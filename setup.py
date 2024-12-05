@@ -16,7 +16,7 @@ def find_py_files(directory):
     return py_files
 
 setup(
-    name="gstreamer-analytics",  # Package name
+    name="gst-python-analytics",  # Package name
     version="1.24.0",  # Version
     packages=['gst_analytics', 'gst_analytics.engine'],  # Manually specify packages
     package_dir={"gst_analytics": "plugins/python"},  # Map everything to gst_analytics
@@ -29,7 +29,7 @@ setup(
     long_description_content_type="text/markdown",
     author="Aaron Boxer",
     author_email="aaron.boxer@collabora.com",
-    url="https://gitlab.freedesktop.org/gstreamer/gstreamer",  # Project URL
+    url="https://github.com/collabora/gst-python-analytics",  # Project URL
     classifiers=[
         "Programming Language :: Python :: 3",
         "License :: OSI Approved :: LGPL License",

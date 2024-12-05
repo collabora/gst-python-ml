@@ -36,7 +36,7 @@ sudo apt install -y python3-pip  python3-venv \
 ```
 export VIRTUAL_ENV=$HOME/venv
 export PATH=$VIRTUAL_ENV/bin:$PATH
-export GST_PLUGIN_PATH=$HOME/src/gstreamer/subprojects/gst-python/gst_analytics/plugins
+export GST_PLUGIN_PATH=$HOME/src/gst-python-analytics/plugins
 ```
 
 and then
@@ -54,7 +54,7 @@ pip install pygobject torch torchvision transformers numpy black ruff
 #### Install requirements (host)
 
 ```
-cd ~/src/gstreamer/subprojects/gst-python/gst_analytics
+cd $HOME/src/gst-python-analytics
 pip install -r requirements.txt
 ```
 
@@ -70,7 +70,7 @@ https://developer.nvidia.com/cuda-downloads
 
 #### Important Note:
 
-This Dockerfile maps a local `gstreamer` repository containing the `gst-python` analytics elements to the container, and expects this repository to be located in `~/src` i.e.  `~/src/gstreamer`.
+This Dockerfile maps a local `gst-python-analytics` repository to the container, and expects this repository to be located in `$HOME/src` i.e.  `$HOME/src/gst-python-analytics`.
 
 
 #### Enable GPU Support on Host
@@ -90,11 +90,11 @@ sudo systemctl restart docker
 #### Run Docker Container
 (if running on CPU, just remove `--gpus all` from command below)
 
-`docker run --network kafka-network -v ~/src/gstreamer/subprojects/gst-python/:/root/gst-python -it --rm --gpus all --name ubuntu24 ubuntu24:latest /bin/bash`
+`docker run --network kafka-network -v ~/src/gst-python-analytics/:/root/gst-python-analytics -it --rm --gpus all --name ubuntu24 ubuntu24:latest /bin/bash`
 
 In the container shell, run the following
 
-`# cd gst_analytics && pip install -r requirements.txt`
+`# cd gst-python-analytics && pip install -r requirements.txt`
 
 Now you should be able to inspect the `objectdetector` element:
 
