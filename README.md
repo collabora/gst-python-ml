@@ -9,6 +9,7 @@ This project provides python base classes and GStreamer elements supporting a br
 1. transcription
 1. speech to text
 1. text to speech
+1. text to image
 1. LLMs
 1. serialize to Kafka server
 
