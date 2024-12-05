@@ -1,0 +1,45 @@
+{
+    "$schema": "http://json-schema.org/draft-07/schema#",
+    "title": "ObjectDetectionMetadata",
+    "type": "object",
+    "properties": {
+      "detections": {
+        "type": "array",
+        "description": "List of detected objects with bounding box coordinates, labels, and scores",
+        "items": {
+          "type": "object",
+          "properties": {
+            "box": {
+              "type": "object",
+              "description": "Bounding box coordinates",
+              "properties": {
+                "x1": { "type": "number", "description": "X coordinate of the top-left corner" },
+                "y1": { "type": "number", "description": "Y coordinate of the top-left corner" },
+                "x2": { "type": "number", "description": "X coordinate of the bottom-right corner" },
+                "y2": { "type": "number", "description": "Y coordinate of the bottom-right corner" }
+              },
+              "required": ["x1", "y1", "x2", "y2"]
+            },
+            "label": {
+              "type": "string",
+              "description": "The label of the detected object"
+            },
+            "score": {
+              "type": "number",
+              "description": "Confidence score of the detection",
+              "minimum": 0,
+              "maximum": 1
+            }
+          },
+          "required": ["box", "label", "score"]
+        }
+      },
+      "timestamp": {
+        "type": "string",
+        "description": "The timestamp when the detection was made",
+        "format": "date-time"
+      }
+    },
+    "required": ["detections", "timestamp"]
+  }
+  
