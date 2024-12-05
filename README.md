@@ -134,8 +134,9 @@ and list networks
 
 #### Set up kafka and zookeeper
 
-Note: setup below is for running pipelines in another docker container. If running pipeline from host, then port changes from 9092 to 29092, and broker changes
-from kafka to localhost.
+Note: setup below assumes you are running your pipeline in a docker container. 
+If running pipeline from host, then the port changes from `9092` to `29092`,
+and the broker changes from `kafka` to `localhost`.
 
 ```
 docker stop kafka zookeeper
