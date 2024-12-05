@@ -1,0 +1,47 @@
+# LLM
+# Copyright (C) 2024 Collabora Ltd.
+#
+# This library is free software; you can redistribute it and/or
+# modify it under the terms of the GNU Library General Public
+# License as published by the Free Software Foundation; either
+# version 2 of the License, or (at your option) any later version.
+#
+# This library is distributed in the hope that it will be useful,
+# but WITHOUT ANY WARRANTY; without even the implied warranty of
+# MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the GNU
+# Library General Public License for more details.
+#
+# You should have received a copy of the GNU Library General Public
+# License along with this library; if not, write to the
+# Free Software Foundation, Inc., 51 Franklin Street, Fifth Floor,
+# Boston, MA 02110-1301, USA.
+
+import gi
+
+gi.require_version("Gst", "1.0")
+from gi.repository import Gst, GObject  # noqa: E402
+
+CAN_REGISTER_ELEMENT = True
+try:
+    from gst_analytics_llm import GstAnalyticsLLM
+except ImportError as e:
+    CAN_REGISTER_ELEMENT = False
+    Gst.warning(f"The 'llm' element will not be available. Error {e}")
+
+
+class LLM(GstAnalyticsLLM):
+    __gstmetadata__ = (
+        "LLM",
+        "Transform",
+        "Processes text using a Large Language Model",
+        "Aaron Boxer <aaron.boxer@collabora.com>",
+    )
+
+
+if CAN_REGISTER_ELEMENT:
+    GObject.type_register(LLM)
+    __gstelementfactory__ = ("llm", Gst.Rank.NONE, LLM)
+else:
+    Gst.warning(
+        "The 'llm' element will not be registered because required modules are missing."
+    )
