@@ -1,6 +1,7 @@
 # GStreamer Python Analytics
 
-This project provides python base classes and GStreamer elements supporting a broad range of analytics tasks. Supported functionality includes:
+This project provides python base classes and GStreamer elements supporting a broad range
+of analytics tasks. Supported functionality includes:
 
 1. object detection
 1. tracking
@@ -11,23 +12,25 @@ This project provides python base classes and GStreamer elements supporting a br
 1. text to speech
 1. text to image
 1. LLMs
-1. serialize to Kafka server
+1. serializing to Kafka server
 
-Different ML toolkits are supported via the `MLEngine` abstraction - we have nominal support for TensorFlow, LiteRT and OpenVINO, but all testing thus far has been with PyTorch.
+Different ML toolkits are supported via the `MLEngine` abstraction - we have nominal support for
+TensorFlow, LiteRT and OpenVINO, but all testing thus far has been done with PyTorch.
 
 These elements will work with your distribution's GStreamer packages. They have been tested on Ubuntu 24
 with GStreamer 1.24.
 
 ## Requirements
 
-There are two installation options described below: installing on your host machine, or installing with a Docker container:
+There are two installation options described below: installing on your host machine,
+or installing with a Docker container:
 
 
 ### Host Install (Ubuntu 24)
 
 #### Install packages
 
-Note: `nvidia-cuda-toolkit` dependency assumes an Nvidia care on the system
+Note: `nvidia-cuda-toolkit` dependency assumes an Nvidia card on your system
 
 ```
 sudo apt update && sudo apt -y upgrade
@@ -45,7 +48,7 @@ sudo apt install -y python3-pip  python3-venv \
 
 #### Clone repo (host)
 
-`git clone https://github.com/GrokImageCompression/grok.git`
+`git clone https://github.com/collabora/gst-python-analytics.git`
 
 #### Update .bashrc
 
@@ -53,6 +56,7 @@ sudo apt install -y python3-pip  python3-venv \
 export VIRTUAL_ENV=$HOME/venv
 export PATH=$VIRTUAL_ENV/bin:$PATH
 export GST_PLUGIN_PATH=$HOME/src/gst-python-analytics/plugins
+export LD_LIBRARY_PATH=$LD_LIBRARY_PATH:$VIRTUAL_ENV/lib/python3.12/site-packages/nvidia/cublas/lib:$VIRTUAL_ENV/lib/python3.12/site-packages/nvidia/cudnn/lib
 ```
 
 and then
@@ -80,12 +84,14 @@ pip install -r requirements.txt
 
 Important Note:
 
-This Dockerfile maps a local `gst-python-analytics` repository to the container, and expects this repository to be located in `$HOME/src` i.e.  `$HOME/src/gst-python-analytics`.
+This Dockerfile maps a local `gst-python-analytics` repository to the container,
+and expects this repository to be located in `$HOME/src` i.e.  `$HOME/src/gst-python-analytics`.
 
 
 #### Enable Docker GPU Support on Host
 
-To use the host GPU in a docker container, you will need to install the nvidia container toolkit. If running on CPU, these steps can be skipped.
+To use the host GPU in a docker container, you will need to install the nvidia container toolkit.
+If running on CPU, these steps can be skipped.
 
 
 ```
