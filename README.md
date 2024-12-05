@@ -1,17 +1,31 @@
 # Python Analytics
 
-These classes and elements support a broad range of analytics tasks, in Python,
-for GStreamer. They will work with your distribution packages for the latest 1.24
-version of GStreamer.
+This project provides python base classes and GStreamer elements supporting a broad range of analytics tasks. Supported functionality includes:
+
+1. object detection
+1. tracking
+1. video captioning
+1. translation
+1. transcription
+1. speech to text
+1. text to speech
+1. LLMs
+1. serializing analytics meta-data to Kafak server
+
+
+These elements will work with your distribution's GStreamer packages. They have been test on Ubuntu 24
+with GStreamer 1.24.
 
 ## Requirements
 
 There are two installation options described below: installing on your host machine, or installing with a Docker container:
 
 
-### Installing on Host (Ubuntu 24)
+### Host Install (Ubuntu 24)
 
 #### Install packages
+
+Note: `nvidia-cuda-toolkit` dependency assumes an Nvidia care on the system
 
 ```
 sudo apt update && sudo apt -y upgrade
@@ -51,31 +65,25 @@ pip install --upgrade pip && \
 pip install pygobject torch torchvision transformers numpy black ruff
 ```
 
-#### Install requirements (host)
+#### Install pip requirements
 
 ```
 cd $HOME/src/gst-python-analytics
 pip install -r requirements.txt
 ```
 
+### Docker Install
 
-#### Install CUDA
+#### Build Docker Container
 
-https://developer.nvidia.com/cuda-downloads
-
-
-### Installing Docker container
-
-#### Building Docker Container
-
-#### Important Note:
+Important Note:
 
 This Dockerfile maps a local `gst-python-analytics` repository to the container, and expects this repository to be located in `$HOME/src` i.e.  `$HOME/src/gst-python-analytics`.
 
 
-#### Enable GPU Support on Host
+#### Enable Docker GPU Support on Host
 
-To use the host GPU in a docker container, you will need to install the nvidia container toolkit. (if running on CPU, these steps can be skipped)
+To use the host GPU in a docker container, you will need to install the nvidia container toolkit. If running on CPU, these steps can be skipped.
 
 
 ```
@@ -88,7 +96,9 @@ sudo systemctl restart docker
 `docker build -f ./Dockerfile -t ubuntu24:latest .`
 
 #### Run Docker Container
-(if running on CPU, just remove `--gpus all` from command below)
+
+a) If running on CPU, just remove `--gpus all` from command below
+b) This command assumes you have set up a Kafka network as described below
 
 `docker run --network kafka-network -v ~/src/gst-python-analytics/:/root/gst-python-analytics -it --rm --gpus all --name ubuntu24 ubuntu24:latest /bin/bash`
 
@@ -109,11 +119,11 @@ docker container prune -f
 docker image prune -a -f
 ```
 
-# Using Analytics Elements
+## Using Analytics Elements
 
-## kafkasink
+### kafkasink
 
-### Setting up kafka network
+#### Setting up kafka network
 
 `docker network create kafka-network`
 
@@ -121,7 +131,7 @@ and list networks
 
 `docker network ls`
 
-### Set up kafka and zookeeper
+#### Set up kafka and zookeeper
 
 Note: setup below is for running pipelines in another docker container. If running pipeline from host, then port changes from 9092 to 29092, and broker changes
 from kafka to localhost.
@@ -143,77 +153,76 @@ docker run -d --name kafka --network kafka-network \
   confluentinc/cp-kafka:latest
 ```
 
-### Create test topic
+#### Create test topic
 ```
 docker exec kafka kafka-topics --create --topic test-kafkasink-topic --bootstrap-server kafka:9092 --partitions 1 --replication-factor 1
 ```
 
-### list topics
+#### list topics
 
 `docker exec -it kafka kafka-topics --list --bootstrap-server kafka:9092`
 
 
-### delete topic
+#### delete topic
 
 `docker exec -it kafka kafka-topics --delete --topic test-topic --bootstrap-server kafka:9092`
 
 
-### consume topic
+#### consume topic
 
 `docker exec -it kafka kafka-console-consumer --bootstrap-server kafka:9092 --topic test-kafkasink-topic --from-beginning`
 
 
-## Object Detection
+### Object Detection
 
-### Some Model Names
+Possible model names:
 `fasterrcnn_resnet50_fpn`
 `retinanet_resnet50_fpn`
 
-### fasterrcnn/kafka pipeline
+#### fasterrcnn/kafka pipeline
 
 `GST_DEBUG=4 gst-launch-1.0 multifilesrc location=data/000015.jpg ! jpegdec ! videoconvert ! videoscale ! objectdetector model-name=fasterrcnn_resnet50_fpn device=cuda batch-size=4 ! kafkasink schema-file=data/gst_analytics_object_detector.json broker=kafka:9092 topic=test-kafkasink-topic  2>&1 | grep kafkasink`
 
-### maskrcnn pipeline
+#### maskrcnn pipeline
 
 `GST_DEBUG=4 gst-launch-1.0   filesrc location=data/people.mp4 !   decodebin ! videoconvert ! videoscale ! maskrcnn device=cuda batch-size=4 model-name=maskrcnn_resnet50_fpn ! videoconvert ! objectdetectionoverlay labels-color=0xFFFF0000 object-detection-outline-color=0xFFFF0000  ! autovideosink`
 
 
-### yolo with tracking pipeline
+#### yolo with tracking pipeline
 
 `gst-launch-1.0   filesrc location=data/soccer_tracking.mp4 !   decodebin ! videoconvert ! videoscale ! video/x-raw,width=640,height=480 ! yolo model-name=yolo11m device=cuda:0 track=True ! videoconvert  !  objectdetectionoverlay labels-color=0xFFFF0000 object-detection-outline-color=0xFFFF0000 ! autovideosink`
 
-#### and with dectionoverlay
+##### yolo with dectionoverlay
 
  `gst-launch-1.0   filesrc location=data/soccer_tracking.mp4 !   decodebin ! videoconvert ! videoscale ! video/x-raw,width=640,height=480 ! yolo model-name=yolo11m device=cuda:0 track=True !  analyticsoverlay ! videoconvert !  autovideosink`
 
 
-
-### analyticsstreammux pipeline
+#### analyticsstreammux pipeline
 
 `GST_DEBUG=4 gst-launch-1.0 analyticsstreammux name=mux  ! videoconvert ! fakesink videotestsrc ! mux. videotestsrc pattern=ball ! mux. videotestsrc pattern=snow ! mux.`
 
 
-## sample whispertranscribe pipeline
+### whispertranscribe
 
-### transcription with initial prompt set
+#### transcription with initial prompt set
 
 `GST_DEBUG=4 gst-launch-1.0 filesrc location=data/air_traffic_korean_with_english.wav ! decodebin ! audioconvert ! whispertranscribe device=cuda language=ko initial_prompt = "Air Traffic Control은, radar systems를,  weather conditions에, flight paths를, communication은, unexpected weather conditions가, continuous training을, dedication과, professionalism" ! fakesink`
 
-### translation to English pipeline
+#### translation to English
 
 `GST_DEBUG=4 gst-launch-1.0 filesrc location=data/air_traffic_korean_with_english.wav ! decodebin ! audioconvert ! whispertranscribe device=cuda language=ko translate=yes ! fakesink`
 
-### coquitts pipeline
+#### coquitts
 
 `GST_DEBUG=4 gst-launch-1.0 filesrc location=data/air_traffic_korean_with_english.wav ! decodebin ! audioconvert ! whispertranscribe device=cuda language=ko translate=yes ! coquitts device=cuda ! audioconvert ! wavenc ! filesink location=output_audio.wav`
 
 
-### whisperspeechtts pipeline
+#### whisperspeechtts
 
 `GST_DEBUG=4 gst-launch-1.0 filesrc location=data/air_traffic_korean_with_english.wav ! decodebin ! audioconvert ! whispertranscribe device=cuda language=ko translate=yes ! whisperspeechtts device=cuda ! audioconvert ! wavenc ! filesink location=output_audio.wav`
 
 
-### mariantranslate pipeline
+#### mariantranslate
 
 `GST_DEBUG=4 gst-launch-1.0 filesrc location=data/air_traffic_korean_with_english.wav ! decodebin ! audioconvert ! whispertranscribe device=cuda language=ko translate=yes ! mariantranslate device=cuda src=en target=fr ! fakesink`
 
@@ -222,11 +231,11 @@ Supported src/target languages:
 https://huggingface.co/models?sort=trending&search=Helsinki
 
 
-### whisperlive pipeline
+#### whisperlive
 
 `GST_DEBUG=4 gst-launch-1.0 filesrc location=data/air_traffic_korean_with_english.wav ! decodebin ! audioconvert ! whisperlive device=cuda language=ko translate=yes llm-model-name="microsoft/phi-2" ! audioconvert ! wavenc ! filesink location=output_audio.wav`
 
-## LLM pipeline
+### LLM
 
 1. generate HuggingFace token
 
@@ -237,21 +246,21 @@ https://huggingface.co/models?sort=trending&search=Helsinki
 
 `GST_DEBUG=4 gst-launch-1.0 filesrc location=data/prompt_for_llm.txt !  llm device=cuda model-name="microsoft/phi-2" ! fakesink`
 
-## stablediffusion pipeline
+#### stablediffusion pipeline
 
 `GST_DEBUG=4 gst-launch-1.0 filesrc location=data/prompt_for_stable_diffusion.txt ! stablediffusion device=cuda ! pngenc ! filesink location=output_image.png`
 
-## caption + yolo
+#### caption + yolo
 
 `GST_DEBUG=4 gst-launch-1.0   filesrc location=data/soccer_tracking.mp4 ! decodebin ! videoconvert ! videoscale ! video/x-raw,width=640,height=480 ! yolo model-name=yolo11m device=cuda:0 track=True ! caption device=cuda:0 ! textoverlay !  analyticsoverlay ! videoconvert !  autovideosink`
 
 
-## caption
+#### caption
 
 `GST_DEBUG=4 gst-launch-1.0   filesrc location=data/soccer_tracking.mp4 ! decodebin ! videoconvert ! caption device=cuda:0 downsampled_width=320 downsampled_height=240 prompt="What is the name of the game being played?" ! textoverlay !  fakesink`
 
 
-## Building PyPI Package
+# Building PyPI Package
 
 1. `pip install setuptools wheel twine`
 2. `python setup.py sdist bdist_wheel`
