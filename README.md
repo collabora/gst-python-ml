@@ -1,4 +1,4 @@
-# Python Analytics
+# GStreamer Python Analytics
 
 This project provides python base classes and GStreamer elements supporting a broad range of analytics tasks. Supported functionality includes:
 
@@ -10,10 +10,11 @@ This project provides python base classes and GStreamer elements supporting a br
 1. speech to text
 1. text to speech
 1. LLMs
-1. serializing analytics meta-data to Kafak server
+1. serialize to Kafka server
 
+Different ML toolkits are supported via the `MLEngine` abstraction - we have nominal support for TensorFlow, LiteRT and OpenVINO, but all testing thus far has been with PyTorch.
 
-These elements will work with your distribution's GStreamer packages. They have been test on Ubuntu 24
+These elements will work with your distribution's GStreamer packages. They have been tested on Ubuntu 24
 with GStreamer 1.24.
 
 ## Requirements
@@ -179,16 +180,16 @@ Possible model names:
 `fasterrcnn_resnet50_fpn`
 `retinanet_resnet50_fpn`
 
-#### fasterrcnn/kafka pipeline
+#### fasterrcnn/kafka
 
 `GST_DEBUG=4 gst-launch-1.0 multifilesrc location=data/000015.jpg ! jpegdec ! videoconvert ! videoscale ! objectdetector model-name=fasterrcnn_resnet50_fpn device=cuda batch-size=4 ! kafkasink schema-file=data/gst_analytics_object_detector.json broker=kafka:9092 topic=test-kafkasink-topic  2>&1 | grep kafkasink`
 
-#### maskrcnn pipeline
+#### maskrcnn
 
 `GST_DEBUG=4 gst-launch-1.0   filesrc location=data/people.mp4 !   decodebin ! videoconvert ! videoscale ! maskrcnn device=cuda batch-size=4 model-name=maskrcnn_resnet50_fpn ! videoconvert ! objectdetectionoverlay labels-color=0xFFFF0000 object-detection-outline-color=0xFFFF0000  ! autovideosink`
 
 
-#### yolo with tracking pipeline
+#### yolo with tracking
 
 `gst-launch-1.0   filesrc location=data/soccer_tracking.mp4 !   decodebin ! videoconvert ! videoscale ! video/x-raw,width=640,height=480 ! yolo model-name=yolo11m device=cuda:0 track=True ! videoconvert  !  objectdetectionoverlay labels-color=0xFFFF0000 object-detection-outline-color=0xFFFF0000 ! autovideosink`
 
