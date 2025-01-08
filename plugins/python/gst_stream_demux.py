@@ -1,5 +1,5 @@
-# AnalyticsStreamDemux
-# Copyright (C) 2024 Collabora Ltd.
+# StreamDemux
+# Copyright (C) 2024-2025 Collabora Ltd.
 #
 # This library is free software; you can redistribute it and/or
 # modify it under the terms of the GNU Library General Public
@@ -24,9 +24,9 @@ gi.require_version("GLib", "2.0")
 from gi.repository import Gst, GObject  # noqa: E402
 
 
-class AnalyticsStreamDemux(Gst.Element):
+class StreamDemux(Gst.Element):
     __gstmetadata__ = (
-        "AnalyticsStreamDemux",
+        "StreamDemux",
         "Demuxer",
         "Custom stream demuxer",
         "Aaron Boxer <aaron.boxer@collabora.com>",
@@ -48,7 +48,7 @@ class AnalyticsStreamDemux(Gst.Element):
     )
 
     def __init__(self):
-        super(AnalyticsStreamDemux, self).__init__()
+        super(StreamDemux, self).__init__()
         self.sinkpad = Gst.Pad.new_from_template(self.get_pad_template("sink"), "sink")
         self.sinkpad.set_event_function_full(self.event)
         self.sinkpad.set_chain_function_full(self.chain)
@@ -124,5 +124,5 @@ class AnalyticsStreamDemux(Gst.Element):
         return Gst.PadProbeReturn.OK
 
 
-GObject.type_register(AnalyticsStreamDemux)
-__gstelementfactory__ = ("analyticsstreamdemux", Gst.Rank.NONE, AnalyticsStreamDemux)
+GObject.type_register(StreamDemux)
+__gstelementfactory__ = ("streamdemux_pyml", Gst.Rank.NONE, StreamDemux)

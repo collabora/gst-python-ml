@@ -1,5 +1,5 @@
-# GstAnalyticsStableDiffusion
-# Copyright (C) 2024 Collabora Ltd.
+# GstStableDiffusion
+# Copyright (C) 2024-2025 Collabora Ltd.
 #
 # This library is free software; you can redistribute it and/or
 # modify it under the terms of the GNU Library General Public
@@ -26,7 +26,7 @@ from gi.repository import Gst, GObject, GstBase  # noqa: E402
 
 CAN_REGISTER_ELEMENT = True
 try:
-    from gst_analytics_aggregator import GstAnalyticsAggregator
+    from gst_aggregator import GstAggregator
     import numpy as np
     from diffusers import StableDiffusionPipeline
 except ImportError as e:
@@ -37,9 +37,9 @@ except ImportError as e:
 ICAPS = Gst.Caps(Gst.Structure("text/plain", format="utf8"))
 
 
-class GstAnalyticsStableDiffusion(GstAnalyticsAggregator):
+class GstStableDiffusion(GstAggregator):
     __gstmetadata__ = (
-        "GstAnalyticsStableDiffusion",
+        "GstStableDiffusion",
         "Aggregator",
         "Generates images from text using Stable Diffusion",
         "Aaron Boxer <aaron.boxer@collabora.com>",
@@ -152,13 +152,13 @@ class GstAnalyticsStableDiffusion(GstAnalyticsAggregator):
 
 
 if CAN_REGISTER_ELEMENT:
-    GObject.type_register(GstAnalyticsStableDiffusion)
+    GObject.type_register(GstStableDiffusion)
     __gstelementfactory__ = (
-        "stablediffusion",
+        "stablediffusion_pyml",
         Gst.Rank.NONE,
-        GstAnalyticsStableDiffusion,
+        GstStableDiffusion,
     )
 else:
     Gst.warning(
-        "The 'stablediffusion' element will not be registered because required modules are missing."
+        "The 'stablediffusion_pyml' element will not be registered because required modules are missing."
     )

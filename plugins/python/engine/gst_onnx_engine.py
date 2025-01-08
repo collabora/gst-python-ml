@@ -1,5 +1,5 @@
-# GstAnalyticsONNXEngine
-# Copyright (C) 2024 Collabora Ltd.
+# GstONNXEngine
+# Copyright (C) 2024-2025 Collabora Ltd.
 #
 # This library is free software; you can redistribute it and/or
 # modify it under the terms of the GNU Library General Public
@@ -19,7 +19,7 @@
 import gi
 import numpy as np
 import onnxruntime as ort  # ONNX Runtime for executing ONNX models
-from .gst_analytics_ml_engine import GstAnalyticsMLEngine
+from .gst_ml_engine import GstMLEngine
 
 gi.require_version("Gst", "1.0")
 gi.require_version("GstBase", "1.0")
@@ -27,7 +27,7 @@ gi.require_version("GLib", "2.0")
 from gi.repository import Gst  # noqa: E402
 
 
-class GstAnalyticsONNXEngine(GstAnalyticsMLEngine):
+class GstONNXEngine(GstMLEngine):
     def __init__(self, device="cpu"):
         """
         Initialize the ONNX engine with the specified device.

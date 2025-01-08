@@ -1,5 +1,5 @@
 # ObjectDetector
-# Copyright (C) 2024 Collabora Ltd.
+# Copyright (C) 2024-2025 Collabora Ltd.
 #
 # This library is free software; you can redistribute it and/or
 # modify it under the terms of the GNU Library General Public
@@ -25,13 +25,13 @@ from gi.repository import Gst, GObject  # noqa: E402
 
 CAN_REGISTER_ELEMENT = True
 try:
-    from gst_analytics_object_detector import GstAnalyticsObjectDetector
+    from gst_object_detector import GstObjectDetector
 except ImportError as e:
     CAN_REGISTER_ELEMENT = False
     Gst.warning(f"The 'objectdetector' element will not be available. Error: {e}")
 
 
-class ObjectDetector(GstAnalyticsObjectDetector):
+class ObjectDetector(GstObjectDetector):
     """
     GStreamer element for a general object detector where the user sets the model-name property.
     """
@@ -52,8 +52,8 @@ class ObjectDetector(GstAnalyticsObjectDetector):
 
 if CAN_REGISTER_ELEMENT:
     GObject.type_register(ObjectDetector)
-    __gstelementfactory__ = ("objectdetector", Gst.Rank.NONE, ObjectDetector)
+    __gstelementfactory__ = ("objectdetector_pyml", Gst.Rank.NONE, ObjectDetector)
 else:
     Gst.warning(
-        "The 'objectdetector' element will not be registered because gst_analytics_object_detector module is missing."
+        "The 'objectdetector_pyml' element will not be registered because gst_object_detector module is missing."
     )

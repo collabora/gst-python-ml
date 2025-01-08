@@ -1,5 +1,5 @@
-# GstAnalyticsOpenVinoEngine
-# Copyright (C) 2024 Collabora Ltd.
+# GstOpenVinoEngine
+# Copyright (C) 2024-2025 Collabora Ltd.
 #
 # This library is free software; you can redistribute it and/or
 # modify it under the terms of the GNU Library General Public
@@ -19,13 +19,13 @@
 import gi
 import numpy as np
 from openvino.runtime import Core
-from .gst_analytics_ml_engine import GstAnalyticsMLEngine
+from .gst_ml_engine import GstMLEngine
 
 gi.require_version("Gst", "1.0")
 from gi.repository import Gst  # noqa: E402
 
 
-class GstAnalyticsOpenVinoEngine(GstAnalyticsMLEngine):
+class GstOpenVinoEngine(GstMLEngine):
     def __init__(self, device="CPU"):
         self.device = device
         self.core = Core()

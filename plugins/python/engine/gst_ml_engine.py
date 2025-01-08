@@ -1,5 +1,5 @@
-# GstAnalyticsMLEngine
-# Copyright (C) 2024 Collabora Ltd.
+# GstMLEngine
+# Copyright (C) 2024-2025 Collabora Ltd.
 #
 # This library is free software; you can redistribute it and/or
 # modify it under the terms of the GNU Library General Public
@@ -19,7 +19,7 @@
 from abc import ABC, abstractmethod
 
 
-class GstAnalyticsMLEngine(ABC):
+class GstMLEngine(ABC):
     def __init__(self, device="cpu"):
         self.device = device
         self.device_index = 0

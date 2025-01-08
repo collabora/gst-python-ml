@@ -1,5 +1,5 @@
 # WhisperTranscribe
-# Copyright (C) 2024 Aaron Boxer <aaron dot boxer at collabora.com>
+# Copyright (C) 2024-2025 Aaron Boxer <aaron dot boxer at collabora.com>
 #
 # This library is free software; you can redistribute it and/or
 # modify it under the terms of the GNU Library General Public
@@ -25,14 +25,14 @@ from gi.repository import Gst, GObject  # noqa: E402
 
 CAN_REGISTER_ELEMENT = True
 try:
-    from gst_analytics_transcribe import GstAnalyticsTranscribe
+    from gst_transcribe import GstTranscribe
     from faster_whisper import WhisperModel
 except ImportError as e:
     CAN_REGISTER_ELEMENT = False
     Gst.warning(f"The 'whispertranscribe' element will not be available. Error: {e}")
 
 
-class WhisperTranscribe(GstAnalyticsTranscribe):
+class WhisperTranscribe(GstTranscribe):
     __gstmetadata__ = (
         "WhisperTranscribe",
         "Text Output",
@@ -71,8 +71,8 @@ class WhisperTranscribe(GstAnalyticsTranscribe):
 
 if CAN_REGISTER_ELEMENT:
     GObject.type_register(WhisperTranscribe)
-    __gstelementfactory__ = ("whispertranscribe", Gst.Rank.NONE, WhisperTranscribe)
+    __gstelementfactory__ = ("whispertranscribe_pyml", Gst.Rank.NONE, WhisperTranscribe)
 else:
     Gst.warning(
-        "The 'whispertranscribe' element will not be registered because gst_analytics_transcribe module is missing."
+        "The 'whispertranscribe_pyml' element will not be registered because gst_transcribe module is missing."
     )

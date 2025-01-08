@@ -1,5 +1,5 @@
-# GstAnalyticsPyTorchYoloEngine
-# Copyright (C) 2024 Collabora Ltd.
+# GstPyTorchYoloEngine
+# Copyright (C) 2024-2025 Collabora Ltd.
 #
 # This library is free software; you can redistribute it and/or
 # modify it under the terms of the GNU Library General Public
@@ -19,13 +19,13 @@
 import gi
 import numpy as np
 from ultralytics import YOLO
-from .gst_analytics_pytorch_engine import GstAnalyticsPyTorchEngine
+from .gst_pytorch_engine import GstPyTorchEngine
 
 gi.require_version("Gst", "1.0")
 from gi.repository import Gst  # noqa: E402
 
 
-class GstAnalyticsPyTorchYoloEngine(GstAnalyticsPyTorchEngine):
+class GstPyTorchYoloEngine(GstPyTorchEngine):
     def load_model(self, model_name, **kwargs):
         """
         Override base method to load the YOLO model (detection or segmentation).

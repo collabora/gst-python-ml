@@ -1,5 +1,5 @@
-# GstAnalyticsPyTorchEngine
-# Copyright (C) 2024 Collabora Ltd.
+# GstPyTorchEngine
+# Copyright (C) 2024-2025 Collabora Ltd.
 #
 # This library is free software; you can redistribute it and/or
 # modify it under the terms of the GNU Library General Public
@@ -30,14 +30,14 @@ from transformers import (
     VisionEncoderDecoderModel,
     AutoProcessor,
 )
-from .gst_analytics_ml_engine import GstAnalyticsMLEngine
+from .gst_ml_engine import GstMLEngine
 
 gi.require_version("Gst", "1.0")
 gi.require_version("GstBase", "1.0")
 from gi.repository import Gst  # noqa: E402
 
 
-class GstAnalyticsPyTorchEngine(GstAnalyticsMLEngine):
+class GstPyTorchEngine(GstMLEngine):
     def load_model(self, model_name, **kwargs):
         """Load a pre-trained model by name from TorchVision, Transformers, or a local path."""
         processor_name = kwargs.get("processor_name")

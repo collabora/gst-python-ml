@@ -1,5 +1,5 @@
-# GstAnalyticsObjectDetector
-# Copyright (C) 2024 Collabora Ltd.
+# GstObjectDetector
+# Copyright (C) 2024-2025 Collabora Ltd.
 #
 # This library is free software; you can redistribute it and/or
 # modify it under the terms of the GNU Library General Public
@@ -18,7 +18,7 @@
 
 import gi
 import numpy as np
-from gst_analytics_video_transform import GstAnalyticsVideoTransform
+from gst_video_transform import GstVideoTransform
 
 gi.require_version("Gst", "1.0")
 gi.require_version("GstBase", "1.0")
@@ -30,7 +30,7 @@ from gi.repository import Gst, GstAnalytics, GObject, GLib  # noqa: E402
 from utils import runtime_check_gstreamer_version
 
 
-class GstAnalyticsObjectDetector(GstAnalyticsVideoTransform):
+class GstObjectDetector(GstVideoTransform):
     """
     GStreamer element for object detection with a machine learning model.
     """
@@ -44,7 +44,7 @@ class GstAnalyticsObjectDetector(GstAnalyticsVideoTransform):
     )
 
     def __init__(self):
-        super(GstAnalyticsObjectDetector, self).__init__()
+        super(GstObjectDetector, self).__init__()
         runtime_check_gstreamer_version()
         self.framerate_num = 30
         self.framerate_denom = 1

@@ -1,5 +1,5 @@
-# GstAnalyticsTranscribe
-# Copyright (C) 2024 Collabora Ltd.
+# GstTranscribe
+# Copyright (C) 2024-2025 Collabora Ltd.
 #
 # This library is free software; you can redistribute it and/or
 # modify it under the terms of the GNU Library General Public
@@ -22,7 +22,7 @@ from abc import abstractmethod
 import gi
 import numpy as np
 from pysilero_vad import SileroVoiceActivityDetector
-from gst_analytics_aggregator import GstAnalyticsAggregator
+from gst_aggregator import GstAggregator
 
 gi.require_version("Gst", "1.0")
 gi.require_version("GstBase", "1.0")
@@ -52,9 +52,9 @@ ICAPS = Gst.Caps(
 OCAPS = Gst.Caps(Gst.Structure("text/x-raw", format="utf8"))
 
 
-class GstAnalyticsTranscribe(GstAnalyticsAggregator):
+class GstTranscribe(GstAggregator):
     __gstmetadata__ = (
-        "GstAnalyticsTranscribe",
+        "GstTranscribe",
         "Text Output",
         "Python element that transcribes audio with Whisper",
         "Aaron Boxer <aaron.boxer@collabora.com>",
@@ -106,7 +106,7 @@ class GstAnalyticsTranscribe(GstAnalyticsAggregator):
     )
 
     def __init__(self):
-        super(GstAnalyticsTranscribe, self).__init__()
+        super(GstTranscribe, self).__init__()
 
         self.clip_buffer = collections.deque()
         self.active_clip = False

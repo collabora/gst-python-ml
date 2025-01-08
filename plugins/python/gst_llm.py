@@ -1,5 +1,5 @@
-# GstAnalyticsLLM
-# Copyright (C) 2024 Collabora Ltd.
+# GstLLM
+# Copyright (C) 2024-2025 Collabora Ltd.
 #
 # This library is free software; you can redistribute it and/or
 # modify it under the terms of the GNU Library General Public
@@ -18,7 +18,7 @@
 
 
 import gi
-from gst_analytics_aggregator import GstAnalyticsAggregator
+from gst_aggregator import GstAggregator
 
 gi.require_version("Gst", "1.0")
 gi.require_version("GstBase", "1.0")
@@ -27,7 +27,7 @@ gi.require_version("GLib", "2.0")
 from gi.repository import Gst  # noqa: E402
 
 
-class GstAnalyticsLLM(GstAnalyticsAggregator):
+class GstLLM(GstAggregator):
     """
     GStreamer base element that performs language model inference
     with a PyTorch model.
@@ -49,7 +49,7 @@ class GstAnalyticsLLM(GstAnalyticsAggregator):
     )
 
     def __init__(self):
-        super(GstAnalyticsLLM, self).__init__()
+        super(GstLLM, self).__init__()
 
     def do_process(self, buf):
         """

@@ -1,5 +1,5 @@
 # YOLOTransform
-# Copyright (C) 2024 Aaron Boxer <aaron dot boxer at collabora.com>
+# Copyright (C) 2024-2025 Aaron Boxer <aaron dot boxer at collabora.com>
 #
 # This library is free software; you can redistribute it and/or
 # modify it under the terms of the GNU Library General Public
@@ -28,7 +28,7 @@ from gi.repository import Gst, GObject, GstAnalytics, GLib  # noqa: E402
 
 CAN_REGISTER_ELEMENT = True
 try:
-    from gst_analytics_object_detector import GstAnalyticsObjectDetector
+    from gst_object_detector import GstObjectDetector
 except ImportError as e:
     CAN_REGISTER_ELEMENT = False
     Gst.warning(f"The 'yolo' element will not be available. Error {e}")
@@ -117,7 +117,7 @@ COCO_CLASSES = {
 }
 
 
-class YOLOTransform(GstAnalyticsObjectDetector):
+class YOLOTransform(GstObjectDetector):
     """
     GStreamer element for YOLO model inference on video frames
     (detection, segmentation, and tracking).
@@ -222,8 +222,8 @@ class YOLOTransform(GstAnalyticsObjectDetector):
 
 if CAN_REGISTER_ELEMENT:
     GObject.type_register(YOLOTransform)
-    __gstelementfactory__ = ("yolo", Gst.Rank.NONE, YOLOTransform)
+    __gstelementfactory__ = ("yolo_pyml", Gst.Rank.NONE, YOLOTransform)
 else:
     Gst.warning(
-        "The 'yolo' element will not be registered because required modules are missing."
+        "The 'yolo_pyml' element will not be registered because required modules are missing."
     )

@@ -1,5 +1,5 @@
 # WhisperSpeechTTS
-# Copyright (C) 2024 Collabora Ltd.
+# Copyright (C) 2024-2025 Collabora Ltd.
 #
 # This library is free software; you can redistribute it and/or
 # modify it under the terms of the GNU Library General Public
@@ -26,7 +26,7 @@ CAN_REGISTER_ELEMENT = True
 try:
     import numpy as np
     from whisperspeech.pipeline import Pipeline
-    from gst_analytics_tts import GstAnalyticsTTS
+    from gst_tts import GstTTS
 except ImportError as e:
     CAN_REGISTER_ELEMENT = False
     Gst.warning(f"The 'whisperspeechtts' element will not be available. Error: {e}")
@@ -46,7 +46,7 @@ OCAPS = Gst.Caps(
 )
 
 
-class WhisperSpeechTTS(GstAnalyticsTTS):
+class WhisperSpeechTTS(GstTTS):
     __gstmetadata__ = (
         "WhisperSpeechTTS",
         "Aggregator",
@@ -98,8 +98,8 @@ class WhisperSpeechTTS(GstAnalyticsTTS):
 
 if CAN_REGISTER_ELEMENT:
     GObject.type_register(WhisperSpeechTTS)
-    __gstelementfactory__ = ("whisperspeechtts", Gst.Rank.NONE, WhisperSpeechTTS)
+    __gstelementfactory__ = ("whisperspeechtts_pyml", Gst.Rank.NONE, WhisperSpeechTTS)
 else:
     Gst.warning(
-        "The 'whisperspeechtts' element will not be registered because required modules were missing."
+        "The 'whisperspeechtts_pyml' element will not be registered because required modules were missing."
     )

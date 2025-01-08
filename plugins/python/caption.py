@@ -1,5 +1,5 @@
 # Caption
-# Copyright (C) 2024 Collabora Ltd.
+# Copyright (C) 2024-2025 Collabora Ltd.
 #
 # This library is free software; you can redistribute it and/or
 # modify it under the terms of the GNU Library General Public
@@ -28,7 +28,7 @@ from gi.repository import Gst, GObject, GstAnalytics, GLib  # noqa: E402
 
 CAN_REGISTER_ELEMENT = True
 try:
-    from gst_analytics_video_transform import GstAnalyticsVideoTransform
+    from gst_video_transform import GstVideoTransform
     import numpy as np
     import cv2
 except ImportError as e:
@@ -36,7 +36,7 @@ except ImportError as e:
     Gst.warning(f"The 'caption' element will not be available. Error {e}")
 
 
-class Caption(GstAnalyticsVideoTransform):
+class Caption(GstVideoTransform):
     """
     GStreamer element for captioning video frames.
     """
@@ -216,8 +216,8 @@ class Caption(GstAnalyticsVideoTransform):
 
 if CAN_REGISTER_ELEMENT:
     GObject.type_register(Caption)
-    __gstelementfactory__ = ("caption", Gst.Rank.NONE, Caption)
+    __gstelementfactory__ = ("caption_pyml", Gst.Rank.NONE, Caption)
 else:
     Gst.warning(
-        "The 'caption' element will not be registered because required modules are missing."
+        "The 'caption_pyml' element will not be registered because required modules are missing."
     )

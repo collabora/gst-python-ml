@@ -1,5 +1,5 @@
-# GstAnalyticsTTS
-# Copyright (C) 2024 Collabora Ltd.
+# GstTTS
+# Copyright (C) 2024-2025 Collabora Ltd.
 #
 # This library is free software; you can redistribute it and/or
 # modify it under the terms of the GNU Library General Public
@@ -22,7 +22,7 @@ import asyncio
 import soundfile as sf
 import gi
 
-from gst_analytics_aggregator import GstAnalyticsAggregator
+from gst_aggregator import GstAggregator
 
 gi.require_version("Gst", "1.0")
 gi.require_version("GstBase", "1.0")
@@ -33,9 +33,9 @@ from gi.repository import Gst, GObject, GstBase, GstAudio  # noqa: E402
 ICAPS = Gst.Caps(Gst.Structure("text/x-raw", format="utf8"))
 
 
-class GstAnalyticsTTS(GstAnalyticsAggregator):
+class GstTTS(GstAggregator):
     __gstmetadata__ = (
-        "GstAnalyticsTTS",
+        "GstTTS",
         "Aggregator",
         "Parent TTS class",
         "Aaron Boxer <aaron.boxer@collabora.com>",
@@ -71,7 +71,7 @@ class GstAnalyticsTTS(GstAnalyticsAggregator):
     )
 
     def __init__(self):
-        super(GstAnalyticsTTS, self).__init__()
+        super(GstTTS, self).__init__()
         self.segment_pushed = False
         self.device = "cpu"
         self.streaming_enabled = False

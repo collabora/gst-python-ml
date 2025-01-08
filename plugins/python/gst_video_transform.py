@@ -1,5 +1,5 @@
-# GstAnalyticsVideoTransform
-# Copyright (C) 2024 Collabora Ltd.
+# GstVideoTransform
+# Copyright (C) 2024-2025 Collabora Ltd.
 #
 # This library is free software; you can redistribute it and/or
 # modify it under the terms of the GNU Library General Public
@@ -17,7 +17,7 @@
 # Boston, MA 02110-1301, USA.
 import gi
 
-from gst_analytics_base_transform import GstAnalyticsBaseTransform
+from gst_base_transform import GstBaseTransform
 
 gi.require_version("Gst", "1.0")
 gi.require_version("GstBase", "1.0")
@@ -25,7 +25,7 @@ gi.require_version("GstVideo", "1.0")
 from gi.repository import Gst, GObject  # noqa: E402
 
 
-class GstAnalyticsVideoTransform(GstAnalyticsBaseTransform):
+class GstVideoTransform(GstBaseTransform):
     """
     GStreamer element for video transformation using a PyTorch model.
     """

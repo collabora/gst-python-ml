@@ -1,5 +1,5 @@
 # KafkaSink
-# Copyright (C) 2024 Collabora Ltd.
+# Copyright (C) 2024-2025 Collabora Ltd.
 #
 # This library is free software; you can redistribute it and/or
 # modify it under the terms of the GNU Library General Public
@@ -327,5 +327,5 @@ if CAN_REGISTER_ELEMENT:
     __gstelementfactory__ = (KafkaSink.GST_PLUGIN_NAME, Gst.Rank.NONE, KafkaSink)
 else:
     Gst.warning(
-        "The 'kafkasink' element will not be registered because confluent_kafka module is missing."
+        "The 'kafkasink_pyml' element will not be registered because confluent_kafka module is missing."
     )

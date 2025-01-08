@@ -1,5 +1,5 @@
-# GstAnalyticsAggregator
-# Copyright (C) 2024 Collabora Ltd.
+# GstAggregator
+# Copyright (C) 2024-2025 Collabora Ltd.
 #
 # This library is free software; you can redistribute it and/or
 # modify it under the terms of the GNU Library General Public
@@ -18,7 +18,7 @@
 
 from abc import abstractmethod
 import gi
-from engine.gst_analytics_engine_factory import GstAnalyticsEngineFactory
+from engine.gst_engine_factory import GstEngineFactory
 
 gi.require_version("Gst", "1.0")
 gi.require_version("GstBase", "1.0")
@@ -26,7 +26,7 @@ gi.require_version("GLib", "2.0")
 from gi.repository import Gst, GObject, GstBase  # noqa: E402
 
 
-class GstAnalyticsAggregator(GstBase.Aggregator):
+class GstAggregator(GstBase.Aggregator):
     """
     Base class for GStreamer aggregator elements that perform inference
     with a machine learning model. This class manages shared properties
@@ -34,7 +34,7 @@ class GstAnalyticsAggregator(GstBase.Aggregator):
     """
 
     __gstmetadata__ = (
-        "GstAnalyticsAggregator",
+        "GstAggregator",
         "Aggregator",
         "Generic machine learning model aggregator element",
         "Aaron Boxer <aaron.boxer@collabora.com>",
@@ -93,8 +93,8 @@ class GstAnalyticsAggregator(GstBase.Aggregator):
     )
 
     def __init__(self):
-        super(GstAnalyticsAggregator, self).__init__()
-        self.ml_engine = GstAnalyticsEngineFactory.PYTORCH_ENGINE
+        super(GstAggregator, self).__init__()
+        self.ml_engine = GstEngineFactory.PYTORCH_ENGINE
         self.engine = None
         self.kwargs = {}
         self.segment_pushed = False
@@ -138,9 +138,7 @@ class GstAnalyticsAggregator(GstBase.Aggregator):
                 self.do_load_model()
         elif prop.name == "ml-engine":
             if self.device:
-                self.ml_engine = GstAnalyticsEngineFactory.create_engine(
-                    value, self.device
-                )
+                self.ml_engine = GstEngineFactory.create_engine(value, self.device)
                 self.initialize_engine()
                 self.do_load_model()
         elif prop.name == "device-queue-id":
@@ -158,9 +156,7 @@ class GstAnalyticsAggregator(GstBase.Aggregator):
     def initialize_engine(self):
         """Initialize the machine learning engine based on the ml_engine property."""
         if self.ml_engine is not None:
-            self.engine = GstAnalyticsEngineFactory.create_engine(
-                self.ml_engine, self.device
-            )
+            self.engine = GstEngineFactory.create_engine(self.ml_engine, self.device)
             self.engine.batch_size = self.batch_size
             self.engine.frame_stride = self.frame_stride
             if self.device_queue_id:

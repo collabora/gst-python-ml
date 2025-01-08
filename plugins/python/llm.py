@@ -1,5 +1,5 @@
 # LLM
-# Copyright (C) 2024 Collabora Ltd.
+# Copyright (C) 2024-2025 Collabora Ltd.
 #
 # This library is free software; you can redistribute it and/or
 # modify it under the terms of the GNU Library General Public
@@ -23,13 +23,13 @@ from gi.repository import Gst, GObject  # noqa: E402
 
 CAN_REGISTER_ELEMENT = True
 try:
-    from gst_analytics_llm import GstAnalyticsLLM
+    from gst_llm import GstLLM
 except ImportError as e:
     CAN_REGISTER_ELEMENT = False
     Gst.warning(f"The 'llm' element will not be available. Error {e}")
 
 
-class LLM(GstAnalyticsLLM):
+class LLM(GstLLM):
     __gstmetadata__ = (
         "LLM",
         "Transform",
@@ -40,8 +40,8 @@ class LLM(GstAnalyticsLLM):
 
 if CAN_REGISTER_ELEMENT:
     GObject.type_register(LLM)
-    __gstelementfactory__ = ("llm", Gst.Rank.NONE, LLM)
+    __gstelementfactory__ = ("llm_pyml", Gst.Rank.NONE, LLM)
 else:
     Gst.warning(
-        "The 'llm' element will not be registered because required modules are missing."
+        "The 'llm_pyml' element will not be registered because required modules are missing."
     )

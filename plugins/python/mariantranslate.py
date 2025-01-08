@@ -1,5 +1,5 @@
 # MarianTranslate
-# Copyright (C) 2024 Collabora Ltd.
+# Copyright (C) 2024-2025 Collabora Ltd.
 #
 # This library is free software; you can redistribute it and/or
 # modify it under the terms of the GNU Library General Public
@@ -23,13 +23,13 @@ from gi.repository import Gst, GObject  # noqa: E402
 
 CAN_REGISTER_ELEMENT = True
 try:
-    from gst_analytics_translate import GstAnalyticsTranslate
+    from gst_translate import GstTranslate
 except ImportError as e:
     CAN_REGISTER_ELEMENT = False
     Gst.warning(f"The 'mariantranslate' element will not be available. Element {e}")
 
 
-class MarianTranslate(GstAnalyticsTranslate):
+class MarianTranslate(GstTranslate):
     __gstmetadata__ = (
         "MarianTranslate",
         "Transform",
@@ -40,8 +40,8 @@ class MarianTranslate(GstAnalyticsTranslate):
 
 if CAN_REGISTER_ELEMENT:
     GObject.type_register(MarianTranslate)
-    __gstelementfactory__ = ("mariantranslate", Gst.Rank.NONE, MarianTranslate)
+    __gstelementfactory__ = ("mariantranslate_pyml", Gst.Rank.NONE, MarianTranslate)
 else:
     Gst.warning(
-        "The 'mariantranslate' element will not be registered because required modules are missing."
+        "The 'mariantranslate_pyml' element will not be registered because required modules are missing."
     )

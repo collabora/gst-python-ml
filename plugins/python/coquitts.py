@@ -1,5 +1,5 @@
 # CoquiTTS
-# Copyright (C) 2024 Collabora Ltd.
+# Copyright (C) 2024-2025 Collabora Ltd.
 #
 # This library is free software; you can redistribute it and/or
 # modify it under the terms of the GNU Library General Public
@@ -37,14 +37,14 @@ OCAPS = Gst.Caps(
 # Check for the availability of TTS module
 CAN_REGISTER_ELEMENT = True
 try:
-    from gst_analytics_tts import GstAnalyticsTTS
+    from gst_tts import GstTTS
     from TTS.api import TTS
 except ImportError as e:
     CAN_REGISTER_ELEMENT = False
     Gst.warning(f"The 'coquitts' element will not be available. Error: {e}")
 
 
-class CoquiTTS(GstAnalyticsTTS):
+class CoquiTTS(GstTTS):
     __gstmetadata__ = (
         "CoquiTTS",
         "Aggregator",
@@ -87,8 +87,8 @@ class CoquiTTS(GstAnalyticsTTS):
 
 if CAN_REGISTER_ELEMENT:
     GObject.type_register(CoquiTTS)
-    __gstelementfactory__ = ("coquitts", Gst.Rank.NONE, CoquiTTS)
+    __gstelementfactory__ = ("coquitts_pyml", Gst.Rank.NONE, CoquiTTS)
 else:
     Gst.warning(
-        "The 'coquitts' element will not be registered because required modules are missing."
+        "The 'coquitts_pyml' element will not be registered because required modules are missing."
     )

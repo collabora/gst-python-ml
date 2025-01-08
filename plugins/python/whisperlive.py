@@ -1,5 +1,5 @@
 # WhisperLive
-# Copyright (C) 2024 Collabora Ltd.
+# Copyright (C) 2024-2025 Collabora Ltd.
 #
 # This library is free software; you can redistribute it and/or
 # modify it under the terms of the GNU Library General Public
@@ -25,7 +25,7 @@ from gi.repository import Gst, GObject, GstBase  # noqa: E402
 
 CAN_REGISTER_ELEMENT = True
 try:
-    from gst_analytics_transcribe import GstAnalyticsTranscribe
+    from gst_transcribe import GstTranscribe
     from whisperspeech.pipeline import Pipeline
     from transformers import AutoTokenizer, AutoModelForCausalLM
     import numpy as np
@@ -50,7 +50,7 @@ OCAPS = Gst.Caps(
 )
 
 
-class WhisperLive(GstAnalyticsTranscribe):
+class WhisperLive(GstTranscribe):
     __gstmetadata__ = (
         "WhisperLive",
         "Text Output",
@@ -213,8 +213,8 @@ class WhisperLive(GstAnalyticsTranscribe):
 
 if CAN_REGISTER_ELEMENT:
     GObject.type_register(WhisperLive)
-    __gstelementfactory__ = ("whisperlive", Gst.Rank.NONE, WhisperLive)
+    __gstelementfactory__ = ("whisperlive_pyml", Gst.Rank.NONE, WhisperLive)
 else:
     Gst.warning(
-        "The 'whisperlive' element will not be registered because required modules were missing."
+        "The 'whisperlive_pyml' element will not be registered because required modules were missing."
     )

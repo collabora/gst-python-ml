@@ -25,9 +25,9 @@ VIDEO_FORMATS = "video/x-raw, format=(string){ RGBA, ARGB, BGRA, ABGR }"
 OBJECT_DETECTION_OVERLAY_CAPS = Gst.Caps.from_string(VIDEO_FORMATS)
 
 
-class AnalyticsOverlay(GstBase.BaseTransform):
+class Overlay(GstBase.BaseTransform):
     __gstmetadata__ = (
-        "AnalyticsOverlay",
+        "Overlay",
         "Filter/Effect/Video",
         "Overlays object detection / tracking data on video",
         "Aaron Boxer <aaron.boxer@collabora.com>",
@@ -49,7 +49,7 @@ class AnalyticsOverlay(GstBase.BaseTransform):
     __gsttemplates__ = (src_template, sink_template)
 
     def __init__(self):
-        super(AnalyticsOverlay, self).__init__()
+        super(Overlay, self).__init__()
         self.outline_color = skia.ColorWHITE
         self.width = 640
         self.height = 480
@@ -273,5 +273,5 @@ class AnalyticsOverlay(GstBase.BaseTransform):
 
 
 # Register the element with GStreamer
-GObject.type_register(AnalyticsOverlay)
-__gstelementfactory__ = ("analyticsoverlay", Gst.Rank.NONE, AnalyticsOverlay)
+GObject.type_register(Overlay)
+__gstelementfactory__ = ("overlay_pyml", Gst.Rank.NONE, Overlay)

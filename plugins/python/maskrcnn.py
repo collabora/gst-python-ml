@@ -1,5 +1,5 @@
 # MaskRCNN
-# Copyright (C) 2024 Collabora Ltd.
+# Copyright (C) 2024-2025 Collabora Ltd.
 #
 # This library is free software; you can redistribute it and/or
 # modify it under the terms of the GNU Library General Public
@@ -29,13 +29,13 @@ from gi.repository import Gst, GObject, GstAnalytics, GLib  # noqa: E402
 CAN_REGISTER_ELEMENT = True
 try:
     import numpy as np
-    from gst_analytics_object_detector import GstAnalyticsObjectDetector
+    from gst_object_detector import GstObjectDetector
 except ImportError as e:
     CAN_REGISTER_ELEMENT = False
     Gst.warning(f"The 'maskrcnn' element will not be available. Error {e}")
 
 
-class MaskRCNN(GstAnalyticsObjectDetector):
+class MaskRCNN(GstObjectDetector):
     """
     GStreamer element for Mask R-CNN model inference on video frames.
     """
@@ -113,8 +113,8 @@ class MaskRCNN(GstAnalyticsObjectDetector):
 
 if CAN_REGISTER_ELEMENT:
     GObject.type_register(MaskRCNN)
-    __gstelementfactory__ = ("maskrcnn", Gst.Rank.NONE, MaskRCNN)
+    __gstelementfactory__ = ("maskrcnn_pyml", Gst.Rank.NONE, MaskRCNN)
 else:
     Gst.warning(
-        "The 'maskrcnn' element will not be registered because required modules are missing."
+        "The 'maskrcnn_pyml' element will not be registered because required modules are missing."
     )

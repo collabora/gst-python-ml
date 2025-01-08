@@ -1,5 +1,5 @@
-# AnalyticsStreamMux
-# Copyright (C) 2024 Collabora Ltd.
+# StreamMux
+# Copyright (C) 2024-2025 Collabora Ltd.
 #
 # This library is free software; you can redistribute it and/or
 # modify it under the terms of the GNU Library General Public
@@ -24,9 +24,9 @@ gi.require_version("GObject", "2.0")
 from gi.repository import Gst, GObject, GstBase  # noqa: E402
 
 
-class AnalyticsStreamMux(GstBase.Aggregator):
+class StreamMux(GstBase.Aggregator):
     __gstmetadata__ = (
-        "AnalyticsStreamMux",
+        "StreamMux",
         "Video/Mux",
         "Custom stream muxer",
         "Aaron Boxer <aaron.boxer@collabora.com>",
@@ -57,7 +57,7 @@ class AnalyticsStreamMux(GstBase.Aggregator):
     )
 
     def __init__(self):
-        super(AnalyticsStreamMux, self).__init__()
+        super(StreamMux, self).__init__()
         self.batch_buffer = []
         self.timestamps = []
         self.timeout_source = None
@@ -139,5 +139,5 @@ class AnalyticsStreamMux(GstBase.Aggregator):
             raise AttributeError(f"Unknown property: {prop.name}")
 
 
-GObject.type_register(AnalyticsStreamMux)
-__gstelementfactory__ = ("analyticsstreammux", Gst.Rank.NONE, AnalyticsStreamMux)
+GObject.type_register(StreamMux)
+__gstelementfactory__ = ("streammux_pyml", Gst.Rank.NONE, StreamMux)

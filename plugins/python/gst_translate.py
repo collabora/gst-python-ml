@@ -1,5 +1,5 @@
-# GstAnalyticsTranslate
-# Copyright (C) 2024 Collabora Ltd.
+# GstTranslate
+# Copyright (C) 2024-2025 Collabora Ltd.
 #
 # This library is free software; you can redistribute it and/or
 # modify it under the terms of the GNU Library General Public
@@ -19,7 +19,7 @@
 import gi
 
 from transformers import MarianMTModel, MarianTokenizer
-from gst_analytics_aggregator import GstAnalyticsAggregator
+from gst_aggregator import GstAggregator
 
 gi.require_version("Gst", "1.0")
 gi.require_version("GstBase", "1.0")
@@ -31,9 +31,9 @@ ICAPS = Gst.Caps(Gst.Structure("text/x-raw", format="utf8"))
 OCAPS = Gst.Caps(Gst.Structure("text/x-raw", format="utf8"))
 
 
-class GstAnalyticsTranslate(GstAnalyticsAggregator):
+class GstTranslate(GstAggregator):
     __gstmetadata__ = (
-        "GstAnalyticsTranslate",
+        "GstTranslate",
         "Aggregator",
         "Text-to-Text translation element",
         "Aaron Boxer <aaron.boxer@collabora.com>",
@@ -71,7 +71,7 @@ class GstAnalyticsTranslate(GstAnalyticsAggregator):
     )
 
     def __init__(self):
-        super(GstAnalyticsTranslate, self).__init__()
+        super(GstTranslate, self).__init__()
         self.tokenizer = None
 
     def do_load_model(self):

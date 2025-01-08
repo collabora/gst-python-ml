@@ -1,5 +1,5 @@
-# GstAnalyticsTFLiteEngine
-# Copyright (C) 2024 Collabora Ltd.
+# GstTFLiteEngine
+# Copyright (C) 2024-2025 Collabora Ltd.
 #
 # This library is free software; you can redistribute it and/or
 # modify it under the terms of the GNU Library General Public
@@ -19,7 +19,7 @@
 import gi
 import numpy as np
 import tensorflow as tf  # TensorFlow Lite interpreter
-from .gst_analytics_ml_engine import GstAnalyticsMLEngine
+from .gst_ml_engine import GstMLEngine
 
 gi.require_version("Gst", "1.0")
 gi.require_version("GstBase", "1.0")
@@ -27,7 +27,7 @@ gi.require_version("GLib", "2.0")
 from gi.repository import Gst  # noqa: E402
 
 
-class GstAnalyticsTFLiteEngine(GstAnalyticsMLEngine):
+class GstTFLiteEngine(GstMLEngine):
     def __init__(self, device="cpu"):
         """
         Initializes the TFLite engine and attempts to load the delegate if provided.

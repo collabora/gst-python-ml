@@ -1,5 +1,5 @@
-# GstAnalyticsEngineFactory
-# Copyright (C) 2024 Collabora Ltd.
+# GstEngineFactory
+# Copyright (C) 2024-2025 Collabora Ltd.
 #
 # This library is free software; you can redistribute it and/or
 # modify it under the terms of the GNU Library General Public
@@ -18,49 +18,49 @@
 
 
 try:
-    from .gst_analytics_pytorch_engine import GstAnalyticsPyTorchEngine
+    from .gst_pytorch_engine import GstPyTorchEngine
 
     _pytorch_engine_available = True
 except ImportError:
     _pytorch_engine_available = False
 
 try:
-    from .gst_analytics_pytorch_yolo_engine import GstAnalyticsPyTorchYoloEngine
+    from .gst_pytorch_yolo_engine import GstPyTorchYoloEngine
 
     _pytorch_yolo_engine_available = True
 except ImportError:
     _pytorch_yolo_engine_available = False
 
 try:
-    from .gst_analytics_tflite_engine import GstAnalyticsTFLiteEngine
+    from .gst_tflite_engine import GstTFLiteEngine
 
     _tflite_engine_available = True
 except ImportError:
     _tflite_engine_available = False
 
 try:
-    from .gst_analytics_tensorflow_engine import GstAnalyticsTensorFlowEngine
+    from .gst_tensorflow_engine import GstTensorFlowEngine
 
     _tensorflow_engine_available = True
 except ImportError:
     _tensorflow_engine_available = False
 
 try:
-    from .gst_analytics_onnx_engine import GstAnalyticsONNXEngine
+    from .gst_onnx_engine import GstONNXEngine
 
     _onnx_engine_available = True
 except ImportError:
     _onnx_engine_available = False
 
 try:
-    from .gst_analytics_openvino_engine import GstAnalyticsOpenVinoEngine
+    from .gst_openvino_engine import GstOpenVinoEngine
 
     _openvino_engine_available = True
 except ImportError:
     _openvino_engine_available = False
 
 
-class GstAnalyticsEngineFactory:
+class GstEngineFactory:
     # Define the constant strings for each engine
     PYTORCH_ENGINE = "pytorch"
     PYTORCH_YOLO_ENGINE = "pytorch-yolo"
@@ -78,52 +78,52 @@ class GstAnalyticsEngineFactory:
         :param device: The device to run the engine on (default is "cpu").
         :return: An instance of the appropriate ML engine class.
         """
-        if engine_type == GstAnalyticsEngineFactory.PYTORCH_ENGINE:
+        if engine_type == GstEngineFactory.PYTORCH_ENGINE:
             if _pytorch_engine_available:
-                return GstAnalyticsPyTorchEngine(device)
+                return GstPyTorchEngine(device)
             else:
                 raise ImportError(
-                    f"{GstAnalyticsEngineFactory.PYTORCH_ENGINE} engine is not available."
+                    f"{GstEngineFactory.PYTORCH_ENGINE} engine is not available."
                 )
 
-        if engine_type == GstAnalyticsEngineFactory.PYTORCH_YOLO_ENGINE:
+        if engine_type == GstEngineFactory.PYTORCH_YOLO_ENGINE:
             if _pytorch_yolo_engine_available:
-                return GstAnalyticsPyTorchYoloEngine(device)
+                return GstPyTorchYoloEngine(device)
             else:
                 raise ImportError(
-                    f"{GstAnalyticsEngineFactory.PYTORCH_YOLO_ENGINE} engine is not available."
+                    f"{GstEngineFactory.PYTORCH_YOLO_ENGINE} engine is not available."
                 )
 
-        elif engine_type == GstAnalyticsEngineFactory.TFLITE_ENGINE:
+        elif engine_type == GstEngineFactory.TFLITE_ENGINE:
             if _tflite_engine_available:
-                return GstAnalyticsTFLiteEngine(device)
+                return GstTFLiteEngine(device)
             else:
                 raise ImportError(
-                    f"{GstAnalyticsEngineFactory.TFLITE_ENGINE} engine is not available."
+                    f"{GstEngineFactory.TFLITE_ENGINE} engine is not available."
                 )
 
-        elif engine_type == GstAnalyticsEngineFactory.TENSORFLOW_ENGINE:
+        elif engine_type == GstEngineFactory.TENSORFLOW_ENGINE:
             if _tensorflow_engine_available:
-                return GstAnalyticsTensorFlowEngine(device)
+                return GstTensorFlowEngine(device)
             else:
                 raise ImportError(
-                    f"{GstAnalyticsEngineFactory.TENSORFLOW_ENGINE} engine is not available."
+                    f"{GstEngineFactory.TENSORFLOW_ENGINE} engine is not available."
                 )
 
-        elif engine_type == GstAnalyticsEngineFactory.ONNX_ENGINE:
+        elif engine_type == GstEngineFactory.ONNX_ENGINE:
             if _onnx_engine_available:
-                return GstAnalyticsONNXEngine(device)
+                return GstONNXEngine(device)
             else:
                 raise ImportError(
-                    f"{GstAnalyticsEngineFactory.ONNX_ENGINE} engine is not available."
+                    f"{GstEngineFactory.ONNX_ENGINE} engine is not available."
                 )
 
-        elif engine_type == GstAnalyticsEngineFactory.OPENVINO_ENGINE:
+        elif engine_type == GstEngineFactory.OPENVINO_ENGINE:
             if _openvino_engine_available:
-                return GstAnalyticsOpenVinoEngine(device)
+                return GstOpenVinoEngine(device)
             else:
                 raise ImportError(
-                    f"{GstAnalyticsEngineFactory.OPENVINO_ENGINE} engine is not available."
+                    f"{GstEngineFactory.OPENVINO_ENGINE} engine is not available."
                 )
 
         else:

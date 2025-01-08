@@ -16,20 +16,20 @@ def find_py_files(directory):
     return py_files
 
 setup(
-    name="gst-python-analytics",  # Package name
+    name="gst-python-ml",  # Package name
     version="1.24.0",  # Version
-    packages=['gst_analytics', 'gst_analytics.engine'],  # Manually specify packages
-    package_dir={"gst_analytics": "plugins/python"},  # Map everything to gst_analytics
+    packages=['gst_pyml', 'gst_pyml.engine'],  # Manually specify packages
+    package_dir={"gst_pyml": "plugins/python"},  # Map everything to gst_pyml
     package_data={  # Manually include all .py files
-        "gst_analytics": find_py_files("plugins/python"),
+        "gst_pyml": find_py_files("plugins/python"),
     },
     include_package_data=True,  # Ensure all data files are included
-    description="An analytics package for GStreamer",
+    description="An ML package for GStreamer",
     long_description=open("README.md").read(),
     long_description_content_type="text/markdown",
     author="Aaron Boxer",
     author_email="aaron.boxer@collabora.com",
-    url="https://github.com/collabora/gst-python-analytics",  # Project URL
+    url="https://github.com/collabora/gst-python-ml",  # Project URL
     classifiers=[
         "Programming Language :: Python :: 3",
         "License :: OSI Approved :: LGPL License",
