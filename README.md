@@ -203,7 +203,7 @@ Possible model names:
 
 `gst-launch-1.0   filesrc location=data/soccer_tracking.mp4 ! decodebin ! videoconvert ! videoscale ! video/x-raw,width=640,height=480 ! yolo_pyml model-name=yolo11m device=cuda:0 track=True ! videoconvert  !  objectdetectionoverlay labels-color=0xFFFF0000 object-detection-outline-color=0xFFFF0000 ! autovideosink`
 
-##### yolo with dectionoverlay
+##### yolo with overlay
 
  `gst-launch-1.0   filesrc location=data/soccer_tracking.mp4 ! decodebin ! videoconvert ! videoscale ! video/x-raw,width=640,height=480 ! yolo_pyml model-name=yolo11m device=cuda:0 track=True !  overlay_pyml ! videoconvert !  autovideosink`
 
@@ -257,7 +257,7 @@ https://huggingface.co/models?sort=trending&search=Helsinki
 
 `GST_DEBUG=4 gst-launch-1.0 filesrc location=data/prompt_for_llm.txt !  llm_pyml device=cuda model-name="microsoft/phi-2" ! fakesink`
 
-#### stablediffusion pipeline
+#### stablediffusion
 
 `GST_DEBUG=4 gst-launch-1.0 filesrc location=data/prompt_for_stable_diffusion.txt ! stablediffusion_pyml device=cuda ! pngenc ! filesink location=output_image.png`
 
@@ -268,7 +268,7 @@ https://huggingface.co/models?sort=trending&search=Helsinki
 
 #### caption
 
-`GST_DEBUG=4 gst-launch-1.0   filesrc location=data/soccer_tracking.mp4 ! decodebin ! videoconvert ! caption_pyml device=cuda:0 downsampled_width=320 downsampled_height=240 prompt="What is the name of the game being played?" ! textoverlay !  fakesink`
+`GST_DEBUG=4 gst-launch-1.0   filesrc location=data/soccer_tracking.mp4 ! decodebin ! videoconvert ! caption_pyml device=cuda:0 downsampled_width=320 downsampled_height=240 prompt="What is the name of the game being played?" ! textoverlay !  autovideosink`
 
 
 # Building PyPI Package
