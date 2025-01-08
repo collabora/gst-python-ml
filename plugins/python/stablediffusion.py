@@ -37,9 +37,9 @@ except ImportError as e:
 ICAPS = Gst.Caps(Gst.Structure("text/plain", format="utf8"))
 
 
-class GstStableDiffusion(GstAggregator):
+class StableDiffusion(GstAggregator):
     __gstmetadata__ = (
-        "GstStableDiffusion",
+        "StableDiffusion",
         "Aggregator",
         "Generates images from text using Stable Diffusion",
         "Aaron Boxer <aaron.boxer@collabora.com>",
@@ -152,7 +152,7 @@ class GstStableDiffusion(GstAggregator):
 
 
 if CAN_REGISTER_ELEMENT:
-    GObject.type_register(GstStableDiffusion)
+    GObject.type_register(StableDiffusion)
     __gstelementfactory__ = (
         "stablediffusion_pyml",
         Gst.Rank.NONE,

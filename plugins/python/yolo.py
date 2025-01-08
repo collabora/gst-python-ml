@@ -1,5 +1,5 @@
-# YOLOTransform
-# Copyright (C) 2024-2025 Aaron Boxer <aaron dot boxer at collabora.com>
+# Yolo
+# Copyright (C) 2024-2025 Collabora Ltd.
 #
 # This library is free software; you can redistribute it and/or
 # modify it under the terms of the GNU Library General Public
