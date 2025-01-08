@@ -28,7 +28,7 @@ try:
     from gst_object_detector import GstObjectDetector
 except ImportError as e:
     CAN_REGISTER_ELEMENT = False
-    Gst.warning(f"The 'objectdetector' element will not be available. Error: {e}")
+    Gst.warning(f"The 'objectdetector_pylm' element will not be available. Error: {e}")
 
 
 class ObjectDetector(GstObjectDetector):

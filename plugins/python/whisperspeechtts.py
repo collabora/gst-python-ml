@@ -29,7 +29,7 @@ try:
     from gst_tts import GstTTS
 except ImportError as e:
     CAN_REGISTER_ELEMENT = False
-    Gst.warning(f"The 'whisperspeechtts' element will not be available. Error: {e}")
+    Gst.warning(f"The 'whisperspeechtts_pyml' element will not be available. Error: {e}")
 
 TTS_SAMPLE_RATE = 24000
 

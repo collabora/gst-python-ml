@@ -29,7 +29,7 @@ try:
     from faster_whisper import WhisperModel
 except ImportError as e:
     CAN_REGISTER_ELEMENT = False
-    Gst.warning(f"The 'whispertranscribe' element will not be available. Error: {e}")
+    Gst.warning(f"The 'whispertranscribe_pyml' element will not be available. Error: {e}")
 
 
 class WhisperTranscribe(GstTranscribe):

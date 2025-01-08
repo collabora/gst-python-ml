@@ -16,25 +16,33 @@
 # Free Software Foundation, Inc., 51 Franklin Street, Fifth Floor,
 # Boston, MA 02110-1301, USA.
 
-import re
-import gi
-import skia
-import cairo
-import numpy as np
 
-gi.require_version("Gst", "1.0")
-gi.require_version("GstBase", "1.0")
-gi.require_version("GstVideo", "1.0")
-gi.require_version("GLib", "2.0")
-gi.require_version("GstAnalytics", "1.0")
-from gi.repository import (
-    Gst,
-    GstBase,
-    GstVideo,
-    GstAnalytics,
-    GLib,
-    GObject,
-)  # noqa: E402
+CAN_REGISTER_ELEMENT = True
+try:
+
+    import re
+    import gi
+    import skia
+    import cairo
+    import numpy as np
+
+    gi.require_version("Gst", "1.0")
+    gi.require_version("GstBase", "1.0")
+    gi.require_version("GstVideo", "1.0")
+    gi.require_version("GLib", "2.0")
+    gi.require_version("GstAnalytics", "1.0")
+    from gi.repository import (
+        Gst,
+        GstBase,
+        GstVideo,
+        GstAnalytics,
+        GLib,
+        GObject,
+    )  # noqa: E402
+
+except ImportError as e:
+    CAN_REGISTER_ELEMENT = False
+    Gst.warning(f"The 'overlay_pyml' element will not be available. Error: {e}")
 
 # Define video formats manually
 VIDEO_FORMATS = "video/x-raw, format=(string){ RGBA, ARGB, BGRA, ABGR }"
@@ -289,7 +297,10 @@ class Overlay(GstBase.BaseTransform):
         cr.show_text(label)
         cr.stroke()
 
-
-# Register the element with GStreamer
-GObject.type_register(Overlay)
-__gstelementfactory__ = ("overlay_pyml", Gst.Rank.NONE, Overlay)
+if CAN_REGISTER_ELEMENT:
+    GObject.type_register(ObjectDetector)
+    __gstelementfactory__ = ("overlay_pyml", Gst.Rank.NONE, Overlay)
+else:
+    Gst.warning(
+        "The 'overlay_pyml' element will not be registered because gst_object_detector module is missing."
+    )

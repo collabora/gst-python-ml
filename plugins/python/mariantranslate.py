@@ -26,7 +26,7 @@ try:
     from gst_translate import GstTranslate
 except ImportError as e:
     CAN_REGISTER_ELEMENT = False
-    Gst.warning(f"The 'mariantranslate' element will not be available. Element {e}")
+    Gst.warning(f"The 'mariantranslate_pyml' element will not be available. Element {e}")
 
 
 class MarianTranslate(GstTranslate):

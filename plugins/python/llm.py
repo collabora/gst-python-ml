@@ -26,7 +26,7 @@ try:
     from gst_llm import GstLLM
 except ImportError as e:
     CAN_REGISTER_ELEMENT = False
-    Gst.warning(f"The 'llm' element will not be available. Error {e}")
+    Gst.warning(f"The 'llm_pyml' element will not be available. Error {e}")
 
 
 class LLM(GstLLM):

@@ -33,7 +33,7 @@ try:
     import cv2
 except ImportError as e:
     CAN_REGISTER_ELEMENT = False
-    Gst.warning(f"The 'caption' element will not be available. Error {e}")
+    Gst.warning(f"The 'caption_pyml' element will not be available. Error {e}")
 
 
 class Caption(GstVideoTransform):

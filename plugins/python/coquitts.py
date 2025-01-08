@@ -41,7 +41,7 @@ try:
     from TTS.api import TTS
 except ImportError as e:
     CAN_REGISTER_ELEMENT = False
-    Gst.warning(f"The 'coquitts' element will not be available. Error: {e}")
+    Gst.warning(f"The 'coquitts_pyml' element will not be available. Error: {e}")
 
 
 class CoquiTTS(GstTTS):

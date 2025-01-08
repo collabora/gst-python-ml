@@ -33,7 +33,7 @@ try:
     from faster_whisper import WhisperModel
 except ImportError as e:
     CAN_REGISTER_ELEMENT = False
-    Gst.warning(f"The 'whisperlive' element will not be available. Error: {e}")
+    Gst.warning(f"The 'whisperlive_pyml' element will not be available. Error: {e}")
 
 TTS_SAMPLE_RATE = 24000
 model_ref = "collabora/whisperspeech:s2a-q4-base-en+pl.model"
