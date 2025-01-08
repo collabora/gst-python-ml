@@ -1,6 +1,6 @@
 # GStreamer Python ML
 
-This project provides python base classes and GStreamer elements supporting a broad range
+This project provides Python base classes and GStreamer elements supporting a broad range
 of ML features. 
 
 Supported functionality includes:
@@ -50,14 +50,14 @@ sudo apt install -y python3-pip  python3-venv \
 
 #### Clone repo (host)
 
-`git clone https://github.com/collabora/gst-python-analytics.git`
+`git clone https://github.com/collabora/gst-python-ml.git`
 
 #### Update .bashrc
 
 ```
 export VIRTUAL_ENV=$HOME/venv
 export PATH=$VIRTUAL_ENV/bin:$PATH
-export GST_PLUGIN_PATH=$HOME/src/gst-python-analytics/plugins
+export GST_PLUGIN_PATH=$HOME/src/gst-python-ml/plugins
 export LD_LIBRARY_PATH=$LD_LIBRARY_PATH:$VIRTUAL_ENV/lib/python3.12/site-packages/nvidia/cublas/lib:$VIRTUAL_ENV/lib/python3.12/site-packages/nvidia/cudnn/lib
 ```
 
@@ -76,7 +76,7 @@ pip install pygobject torch torchvision transformers numpy black ruff
 #### Install pip requirements
 
 ```
-cd $HOME/src/gst-python-analytics
+cd $HOME/src/gst-python-ml
 pip install -r requirements.txt
 ```
 
@@ -86,8 +86,8 @@ pip install -r requirements.txt
 
 Important Note:
 
-This Dockerfile maps a local `gst-python-analytics` repository to the container,
-and expects this repository to be located in `$HOME/src` i.e.  `$HOME/src/gst-python-analytics`.
+This Dockerfile maps a local `gst-python-ml` repository to the container,
+and expects this repository to be located in `$HOME/src` i.e.  `$HOME/src/gst-python-ml`.
 
 
 #### Enable Docker GPU Support on Host
@@ -110,11 +110,11 @@ sudo systemctl restart docker
 a) If running on CPU, just remove `--gpus all` from command below
 b) This command assumes you have set up a Kafka network as described below
 
-`docker run --network kafka-network -v ~/src/gst-python-analytics/:/root/gst-python-analytics -it --rm --gpus all --name ubuntu24 ubuntu24:latest /bin/bash`
+`docker run --network kafka-network -v ~/src/gst-python-ml/:/root/gst-python-ml -it --rm --gpus all --name ubuntu24 ubuntu24:latest /bin/bash`
 
 In the container shell, run the following
 
-`# cd gst-python-analytics && pip install -r requirements.txt`
+`# cd gst-python-ml && pip install -r requirements.txt`
 
 Now you should be able to inspect the `objectdetector` element:
 
