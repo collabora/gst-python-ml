@@ -1,7 +1,9 @@
-# GStreamer Python Analytics
+# GStreamer Python ML
 
 This project provides python base classes and GStreamer elements supporting a broad range
-of analytics tasks. Supported functionality includes:
+of ML features. 
+
+Supported functionality includes:
 
 1. object detection
 1. tracking
