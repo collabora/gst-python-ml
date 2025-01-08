@@ -16,11 +16,14 @@ Supported functionality includes:
 1. LLMs
 1. serializing to Kafka server
 
-Different ML toolkits are supported via the `MLEngine` abstraction - we have nominal support for
+ML toolkits are supported via the `MLEngine` abstraction - we have nominal support for
 TensorFlow, LiteRT and OpenVINO, but all testing thus far has been done with PyTorch.
 
-These elements will work with your distribution's GStreamer packages. They have been tested on Ubuntu 24
-with GStreamer 1.24.
+These elements will work with your distribution's GStreamer packages. They have been tested on Ubuntu 24 with GStreamer 1.24.
+
+## Python Version
+
+All elements work with the installed version of Python on Ubuntu 24 : 3.12
 
 ## Requirements
 
