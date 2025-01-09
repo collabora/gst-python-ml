@@ -43,7 +43,7 @@ sudo apt install -y python3-pip  python3-venv \
     gstreamer1.0-plugins-base gstreamer1.0-plugins-base-apps \
     gstreamer1.0-plugins-good gstreamer1.0-plugins-bad \
     gir1.2-gst-plugins-bad-1.0 python3-gst-1.0 gstreamer1.0-python3-plugin-loader \
-    libcairo2 libcairo2-dev git nvidia-cuda-toolkit
+    libcairo2 libcairo2-dev git
 ```
 
 #### Install venv
@@ -141,6 +141,13 @@ If you want to purge existing docker containers and images:
 docker container prune -f
 docker image prune -a -f
 ```
+
+#### IMPORTANT NOTE
+
+To use the language elements included in this project, the `nvidia-cuda-toolkit`
+ubuntu package must be installed, and additional pip requirements must be installed from
+`requirements/language_requrements.txt`
+
 
 ## Using GStreamer Python ML Elements
 
