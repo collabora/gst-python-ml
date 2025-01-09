@@ -298,7 +298,7 @@ class Overlay(GstBase.BaseTransform):
         cr.stroke()
 
 if CAN_REGISTER_ELEMENT:
-    GObject.type_register(ObjectDetector)
+    GObject.type_register(Overlay)
     __gstelementfactory__ = ("overlay_pyml", Gst.Rank.NONE, Overlay)
 else:
     Gst.warning(
