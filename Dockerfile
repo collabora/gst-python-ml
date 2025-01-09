@@ -17,11 +17,10 @@ RUN echo 'source /opt/venv/bin/activate' >> /root/.bashrc
 ENV VIRTUAL_ENV=/opt/venv
 ENV PATH="$VIRTUAL_ENV/bin:$PATH"
 
-# Activate the virtual environment and install necessary Python packages
+# Activate the virtual environment
 RUN /bin/bash -c "\
     source /opt/venv/bin/activate && \
-    pip install --upgrade pip && \
-    pip install pygobject torch torchvision transformers numpy black ruff"
+    pip install --upgrade pip"
 
 # Set some environment variables
 ENV GST_PLUGIN_PATH=/root/gst-python-ml/plugins

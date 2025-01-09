@@ -1,0 +1,15 @@
+# These are the requirements for running the NLP elements such as
+# TTS and STT
+
+nvidia-cudnn-cu11==8.9.6.50
+sentencepiece
+protobuf
+accelerate
+pysilero
+faster_whisper
+pysilero-vad
+diffusers
+whisperspeech
+webdataset
+sacremoses
+coqui-tts

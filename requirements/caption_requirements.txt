@@ -1,0 +1,5 @@
+# These are the requirements specific to the caption element i.e. phi3-vision model.
+# Flash attention takes a long time to build, so it is separated out into this file.
+
+flash_attn
+
