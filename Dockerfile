@@ -9,7 +9,7 @@ RUN apt-get install -y python3-pip  python3-venv \
     gstreamer1.0-plugins-base gstreamer1.0-plugins-base-apps \
     gstreamer1.0-plugins-good gstreamer1.0-plugins-bad \
     gir1.2-gst-plugins-bad-1.0 python3-gst-1.0 libcairo2 libcairo2-dev \
-    git nvidia-cuda-toolkit
+    git nvidia-cuda-toolkit gstreamer1.0-python3-plugin-loader
 
 # Create and activate a virtual environment with access to system packages
 RUN python3 -m venv --system-site-packages /opt/venv
