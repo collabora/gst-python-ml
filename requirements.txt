@@ -9,7 +9,6 @@ numpy
 black
 ruff
 huggingface-hub
-confluent-kafka
 ultralytics
 skia-python
 pycairo
