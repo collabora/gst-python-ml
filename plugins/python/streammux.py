@@ -140,4 +140,4 @@ class StreamMux(GstBase.Aggregator):
 
 
 GObject.type_register(StreamMux)
-__gstelementfactory__ = ("streammux_pyml", Gst.Rank.NONE, StreamMux)
+__gstelementfactory__ = ("pyml_streammux", Gst.Rank.NONE, StreamMux)

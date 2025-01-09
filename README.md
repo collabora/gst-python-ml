@@ -72,8 +72,7 @@ and then
 
 ```
 source $VIRTUAL_ENV/bin/activate
-pip install --upgrade pip && \
-pip install pygobject torch torchvision transformers numpy black ruff
+pip install --upgrade pip
 ```
 
 #### Install pip requirements
@@ -206,50 +205,50 @@ Possible model names:
 
 #### fasterrcnn/kafka
 
-`GST_DEBUG=4 gst-launch-1.0 multifilesrc location=data/000015.jpg ! jpegdec ! videoconvert ! videoscale ! objectdetector_pyml model-name=fasterrcnn_resnet50_fpn device=cuda batch-size=4 ! kafkasink_pyml schema-file=data/gst_object_detector.json broker=kafka:9092 topic=test-kafkasink-topic  2>&1 | grep kafkasink_pyml`
+`GST_DEBUG=4 gst-launch-1.0 multifilesrc location=data/000015.jpg ! jpegdec ! videoconvert ! videoscale ! pyml_objectdetector model-name=fasterrcnn_resnet50_fpn device=cuda batch-size=4 ! pyml_kafkasink schema-file=data/gst_object_detector.json broker=kafka:9092 topic=test-kafkasink-topic  2>&1 | grep pyml_kafkasink`
 
 #### maskrcnn
 
-`GST_DEBUG=4 gst-launch-1.0   filesrc location=data/people.mp4 ! decodebin ! videoconvert ! videoscale ! maskrcnn_pyml device=cuda batch-size=4 model-name=maskrcnn_resnet50_fpn ! videoconvert ! objectdetectionoverlay labels-color=0xFFFF0000 object-detection-outline-color=0xFFFF0000  ! autovideosink`
+`GST_DEBUG=4 gst-launch-1.0   filesrc location=data/people.mp4 ! decodebin ! videoconvert ! videoscale ! pyml_maskrcnn device=cuda batch-size=4 model-name=maskrcnn_resnet50_fpn ! videoconvert ! objectdetectionoverlay labels-color=0xFFFF0000 object-detection-outline-color=0xFFFF0000  ! autovideosink`
 
 
 #### yolo with tracking
 
-`gst-launch-1.0   filesrc location=data/soccer_tracking.mp4 ! decodebin ! videoconvert ! videoscale ! video/x-raw,width=640,height=480 ! yolo_pyml model-name=yolo11m device=cuda:0 track=True ! videoconvert  !  objectdetectionoverlay labels-color=0xFFFF0000 object-detection-outline-color=0xFFFF0000 ! autovideosink`
+`gst-launch-1.0   filesrc location=data/soccer_tracking.mp4 ! decodebin ! videoconvert ! videoscale ! video/x-raw,width=640,height=480 ! pyml_yolo model-name=yolo11m device=cuda:0 track=True ! videoconvert  !  objectdetectionoverlay labels-color=0xFFFF0000 object-detection-outline-color=0xFFFF0000 ! autovideosink`
 
 ##### yolo with overlay
 
- `gst-launch-1.0   filesrc location=data/soccer_tracking.mp4 ! decodebin ! videoconvert ! videoscale ! video/x-raw,width=640,height=480 ! yolo_pyml model-name=yolo11m device=cuda:0 track=True !  overlay_pyml ! videoconvert !  autovideosink`
+ `gst-launch-1.0   filesrc location=data/soccer_tracking.mp4 ! decodebin ! videoconvert ! videoscale ! video/x-raw,width=640,height=480 ! pyml_yolo model-name=yolo11m device=cuda:0 track=True !  pyml_overlay ! videoconvert !  autovideosink`
 
 
 #### streammux pipeline
 
-`GST_DEBUG=4 gst-launch-1.0 streammux_pyml name=mux  ! videoconvert ! fakesink videotestsrc ! mux. videotestsrc pattern=ball ! mux. videotestsrc pattern=snow ! mux.`
+`GST_DEBUG=4 gst-launch-1.0 pyml_streammux name=mux  ! videoconvert ! fakesink videotestsrc ! mux. videotestsrc pattern=ball ! mux. videotestsrc pattern=snow ! mux.`
 
 
 ### whispertranscribe
 
 #### transcription with initial prompt set
 
-`GST_DEBUG=4 gst-launch-1.0 filesrc location=data/air_traffic_korean_with_english.wav ! decodebin ! audioconvert ! whispertranscribe_pyml device=cuda language=ko initial_prompt = "Air Traffic Control은, radar systems를,  weather conditions에, flight paths를, communication은, unexpected weather conditions가, continuous training을, dedication과, professionalism" ! fakesink`
+`GST_DEBUG=4 gst-launch-1.0 filesrc location=data/air_traffic_korean_with_english.wav ! decodebin ! audioconvert ! pyml_whispertranscribe device=cuda language=ko initial_prompt = "Air Traffic Control은, radar systems를,  weather conditions에, flight paths를, communication은, unexpected weather conditions가, continuous training을, dedication과, professionalism" ! fakesink`
 
 #### translation to English
 
-`GST_DEBUG=4 gst-launch-1.0 filesrc location=data/air_traffic_korean_with_english.wav ! decodebin ! audioconvert ! whispertranscribe_pyml device=cuda language=ko translate=yes ! fakesink`
+`GST_DEBUG=4 gst-launch-1.0 filesrc location=data/air_traffic_korean_with_english.wav ! decodebin ! audioconvert ! pyml_whispertranscribe device=cuda language=ko translate=yes ! fakesink`
 
 #### coquitts
 
-`GST_DEBUG=4 gst-launch-1.0 filesrc location=data/air_traffic_korean_with_english.wav ! decodebin ! audioconvert ! whispertranscribe_pyml device=cuda language=ko translate=yes ! coquitts_pyml device=cuda ! audioconvert ! wavenc ! filesink location=output_audio.wav`
+`GST_DEBUG=4 gst-launch-1.0 filesrc location=data/air_traffic_korean_with_english.wav ! decodebin ! audioconvert ! pyml_whispertranscribe device=cuda language=ko translate=yes ! pyml_coquitts device=cuda ! audioconvert ! wavenc ! filesink location=output_audio.wav`
 
 
 #### whisperspeechtts
 
-`GST_DEBUG=4 gst-launch-1.0 filesrc location=data/air_traffic_korean_with_english.wav ! decodebin ! audioconvert ! whispertranscribe_pyml device=cuda language=ko translate=yes ! whisperspeechtts_pyml device=cuda ! audioconvert ! wavenc ! filesink location=output_audio.wav`
+`GST_DEBUG=4 gst-launch-1.0 filesrc location=data/air_traffic_korean_with_english.wav ! decodebin ! audioconvert ! pyml_whispertranscribe device=cuda language=ko translate=yes ! pyml_whisperspeechtts device=cuda ! audioconvert ! wavenc ! filesink location=output_audio.wav`
 
 
 #### mariantranslate
 
-`GST_DEBUG=4 gst-launch-1.0 filesrc location=data/air_traffic_korean_with_english.wav ! decodebin ! audioconvert ! whispertranscribe_pyml device=cuda language=ko translate=yes ! mariantranslate_pyml device=cuda src=en target=fr ! fakesink`
+`GST_DEBUG=4 gst-launch-1.0 filesrc location=data/air_traffic_korean_with_english.wav ! decodebin ! audioconvert ! pyml_whispertranscribe device=cuda language=ko translate=yes ! pyml_mariantranslate device=cuda src=en target=fr ! fakesink`
 
 Supported src/target languages:
 
@@ -258,7 +257,7 @@ https://huggingface.co/models?sort=trending&search=Helsinki
 
 #### whisperlive
 
-`GST_DEBUG=4 gst-launch-1.0 filesrc location=data/air_traffic_korean_with_english.wav ! decodebin ! audioconvert ! whisperlive_pyml device=cuda language=ko translate=yes llm-model-name="microsoft/phi-2" ! audioconvert ! wavenc ! filesink location=output_audio.wav`
+`GST_DEBUG=4 gst-launch-1.0 filesrc location=data/air_traffic_korean_with_english.wav ! decodebin ! audioconvert ! pyml_whisperlive device=cuda language=ko translate=yes llm-model-name="microsoft/phi-2" ! audioconvert ! wavenc ! filesink location=output_audio.wav`
 
 ### LLM
 
@@ -269,20 +268,20 @@ https://huggingface.co/models?sort=trending&search=Helsinki
 
 3. LLM pipeline (in this case, we use phi-2)
 
-`GST_DEBUG=4 gst-launch-1.0 filesrc location=data/prompt_for_llm.txt !  llm_pyml device=cuda model-name="microsoft/phi-2" ! fakesink`
+`GST_DEBUG=4 gst-launch-1.0 filesrc location=data/prompt_for_llm.txt !  pyml_llm device=cuda model-name="microsoft/phi-2" ! fakesink`
 
 #### stablediffusion
 
-`GST_DEBUG=4 gst-launch-1.0 filesrc location=data/prompt_for_stable_diffusion.txt ! stablediffusion_pyml device=cuda ! pngenc ! filesink location=output_image.png`
+`GST_DEBUG=4 gst-launch-1.0 filesrc location=data/prompt_for_stable_diffusion.txt ! pyml_stablediffusion device=cuda ! pngenc ! filesink location=output_image.png`
 
 #### caption + yolo
 
-`GST_DEBUG=4 gst-launch-1.0   filesrc location=data/soccer_tracking.mp4 ! decodebin ! videoconvert ! videoscale ! video/x-raw,width=640,height=480 ! yolo_pyml model-name=yolo11m device=cuda:0 track=True ! caption_pyml device=cuda:0 ! textoverlay !  overlay_pyml ! videoconvert !  autovideosink`
+`GST_DEBUG=4 gst-launch-1.0   filesrc location=data/soccer_tracking.mp4 ! decodebin ! videoconvert ! videoscale ! video/x-raw,width=640,height=480 ! pyml_yolo model-name=yolo11m device=cuda:0 track=True ! pyml_caption device=cuda:0 ! textoverlay !  pyml_overlay ! videoconvert !  autovideosink`
 
 
 #### caption
 
-`GST_DEBUG=4 gst-launch-1.0   filesrc location=data/soccer_tracking.mp4 ! decodebin ! videoconvert ! caption_pyml device=cuda:0 downsampled_width=320 downsampled_height=240 prompt="What is the name of the game being played?" ! textoverlay !  autovideosink`
+`GST_DEBUG=4 gst-launch-1.0   filesrc location=data/soccer_tracking.mp4 ! decodebin ! videoconvert ! pyml_caption device=cuda:0 downsampled_width=320 downsampled_height=240 prompt="What is the name of the game being played?" ! textoverlay !  autovideosink`
 
 
 # Building PyPI Package

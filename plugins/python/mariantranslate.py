@@ -26,7 +26,7 @@ try:
     from gst_translate import GstTranslate
 except ImportError as e:
     CAN_REGISTER_ELEMENT = False
-    Gst.warning(f"The 'mariantranslate_pyml' element will not be available. Element {e}")
+    Gst.warning(f"The 'pyml_mariantranslate' element will not be available. Element {e}")
 
 
 class MarianTranslate(GstTranslate):
@@ -40,8 +40,8 @@ class MarianTranslate(GstTranslate):
 
 if CAN_REGISTER_ELEMENT:
     GObject.type_register(MarianTranslate)
-    __gstelementfactory__ = ("mariantranslate_pyml", Gst.Rank.NONE, MarianTranslate)
+    __gstelementfactory__ = ("pyml_mariantranslate", Gst.Rank.NONE, MarianTranslate)
 else:
     Gst.warning(
-        "The 'mariantranslate_pyml' element will not be registered because required modules are missing."
+        "The 'pyml_mariantranslate' element will not be registered because required modules are missing."
     )

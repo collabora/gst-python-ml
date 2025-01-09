@@ -125,4 +125,4 @@ class StreamDemux(Gst.Element):
 
 
 GObject.type_register(StreamDemux)
-__gstelementfactory__ = ("streamdemux_pyml", Gst.Rank.NONE, StreamDemux)
+__gstelementfactory__ = ("pyml_streamdemux", Gst.Rank.NONE, StreamDemux)

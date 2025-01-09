@@ -29,7 +29,7 @@ try:
     from gst_tts import GstTTS
 except ImportError as e:
     CAN_REGISTER_ELEMENT = False
-    Gst.warning(f"The 'whisperspeechtts_pyml' element will not be available. Error: {e}")
+    Gst.warning(f"The 'pyml_whisperspeechtts' element will not be available. Error: {e}")
 
 TTS_SAMPLE_RATE = 24000
 
@@ -98,8 +98,8 @@ class WhisperSpeechTTS(GstTTS):
 
 if CAN_REGISTER_ELEMENT:
     GObject.type_register(WhisperSpeechTTS)
-    __gstelementfactory__ = ("whisperspeechtts_pyml", Gst.Rank.NONE, WhisperSpeechTTS)
+    __gstelementfactory__ = ("pyml_whisperspeechtts", Gst.Rank.NONE, WhisperSpeechTTS)
 else:
     Gst.warning(
-        "The 'whisperspeechtts_pyml' element will not be registered because required modules were missing."
+        "The 'pyml_whisperspeechtts' element will not be registered because required modules were missing."
     )

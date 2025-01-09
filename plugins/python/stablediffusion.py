@@ -31,7 +31,7 @@ try:
     from diffusers import StableDiffusionPipeline
 except ImportError as e:
     CAN_REGISTER_ELEMENT = False
-    Gst.warning(f"The 'stablediffusion_pyml' element will not be available. Error: {e}")
+    Gst.warning(f"The 'pyml_stablediffusion' element will not be available. Error: {e}")
 
 # Set output caps to image format (e.g., PNG)
 ICAPS = Gst.Caps(Gst.Structure("text/plain", format="utf8"))
@@ -154,11 +154,11 @@ class StableDiffusion(GstAggregator):
 if CAN_REGISTER_ELEMENT:
     GObject.type_register(StableDiffusion)
     __gstelementfactory__ = (
-        "stablediffusion_pyml",
+        "pyml_stablediffusion",
         Gst.Rank.NONE,
         StableDiffusion,
     )
 else:
     Gst.warning(
-        "The 'stablediffusion_pyml' element will not be registered because required modules are missing."
+        "The 'pyml_stablediffusion' element will not be registered because required modules are missing."
     )

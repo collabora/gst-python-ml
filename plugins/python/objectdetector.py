@@ -52,8 +52,8 @@ class ObjectDetector(GstObjectDetector):
 
 if CAN_REGISTER_ELEMENT:
     GObject.type_register(ObjectDetector)
-    __gstelementfactory__ = ("objectdetector_pyml", Gst.Rank.NONE, ObjectDetector)
+    __gstelementfactory__ = ("pyml_objectdetector", Gst.Rank.NONE, ObjectDetector)
 else:
     Gst.warning(
-        "The 'objectdetector_pyml' element will not be registered because gst_object_detector module is missing."
+        "The 'pyml_objectdetector' element will not be registered because gst_object_detector module is missing."
     )

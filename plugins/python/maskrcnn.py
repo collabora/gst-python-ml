@@ -32,7 +32,7 @@ try:
     from gst_object_detector import GstObjectDetector
 except ImportError as e:
     CAN_REGISTER_ELEMENT = False
-    Gst.warning(f"The 'maskrcnn_pyml' element will not be available. Error {e}")
+    Gst.warning(f"The 'pyml_maskrcnn' element will not be available. Error {e}")
 
 
 class MaskRCNN(GstObjectDetector):
@@ -113,8 +113,8 @@ class MaskRCNN(GstObjectDetector):
 
 if CAN_REGISTER_ELEMENT:
     GObject.type_register(MaskRCNN)
-    __gstelementfactory__ = ("maskrcnn_pyml", Gst.Rank.NONE, MaskRCNN)
+    __gstelementfactory__ = ("pyml_maskrcnn", Gst.Rank.NONE, MaskRCNN)
 else:
     Gst.warning(
-        "The 'maskrcnn_pyml' element will not be registered because required modules are missing."
+        "The 'pyml_maskrcnn' element will not be registered because required modules are missing."
     )

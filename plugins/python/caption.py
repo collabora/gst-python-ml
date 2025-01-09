@@ -33,7 +33,7 @@ try:
     import cv2
 except ImportError as e:
     CAN_REGISTER_ELEMENT = False
-    Gst.warning(f"The 'caption_pyml' element will not be available. Error {e}")
+    Gst.warning(f"The 'pyml_caption' element will not be available. Error {e}")
 
 
 class Caption(GstVideoTransform):
@@ -216,8 +216,8 @@ class Caption(GstVideoTransform):
 
 if CAN_REGISTER_ELEMENT:
     GObject.type_register(Caption)
-    __gstelementfactory__ = ("caption_pyml", Gst.Rank.NONE, Caption)
+    __gstelementfactory__ = ("pyml_caption", Gst.Rank.NONE, Caption)
 else:
     Gst.warning(
-        "The 'caption_pyml' element will not be registered because required modules are missing."
+        "The 'pyml_caption' element will not be registered because required modules are missing."
     )

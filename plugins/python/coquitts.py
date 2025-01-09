@@ -41,7 +41,7 @@ try:
     from TTS.api import TTS
 except ImportError as e:
     CAN_REGISTER_ELEMENT = False
-    Gst.warning(f"The 'coquitts_pyml' element will not be available. Error: {e}")
+    Gst.warning(f"The 'pyml_coquitts' element will not be available. Error: {e}")
 
 
 class CoquiTTS(GstTTS):
@@ -87,8 +87,8 @@ class CoquiTTS(GstTTS):
 
 if CAN_REGISTER_ELEMENT:
     GObject.type_register(CoquiTTS)
-    __gstelementfactory__ = ("coquitts_pyml", Gst.Rank.NONE, CoquiTTS)
+    __gstelementfactory__ = ("pyml_coquitts", Gst.Rank.NONE, CoquiTTS)
 else:
     Gst.warning(
-        "The 'coquitts_pyml' element will not be registered because required modules are missing."
+        "The 'pyml_coquitts' element will not be registered because required modules are missing."
     )

@@ -42,7 +42,7 @@ try:
 
 except ImportError as e:
     CAN_REGISTER_ELEMENT = False
-    Gst.warning(f"The 'overlay_pyml' element will not be available. Error: {e}")
+    Gst.warning(f"The 'pyml_overlay' element will not be available. Error: {e}")
 
 # Define video formats manually
 VIDEO_FORMATS = "video/x-raw, format=(string){ RGBA, ARGB, BGRA, ABGR }"
@@ -299,8 +299,8 @@ class Overlay(GstBase.BaseTransform):
 
 if CAN_REGISTER_ELEMENT:
     GObject.type_register(Overlay)
-    __gstelementfactory__ = ("overlay_pyml", Gst.Rank.NONE, Overlay)
+    __gstelementfactory__ = ("pyml_overlay", Gst.Rank.NONE, Overlay)
 else:
     Gst.warning(
-        "The 'overlay_pyml' element will not be registered because gst_object_detector module is missing."
+        "The 'pyml_overlay' element will not be registered because gst_object_detector module is missing."
     )

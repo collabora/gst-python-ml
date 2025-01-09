@@ -222,8 +222,8 @@ class YOLOTransform(GstObjectDetector):
 
 if CAN_REGISTER_ELEMENT:
     GObject.type_register(YOLOTransform)
-    __gstelementfactory__ = ("yolo_pyml", Gst.Rank.NONE, YOLOTransform)
+    __gstelementfactory__ = ("pyml_yolo", Gst.Rank.NONE, YOLOTransform)
 else:
     Gst.warning(
-        "The 'yolo_pyml' element will not be registered because required modules are missing."
+        "The 'pyml_yolo' element will not be registered because required modules are missing."
     )

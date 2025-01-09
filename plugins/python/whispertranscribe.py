@@ -29,7 +29,7 @@ try:
     from faster_whisper import WhisperModel
 except ImportError as e:
     CAN_REGISTER_ELEMENT = False
-    Gst.warning(f"The 'whispertranscribe_pyml' element will not be available. Error: {e}")
+    Gst.warning(f"The 'pyml_whispertranscribe' element will not be available. Error: {e}")
 
 
 class WhisperTranscribe(GstTranscribe):
@@ -71,8 +71,8 @@ class WhisperTranscribe(GstTranscribe):
 
 if CAN_REGISTER_ELEMENT:
     GObject.type_register(WhisperTranscribe)
-    __gstelementfactory__ = ("whispertranscribe_pyml", Gst.Rank.NONE, WhisperTranscribe)
+    __gstelementfactory__ = ("pyml_whispertranscribe", Gst.Rank.NONE, WhisperTranscribe)
 else:
     Gst.warning(
-        "The 'whispertranscribe_pyml' element will not be registered because gst_transcribe module is missing."
+        "The 'pyml_whispertranscribe' element will not be registered because gst_transcribe module is missing."
     )

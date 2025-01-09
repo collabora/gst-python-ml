@@ -33,7 +33,7 @@ try:
     from faster_whisper import WhisperModel
 except ImportError as e:
     CAN_REGISTER_ELEMENT = False
-    Gst.warning(f"The 'whisperlive_pyml' element will not be available. Error: {e}")
+    Gst.warning(f"The 'pyml_whisperlive' element will not be available. Error: {e}")
 
 TTS_SAMPLE_RATE = 24000
 model_ref = "collabora/whisperspeech:s2a-q4-base-en+pl.model"
@@ -213,8 +213,8 @@ class WhisperLive(GstTranscribe):
 
 if CAN_REGISTER_ELEMENT:
     GObject.type_register(WhisperLive)
-    __gstelementfactory__ = ("whisperlive_pyml", Gst.Rank.NONE, WhisperLive)
+    __gstelementfactory__ = ("pyml_whisperlive", Gst.Rank.NONE, WhisperLive)
 else:
     Gst.warning(
-        "The 'whisperlive_pyml' element will not be registered because required modules were missing."
+        "The 'pyml_whisperlive' element will not be registered because required modules were missing."
     )

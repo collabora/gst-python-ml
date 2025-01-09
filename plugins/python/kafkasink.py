@@ -32,11 +32,11 @@ try:
     from confluent_kafka import Producer
 except ImportError as e:
     CAN_REGISTER_ELEMENT = False
-    Gst.warning(f"The 'kafkasink_pyml' element will not be available. Error {e}")
+    Gst.warning(f"The 'pyml_kafkasink' element will not be available. Error {e}")
 
 
 class KafkaSink(Gst.Element):
-    GST_PLUGIN_NAME = "kafkasink_pyml"
+    GST_PLUGIN_NAME = "pyml_kafkasink"
 
     __gstmetadata__ = (
         "Kafka Sink",
@@ -327,5 +327,5 @@ if CAN_REGISTER_ELEMENT:
     __gstelementfactory__ = (KafkaSink.GST_PLUGIN_NAME, Gst.Rank.NONE, KafkaSink)
 else:
     Gst.warning(
-        "The 'kafkasink_pyml' element will not be registered because confluent_kafka module is missing."
+        "The 'pyml_kafkasink' element will not be registered because confluent_kafka module is missing."
     )
