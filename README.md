@@ -14,7 +14,7 @@ Supported functionality includes:
 1. text to speech
 1. text to image
 1. LLMs
-1. serializing to Kafka server
+1. serializing model metadata to Kafka server
 
 ML toolkits are supported via the `MLEngine` abstraction - we have nominal support for
 TensorFlow, LiteRT and OpenVINO, but all testing thus far has been done with PyTorch.
@@ -75,7 +75,7 @@ pip install --upgrade pip
 #### Install pip requirements
 
 ```
-cd $HOME/src/gst-python-ml
+cd ~/src/gst-python-ml
 pip install -r requirements.txt
 ```
 
@@ -86,13 +86,12 @@ pip install -r requirements.txt
 Important Note:
 
 This Dockerfile maps a local `gst-python-ml` repository to the container,
-and expects this repository to be located in `$HOME/src` i.e.  `$HOME/src/gst-python-ml`.
+and expects this repository to be located in `~/src` i.e.  `~/src/gst-python-ml`.
 
 
 #### Enable Docker GPU Support on Host
 
-To use the host GPU in a docker container, you will need to install the nvidia container toolkit.
-If running on CPU, these steps can be skipped.
+To use the host GPU in a docker container, you will need to install the nvidia container toolkit. If running on CPU, these steps can be skipped.
 
 
 Add nvidia repository (Ubuntu)
@@ -126,10 +125,6 @@ In the container shell, run the following
 
 `# cd gst-python-ml && pip install -r requirements.txt`
 
-Now you should be able to inspect the `objectdetector` element:
-
-`gst-inspect-1.0 objectdetector`
-
 #### Docker Cleanup
 
 If you want to purge existing docker containers and images:
@@ -139,11 +134,15 @@ docker container prune -f
 docker image prune -a -f
 ```
 
-#### IMPORTANT NOTE
+## IMPORTANT NOTE
 
 To use the language elements included in this project, the `nvidia-cuda-toolkit`
 ubuntu package must be installed, and additional pip requirements must be installed from
 `requirements/language_requrements.txt`
+
+## Post Install
+
+Run `gst-inspect-1.0 python` to see all of the pyml elements listed.
 
 
 ## Using GStreamer Python ML Elements
