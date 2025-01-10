@@ -3,5 +3,6 @@
 
 # Note: building flash_attn also requires installation of nvidia-cuda-toolkit ubuntu package
 
+ninja
 flash_attn
 

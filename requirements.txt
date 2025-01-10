@@ -6,8 +6,6 @@ torchvision
 torchaudio
 transformers
 numpy
-black
-ruff
 huggingface-hub
 ultralytics
 skia-python
