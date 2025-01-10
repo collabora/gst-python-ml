@@ -212,7 +212,7 @@ Possible model names:
 
 #### fasterrcnn/kafka
 
-`GST_DEBUG=4 gst-launch-1.0 multifilesrc location=data/000015.jpg ! jpegdec ! videoconvert ! videoscale ! pyml_objectdetector model-name=fasterrcnn_resnet50_fpn device=cuda batch-size=4 ! pyml_kafkasink schema-file=data/gst_object_detector.json broker=kafka:9092 topic=test-kafkasink-topic  2>&1 | grep pyml_kafkasink`
+`GST_DEBUG=4 gst-launch-1.0 multifilesrc location=data/000015.jpg ! jpegdec ! videoconvert ! videoscale ! pyml_objectdetector model-name=fasterrcnn_resnet50_fpn device=cuda batch-size=4 ! pyml_kafkasink schema-file=data/pyml_object_detector.json broker=kafka:9092 topic=test-kafkasink-topic  2>&1 | grep pyml_kafkasink`
 
 #### maskrcnn
 
