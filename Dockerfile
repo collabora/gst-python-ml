@@ -24,7 +24,6 @@ RUN /bin/bash -c "\
 
 # Set some environment variables
 ENV GST_PLUGIN_PATH=/root/gst-python-ml/plugins
-ENV LD_LIBRARY_PATH=/opt/venv/lib/python3.12/site-packages/nvidia/cublas/lib:/opt/venv/lib/python3.12/site-packages/nvidia/cudnn/lib
 
 # allow Python to properly handle Unicode characters during logging.
 ENV PYTHONIOENCODING=utf-8

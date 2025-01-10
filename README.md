@@ -35,8 +35,6 @@ or installing with a Docker container:
 
 #### Install packages
 
-Note: `nvidia-cuda-toolkit` dependency assumes an Nvidia card on your system
-
 ```
 sudo apt update && sudo apt -y upgrade
 sudo apt install -y python3-pip  python3-venv \
@@ -61,7 +59,6 @@ sudo apt install -y python3-pip  python3-venv \
 export VIRTUAL_ENV=$HOME/venv
 export PATH=$VIRTUAL_ENV/bin:$PATH
 export GST_PLUGIN_PATH=$HOME/src/gst-python-ml/plugins
-export LD_LIBRARY_PATH=$LD_LIBRARY_PATH:$VIRTUAL_ENV/lib/python3.12/site-packages/nvidia/cublas/lib:$VIRTUAL_ENV/lib/python3.12/site-packages/nvidia/cudnn/lib
 ```
 
 and then
