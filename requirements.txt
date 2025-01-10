@@ -7,6 +7,7 @@ torchaudio
 transformers
 numpy
 huggingface-hub
+lap
 ultralytics
 skia-python
 pycairo
