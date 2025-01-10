@@ -16,19 +16,18 @@
 # Free Software Foundation, Inc., 51 Franklin Street, Fifth Floor,
 # Boston, MA 02110-1301, USA.
 
-import json
-import os
-import gi
-
-gi.require_version("Gst", "1.0")
-gi.require_version("GstAnalytics", "1.0")
-gi.require_version("GLib", "2.0")
-from gi.repository import Gst, GObject, GLib, GstAnalytics  # noqa: E402
-
-from utils import runtime_check_gstreamer_version
-
 CAN_REGISTER_ELEMENT = True
 try:
+    import json
+    import os
+    import gi
+
+    gi.require_version("Gst", "1.0")
+    gi.require_version("GstAnalytics", "1.0")
+    gi.require_version("GLib", "2.0")
+    from gi.repository import Gst, GObject, GLib, GstAnalytics  # noqa: E402
+
+    from utils import runtime_check_gstreamer_version
     from confluent_kafka import Producer
 except ImportError as e:
     CAN_REGISTER_ELEMENT = False

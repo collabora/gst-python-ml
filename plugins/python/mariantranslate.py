@@ -16,18 +16,15 @@
 # Free Software Foundation, Inc., 51 Franklin Street, Fifth Floor,
 # Boston, MA 02110-1301, USA.
 
-import gi
-
-gi.require_version("Gst", "1.0")
-from gi.repository import Gst, GObject  # noqa: E402
-
 CAN_REGISTER_ELEMENT = True
 try:
+    import gi
+    gi.require_version("Gst", "1.0")
+    from gi.repository import Gst, GObject  # noqa: E402
     from gst_translate import GstTranslate
 except ImportError as e:
     CAN_REGISTER_ELEMENT = False
     Gst.warning(f"The 'pyml_mariantranslate' element will not be available. Element {e}")
-
 
 class MarianTranslate(GstTranslate):
     __gstmetadata__ = (

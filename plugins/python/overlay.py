@@ -19,7 +19,6 @@
 
 CAN_REGISTER_ELEMENT = True
 try:
-
     import re
     import gi
     import skia
@@ -39,7 +38,6 @@ try:
         GLib,
         GObject,
     )  # noqa: E402
-
 except ImportError as e:
     CAN_REGISTER_ELEMENT = False
     Gst.warning(f"The 'pyml_overlay' element will not be available. Error: {e}")

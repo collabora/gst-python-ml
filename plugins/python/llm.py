@@ -16,18 +16,15 @@
 # Free Software Foundation, Inc., 51 Franklin Street, Fifth Floor,
 # Boston, MA 02110-1301, USA.
 
-import gi
-
-gi.require_version("Gst", "1.0")
-from gi.repository import Gst, GObject  # noqa: E402
-
 CAN_REGISTER_ELEMENT = True
 try:
+    import gi
+    gi.require_version("Gst", "1.0")
+    from gi.repository import Gst, GObject  # noqa: E402
     from gst_llm import GstLLM
 except ImportError as e:
     CAN_REGISTER_ELEMENT = False
     Gst.warning(f"The 'pyml_llm' element will not be available. Error {e}")
-
 
 class LLM(GstLLM):
     __gstmetadata__ = (

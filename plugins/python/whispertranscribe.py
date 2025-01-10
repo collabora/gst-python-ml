@@ -16,15 +16,13 @@
 # Free Software Foundation, Inc., 51 Franklin Street, Fifth Floor,
 # Boston, MA 02110-1301, USA.
 
-import gi
-
-gi.require_version("Gst", "1.0")
-gi.require_version("GstBase", "1.0")
-gi.require_version("GObject", "2.0")
-from gi.repository import Gst, GObject  # noqa: E402
-
 CAN_REGISTER_ELEMENT = True
 try:
+    import gi
+    gi.require_version("Gst", "1.0")
+    gi.require_version("GstBase", "1.0")
+    gi.require_version("GObject", "2.0")
+    from gi.repository import Gst, GObject  # noqa: E402
     from gst_transcribe import GstTranscribe
     from faster_whisper import WhisperModel
 except ImportError as e:

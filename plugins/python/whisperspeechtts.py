@@ -16,14 +16,12 @@
 # Free Software Foundation, Inc., 51 Franklin Street, Fifth Floor,
 # Boston, MA 02110-1301, USA.
 
-import gi
-
-gi.require_version("Gst", "1.0")
-gi.require_version("GstBase", "1.0")
-from gi.repository import Gst, GObject, GstBase  # noqa: E402
-
 CAN_REGISTER_ELEMENT = True
 try:
+    import gi
+    gi.require_version("Gst", "1.0")
+    gi.require_version("GstBase", "1.0")
+    from gi.repository import Gst, GObject, GstBase  # noqa: E402
     import numpy as np
     from whisperspeech.pipeline import Pipeline
     from gst_tts import GstTTS
