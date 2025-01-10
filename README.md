@@ -119,11 +119,21 @@ sudo systemctl restart docker
 a) If running on CPU, just remove `--gpus all` from command below
 b) This command assumes you have set up a Kafka network as described below
 
-`docker run --network kafka-network -v ~/src/gst-python-ml/:/root/gst-python-ml -it --rm --gpus all --name ubuntu24 ubuntu24:latest /bin/bash`
+`docker run -v ~/src/gst-python-ml/:/root/gst-python-ml -it --rm --gpus all --name ubuntu24 ubuntu24:latest /bin/bash`
 
-In the container shell, run the following
+In the container shell, run
 
-`# cd gst-python-ml && pip install -r requirements.txt`
+`pip install -r requirements.txt`
+
+to install base requirements, and then
+
+`cd gst-python-ml` to run the pipelines below. After installing requirements,
+it is recommended to open another terminal on host and run
+
+`docker ps` to get the container id, and then run
+
+`docker commit $CONTAINER_ID` to commit the changes, where `$CONTAINER_ID`
+is the id for your docker instance.
 
 #### Docker Cleanup
 
@@ -156,6 +166,11 @@ Run `gst-inspect-1.0 python` to see all of the pyml elements listed.
 and list networks
 
 `docker network ls`
+
+#### docker launch
+
+To launch a docker instance with the kafka network, add ` --network kafka-network  `
+to the docker launch command above.
 
 #### Set up kafka and zookeeper
 
