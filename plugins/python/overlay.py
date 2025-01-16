@@ -204,7 +204,7 @@ class Overlay(GstBase.BaseTransform):
         metadata = []
         meta = GstAnalytics.buffer_get_analytics_relation_meta(buffer)
         if not meta:
-            Gst.warning("No GstAnalytics metadata found on buffer.")
+            #Gst.warning("No GstAnalytics metadata found on buffer.")
             return metadata
 
         try:
