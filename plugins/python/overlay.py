@@ -241,10 +241,12 @@ class Overlay(GstBase.BaseTransform):
         return surface
 
     def do_transform_ip(self, buf):
-        self.load_and_store_metadata()
+        self.load_and_store_metadata()  # Load metadata if not already loaded
         metadata = self.extract_metadata(buf)
         frame_metadata = self.get_metadata_for_frame(self.frame_counter)
-        metadata = self.extract_metadata(buf) + frame_metadata
+
+        # Combine metadata from buffer and preloaded JSON
+        metadata.extend(frame_metadata)
 
         # Skip processing if no metadata exists for the current frame
         if not metadata:
@@ -260,6 +262,10 @@ class Overlay(GstBase.BaseTransform):
         success, map_info = buf.map(Gst.MapFlags.WRITE)
         if not success:
             return Gst.FlowReturn.ERROR
+
+        surface = None
+        cairo_surface = None
+        cr = None
 
         try:
             # Create Skia surface for the main canvas
@@ -295,17 +301,13 @@ class Overlay(GstBase.BaseTransform):
             # Draw bounding boxes and labels on main surface
             for data in metadata:
                 self.draw_bounding_box(canvas, data["box"])
-                track_id = data.get(
-                    "track_id"
-                )  # Assumes `track_id` is available in metadata
+                track_id = data.get("track_id")  # Assumes `track_id` is available in metadata
                 color = self.get_color_for_id(track_id)
 
                 # Adjust the center point to be lower toward the bottom of the bounding box
                 center = {
                     "x": (data["box"]["x1"] + data["box"]["x2"]) / 2,
-                    "y": (
-                        data["box"]["y1"] * 0.25 + data["box"]["y2"] * 0.75
-                    ),  # Adjusts y to be lower
+                    "y": (data["box"]["y1"] * 0.25 + data["box"]["y2"] * 0.75),
                 }
 
                 self.draw_trail_circle(
@@ -333,10 +335,15 @@ class Overlay(GstBase.BaseTransform):
             # Ensure Cairo operations are complete before unmapping
             cr.stroke()
             cairo_surface.finish()
-            cr = None
-            cairo_surface = None  # Explicitly release Cairo references
 
         finally:
+            # Cleanup resources
+            if surface:
+                del surface
+            if cairo_surface:
+                del cairo_surface
+            if cr:
+                del cr
             buf.unmap(map_info)  # Unmap buffer after ensuring no references remain
             self.frame_counter += 1
 
