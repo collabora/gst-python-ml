@@ -24,6 +24,7 @@ try:
     import skia
     import cairo
     import numpy as np
+    import json
 
     gi.require_version("Gst", "1.0")
     gi.require_version("GstBase", "1.0")
@@ -72,8 +73,20 @@ class Overlay(GstBase.BaseTransform):
     )
     __gsttemplates__ = (src_template, sink_template)
 
+    # Add the meta_path property
+    meta_path = GObject.Property(
+        type=str,
+        default=None,
+        nick="Metadata Path",
+        blurb="Path to the JSON file containing frame metadata with bounding boxes and tracking data",
+        flags=GObject.ParamFlags.READWRITE,
+    )
+
     def __init__(self):
         super(Overlay, self).__init__()
+        self.meta_path = None  # Initialize the frame_meta property
+        self.preloaded_metadata = {}  # Dictionary to store frame-indexed metadata
+        self.frame_counter = 0
         self.outline_color = skia.ColorWHITE
         self.width = 640
         self.height = 480
@@ -106,6 +119,19 @@ class Overlay(GstBase.BaseTransform):
         # Dictionary to store ID-to-color mapping
         self.id_color_map = {}
 
+    def do_get_property(self, prop: GObject.ParamSpec):
+        if prop.name == "meta-path":
+            return self.meta_path
+        else:
+            raise AttributeError(f"Unknown property {prop.name}")
+
+    def do_set_property(self, prop: GObject.ParamSpec, value):
+        if prop.name == "meta-path":
+            self.meta_path = value
+            self.load_and_store_metadata()  # Load JSON data when property is set
+        else:
+            raise AttributeError(f"Unknown property {prop.name}")
+
     def do_start(self):
         # Setup trail surface for fading circles
         self.trail_surface = skia.Surface(self.width, self.height)
@@ -113,6 +139,10 @@ class Overlay(GstBase.BaseTransform):
         return True
 
     def do_stop(self):
+        # Cleanup Skia trail surface
+        if self.trail_surface:
+            del self.trail_surface
+            self.trail_surface = None
         Gst.info("Overlay stopped, resources cleaned.")
         return True
 
@@ -130,6 +160,35 @@ class Overlay(GstBase.BaseTransform):
             color_index = len(self.id_color_map) % len(self.color_palette)
             self.id_color_map[track_id] = self.color_palette[color_index]
         return self.id_color_map[track_id]
+
+    def load_and_store_metadata(self):
+        if self.preloaded_metadata:
+            return
+        """Load JSON data once and store it for fast indexing."""
+        if not self.meta_path:
+            Gst.error("Frame metadata file path not set.")
+            return
+
+        try:
+            with open(self.meta_path, "r") as f:
+                all_data = json.load(f)
+                frame_data = all_data.get("frames", [])
+                # Store metadata indexed by frame_index
+                self.preloaded_metadata = {
+                    frame.get("frame_index"): frame.get("objects", [])
+                    for frame in frame_data
+                }
+            Gst.warning(f"Loaded metadata for {len(self.preloaded_metadata)} frames.")
+        except FileNotFoundError:
+            Gst.error(f"JSON file not found: {self.meta_path}")
+        except json.JSONDecodeError as e:
+            Gst.error(f"Failed to parse JSON file: {e}")
+        except Exception as e:
+            Gst.error(f"Unexpected error while loading metadata: {e}")
+
+    def get_metadata_for_frame(self, frame_index):
+        """Retrieve preloaded metadata for the given frame index."""
+        return self.preloaded_metadata.get(frame_index, [])
 
     def extract_id_from_label(self, label):
         """Extracts the numeric ID from a label formatted as 'id_<number>'."""
@@ -182,7 +241,16 @@ class Overlay(GstBase.BaseTransform):
         return surface
 
     def do_transform_ip(self, buf):
+        self.load_and_store_metadata()
         metadata = self.extract_metadata(buf)
+        frame_metadata = self.get_metadata_for_frame(self.frame_counter)
+        metadata = self.extract_metadata(buf) + frame_metadata
+
+        # Skip processing if no metadata exists for the current frame
+        if not metadata:
+            Gst.warning(f"No metadata found for frame {self.frame_counter}.")
+            self.frame_counter += 1
+            return Gst.FlowReturn.OK
 
         video_meta = GstVideo.buffer_get_video_meta(buf)
         if not video_meta:
@@ -270,6 +338,7 @@ class Overlay(GstBase.BaseTransform):
 
         finally:
             buf.unmap(map_info)  # Unmap buffer after ensuring no references remain
+            self.frame_counter += 1
 
         return Gst.FlowReturn.OK
 

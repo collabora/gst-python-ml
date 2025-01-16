@@ -215,6 +215,11 @@ docker exec kafka kafka-topics --create --topic test-kafkasink-topic --bootstrap
 `docker exec -it kafka kafka-console-consumer --bootstrap-server kafka:9092 --topic test-kafkasink-topic --from-beginning`
 
 
+### non ML
+
+`gst-launch-1.0 videotestsrc ! videoconvert ! autovideosink`
+
+
 ### Object Detection
 
 Possible model names:
@@ -232,19 +237,19 @@ Possible model names:
 
 #### yolo with tracking
 
-`gst-launch-1.0   filesrc location=data/soccer_tracking.mp4 ! decodebin ! videoconvert ! videoscale ! video/x-raw,width=640,height=480 ! pyml_yolo model-name=yolo11m device=cuda:0 track=True ! videoconvert  !  objectdetectionoverlay labels-color=0xFFFF0000 object-detection-outline-color=0xFFFF0000 ! autovideosink`
+`gst-launch-1.0   filesrc location=data/soccer_tracking.mp4 ! decodebin ! videoconvert ! videoscale ! video/x-raw,width=640,height=480 ! pyml_yolo model-name=yolo11m device=cuda:0 track=True ! videoconvert  !  pyml_overlay labels-color=0xFFFF0000 object-detection-outline-color=0xFFFF0000 ! autovideosink`
 
-##### yolo with overlay
+#### yolo with overlay
 
  `gst-launch-1.0   filesrc location=data/soccer_tracking.mp4 ! decodebin ! videoconvert ! videoscale ! video/x-raw,width=640,height=480 ! pyml_yolo model-name=yolo11m device=cuda:0 track=True !  pyml_overlay ! videoconvert !  autovideosink`
 
 
-#### streammux pipeline
+### streammux pipeline
 
 `GST_DEBUG=4 gst-launch-1.0 pyml_streammux name=mux  ! videoconvert ! fakesink videotestsrc ! mux. videotestsrc pattern=ball ! mux. videotestsrc pattern=snow ! mux.`
 
 
-### whispertranscribe
+### Transcription
 
 #### transcription with initial prompt set
 
@@ -288,9 +293,11 @@ https://huggingface.co/models?sort=trending&search=Helsinki
 
 `GST_DEBUG=4 gst-launch-1.0 filesrc location=data/prompt_for_llm.txt !  pyml_llm device=cuda model-name="microsoft/phi-2" ! fakesink`
 
-#### stablediffusion
+### stablediffusion
 
 `GST_DEBUG=4 gst-launch-1.0 filesrc location=data/prompt_for_stable_diffusion.txt ! pyml_stablediffusion device=cuda ! pngenc ! filesink location=output_image.png`
+
+#### Caption
 
 #### caption + yolo
 
