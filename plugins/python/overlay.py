@@ -376,5 +376,5 @@ if CAN_REGISTER_ELEMENT:
     __gstelementfactory__ = ("pyml_overlay", Gst.Rank.NONE, Overlay)
 else:
     Gst.warning(
-        "The 'pyml_overlay' element will not be registered because gst_object_detector module is missing."
+        "The 'pyml_overlay' element will not be registered because a required module is missing."
     )
