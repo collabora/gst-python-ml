@@ -105,11 +105,19 @@ class OverlayCairo(GstBase.BaseTransform):
         else:
             raise AttributeError(f"Unknown property {prop.name}")
 
-    def do_start(self):
-        return True
+    def on_message(self, bus, message):
+        """Handle messages from the pipeline's bus."""
+        if message.type == Gst.MessageType.SEGMENT_DONE:
+            Gst.info("reset frame counter.")
+            self.frame_counter = 0
 
-    def do_stop(self):
-        Gst.info("OverlayCairo stopped, resources cleaned.")
+    def do_start(self):
+        if self.bus:
+            self.bus.add_signal_watch()
+            self.bus.connect("message", self.on_message)
+            Gst.info("Added signal watch to pipeline's bus.")
+        else:
+            Gst.error("Could not get the bus from the pipeline.")
         return True
 
     def do_set_caps(self, incaps, outcaps):
@@ -136,7 +144,7 @@ class OverlayCairo(GstBase.BaseTransform):
                     frame.get("frame_index"): frame.get("objects", [])
                     for frame in frame_data
                 }
-            Gst.warning(f"Loaded metadata for {len(self.preloaded_metadata)} frames.")
+            Gst.info(f"Loaded metadata for {len(self.preloaded_metadata)} frames.")
         except FileNotFoundError:
             Gst.error(f"JSON file not found: {self.meta_path}")
         except json.JSONDecodeError as e:
