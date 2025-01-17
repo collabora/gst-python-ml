@@ -28,6 +28,7 @@ gi.require_version("GstAnalytics", "1.0")
 gi.require_version("GLib", "2.0")
 from gi.repository import Gst, GstAnalytics, GObject, GLib  # noqa: E402
 
+
 class GstObjectDetector(GstVideoTransform):
     """
     GStreamer element for object detection with a machine learning model.

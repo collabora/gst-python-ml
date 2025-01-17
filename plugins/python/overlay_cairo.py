@@ -70,14 +70,24 @@ class OverlayCairo(GstBase.BaseTransform):
     meta_path = GObject.Property(
         type=str,
         default=None,
-        nick="Metadata Path",
+        nick="Metadata File Path",
         blurb="Path to the JSON file containing frame metadata with bounding boxes and tracking data",
+        flags=GObject.ParamFlags.READWRITE,
+    )
+
+    # Add the tracking property
+    tracking = GObject.Property(
+        type=bool,
+        default=False,
+        nick="Enable Tracking Display",
+        blurb="Enable or disable tracking display",
         flags=GObject.ParamFlags.READWRITE,
     )
 
     def __init__(self):
         super(OverlayCairo, self).__init__()
-        self.meta_path = None  # Initialize the frame_meta property
+        self.meta_path = None
+        self.tracking = True
         self.preloaded_metadata = {}  # Dictionary to store frame-indexed metadata
         self.frame_counter = 0
         self.width = 640
@@ -99,13 +109,17 @@ class OverlayCairo(GstBase.BaseTransform):
     def do_get_property(self, prop: GObject.ParamSpec):
         if prop.name == "meta-path":
             return self.meta_path
+        elif prop.name == "tracking":
+            return self.tracking
         else:
             raise AttributeError(f"Unknown property {prop.name}")
 
     def do_set_property(self, prop: GObject.ParamSpec, value):
         if prop.name == "meta-path":
             self.meta_path = value
-            self.load_and_store_metadata()  # Load JSON data when property is set
+        elif prop.name == "tracking":
+            self.tracking = value
+            Gst.info(f"Tracking set to: {self.tracking}")
         else:
             raise AttributeError(f"Unknown property {prop.name}")
 
@@ -168,17 +182,17 @@ class OverlayCairo(GstBase.BaseTransform):
             )
             cr = cairo.Context(cairo_surface)
 
-
             # Draw the fading history
-            for point in self.history:
-                self.draw_tracking_box(
-                    cr,
-                    point["center"],
-                    point["color"],
-                    point["opacity"],
-                )
-                # Reduce the opacity for fading effect
-                point["opacity"] *= 0.9
+            if self.tracking:
+                for point in self.history:
+                    self.draw_tracking_box(
+                        cr,
+                        point["center"],
+                        point["color"],
+                        point["opacity"],
+                    )
+                    # Reduce the opacity for fading effect
+                    point["opacity"] *= 0.9
 
             # Draw bounding boxes, labels, and new tracking boxes
             for data in metadata:
@@ -187,20 +201,26 @@ class OverlayCairo(GstBase.BaseTransform):
                     cr, data["label"], data["box"]["x1"], data["box"]["y1"]
                 )
 
-                track_id = data.get("track_id")
-                if track_id is not None:
-                    color = self.get_color_for_id(track_id)
-                    center = {
-                        "x": (data["box"]["x1"] + data["box"]["x2"]) / 2,
-                        "y": (data["box"]["y1"] + data["box"]["y2"]) / 2,
-                    }
-                    self.draw_tracking_box(cr, center, color, 1.0)
+                if self.tracking:
+                    track_id = data.get("track_id")
+                    if track_id is not None:
+                        color = self.get_color_for_id(track_id)
+                        center = {
+                            "x": (data["box"]["x1"] + data["box"]["x2"]) / 2,
+                            "y": (data["box"]["y1"] + data["box"]["y2"]) / 2,
+                        }
+                        self.draw_tracking_box(cr, center, color, 1.0)
 
-                    # Add new tracking box to history
-                    self.history.append({"center": center, "color": color, "opacity": 1.0})
+                        # Add new tracking box to history
+                        self.history.append(
+                            {"center": center, "color": color, "opacity": 1.0}
+                        )
 
             # Trim history if it exceeds max length
-            self.history = [point for point in self.history if point["opacity"] > 0.1]
+            if self.tracking:
+                self.history = [
+                    point for point in self.history if point["opacity"] > 0.1
+                ]
 
             # Ensure Cairo operations are complete before unmapping
             cr.stroke()
@@ -244,7 +264,6 @@ class OverlayCairo(GstBase.BaseTransform):
         cr.rectangle(box["x1"], box["y1"], box["x2"] - box["x1"], box["y2"] - box["y1"])
         cr.stroke()
 
-
     def draw_label_with_cairo(self, cr, label, x, y):
         """Draws a label with Cairo at the specified position."""
         cr.set_font_size(12)
@@ -252,6 +271,7 @@ class OverlayCairo(GstBase.BaseTransform):
         cr.move_to(x, y - 10)  # Position the text above the bounding box
         cr.show_text(label)
         cr.stroke()
+
 
 if CAN_REGISTER_ELEMENT:
     GObject.type_register(OverlayCairo)
