@@ -217,7 +217,7 @@ docker exec kafka kafka-topics --create --topic test-kafkasink-topic --bootstrap
 
 ### non ML
 
-`gst-launch-1.0 videotestsrc ! pyml_overlay meta-path=/home/$USER/src/gst-python-ml/data/sample_metadata.json ! videoconvert ! autovideosink`
+`gst-launch-1.0 videotestsrc num-buffers=100 ! pyml_overlay meta-path=/home/$USER/src/gst-python-ml/data/sample_metadata.json ! videoconvert ! autovideosink`
 
 Note: make sure to set the following in `.bashrc` file :
 

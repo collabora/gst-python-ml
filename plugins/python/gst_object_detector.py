@@ -16,6 +16,7 @@
 # Free Software Foundation, Inc., 51 Franklin Street, Fifth Floor,
 # Boston, MA 02110-1301, USA.
 
+from utils import runtime_check_gstreamer_version
 import gi
 import numpy as np
 from gst_video_transform import GstVideoTransform
@@ -26,9 +27,6 @@ gi.require_version("GstVideo", "1.0")
 gi.require_version("GstAnalytics", "1.0")
 gi.require_version("GLib", "2.0")
 from gi.repository import Gst, GstAnalytics, GObject, GLib  # noqa: E402
-
-from utils import runtime_check_gstreamer_version
-
 
 class GstObjectDetector(GstVideoTransform):
     """

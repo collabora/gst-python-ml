@@ -19,22 +19,17 @@
 
 CAN_REGISTER_ELEMENT = True
 try:
-    import re
+    from utils import load_metadata
     import gi
     import cairo
-    import numpy as np
-
-    from utils import load_metadata
 
     gi.require_version("Gst", "1.0")
     gi.require_version("GstBase", "1.0")
     gi.require_version("GstVideo", "1.0")
-    gi.require_version("GLib", "2.0")
     from gi.repository import (
         Gst,
         GstBase,
         GstVideo,
-        GLib,
         GObject,
     )  # noqa: E402
 except ImportError as e:
@@ -127,31 +122,6 @@ class OverlayCairo(GstBase.BaseTransform):
         self.height = video_info.height
         Gst.info(f"Video caps set: width={self.width}, height={self.height}")
         return True
-
-    def load_and_store_metadata(self):
-        if self.preloaded_metadata:
-            return
-        """Load JSON data once and store it for fast indexing."""
-        if not self.meta_path:
-            Gst.error("Frame metadata file path not set.")
-            return
-
-        try:
-            with open(self.meta_path, "r") as f:
-                all_data = json.load(f)
-                frame_data = all_data.get("frames", [])
-                # Store metadata indexed by frame_index
-                self.preloaded_metadata = {
-                    frame.get("frame_index"): frame.get("objects", [])
-                    for frame in frame_data
-                }
-            Gst.info(f"Loaded metadata for {len(self.preloaded_metadata)} frames.")
-        except FileNotFoundError:
-            Gst.error(f"JSON file not found: {self.meta_path}")
-        except json.JSONDecodeError as e:
-            Gst.error(f"Failed to parse JSON file: {e}")
-        except Exception as e:
-            Gst.error(f"Unexpected error while loading metadata: {e}")
 
     def get_metadata_for_frame(self, frame_index):
         """Retrieve preloaded metadata for the given frame index."""
