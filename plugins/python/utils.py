@@ -17,6 +17,13 @@
 # Boston, MA 02110-1301, USA.
 
 import subprocess
+import os
+import json
+import gi
+gi.require_version("Gst", "1.0")
+from gi.repository import (
+    Gst
+)  # noqa: E402
 
 
 def runtime_check_gstreamer_version(min_version="1.24"):
@@ -42,3 +49,40 @@ def runtime_check_gstreamer_version(min_version="1.24"):
             )
     except FileNotFoundError:
         raise EnvironmentError("GStreamer is not installed.")
+
+
+def load_metadata(meta_path):
+    """Load JSON metadata from a file and return a dictionary indexed by frame index.
+
+    Args:
+        meta_path (str): Path to the JSON metadata file.
+
+    Returns:
+        dict: Metadata indexed by frame index.
+    """
+    if not meta_path:
+        Gst.error("Frame metadata file path not set.")
+        return {}
+
+    if not os.path.exists(meta_path):
+        Gst.error(f"JSON file not found: {meta_path}")
+        return {}
+
+    try:
+        with open(meta_path, "r") as f:
+            all_data = json.load(f)
+            frame_data = all_data.get("frames", [])
+            # Store metadata indexed by frame_index
+            metadata = {
+                frame.get("frame_index"): frame.get("objects", [])
+                for frame in frame_data
+            }
+            Gst.info(f"Loaded metadata for {len(metadata)} frames.")
+            return metadata
+    except json.JSONDecodeError as e:
+        Gst.error(f"Failed to parse JSON file: {e}")
+        return {}
+    except Exception as e:
+        Gst.error(f"Unexpected error while loading metadata: {e}")
+        return {}
+

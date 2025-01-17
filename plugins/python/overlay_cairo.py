@@ -23,7 +23,8 @@ try:
     import gi
     import cairo
     import numpy as np
-    import json
+
+    from utils import load_metadata
 
     gi.require_version("Gst", "1.0")
     gi.require_version("GstBase", "1.0")
@@ -45,7 +46,6 @@ VIDEO_FORMATS = "video/x-raw, format=(string){ RGBA, ARGB, BGRA, ABGR }"
 
 # Create OBJECT_DETECTION_OVERLAY_CAPS
 OBJECT_DETECTION_OVERLAY_CAPS = Gst.Caps.from_string(VIDEO_FORMATS)
-
 
 class OverlayCairo(GstBase.BaseTransform):
     __gstmetadata__ = (
@@ -157,7 +157,8 @@ class OverlayCairo(GstBase.BaseTransform):
         return self.preloaded_metadata.get(frame_index, [])
 
     def do_transform_ip(self, buf):
-        self.load_and_store_metadata()  # Load metadata if not already loaded
+        if not self.preloaded_metadata:
+            self.preloaded_metadata = load_metadata(self.meta_path)
         metadata = self.get_metadata_for_frame(self.frame_counter)
 
         # Skip processing if no metadata exists for the current frame
