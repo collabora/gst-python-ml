@@ -34,7 +34,7 @@ try:
     )  # noqa: E402
 except ImportError as e:
     CAN_REGISTER_ELEMENT = False
-    Gst.warning(f"The 'pyml_overlay' element will not be available. Error: {e}")
+    Gst.warning(f"The 'pyml_overlay_cairo' element will not be available. Error: {e}")
 
 VIDEO_FORMATS = "video/x-raw, format=(string){ RGBA, ARGB, BGRA, ABGR }"
 OVERLAY_CAPS = Gst.Caps.from_string(VIDEO_FORMATS)
