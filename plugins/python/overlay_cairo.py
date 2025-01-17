@@ -110,8 +110,7 @@ class OverlayCairo(GstBase.BaseTransform):
             raise AttributeError(f"Unknown property {prop.name}")
 
     def on_message(self, bus, message):
-        """Handle messages from the pipeline's bus."""
-        if message.type == Gst.MessageType.SEGMENT_DONE:
+        if message.type == Gst.MessageType.EOS:
             Gst.info("reset frame counter.")
             self.frame_counter = 0
 
