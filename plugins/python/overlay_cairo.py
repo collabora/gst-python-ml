@@ -36,10 +36,7 @@ except ImportError as e:
     CAN_REGISTER_ELEMENT = False
     Gst.warning(f"The 'pyml_overlay' element will not be available. Error: {e}")
 
-# Define video formats manually
 VIDEO_FORMATS = "video/x-raw, format=(string){ RGBA, ARGB, BGRA, ABGR }"
-
-# Create OBJECT_DETECTION_OVERLAY_CAPS
 OVERLAY_CAPS = Gst.Caps.from_string(VIDEO_FORMATS)
 
 

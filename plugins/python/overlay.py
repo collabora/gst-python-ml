@@ -44,11 +44,8 @@ except ImportError as e:
     CAN_REGISTER_ELEMENT = False
     Gst.warning(f"The 'pyml_overlay' element will not be available. Error: {e}")
 
-# Define video formats manually
 VIDEO_FORMATS = "video/x-raw, format=(string){ RGBA, ARGB, BGRA, ABGR }"
-
-# Create OBJECT_DETECTION_OVERLAY_CAPS
-OBJECT_DETECTION_OVERLAY_CAPS = Gst.Caps.from_string(VIDEO_FORMATS)
+OVERLAY_CAPS = Gst.Caps.from_string(VIDEO_FORMATS)
 
 
 class Overlay(GstBase.BaseTransform):
@@ -63,18 +60,17 @@ class Overlay(GstBase.BaseTransform):
         "src",
         Gst.PadDirection.SRC,
         Gst.PadPresence.ALWAYS,
-        OBJECT_DETECTION_OVERLAY_CAPS.copy(),
+        OVERLAY_CAPS.copy(),
     )
 
     sink_template = Gst.PadTemplate.new(
         "sink",
         Gst.PadDirection.SINK,
         Gst.PadPresence.ALWAYS,
-        OBJECT_DETECTION_OVERLAY_CAPS.copy(),
+        OVERLAY_CAPS.copy(),
     )
     __gsttemplates__ = (src_template, sink_template)
 
-    # Add the meta_path property
     meta_path = GObject.Property(
         type=str,
         default=None,
@@ -85,8 +81,8 @@ class Overlay(GstBase.BaseTransform):
 
     def __init__(self):
         super(Overlay, self).__init__()
-        self.meta_path = None  # Initialize the frame_meta property
-        self.preloaded_metadata = {}  # Dictionary to store frame-indexed metadata
+        self.meta_path = None
+        self.preloaded_metadata = {}
         self.frame_counter = 0
         self.outline_color = skia.ColorWHITE
         self.width = 640
@@ -116,8 +112,6 @@ class Overlay(GstBase.BaseTransform):
             skia.Color4f(0.5, 0.5, 0.5, 1.0),  # Grey
             skia.Color4f(1.0, 0.6, 0.4, 1.0),  # Peach
         ]
-
-        # Dictionary to store ID-to-color mapping
         self.id_color_map = {}
 
     def do_get_property(self, prop: GObject.ParamSpec):
@@ -179,7 +173,6 @@ class Overlay(GstBase.BaseTransform):
         metadata = []
         meta = GstAnalytics.buffer_get_analytics_relation_meta(buffer)
         if not meta:
-            # Gst.warning("No GstAnalytics metadata found on buffer.")
             return metadata
 
         try:
