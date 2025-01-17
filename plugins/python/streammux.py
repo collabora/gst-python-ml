@@ -17,10 +17,12 @@
 # Boston, MA 02110-1301, USA.
 
 import gi
+
 gi.require_version("Gst", "1.0")
 gi.require_version("GstBase", "1.0")
 gi.require_version("GObject", "2.0")
 from gi.repository import Gst, GObject, GstBase  # noqa: E402
+
 
 class StreamMux(GstBase.Aggregator):
     __gstmetadata__ = (

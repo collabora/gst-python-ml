@@ -47,6 +47,7 @@ VIDEO_FORMATS = "video/x-raw, format=(string){ RGBA, ARGB, BGRA, ABGR }"
 # Create OBJECT_DETECTION_OVERLAY_CAPS
 OBJECT_DETECTION_OVERLAY_CAPS = Gst.Caps.from_string(VIDEO_FORMATS)
 
+
 class OverlayCairo(GstBase.BaseTransform):
     __gstmetadata__ = (
         "OverlayCairo",
@@ -193,9 +194,7 @@ class OverlayCairo(GstBase.BaseTransform):
             # Draw bounding boxes and labels on main surface
             for data in metadata:
                 # Draw bounding box
-                self.draw_bounding_box_with_cairo(
-                    cr, data["box"]
-                )
+                self.draw_bounding_box_with_cairo(cr, data["box"])
 
                 # Draw label near the bounding box using Cairo
                 self.draw_label_with_cairo(
@@ -239,6 +238,7 @@ class OverlayCairo(GstBase.BaseTransform):
         cr.move_to(x, y - 10)  # Position the text above the bounding box
         cr.show_text(label)
         cr.stroke()
+
 
 if CAN_REGISTER_ELEMENT:
     GObject.type_register(OverlayCairo)

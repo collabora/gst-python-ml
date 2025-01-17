@@ -20,6 +20,7 @@ CAN_REGISTER_ELEMENT = True
 try:
     import asyncio
     import gi
+
     gi.require_version("Gst", "1.0")
     gi.require_version("GstBase", "1.0")
     gi.require_version("GObject", "2.0")

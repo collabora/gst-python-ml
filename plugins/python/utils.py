@@ -20,10 +20,9 @@ import subprocess
 import os
 import json
 import gi
+
 gi.require_version("Gst", "1.0")
-from gi.repository import (
-    Gst
-)  # noqa: E402
+from gi.repository import Gst  # noqa: E402
 
 
 def runtime_check_gstreamer_version(min_version="1.24"):
@@ -85,4 +84,3 @@ def load_metadata(meta_path):
     except Exception as e:
         Gst.error(f"Unexpected error while loading metadata: {e}")
         return {}
-

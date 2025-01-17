@@ -19,6 +19,7 @@
 CAN_REGISTER_ELEMENT = True
 try:
     import gi
+
     gi.require_version("Gst", "1.0")
     gi.require_version("GstBase", "1.0")
     from gi.repository import Gst, GObject, GstBase  # noqa: E402
@@ -27,7 +28,9 @@ try:
     from gst_tts import GstTTS
 except ImportError as e:
     CAN_REGISTER_ELEMENT = False
-    Gst.warning(f"The 'pyml_whisperspeechtts' element will not be available. Error: {e}")
+    Gst.warning(
+        f"The 'pyml_whisperspeechtts' element will not be available. Error: {e}"
+    )
 
 TTS_SAMPLE_RATE = 24000
 

@@ -19,6 +19,7 @@
 CAN_REGISTER_ELEMENT = True
 try:
     import gi
+
     gi.require_version("Gst", "1.0")
     gi.require_version("GstBase", "1.0")
     gi.require_version("GObject", "2.0")
@@ -27,7 +28,9 @@ try:
     from faster_whisper import WhisperModel
 except ImportError as e:
     CAN_REGISTER_ELEMENT = False
-    Gst.warning(f"The 'pyml_whispertranscribe' element will not be available. Error: {e}")
+    Gst.warning(
+        f"The 'pyml_whispertranscribe' element will not be available. Error: {e}"
+    )
 
 
 class WhisperTranscribe(GstTranscribe):

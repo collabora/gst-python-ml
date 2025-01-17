@@ -204,7 +204,7 @@ class Overlay(GstBase.BaseTransform):
         metadata = []
         meta = GstAnalytics.buffer_get_analytics_relation_meta(buffer)
         if not meta:
-            #Gst.warning("No GstAnalytics metadata found on buffer.")
+            # Gst.warning("No GstAnalytics metadata found on buffer.")
             return metadata
 
         try:
@@ -301,7 +301,9 @@ class Overlay(GstBase.BaseTransform):
             # Draw bounding boxes and labels on main surface
             for data in metadata:
                 self.draw_bounding_box(canvas, data["box"])
-                track_id = data.get("track_id")  # Assumes `track_id` is available in metadata
+                track_id = data.get(
+                    "track_id"
+                )  # Assumes `track_id` is available in metadata
                 color = self.get_color_for_id(track_id)
 
                 # Adjust the center point to be lower toward the bottom of the bounding box
@@ -370,6 +372,7 @@ class Overlay(GstBase.BaseTransform):
         cr.move_to(x, y - 10)  # Position the text above the bounding box
         cr.show_text(label)
         cr.stroke()
+
 
 if CAN_REGISTER_ELEMENT:
     GObject.type_register(Overlay)
