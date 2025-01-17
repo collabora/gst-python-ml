@@ -40,7 +40,7 @@ except ImportError as e:
 VIDEO_FORMATS = "video/x-raw, format=(string){ RGBA, ARGB, BGRA, ABGR }"
 
 # Create OBJECT_DETECTION_OVERLAY_CAPS
-OBJECT_DETECTION_OVERLAY_CAPS = Gst.Caps.from_string(VIDEO_FORMATS)
+OVERLAY_CAPS = Gst.Caps.from_string(VIDEO_FORMATS)
 
 
 class OverlayCairo(GstBase.BaseTransform):
@@ -55,18 +55,17 @@ class OverlayCairo(GstBase.BaseTransform):
         "src",
         Gst.PadDirection.SRC,
         Gst.PadPresence.ALWAYS,
-        OBJECT_DETECTION_OVERLAY_CAPS.copy(),
+        OVERLAY_CAPS.copy(),
     )
 
     sink_template = Gst.PadTemplate.new(
         "sink",
         Gst.PadDirection.SINK,
         Gst.PadPresence.ALWAYS,
-        OBJECT_DETECTION_OVERLAY_CAPS.copy(),
+        OVERLAY_CAPS.copy(),
     )
     __gsttemplates__ = (src_template, sink_template)
 
-    # Add the meta_path property
     meta_path = GObject.Property(
         type=str,
         default=None,
@@ -74,8 +73,6 @@ class OverlayCairo(GstBase.BaseTransform):
         blurb="Path to the JSON file containing frame metadata with bounding boxes and tracking data",
         flags=GObject.ParamFlags.READWRITE,
     )
-
-    # Add the tracking property
     tracking = GObject.Property(
         type=bool,
         default=True,
@@ -86,13 +83,12 @@ class OverlayCairo(GstBase.BaseTransform):
 
     def __init__(self):
         super(OverlayCairo, self).__init__()
-        self.preloaded_metadata = {}  # Dictionary to store frame-indexed metadata
+        self.preloaded_metadata = {}
         self.frame_counter = 0
         self.width = 640
         self.height = 480
         self.history = []
         self.max_history_length = 5000
-        # Color palette for tracking IDs
         self.color_palette = [
             (1.0, 0.0, 0.0),  # Red
             (0.0, 1.0, 0.0),  # Green
@@ -101,7 +97,6 @@ class OverlayCairo(GstBase.BaseTransform):
             (1.0, 0.0, 1.0),  # Magenta
             (0.0, 1.0, 1.0),  # Cyan
         ]
-        # Dictionary to store ID-to-color mapping
         self.id_color_map = {}
 
     def do_get_property(self, prop: GObject.ParamSpec):
@@ -258,14 +253,14 @@ class OverlayCairo(GstBase.BaseTransform):
     def draw_bounding_box_with_cairo(self, cr, box):
         """Draw a bounding box using Cairo."""
         cr.set_line_width(2.0)
-        cr.set_source_rgb(1, 0, 0)  # Red color for bounding box
+        cr.set_source_rgb(1, 0, 0)
         cr.rectangle(box["x1"], box["y1"], box["x2"] - box["x1"], box["y2"] - box["y1"])
         cr.stroke()
 
     def draw_label_with_cairo(self, cr, label, x, y):
         """Draws a label with Cairo at the specified position."""
         cr.set_font_size(12)
-        cr.set_source_rgba(1, 1, 1, 1)  # White color
+        cr.set_source_rgba(1, 1, 1, 1)
         cr.move_to(x, y - 10)  # Position the text above the bounding box
         cr.show_text(label)
         cr.stroke()
