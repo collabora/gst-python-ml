@@ -19,6 +19,7 @@
 
 CAN_REGISTER_ELEMENT = True
 try:
+    from utils import load_metadata
     import re
     import gi
     import skia
@@ -128,7 +129,6 @@ class Overlay(GstBase.BaseTransform):
     def do_set_property(self, prop: GObject.ParamSpec, value):
         if prop.name == "meta-path":
             self.meta_path = value
-            self.load_and_store_metadata()  # Load JSON data when property is set
         else:
             raise AttributeError(f"Unknown property {prop.name}")
 
@@ -160,31 +160,6 @@ class Overlay(GstBase.BaseTransform):
             color_index = len(self.id_color_map) % len(self.color_palette)
             self.id_color_map[track_id] = self.color_palette[color_index]
         return self.id_color_map[track_id]
-
-    def load_and_store_metadata(self):
-        if self.preloaded_metadata:
-            return
-        """Load JSON data once and store it for fast indexing."""
-        if not self.meta_path:
-            Gst.error("Frame metadata file path not set.")
-            return
-
-        try:
-            with open(self.meta_path, "r") as f:
-                all_data = json.load(f)
-                frame_data = all_data.get("frames", [])
-                # Store metadata indexed by frame_index
-                self.preloaded_metadata = {
-                    frame.get("frame_index"): frame.get("objects", [])
-                    for frame in frame_data
-                }
-            Gst.warning(f"Loaded metadata for {len(self.preloaded_metadata)} frames.")
-        except FileNotFoundError:
-            Gst.error(f"JSON file not found: {self.meta_path}")
-        except json.JSONDecodeError as e:
-            Gst.error(f"Failed to parse JSON file: {e}")
-        except Exception as e:
-            Gst.error(f"Unexpected error while loading metadata: {e}")
 
     def get_metadata_for_frame(self, frame_index):
         """Retrieve preloaded metadata for the given frame index."""
@@ -241,7 +216,8 @@ class Overlay(GstBase.BaseTransform):
         return surface
 
     def do_transform_ip(self, buf):
-        self.load_and_store_metadata()  # Load metadata if not already loaded
+        if not self.preloaded_metadata:
+            self.preloaded_metadata = load_metadata(self.meta_path)
         metadata = self.extract_metadata(buf)
         frame_metadata = self.get_metadata_for_frame(self.frame_counter)
 
