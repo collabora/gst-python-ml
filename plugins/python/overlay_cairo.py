@@ -84,7 +84,15 @@ class OverlayCairo(GstBase.BaseTransform):
         self.height = 480
         self.history = []
         self.max_history_length = 5000
-
+        # Color palette for tracking IDs
+        self.color_palette = [
+            (1.0, 0.0, 0.0),  # Red
+            (0.0, 1.0, 0.0),  # Green
+            (0.0, 0.0, 1.0),  # Blue
+            (1.0, 1.0, 0.0),  # Yellow
+            (1.0, 0.0, 1.0),  # Magenta
+            (0.0, 1.0, 1.0),  # Cyan
+        ]
         # Dictionary to store ID-to-color mapping
         self.id_color_map = {}
 
@@ -161,15 +169,39 @@ class OverlayCairo(GstBase.BaseTransform):
             )
             cr = cairo.Context(cairo_surface)
 
-            # Draw bounding boxes and labels on main surface
-            for data in metadata:
-                # Draw bounding box
-                self.draw_bounding_box_with_cairo(cr, data["box"])
 
-                # Draw label near the bounding box using Cairo
+            # Draw the fading history
+            for point in self.history:
+                self.draw_tracking_box(
+                    cr,
+                    point["center"],
+                    point["color"],
+                    point["opacity"],
+                )
+                # Reduce the opacity for fading effect
+                point["opacity"] *= 0.9
+
+            # Draw bounding boxes, labels, and new tracking boxes
+            for data in metadata:
+                self.draw_bounding_box_with_cairo(cr, data["box"])
                 self.draw_label_with_cairo(
                     cr, data["label"], data["box"]["x1"], data["box"]["y1"]
                 )
+
+                track_id = data.get("track_id")
+                if track_id is not None:
+                    color = self.get_color_for_id(track_id)
+                    center = {
+                        "x": (data["box"]["x1"] + data["box"]["x2"]) / 2,
+                        "y": (data["box"]["y1"] + data["box"]["y2"]) / 2,
+                    }
+                    self.draw_tracking_box(cr, center, color, 1.0)
+
+                    # Add new tracking box to history
+                    self.history.append({"center": center, "color": color, "opacity": 1.0})
+
+            # Trim history if it exceeds max length
+            self.history = [point for point in self.history if point["opacity"] > 0.1]
 
             # Ensure Cairo operations are complete before unmapping
             cr.stroke()
@@ -185,6 +217,26 @@ class OverlayCairo(GstBase.BaseTransform):
             self.frame_counter += 1
 
         return Gst.FlowReturn.OK
+
+    def get_color_for_id(self, track_id):
+        """Get a color for the given track ID."""
+        if track_id not in self.id_color_map:
+            # Assign a color based on the track ID, cycling through the palette
+            color_index = len(self.id_color_map) % len(self.color_palette)
+            self.id_color_map[track_id] = self.color_palette[color_index]
+        return self.id_color_map[track_id]
+
+    def draw_tracking_box(self, cr, center, color, opacity):
+        """Draw a small box for tracking at the given center point with fading effect."""
+        size = 10  # Size of the tracking box
+        half_size = size // 2
+
+        # Set the color with opacity
+        cr.set_source_rgba(color[0], color[1], color[2], opacity)
+
+        # Draw the filled box
+        cr.rectangle(center["x"] - half_size, center["y"] - half_size, size, size)
+        cr.fill()
 
     def draw_bounding_box_with_cairo(self, cr, box):
         """Draw a bounding box using Cairo."""
