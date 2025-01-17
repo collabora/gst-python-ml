@@ -78,7 +78,7 @@ class OverlayCairo(GstBase.BaseTransform):
     # Add the tracking property
     tracking = GObject.Property(
         type=bool,
-        default=False,
+        default=True,
         nick="Enable Tracking Display",
         blurb="Enable or disable tracking display",
         flags=GObject.ParamFlags.READWRITE,
@@ -86,8 +86,6 @@ class OverlayCairo(GstBase.BaseTransform):
 
     def __init__(self):
         super(OverlayCairo, self).__init__()
-        self.meta_path = None
-        self.tracking = True
         self.preloaded_metadata = {}  # Dictionary to store frame-indexed metadata
         self.frame_counter = 0
         self.width = 640
