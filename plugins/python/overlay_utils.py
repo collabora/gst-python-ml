@@ -213,7 +213,7 @@ class CairoOverlayGraphics(OverlayGraphics):
             self.draw_bounding_box(box)
 
             label = data.get("label", "")
-            self.draw_text(label, box["x1"], box["y1"])
+            self.draw_text(label, box["x1"], box["y1"] - 10)
 
             if tracking_display:
                 track_id = data.get("track_id")
@@ -244,7 +244,7 @@ class CairoOverlayGraphics(OverlayGraphics):
     def draw_text(self, label, x, y):
         self.context.set_source_rgba(0, 0, 1, 1)
         self.context.set_font_size(12)
-        self.context.move_to(x, y - 10)
+        self.context.move_to(x, y)
         self.context.show_text(label)
         self.context.stroke()
 
