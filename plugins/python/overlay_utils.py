@@ -41,12 +41,26 @@ class TrackingDisplay:
         self.max_history_length = max_history_length
         self.id_color_map = {}
         self.color_palette = [
-            Color(1.0, 0.0, 0.0),  # Red
-            Color(0.0, 1.0, 0.0),  # Green
-            Color(0.0, 0.0, 1.0),  # Blue
-            Color(1.0, 1.0, 0.0),  # Yellow
-            Color(1.0, 0.0, 1.0),  # Magenta
-            Color(0.0, 1.0, 1.0),  # Cyan
+            Color(1.0, 0.0, 0.0, 1.0),  # Red
+            Color(0.0, 1.0, 0.0, 1.0),  # Green
+            Color(0.0, 0.0, 1.0, 1.0),  # Blue
+            Color(1.0, 1.0, 0.0, 1.0),  # Yellow
+            Color(1.0, 0.0, 1.0, 1.0),  # Magenta
+            Color(0.0, 1.0, 1.0, 1.0),  # Cyan
+            Color(1.0, 0.5, 0.0, 1.0),  # Orange
+            Color(0.5, 0.0, 1.0, 1.0),  # Purple
+            Color(0.5, 1.0, 0.0, 1.0),  # Lime
+            Color(0.0, 0.5, 1.0, 1.0),  # Light Blue
+            Color(1.0, 0.3, 0.3, 1.0),  # Light Red
+            Color(0.3, 1.0, 0.3, 1.0),  # Light Green
+            Color(0.3, 0.3, 1.0, 1.0),  # Light Blue
+            Color(1.0, 1.0, 0.3, 1.0),  # Light Yellow
+            Color(1.0, 0.3, 1.0, 1.0),  # Pink
+            Color(0.3, 1.0, 1.0, 1.0),  # Aqua
+            Color(0.5, 0.2, 0.0, 1.0),  # Brown
+            Color(0.2, 0.5, 0.0, 1.0),  # Olive
+            Color(0.5, 0.5, 0.5, 1.0),  # Grey
+            Color(1.0, 0.6, 0.4, 1.0),  # Peach
         ]
 
     def get_color_for_id(self, track_id):
