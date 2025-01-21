@@ -19,13 +19,12 @@
 
 CAN_REGISTER_ELEMENT = True
 try:
-    from utils import load_metadata
+    from overlay_utils import load_metadata
     import re
     import gi
     import skia
     import cairo
     import numpy as np
-    import json
 
     gi.require_version("Gst", "1.0")
     gi.require_version("GstBase", "1.0")

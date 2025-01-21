@@ -16,10 +16,14 @@
 # Free Software Foundation, Inc., 51 Franklin Street, Fifth Floor,
 # Boston, MA 02110-1301, USA.
 
-
 CAN_REGISTER_ELEMENT = True
 try:
-    from utils import load_metadata
+    from overlay_utils import (
+        load_metadata,
+        Color,
+        TrackingDisplay,
+        CairoOverlayGraphics,
+    )
     import gi
     import cairo
 
@@ -84,17 +88,8 @@ class OverlayCairo(GstBase.BaseTransform):
         self.frame_counter = 0
         self.width = 640
         self.height = 480
-        self.history = []
-        self.max_history_length = 5000
-        self.color_palette = [
-            (1.0, 0.0, 0.0),  # Red
-            (0.0, 1.0, 0.0),  # Green
-            (0.0, 0.0, 1.0),  # Blue
-            (1.0, 1.0, 0.0),  # Yellow
-            (1.0, 0.0, 1.0),  # Magenta
-            (0.0, 1.0, 1.0),  # Cyan
-        ]
-        self.id_color_map = {}
+        self.tracking_display = TrackingDisplay()
+        self.overlay_graphics = CairoOverlayGraphics(self.width, self.height)
 
     def do_get_property(self, prop: GObject.ParamSpec):
         if prop.name == "meta-path":
@@ -115,7 +110,7 @@ class OverlayCairo(GstBase.BaseTransform):
 
     def on_message(self, bus, message):
         if message.type == Gst.MessageType.EOS:
-            Gst.info("reset frame counter.")
+            Gst.info("Reset frame counter.")
             self.frame_counter = 0
 
     def do_start(self):
@@ -132,10 +127,10 @@ class OverlayCairo(GstBase.BaseTransform):
         self.width = video_info.width
         self.height = video_info.height
         Gst.info(f"Video caps set: width={self.width}, height={self.height}")
+        self.overlay_graphics = CairoOverlayGraphics(self.width, self.height)
         return True
 
     def get_metadata_for_frame(self, frame_index):
-        """Retrieve preloaded metadata for the given frame index."""
         return self.preloaded_metadata.get(frame_index, [])
 
     def do_transform_ip(self, buf):
@@ -143,7 +138,6 @@ class OverlayCairo(GstBase.BaseTransform):
             self.preloaded_metadata = load_metadata(self.meta_path)
         metadata = self.get_metadata_for_frame(self.frame_counter)
 
-        # Skip processing if no metadata exists for the current frame
         if not metadata:
             Gst.warning(f"No metadata found for frame {self.frame_counter}.")
             self.frame_counter += 1
@@ -158,109 +152,22 @@ class OverlayCairo(GstBase.BaseTransform):
         if not success:
             return Gst.FlowReturn.ERROR
 
-        cairo_surface = None
-        cr = None
-
         try:
-            # Create a Cairo surface for text rendering directly on buffer data
-            cairo_surface = cairo.ImageSurface.create_for_data(
-                map_info.data,
-                cairo.FORMAT_ARGB32,
-                self.width,
-                self.height,
-                self.width * 4,
+            self.overlay_graphics.initialize(map_info.data)
+            self.overlay_graphics.draw_metadata(
+                metadata, self.tracking_display if self.tracking else None
             )
-            cr = cairo.Context(cairo_surface)
 
-            # Draw the fading history
             if self.tracking:
-                for point in self.history:
-                    self.draw_tracking_box(
-                        cr,
-                        point["center"],
-                        point["color"],
-                        point["opacity"],
-                    )
-                    # Reduce the opacity for fading effect
-                    point["opacity"] *= 0.9
+                self.tracking_display.fade_history()
 
-            # Draw bounding boxes, labels, and new tracking boxes
-            for data in metadata:
-                self.draw_bounding_box_with_cairo(cr, data["box"])
-                self.draw_label_with_cairo(
-                    cr, data["label"], data["box"]["x1"], data["box"]["y1"]
-                )
-
-                if self.tracking:
-                    track_id = data.get("track_id")
-                    if track_id is not None:
-                        color = self.get_color_for_id(track_id)
-                        center = {
-                            "x": (data["box"]["x1"] + data["box"]["x2"]) / 2,
-                            "y": (data["box"]["y1"] + data["box"]["y2"]) / 2,
-                        }
-                        self.draw_tracking_box(cr, center, color, 1.0)
-
-                        # Add new tracking box to history
-                        self.history.append(
-                            {"center": center, "color": color, "opacity": 1.0}
-                        )
-
-            # Trim history if it exceeds max length
-            if self.tracking:
-                self.history = [
-                    point for point in self.history if point["opacity"] > 0.1
-                ]
-
-            # Ensure Cairo operations are complete before unmapping
-            cr.stroke()
-            cairo_surface.finish()
+            self.overlay_graphics.finalize()
 
         finally:
-            # Cleanup resources
-            if cairo_surface:
-                del cairo_surface
-            if cr:
-                del cr
-            buf.unmap(map_info)  # Unmap buffer after ensuring no references remain
+            buf.unmap(map_info)
             self.frame_counter += 1
 
         return Gst.FlowReturn.OK
-
-    def get_color_for_id(self, track_id):
-        """Get a color for the given track ID."""
-        if track_id not in self.id_color_map:
-            # Assign a color based on the track ID, cycling through the palette
-            color_index = len(self.id_color_map) % len(self.color_palette)
-            self.id_color_map[track_id] = self.color_palette[color_index]
-        return self.id_color_map[track_id]
-
-    def draw_tracking_box(self, cr, center, color, opacity):
-        """Draw a small box for tracking at the given center point with fading effect."""
-        size = 10  # Size of the tracking box
-        half_size = size // 2
-
-        # Set the color with opacity
-        cr.set_source_rgba(color[0], color[1], color[2], opacity)
-
-        # Draw the filled box
-        cr.rectangle(center["x"] - half_size, center["y"] - half_size, size, size)
-        cr.fill()
-
-    def draw_bounding_box_with_cairo(self, cr, box):
-        """Draw a bounding box using Cairo."""
-        cr.set_line_width(2.0)
-        cr.set_source_rgb(1, 0, 0)
-        cr.rectangle(box["x1"], box["y1"], box["x2"] - box["x1"], box["y2"] - box["y1"])
-        cr.stroke()
-
-    def draw_label_with_cairo(self, cr, label, x, y):
-        """Draws a label with Cairo at the specified position."""
-        cr.set_font_size(12)
-        cr.set_source_rgba(1, 1, 1, 1)
-        cr.move_to(x, y - 10)  # Position the text above the bounding box
-        cr.show_text(label)
-        cr.stroke()
 
 
 if CAN_REGISTER_ELEMENT:
