@@ -89,7 +89,7 @@ class Overlay(GstBase.BaseTransform):
 
     def __init__(self):
         super(Overlay, self).__init__()
-        self.preloaded_metadata = {}
+        self.extracted_metadata = {}
         self.frame_counter = 0
         self.tracking_display = TrackingDisplay()
         self.width = 0
@@ -140,18 +140,22 @@ class Overlay(GstBase.BaseTransform):
         return True
 
     def get_metadata_for_frame(self, frame_index):
-        return self.preloaded_metadata.get(frame_index, [])
+        return self.extracted_metadata.get(frame_index, [])
 
     def do_transform_ip(self, buf):
-        if not self.preloaded_metadata:
-            self.preloaded_metadata = load_metadata(self.meta_path)
-        metadata = self.get_metadata_for_frame(self.frame_counter)
-        if ANALYTICS_UTILS_AVAILABLE:
+        # first try to extract metadata from frame meta
+        if ANALYTICS_UTILS_AVAILABLE and not self.extracted_metadata:
             analytics_utils = AnalyticsUtils()
-            metadata.extend(analytics_utils.extract_analytics_metadata(buf))
+            self.extracted_metadata = analytics_utils.extract_analytics_metadata(buf)
+        # if not available, then try from file
+        if not self.extracted_metadata:
+            self.extracted_metadata = load_metadata(self.meta_path)
+        if not self.extracted_metadata:
+            self.frame_counter += 1
+            return Gst.FlowReturn.OK
 
-        if not metadata:
-            Gst.warning(f"No metadata found for frame {self.frame_counter}.")
+        frame_metadata = self.get_metadata_for_frame(self.frame_counter)
+        if not frame_metadata:
             self.frame_counter += 1
             return Gst.FlowReturn.OK
 
@@ -166,7 +170,7 @@ class Overlay(GstBase.BaseTransform):
 
         try:
             self.overlay_graphics.initialize(map_info.data)
-            self.do_post_process(metadata)
+            self.do_post_process(frame_metadata)
             self.overlay_graphics.finalize()
         finally:
             buf.unmap(map_info)
@@ -174,9 +178,9 @@ class Overlay(GstBase.BaseTransform):
 
         return Gst.FlowReturn.OK
 
-    def do_post_process(self, metadata):
+    def do_post_process(self, frame_metadata):
         self.overlay_graphics.draw_metadata(
-            metadata, self.tracking_display if self.tracking else None
+            frame_metadata, self.tracking_display if self.tracking else None
         )
         if self.tracking:
             self.tracking_display.fade_history()

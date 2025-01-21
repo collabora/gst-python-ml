@@ -190,14 +190,14 @@ class CairoOverlayGraphics(OverlayGraphics):
     def draw_tracking_point(self, center, color, opacity):
         size = 10
         half_size = size // 2
-        self.context.set_source_rgba(color.r, color.g, color.b, opacity)
+        self.context.set_source_rgba(color.b, color.g, color.r, opacity)
         self.context.rectangle(
             center["x"] - half_size, center["y"] - half_size, size, size
         )
         self.context.fill()
 
     def draw_line(self, start, end, color, width):
-        self.context.set_source_rgba(color.r, color.g, color.b, color.a)
+        self.context.set_source_rgba(color.b, color.g, color.r, color.a)
         self.context.set_line_width(width)
         self.context.move_to(start["x"], start["y"])
         self.context.line_to(end["x"], end["y"])
