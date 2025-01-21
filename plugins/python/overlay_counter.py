@@ -33,10 +33,13 @@ class OverlayCounter(Overlay):
         # Call the base class's method to display tracks, bounding boxes and labels
         super().do_post_process(width, height, frame_metadata)
 
+        line_height = height / 2
+        self.tracking_display.set_y_line(line_height)
+
         # add some graphics
         # Define the line start and end points
-        start_point = {"x": 0, "y": height / 2}
-        end_point = {"x": width, "y": height / 2}
+        start_point = {"x": 0, "y": line_height}
+        end_point = {"x": width, "y": line_height}
 
         # Define the color (red with full opacity) and line width
         red_color = Color(r=1.0, g=0.0, b=0.0, a=1.0)  # RGBA
@@ -46,6 +49,11 @@ class OverlayCounter(Overlay):
         self.overlay_graphics.draw_line(
             start=start_point, end=end_point, color=red_color, width=line_width
         )
+
+        up, down = self.tracking_display.update_objects_crossing_line()
+
+        text = f"Cars going up {up}, cars going down {down}"
+        self.overlay_graphics.draw_label(text, 0, 50)
 
 
 if CAN_REGISTER_ELEMENT:

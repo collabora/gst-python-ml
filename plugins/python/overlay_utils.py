@@ -62,6 +62,10 @@ class TrackingDisplay:
             Color(0.5, 0.5, 0.5, 1.0),  # Grey
             Color(1.0, 0.6, 0.4, 1.0),  # Peach
         ]
+        self.processed_ids = set()  # Track IDs that have already been counted
+        self.total_top_to_bottom = 0  # Total objects crossing from top to bottom
+        self.total_bottom_to_top = 0  # Total objects crossing from bottom to top
+        self.y_line = None  # The y-coordinate of the horizontal line
 
     def get_color_for_id(self, track_id):
         if track_id not in self.id_color_map:
@@ -71,7 +75,9 @@ class TrackingDisplay:
 
     def add_tracking_point(self, center, track_id):
         color = self.get_color_for_id(track_id)
-        self.history.append({"center": center, "color": color, "opacity": 1.0})
+        self.history.append(
+            {"center": center, "color": color, "track_id": track_id, "opacity": 1.0}
+        )
 
         if len(self.history) > self.max_history_length:
             self.history = self.history[-self.max_history_length :]
@@ -80,6 +86,47 @@ class TrackingDisplay:
         for point in self.history:
             point["opacity"] *= 0.9
         self.history = [point for point in self.history if point["opacity"] > 0.1]
+
+    def set_y_line(self, y_line):
+        """Set the y-coordinate of the horizontal line for calculations."""
+        self.y_line = y_line
+
+    def update_objects_crossing_line(self):
+        """Count cars crossing the horizontal line set by `set_y_line`.
+
+        Returns:
+            tuple: (count_top_to_bottom, count_bottom_to_top)
+        """
+        if self.y_line is None:
+            raise ValueError("The y_line must be set before counting crossings.")
+
+        count_top_to_bottom = 0
+        count_bottom_to_top = 0
+
+        track_last_positions = {}
+
+        for point in self.history:
+            track_id = point["track_id"]
+            if track_id in self.processed_ids:
+                continue  # Skip tracks that have already been processed
+
+            current_y = point["center"]["y"]
+
+            if track_id in track_last_positions:
+                last_y = track_last_positions[track_id]
+
+                if last_y < self.y_line <= current_y:  # Crossed from top to bottom
+                    count_top_to_bottom += 1
+                    self.total_top_to_bottom += 1
+                    self.processed_ids.add(track_id)
+                elif last_y > self.y_line >= current_y:  # Crossed from bottom to top
+                    count_bottom_to_top += 1
+                    self.total_bottom_to_top += 1
+                    self.processed_ids.add(track_id)
+
+            track_last_positions[track_id] = current_y
+
+        return self.total_top_to_bottom, self.total_bottom_to_top
 
 
 class OverlayGraphics(ABC):
@@ -195,7 +242,7 @@ class CairoOverlayGraphics(OverlayGraphics):
         self.context.stroke()
 
     def draw_label(self, label, x, y):
-        self.context.set_source_rgba(1, 1, 1, 1)
+        self.context.set_source_rgba(0, 0, 1, 1)
         self.context.set_font_size(12)
         self.context.move_to(x, y - 10)
         self.context.show_text(label)
