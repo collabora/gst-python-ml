@@ -25,7 +25,6 @@ try:
         CairoOverlayGraphics,
     )
     import gi
-    import cairo
 
     gi.require_version("Gst", "1.0")
     gi.require_version("GstBase", "1.0")
@@ -154,21 +153,20 @@ class OverlayCairo(GstBase.BaseTransform):
 
         try:
             self.overlay_graphics.initialize(map_info.data)
-            self.overlay_graphics.draw_metadata(
-                metadata, self.tracking_display if self.tracking else None
-            )
-
-            if self.tracking:
-                self.tracking_display.fade_history()
-
+            self.do_post_process(metadata)
             self.overlay_graphics.finalize()
-
         finally:
             buf.unmap(map_info)
             self.frame_counter += 1
 
         return Gst.FlowReturn.OK
 
+    def do_post_process(self, metadata):
+        self.overlay_graphics.draw_metadata(
+            metadata, self.tracking_display if self.tracking else None
+        )
+        if self.tracking:
+            self.tracking_display.fade_history()
 
 if CAN_REGISTER_ELEMENT:
     GObject.type_register(OverlayCairo)
