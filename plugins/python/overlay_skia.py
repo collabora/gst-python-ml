@@ -288,7 +288,7 @@ class OverlaySkia(GstBase.BaseTransform):
                 self.history.append({"center": center, "opacity": 1.0, "color": color})
 
                 # Draw label near the bounding box using Cairo for faster text rendering
-                self.draw_label_with_cairo(
+                self.draw_text_with_cairo(
                     cr, data["label"], data["box"]["x1"], data["box"]["y1"]
                 )
 
@@ -333,7 +333,7 @@ class OverlaySkia(GstBase.BaseTransform):
         )
         canvas.drawCircle(center["x"], center["y"], 5, paint)
 
-    def draw_label_with_cairo(self, cr, label, x, y):
+    def draw_text_with_cairo(self, cr, label, x, y):
         """Draws a label with Cairo at the specified position."""
         cr.set_font_size(12)
         cr.set_source_rgba(1, 1, 1, 1)  # White color

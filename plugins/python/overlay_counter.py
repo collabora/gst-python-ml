@@ -53,7 +53,7 @@ class OverlayCounter(Overlay):
         up, down = self.tracking_display.update_objects_crossing_line()
 
         text = f"Cars going up {up}, cars going down {down}"
-        self.overlay_graphics.draw_label(text, 0, 50)
+        self.overlay_graphics.draw_text(text, 0, 50)
 
 
 if CAN_REGISTER_ELEMENT:
