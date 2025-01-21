@@ -17,26 +17,28 @@
 # Boston, MA 02110-1301, USA.
 
 
+from analytics_utils import ANALYTICS_UTILS_AVAILABLE
+
+if ANALYTICS_UTILS_AVAILABLE:
+    from analytics_utils import AnalyticsUtils
+
 CAN_REGISTER_ELEMENT = True
 try:
-    from overlay_utils import load_metadata
-    import re
+    from overlay_utils import (
+        load_metadata,
+        TrackingDisplay,
+        GraphicsType,
+        OverlayGraphicsFactory,
+    )
     import gi
-    import skia
-    import cairo
-    import numpy as np
 
     gi.require_version("Gst", "1.0")
     gi.require_version("GstBase", "1.0")
     gi.require_version("GstVideo", "1.0")
-    gi.require_version("GLib", "2.0")
-    gi.require_version("GstAnalytics", "1.0")
     from gi.repository import (
         Gst,
         GstBase,
         GstVideo,
-        GstAnalytics,
-        GLib,
         GObject,
     )  # noqa: E402
 except ImportError as e:
@@ -73,70 +75,58 @@ class Overlay(GstBase.BaseTransform):
     meta_path = GObject.Property(
         type=str,
         default=None,
-        nick="Metadata Path",
+        nick="Metadata File Path",
         blurb="Path to the JSON file containing frame metadata with bounding boxes and tracking data",
+        flags=GObject.ParamFlags.READWRITE,
+    )
+    tracking = GObject.Property(
+        type=bool,
+        default=True,
+        nick="Enable Tracking Display",
+        blurb="Enable or disable tracking display",
         flags=GObject.ParamFlags.READWRITE,
     )
 
     def __init__(self):
         super(Overlay, self).__init__()
-        self.meta_path = None
         self.preloaded_metadata = {}
         self.frame_counter = 0
-        self.outline_color = skia.ColorWHITE
-        self.width = 640
-        self.height = 480
-        self.history = []
-        self.max_history_length = 5000
-        # Define a color palette with 20 distinct colors
-        self.color_palette = [
-            skia.Color4f(1.0, 0.0, 0.0, 1.0),  # Red
-            skia.Color4f(0.0, 1.0, 0.0, 1.0),  # Green
-            skia.Color4f(0.0, 0.0, 1.0, 1.0),  # Blue
-            skia.Color4f(1.0, 1.0, 0.0, 1.0),  # Yellow
-            skia.Color4f(1.0, 0.0, 1.0, 1.0),  # Magenta
-            skia.Color4f(0.0, 1.0, 1.0, 1.0),  # Cyan
-            skia.Color4f(1.0, 0.5, 0.0, 1.0),  # Orange
-            skia.Color4f(0.5, 0.0, 1.0, 1.0),  # Purple
-            skia.Color4f(0.5, 1.0, 0.0, 1.0),  # Lime
-            skia.Color4f(0.0, 0.5, 1.0, 1.0),  # Light Blue
-            skia.Color4f(1.0, 0.3, 0.3, 1.0),  # Light Red
-            skia.Color4f(0.3, 1.0, 0.3, 1.0),  # Light Green
-            skia.Color4f(0.3, 0.3, 1.0, 1.0),  # Light Blue
-            skia.Color4f(1.0, 1.0, 0.3, 1.0),  # Light Yellow
-            skia.Color4f(1.0, 0.3, 1.0, 1.0),  # Pink
-            skia.Color4f(0.3, 1.0, 1.0, 1.0),  # Aqua
-            skia.Color4f(0.5, 0.2, 0.0, 1.0),  # Brown
-            skia.Color4f(0.2, 0.5, 0.0, 1.0),  # Olive
-            skia.Color4f(0.5, 0.5, 0.5, 1.0),  # Grey
-            skia.Color4f(1.0, 0.6, 0.4, 1.0),  # Peach
-        ]
-        self.id_color_map = {}
+        self.tracking_display = TrackingDisplay()
+        self.width = 0
+        self.height = 0
+        self.overlay_graphics = OverlayGraphicsFactory.create(
+            GraphicsType.CAIRO, self.width, self.height
+        )
 
     def do_get_property(self, prop: GObject.ParamSpec):
         if prop.name == "meta-path":
             return self.meta_path
+        elif prop.name == "tracking":
+            return self.tracking
         else:
             raise AttributeError(f"Unknown property {prop.name}")
 
     def do_set_property(self, prop: GObject.ParamSpec, value):
         if prop.name == "meta-path":
             self.meta_path = value
+        elif prop.name == "tracking":
+            self.tracking = value
+            Gst.info(f"Tracking set to: {self.tracking}")
         else:
             raise AttributeError(f"Unknown property {prop.name}")
 
-    def do_start(self):
-        # Setup trail surface for fading circles
-        self.trail_surface = skia.Surface(self.width, self.height)
-        Gst.info("Skia trail surface initialized.")
-        return True
+    def on_message(self, bus, message):
+        if message.type == Gst.MessageType.EOS:
+            Gst.info("Reset frame counter.")
+            self.frame_counter = 0
 
-    def do_stop(self):
-        # Cleanup Skia trail surface
-        if self.trail_surface:
-            del self.trail_surface
-            self.trail_surface = None
-        Gst.info("Overlay stopped, resources cleaned.")
+    def do_start(self):
+        if self.bus:
+            self.bus.add_signal_watch()
+            self.bus.connect("message", self.on_message)
+            Gst.info("Added signal watch to pipeline's bus.")
+        else:
+            Gst.error("Could not get the bus from the pipeline.")
         return True
 
     def do_set_caps(self, incaps, outcaps):
@@ -144,79 +134,22 @@ class Overlay(GstBase.BaseTransform):
         self.width = video_info.width
         self.height = video_info.height
         Gst.info(f"Video caps set: width={self.width}, height={self.height}")
+        self.overlay_graphics = OverlayGraphicsFactory.create(
+            GraphicsType.CAIRO, self.width, self.height
+        )
         return True
 
-    def get_color_for_id(self, track_id):
-        """Get a color for the given track ID."""
-        if track_id not in self.id_color_map:
-            # Assign the next color in the palette, cycling if necessary
-            color_index = len(self.id_color_map) % len(self.color_palette)
-            self.id_color_map[track_id] = self.color_palette[color_index]
-        return self.id_color_map[track_id]
-
     def get_metadata_for_frame(self, frame_index):
-        """Retrieve preloaded metadata for the given frame index."""
         return self.preloaded_metadata.get(frame_index, [])
-
-    def extract_id_from_label(self, label):
-        """Extracts the numeric ID from a label formatted as 'id_<number>'."""
-        match = re.match(r"id_(\d+)", label)
-        if match:
-            track_id = int(match.group(1))
-            return track_id
-        else:
-            print("No ID found in label")  # Optional debug message for unmatched format
-            return None  # Return None if the ID format is not found
-
-    def extract_metadata(self, buffer):
-        metadata = []
-        meta = GstAnalytics.buffer_get_analytics_relation_meta(buffer)
-        if not meta:
-            return metadata
-
-        try:
-            count = GstAnalytics.relation_get_length(meta)
-            for index in range(count):
-                ret, od_mtd = meta.get_od_mtd(index)
-                if not ret or od_mtd is None:
-                    continue
-
-                label_quark = od_mtd.get_obj_type()
-                label = GLib.quark_to_string(label_quark)
-                track_id = self.extract_id_from_label(label)
-                location = od_mtd.get_location()
-                presence, x, y, w, h, loc_conf_lvl = location
-                if presence:
-                    metadata.append(
-                        {
-                            "label": label,
-                            "track_id": track_id,
-                            "confidence": loc_conf_lvl,
-                            "box": {"x1": x, "y1": y, "x2": x + w, "y2": y + h},
-                        }
-                    )
-        except Exception as e:
-            Gst.error(f"Error while extracting metadata: {e}")
-        return metadata
-
-    def create_overlay_surface(self, map_info, width, height):
-        image_data = np.frombuffer(map_info.data, dtype=np.uint8)
-        image_data = image_data.reshape((height, width, 4))
-        surface = skia.Surface.MakeRasterDirect(
-            skia.ImageInfo.MakeN32Premul(width, height), image_data
-        )
-        return surface
 
     def do_transform_ip(self, buf):
         if not self.preloaded_metadata:
             self.preloaded_metadata = load_metadata(self.meta_path)
-        metadata = self.extract_metadata(buf)
-        frame_metadata = self.get_metadata_for_frame(self.frame_counter)
+        metadata = self.get_metadata_for_frame(self.frame_counter)
+        if ANALYTICS_UTILS_AVAILABLE:
+            analytics_utils = AnalyticsUtils()
+            metadata.extend(analytics_utils.extract_analytics_metadata(buf))
 
-        # Combine metadata from buffer and preloaded JSON
-        metadata.extend(frame_metadata)
-
-        # Skip processing if no metadata exists for the current frame
         if not metadata:
             Gst.warning(f"No metadata found for frame {self.frame_counter}.")
             self.frame_counter += 1
@@ -231,115 +164,22 @@ class Overlay(GstBase.BaseTransform):
         if not success:
             return Gst.FlowReturn.ERROR
 
-        surface = None
-        cairo_surface = None
-        cr = None
-
         try:
-            # Create Skia surface for the main canvas
-            surface = self.create_overlay_surface(map_info, self.width, self.height)
-            canvas = surface.getCanvas()
-
-            # Fade out existing circles on trail surface
-            self.trail_surface.getCanvas().drawColor(
-                skia.Color4f(0, 0, 0, 0.1), skia.BlendMode.kDstIn
-            )
-
-            # Fade and draw circles from history
-            for past_point in self.history:
-                self.draw_trail_circle(
-                    self.trail_surface.getCanvas(),
-                    past_point["center"],
-                    past_point["opacity"],
-                    past_point["color"],
-                )
-                # Gradually fade the opacity of each point
-                past_point["opacity"] *= 0.9
-
-            # Create a Cairo surface for text rendering directly on buffer data
-            cairo_surface = cairo.ImageSurface.create_for_data(
-                map_info.data,
-                cairo.FORMAT_ARGB32,
-                self.width,
-                self.height,
-                self.width * 4,
-            )
-            cr = cairo.Context(cairo_surface)
-
-            # Draw bounding boxes and labels on main surface
-            for data in metadata:
-                self.draw_bounding_box(canvas, data["box"])
-                track_id = data.get(
-                    "track_id"
-                )  # Assumes `track_id` is available in metadata
-                color = self.get_color_for_id(track_id)
-
-                # Adjust the center point to be lower toward the bottom of the bounding box
-                center = {
-                    "x": (data["box"]["x1"] + data["box"]["x2"]) / 2,
-                    "y": (data["box"]["y1"] * 0.25 + data["box"]["y2"] * 0.75),
-                }
-
-                self.draw_trail_circle(
-                    self.trail_surface.getCanvas(), center, 1.0, color
-                )
-
-                # Add new point to history with color and opacity information
-                self.history.append({"center": center, "opacity": 1.0, "color": color})
-
-                # Draw label near the bounding box using Cairo for faster text rendering
-                self.draw_label_with_cairo(
-                    cr, data["label"], data["box"]["x1"], data["box"]["y1"]
-                )
-
-            if len(self.history) > self.max_history_length:
-                self.history.pop(0)
-
-            # Composite trail surface onto main surface
-            paint = skia.Paint()
-            paint.setColor(
-                skia.Color4f(1, 1, 1, 0.9)
-            )  # Set color with alpha for blending
-            canvas.drawImage(self.trail_surface.makeImageSnapshot(), 0, 0, paint)
-
-            # Ensure Cairo operations are complete before unmapping
-            cr.stroke()
-            cairo_surface.finish()
-
+            self.overlay_graphics.initialize(map_info.data)
+            self.do_post_process(metadata)
+            self.overlay_graphics.finalize()
         finally:
-            # Cleanup resources
-            if surface:
-                del surface
-            if cairo_surface:
-                del cairo_surface
-            if cr:
-                del cr
-            buf.unmap(map_info)  # Unmap buffer after ensuring no references remain
+            buf.unmap(map_info)
             self.frame_counter += 1
 
         return Gst.FlowReturn.OK
 
-    def draw_bounding_box(self, canvas, box):
-        paint = skia.Paint(
-            Color=self.outline_color, StrokeWidth=2, Style=skia.Paint.kStroke_Style
+    def do_post_process(self, metadata):
+        self.overlay_graphics.draw_metadata(
+            metadata, self.tracking_display if self.tracking else None
         )
-        canvas.drawRect(skia.Rect(box["x1"], box["y1"], box["x2"], box["y2"]), paint)
-
-    def draw_trail_circle(self, canvas, center, opacity, color):
-        """Draws a trail circle with the specified color."""
-        paint = skia.Paint(
-            Color=skia.Color4f(color.fR, color.fG, color.fB, opacity),
-            Style=skia.Paint.kFill_Style,
-        )
-        canvas.drawCircle(center["x"], center["y"], 5, paint)
-
-    def draw_label_with_cairo(self, cr, label, x, y):
-        """Draws a label with Cairo at the specified position."""
-        cr.set_font_size(12)
-        cr.set_source_rgba(1, 1, 1, 1)  # White color
-        cr.move_to(x, y - 10)  # Position the text above the bounding box
-        cr.show_text(label)
-        cr.stroke()
+        if self.tracking:
+            self.tracking_display.fade_history()
 
 
 if CAN_REGISTER_ELEMENT:
@@ -347,5 +187,5 @@ if CAN_REGISTER_ELEMENT:
     __gstelementfactory__ = ("pyml_overlay", Gst.Rank.NONE, Overlay)
 else:
     Gst.warning(
-        "The 'pyml_overlay' element will not be registered because a required module is missing."
+        "The 'pyml_overlay' element will not be registered because a module is missing."
     )
