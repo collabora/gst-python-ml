@@ -21,6 +21,7 @@ import json
 import gi
 import cairo
 from abc import ABC, abstractmethod
+from enum import Enum
 
 gi.require_version("Gst", "1.0")
 from gi.repository import Gst  # noqa: E402
@@ -201,6 +202,21 @@ class CairoOverlayGraphics(OverlayGraphics):
         self.context.move_to(start["x"], start["y"])
         self.context.line_to(end["x"], end["y"])
         self.context.stroke()
+
+
+class GraphicsType(Enum):
+    CAIRO = ("cairo",)
+    SKIA = "skia"
+
+
+class OverlayGraphicsFactory:
+    @staticmethod
+    def create(graphics_type, width, height):
+        """Factory method to create an OverlayGraphics object based on type."""
+        if graphics_type == GraphicsType.CAIRO:
+            return CairoOverlayGraphics(width, height)
+        else:
+            raise ValueError(f"Unknown graphics type: {graphics_type}")
 
 
 def load_metadata(meta_path):

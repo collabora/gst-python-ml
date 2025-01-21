@@ -22,7 +22,8 @@ try:
         load_metadata,
         Color,
         TrackingDisplay,
-        CairoOverlayGraphics,
+        GraphicsType,
+        OverlayGraphicsFactory,
     )
     import gi
 
@@ -85,10 +86,12 @@ class OverlayCairo(GstBase.BaseTransform):
         super(OverlayCairo, self).__init__()
         self.preloaded_metadata = {}
         self.frame_counter = 0
-        self.width = 640
-        self.height = 480
         self.tracking_display = TrackingDisplay()
-        self.overlay_graphics = CairoOverlayGraphics(self.width, self.height)
+        self.width = 0
+        self.height = 0
+        self.overlay_graphics = OverlayGraphicsFactory.create(
+            GraphicsType.CAIRO, self.width, self.height
+        )
 
     def do_get_property(self, prop: GObject.ParamSpec):
         if prop.name == "meta-path":
@@ -126,7 +129,9 @@ class OverlayCairo(GstBase.BaseTransform):
         self.width = video_info.width
         self.height = video_info.height
         Gst.info(f"Video caps set: width={self.width}, height={self.height}")
-        self.overlay_graphics = CairoOverlayGraphics(self.width, self.height)
+        self.overlay_graphics = OverlayGraphicsFactory.create(
+            GraphicsType.CAIRO, self.width, self.height
+        )
         return True
 
     def get_metadata_for_frame(self, frame_index):
@@ -167,6 +172,7 @@ class OverlayCairo(GstBase.BaseTransform):
         )
         if self.tracking:
             self.tracking_display.fade_history()
+
 
 if CAN_REGISTER_ELEMENT:
     GObject.type_register(OverlayCairo)
