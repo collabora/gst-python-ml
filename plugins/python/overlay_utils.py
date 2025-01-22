@@ -91,7 +91,7 @@ class TrackingDisplay:
         """Set the y-coordinate of the horizontal line for calculations."""
         self.y_line = y_line
 
-    def update_objects_crossing_line(self):
+    def count_objects(self):
         """Count cars crossing the horizontal line set by `set_y_line`.
 
         Returns:

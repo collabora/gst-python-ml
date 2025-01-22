@@ -48,7 +48,7 @@ class OverlayCounter(Overlay):
             start=start_point, end=end_point, color=red_color, width=line_width
         )
 
-        up, down = self.tracking_display.update_objects_crossing_line()
+        up, down = self.tracking_display.count_objects()
 
         text = f"Cars going up {up}, cars going down {down}"
         self.overlay_graphics.draw_text(text, 0, 50)
