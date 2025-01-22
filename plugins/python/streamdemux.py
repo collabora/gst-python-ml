@@ -48,7 +48,7 @@ class StreamDemux(Gst.Element):
     )
 
     def __init__(self):
-        super(StreamDemux, self).__init__()
+        super().__init__()
         self.sinkpad = Gst.Pad.new_from_template(self.get_pad_template("sink"), "sink")
         self.sinkpad.set_event_function_full(self.event)
         self.sinkpad.set_chain_function_full(self.chain)

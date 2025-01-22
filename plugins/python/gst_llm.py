@@ -49,7 +49,7 @@ class GstLLM(GstAggregator):
     )
 
     def __init__(self):
-        super(GstLLM, self).__init__()
+        super().__init__()
 
     def do_process(self, buf):
         """

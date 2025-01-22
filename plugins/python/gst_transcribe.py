@@ -106,7 +106,7 @@ class GstTranscribe(GstAggregator):
     )
 
     def __init__(self):
-        super(GstTranscribe, self).__init__()
+        super().__init__()
 
         self.clip_buffer = collections.deque()
         self.active_clip = False

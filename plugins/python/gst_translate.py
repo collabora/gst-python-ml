@@ -71,7 +71,7 @@ class GstTranslate(GstAggregator):
     )
 
     def __init__(self):
-        super(GstTranslate, self).__init__()
+        super().__init__()
         self.tokenizer = None
 
     def do_load_model(self):

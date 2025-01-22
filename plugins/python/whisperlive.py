@@ -74,7 +74,7 @@ class WhisperLive(GstTranscribe):
     )
 
     def __init__(self):
-        super(WhisperLive, self).__init__()
+        super().__init__()
         self.model_name = "medium"
         self.pipeline = None
         self.llm_tokenizer = None

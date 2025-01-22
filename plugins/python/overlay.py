@@ -88,7 +88,7 @@ class Overlay(GstBase.BaseTransform):
     )
 
     def __init__(self):
-        super(Overlay, self).__init__()
+        super().__init__()
         self.extracted_metadata = {}
         self.frame_counter = 0
         self.tracking_display = TrackingDisplay()

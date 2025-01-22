@@ -57,7 +57,7 @@ class StreamMux(GstBase.Aggregator):
     )
 
     def __init__(self):
-        super(StreamMux, self).__init__()
+        super().__init__()
         self.batch_buffer = []
         self.timestamps = []
         self.timeout_source = None

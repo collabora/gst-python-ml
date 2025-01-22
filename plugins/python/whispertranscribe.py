@@ -42,7 +42,7 @@ class WhisperTranscribe(GstTranscribe):
     )
 
     def __init__(self):
-        super(WhisperTranscribe, self).__init__()
+        super().__init__()
         self.model_name = "medium"
 
     def do_load_model(self):

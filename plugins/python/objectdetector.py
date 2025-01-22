@@ -43,7 +43,7 @@ class ObjectDetector(GstObjectDetector):
     )
 
     def __init__(self):
-        super(ObjectDetector, self).__init__()
+        super().__init__()
         Gst.info(
             "ObjectDetector created without a model. Please set the 'model-name' property."
         )

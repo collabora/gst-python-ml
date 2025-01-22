@@ -43,7 +43,7 @@ class GstObjectDetector(GstVideoTransform):
     )
 
     def __init__(self):
-        super(GstObjectDetector, self).__init__()
+        super().__init__()
         runtime_check_gstreamer_version()
         self.framerate_num = 30
         self.framerate_denom = 1

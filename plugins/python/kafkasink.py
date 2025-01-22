@@ -109,7 +109,7 @@ class KafkaSink(Gst.Element):
     )
 
     def __init__(self):
-        super(KafkaSink, self).__init__()
+        super().__init__()
         runtime_check_gstreamer_version()
 
         self.sinkpad = Gst.Pad.new_from_template(

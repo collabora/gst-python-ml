@@ -137,7 +137,7 @@ class GstBaseTransform(GstBase.BaseTransform):
     )
 
     def __init__(self):
-        super(GstBaseTransform, self).__init__()
+        super().__init__()
         self.ml_engine = GstEngineFactory.PYTORCH_ENGINE
         self.engine = None
         self.kwargs = {}

@@ -46,7 +46,7 @@ class MaskRCNN(GstObjectDetector):
     )
 
     def __init__(self):
-        super(MaskRCNN, self).__init__()
+        super().__init__()
 
     # @GObject.Property
     # def model_name(self):

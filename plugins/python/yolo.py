@@ -129,7 +129,7 @@ class YOLOTransform(GstObjectDetector):
     )
 
     def __init__(self):
-        super(YOLOTransform, self).__init__()
+        super().__init__()
         self.ml_engine = "pytorch-yolo"
 
     def do_decode(self, buf, result):

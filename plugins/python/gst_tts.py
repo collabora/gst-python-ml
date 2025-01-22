@@ -71,7 +71,7 @@ class GstTTS(GstAggregator):
     )
 
     def __init__(self):
-        super(GstTTS, self).__init__()
+        super().__init__()
         self.segment_pushed = False
         self.device = "cpu"
         self.streaming_enabled = False

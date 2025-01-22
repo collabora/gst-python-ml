@@ -79,7 +79,7 @@ class OverlaySkia(GstBase.BaseTransform):
     )
 
     def __init__(self):
-        super(OverlaySkia, self).__init__()
+        super().__init__()
         self.meta_path = None
         self.preloaded_metadata = {}
         self.frame_counter = 0

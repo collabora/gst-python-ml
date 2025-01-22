@@ -93,7 +93,7 @@ class GstAggregator(GstBase.Aggregator):
     )
 
     def __init__(self):
-        super(GstAggregator, self).__init__()
+        super().__init__()
         self.ml_engine = GstEngineFactory.PYTORCH_ENGINE
         self.engine = None
         self.kwargs = {}
