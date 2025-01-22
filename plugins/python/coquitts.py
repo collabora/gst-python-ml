@@ -61,9 +61,6 @@ class CoquiTTS(GstTTS):
         ),
     )
 
-    def __init__(self):
-        super().__init__()
-
     def do_load_model(self):
         Gst.info(f"Initializing Coqui TTS model on device: {self.device}")
         self.set_model(

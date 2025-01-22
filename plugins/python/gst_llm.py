@@ -48,9 +48,6 @@ class GstLLM(GstAggregator):
         ),
     )
 
-    def __init__(self):
-        super().__init__()
-
     def do_process(self, buf):
         """
         Processes the input buffer with the language model

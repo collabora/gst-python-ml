@@ -45,9 +45,6 @@ class MaskRCNN(GstObjectDetector):
         "Aaron Boxer <aaron.boxer@collabora.com>",
     )
 
-    def __init__(self):
-        super().__init__()
-
     # @GObject.Property
     # def model_name(self):
     #     return "maskrcnn_resnet50_fpn"  # Always return the correct model name

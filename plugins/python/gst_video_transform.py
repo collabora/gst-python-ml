@@ -61,9 +61,6 @@ class GstVideoTransform(GstBaseTransform):
         flags=GObject.ParamFlags.READWRITE,
     )
 
-    def __init__(self):
-        super().__init__()
-
     def do_set_property(self, prop, value):
         if prop.name == "downsampled-width":
             self.downsampled_width = value
