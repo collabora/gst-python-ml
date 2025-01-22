@@ -35,17 +35,18 @@ class OverlayCounter(Overlay):
         "Aaron Boxer <aaron.boxer@collabora.com>",
     )
 
+    def do_set_dims(self, width, height):
+        super().do_set_dims(width, height)
+        self.tracking_display.set_y_line(self.height / 2)
+
     def do_post_process(self, frame_metadata):
         # Call the base class's method to display tracks, bounding boxes and labels
         super().do_post_process(frame_metadata)
 
-        line_height = self.height / 2
-        self.tracking_display.set_y_line(line_height)
-
         # add some graphics
         # Define the line start and end points
-        start_point = {"x": 0, "y": line_height}
-        end_point = {"x": self.width, "y": line_height}
+        start_point = {"x": 0, "y": self.tracking_display.y_line}
+        end_point = {"x": self.width, "y": self.tracking_display.y_line}
 
         # Define the color (red with full opacity) and line width
         red_color = Color(r=1.0, g=0.0, b=0.0, a=1.0)  # RGBA

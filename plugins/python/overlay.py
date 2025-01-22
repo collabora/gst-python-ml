@@ -92,10 +92,9 @@ class Overlay(GstBase.BaseTransform):
         self.extracted_metadata = {}
         self.frame_counter = 0
         self.tracking_display = TrackingDisplay()
-        self.width = 0
-        self.height = 0
+        super().do_set_dims(0, 0)
         self.overlay_graphics = OverlayGraphicsFactory.create(
-            GraphicsType.CAIRO, self.width, self.height
+            GraphicsType.CAIRO, self.width, self, height
         )
 
     def do_get_property(self, prop: GObject.ParamSpec):
@@ -131,13 +130,16 @@ class Overlay(GstBase.BaseTransform):
 
     def do_set_caps(self, incaps, outcaps):
         video_info = GstVideo.VideoInfo.new_from_caps(incaps)
-        self.width = video_info.width
-        self.height = video_info.height
+        self.do_set_dims(video_info.width, video_info.height)
         Gst.info(f"Video caps set: width={self.width}, height={self.height}")
         self.overlay_graphics = OverlayGraphicsFactory.create(
             GraphicsType.CAIRO, self.width, self.height
         )
         return True
+
+    def do_set_dims(self, width, height):
+        self.width = width
+        self.height = height
 
     def get_metadata_for_frame(self, frame_index):
         return self.extracted_metadata.get(frame_index, [])
