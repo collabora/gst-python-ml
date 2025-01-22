@@ -29,17 +29,17 @@ except ImportError as e:
 
 
 class OverlayCounter(Overlay):
-    def do_post_process(self, width, height, frame_metadata):
+    def do_post_process(self, frame_metadata):
         # Call the base class's method to display tracks, bounding boxes and labels
-        super().do_post_process(width, height, frame_metadata)
+        super().do_post_process(frame_metadata)
 
-        line_height = height / 2
+        line_height = self.height / 2
         self.tracking_display.set_y_line(line_height)
 
         # add some graphics
         # Define the line start and end points
         start_point = {"x": 0, "y": line_height}
-        end_point = {"x": width, "y": line_height}
+        end_point = {"x": self.width, "y": line_height}
 
         # Define the color (red with full opacity) and line width
         red_color = Color(r=1.0, g=0.0, b=0.0, a=1.0)  # RGBA

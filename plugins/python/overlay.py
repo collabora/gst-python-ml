@@ -170,7 +170,7 @@ class Overlay(GstBase.BaseTransform):
 
         try:
             self.overlay_graphics.initialize(map_info.data)
-            self.do_post_process(self.width, self.height, frame_metadata)
+            self.do_post_process(frame_metadata)
             self.overlay_graphics.finalize()
         finally:
             buf.unmap(map_info)
@@ -178,7 +178,7 @@ class Overlay(GstBase.BaseTransform):
 
         return Gst.FlowReturn.OK
 
-    def do_post_process(self, width, height, frame_metadata):
+    def do_post_process(self, frame_metadata):
         self.overlay_graphics.draw_metadata(
             frame_metadata, self.tracking_display if self.tracking else None
         )
