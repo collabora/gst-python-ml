@@ -151,7 +151,7 @@ class OverlayGraphics(ABC):
         pass
 
     @abstractmethod
-    def draw_text(self, label, x, y):
+    def draw_text(self, label, x, y, colour, font_size):
         """Draw a label at the specified position on the current frame."""
         pass
 
@@ -213,7 +213,7 @@ class CairoOverlayGraphics(OverlayGraphics):
             self.draw_bounding_box(box)
 
             label = data.get("label", "")
-            self.draw_text(label, box["x1"], box["y1"] - 10)
+            self.draw_text(label, box["x1"], box["y1"] - 10, Color(1, 0, 0, 1), 12)
 
             if tracking_display:
                 track_id = data.get("track_id")
@@ -241,9 +241,9 @@ class CairoOverlayGraphics(OverlayGraphics):
         )
         self.context.stroke()
 
-    def draw_text(self, label, x, y):
-        self.context.set_source_rgba(0, 0, 1, 1)
-        self.context.set_font_size(12)
+    def draw_text(self, label, x, y, color, font_size):
+        self.context.set_source_rgba(color.b, color.g, color.r, color.a)
+        self.context.set_font_size(font_size)
         self.context.move_to(x, y)
         self.context.show_text(label)
         self.context.stroke()

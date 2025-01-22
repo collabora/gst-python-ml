@@ -48,10 +48,10 @@ class OverlayCounter(Overlay):
             start=start_point, end=end_point, color=red_color, width=line_width
         )
 
-        up, down = self.tracking_display.count_objects()
+        approaching, receding = self.tracking_display.count_objects()
 
-        text = f"Cars going up {up}, cars going down {down}"
-        self.overlay_graphics.draw_text(text, 0, 50)
+        text = f"Objects approaching : {approaching}, receding : {receding}"
+        self.overlay_graphics.draw_text(text, 0, 50, Color(1, 0, 0, 1), 20)
 
 
 if CAN_REGISTER_ELEMENT:
