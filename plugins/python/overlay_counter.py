@@ -27,6 +27,14 @@ except ImportError as e:
 
 
 class OverlayCounter(Overlay):
+
+    __gstmetadata__ = (
+        "OverlayCounter",
+        "Filter/Effect/Video",
+        "Counts objects and displays count",
+        "Aaron Boxer <aaron.boxer@collabora.com>",
+    )
+
     def do_post_process(self, frame_metadata):
         # Call the base class's method to display tracks, bounding boxes and labels
         super().do_post_process(frame_metadata)
@@ -58,4 +66,4 @@ if CAN_REGISTER_ELEMENT:
     GObject.type_register(OverlayCounter)
     __gstelementfactory__ = ("pyml_overlay_counter", Gst.Rank.NONE, OverlayCounter)
 else:
-    Gst.warning("Failed to register the 'OverlayCounter' element.")
+    Gst.warning("Failed to register the 'pyml_overlay_counter' element.")
