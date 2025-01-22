@@ -16,13 +16,11 @@
 # Free Software Foundation, Inc., 51 Franklin Street, Fifth Floor,
 # Boston, MA 02110-1301, USA.
 
-
+CAN_REGISTER_ELEMENT = True
 try:
     from overlay import Overlay
     from overlay_utils import Color
     from gi.repository import Gst, GObject
-
-    CAN_REGISTER_ELEMENT = True
 except ImportError as e:
     Gst.warning(f"The 'OverlayCounter' element cannot be registered because: {e}")
     CAN_REGISTER_ELEMENT = False
