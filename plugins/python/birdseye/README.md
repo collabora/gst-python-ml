@@ -87,3 +87,8 @@ Please run the following code to install the Requirements.
 $ python3 main.py --source test_video.mp4 [--view] [--save]
 ```
 3. If you use the `--save` argument, the output will be saved in the `inference/output` folder.
+
+# Sample Command
+
+python3 main.py --source ~/Downloads/test-video.mp4  --save
+
