@@ -2,8 +2,6 @@ import argparse
 import torch
 import os
 
-from perspective_transform.util import util
-
 
 class ArgumentsBase(object):
     def __init__(self):

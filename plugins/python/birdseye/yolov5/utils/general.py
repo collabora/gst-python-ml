@@ -88,10 +88,9 @@ def is_docker():
 def is_colab():
     # Is environment a Google Colab instance?
     try:
-        import google.colab
 
         return True
-    except Exception as e:
+    except Exception:
         return False
 
 
@@ -189,7 +188,7 @@ def check_requirements(requirements="requirements.txt", exclude=()):
             pkg.require(r)
         except (
             Exception
-        ) as e:  # DistributionNotFound or VersionConflict if requirements not met
+        ):  # DistributionNotFound or VersionConflict if requirements not met
             print(
                 f"{prefix} {r} not found and is required by YOLOv5, attempting auto-update..."
             )

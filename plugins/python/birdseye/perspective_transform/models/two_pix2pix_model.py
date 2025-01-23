@@ -4,7 +4,6 @@ import torch
 from collections import OrderedDict
 from torch.autograd import Variable
 import perspective_transform.util.util as util
-from perspective_transform.util.image_pool import ImagePool
 from .pix2pix_model import Pix2PixModel
 from . import networks
 

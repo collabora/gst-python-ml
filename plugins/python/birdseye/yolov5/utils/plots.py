@@ -3,7 +3,6 @@
 import glob
 import math
 import os
-import random
 from copy import copy
 from pathlib import Path
 

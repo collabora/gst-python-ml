@@ -1,10 +1,7 @@
 import random
 from PIL import Image
-import numpy as np
 import torch
 from torch.utils.data.dataset import Dataset
-
-import cv2 as cv
 
 
 class CameraDataset(Dataset):
