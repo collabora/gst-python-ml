@@ -59,7 +59,7 @@ class OverlayCounter(Overlay):
 
         approaching, receding = self.tracking_display.count_objects()
 
-        text = f"Objects approaching : {approaching}, receding : {receding}"
+        text = f"Objects receding : {receding}, approaching : {approaching}"
         self.overlay_graphics.draw_text(text, 0, 50, Color(1, 0, 0, 1), 20)
 
 
