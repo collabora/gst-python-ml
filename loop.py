@@ -1,3 +1,29 @@
+# Loop
+# Copyright (C) 2024-2025 Collabora Ltd.
+#
+# This library is free software; you can redistribute it and/or
+# modify it under the terms of the GNU Library General Public
+# License as published by the Free Software Foundation; either
+# version 2 of the License, or (at your option) any later version.
+#
+# This library is distributed in the hope that it will be useful,
+# but WITHOUT ANY WARRANTY; without even the implied warranty of
+# MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the GNU
+# Library General Public License for more details.
+#
+# You should have received a copy of the GNU Library General Public
+# License along with this library; if not, write to the
+# Free Software Foundation, Inc., 51 Franklin Street, Fifth Floor,
+# Boston, MA 02110-1301, USA.
+
+# Script to loop an arbitrary pipeline.
+# Pass in command line for pipeline and this pipeline will then loop indefinitely
+
+# Example: python loop.py "filesrc location=data/people.mp4 ! decodebin ! videoconvert  ! videoconvert ! autovideosink"
+
+# Example WAYLAND_DISPLAY=wayland-1 XDG_RUNTIME_DIR=/run/user/1000 python loop.py "filesrc location=data/people.mp4 ! decodebin ! videoconvert  ! videoconvert ! autovideosink"
+
+
 import os
 import gi
 import sys
@@ -42,50 +68,22 @@ def bus_call(bus, msg, loop, pipeline):
 
 def main():
     # Parse command-line arguments
-    if len(sys.argv) != 3:
-        print("Usage: python script.py <file_source> <sink_name>")
-        print("Example: python script.py data/people.mp4 autovideosink")
+    if len(sys.argv) != 2:
+        print("Usage: python script.py <gst_pipeline>")
+        print(
+            "Example: python script.py 'filesrc location=data/people.mp4 ! decodebin ! videoconvert ! autovideosink'"
+        )
         return -1
 
-    file_source = sys.argv[1]
-    sink_name = sys.argv[2]
+    gst_pipeline = sys.argv[1]
 
     Gst.init(None)
 
-    # Create GStreamer pipeline
-    pipeline = Gst.Pipeline.new("video-pipeline")
-
-    # Create elements
-    source = Gst.ElementFactory.make("filesrc", "source")
-    decodebin = Gst.ElementFactory.make("decodebin", "decodebin")
-    videoconvert = Gst.ElementFactory.make("videoconvert", "videoconvert")
-    sink = Gst.ElementFactory.make(sink_name, "sink")
-
-    # Validate element creation
-    if not all([pipeline, source, decodebin, videoconvert, sink]):
-        Gst.error("Failed to create GStreamer elements.")
-        return -1
-
-    # Configure elements
-    source.set_property("location", file_source)
-
-    # Add elements to the pipeline
-    pipeline.add(source)
-    pipeline.add(decodebin)
-    pipeline.add(videoconvert)
-    pipeline.add(sink)
-
-    # Link source to decodebin
-    if not source.link(decodebin):
-        Gst.error("Failed to link source to decodebin.")
-        return -1
-
-    # Connect pad-added signal for decodebin
-    decodebin.connect("pad-added", pad_added_handler, videoconvert)
-
-    # Link videoconvert to sink
-    if not videoconvert.link(sink):
-        Gst.error("Failed to link videoconvert to sink.")
+    try:
+        # Parse the pipeline
+        pipeline = Gst.parse_launch(gst_pipeline)
+    except Gst.ParseError as e:
+        Gst.error(f"Failed to parse pipeline: {e}")
         return -1
 
     # Create a main loop
