@@ -10,8 +10,13 @@ class ArgumentsBase(object):
             formatter_class=argparse.ArgumentDefaultsHelpFormatter
         )
         self.initialized = False
-        self.current_path = os.path.join(os.getcwd(), "perspective_transform")
-        self.base_path = os.getcwd()
+
+        # Get the directory of this script
+        script_dir = os.path.dirname(os.path.abspath(__file__))
+
+        # Set paths relative to the script directory
+        self.current_path = os.path.join(script_dir, "perspective_transform")
+        self.base_path = script_dir
         self.isTrain = False
 
     def main_args_initialization(self):
