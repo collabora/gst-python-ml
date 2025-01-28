@@ -224,6 +224,12 @@ Note: make sure to set the following in `.bashrc` file :
 `export GST_PLUGIN_PATH=/home/$USER/src/gst-python-ml/plugins:$GST_PLUGIN_PATH`
 
 
+### Bird's Eye View
+
+`GST_DEBUG=4 gst-launch-1.0 filesrc location=data/soccer_single_camera.mp4 ! decodebin ! videoconvert ! pyml_birdseye ! videoconvert ! autovideosink`
+
+`GST_DEBUG=4 gst-launch-1.0 filesrc location=data/soccer_single_camera.mp4 ! decodebin ! videorate ! video/x-raw,framerate=30/1 ! videoconvert ! pyml_birdseye ! videoconvert ! openh264enc ! h264parse ! matroskamux ! filesink location=output.mkv`
+
 ### Object Detection
 
 Possible model names:
