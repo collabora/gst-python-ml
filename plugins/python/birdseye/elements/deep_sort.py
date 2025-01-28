@@ -1,3 +1,4 @@
+import os
 import torch
 from deep_sort_pytorch.utils.parser import get_config
 from deep_sort_pytorch.deep_sort import DeepSort
@@ -8,6 +9,8 @@ class DEEPSORT:
     def __init__(self, deepsort_config):
         cfg = get_config()
         cfg.merge_from_file(deepsort_config)
+        birdseye_dir = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+        cfg.DEEPSORT.REID_CKPT = os.path.join(birdseye_dir, cfg.DEEPSORT.REID_CKPT)
         self.deepsort = DeepSort(
             cfg.DEEPSORT.REID_CKPT,
             max_dist=cfg.DEEPSORT.MAX_DIST,

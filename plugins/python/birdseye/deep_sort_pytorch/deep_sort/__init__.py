@@ -5,6 +5,10 @@ __all__ = ["DeepSort", "build_tracker"]
 
 
 def build_tracker(cfg, use_cuda):
+    # Resolve REID_CKPT path relative to the birdseye directory
+    birdseye_dir = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+    cfg.DEEPSORT.REID_CKPT = os.path.join(birdseye_dir, cfg.DEEPSORT.REID_CKPT)
+
     return DeepSort(
         cfg.DEEPSORT.REID_CKPT,
         max_dist=cfg.DEEPSORT.MAX_DIST,
