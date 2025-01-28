@@ -16,8 +16,9 @@ class BirdsEyeView:
         self.detector = YOLO(config.yolov5_model, config.conf_thresh, config.iou_thresh)
         self.deep_sort = DEEPSORT(config.deepsort_config)
         self.perspective_transform = Perspective_Transform()
-        self.bg_img_path = "./inference/black.jpg"
-
+        # Resolve the path relative to the script's directory
+        script_dir = os.path.dirname(os.path.abspath(__file__))
+        self.bg_img_path = os.path.join(script_dir, "inference", "black.jpg")
         self.gt_img = self._load_background_image()
 
     def _load_background_image(self):
