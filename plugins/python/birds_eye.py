@@ -94,7 +94,9 @@ class BirdsEye(GstVideoTransform):
                     return Gst.FlowReturn.ERROR
 
                 # Debugging frame dimensions
-                Gst.warning(f"Frame dimensions: width={self.width}, height={self.height}")
+                Gst.warning(
+                    f"Frame dimensions: width={self.width}, height={self.height}"
+                )
 
                 # Assume frame dimensions are set somewhere (self.width, self.height)
                 frame = np.ndarray(

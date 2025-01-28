@@ -31,7 +31,6 @@ class Perspective_Transform:
 
         print(f"Using weights directory: {self.current_directory}")
 
-
         # Deep features
         deep_database_directory = os.path.join(
             self.current_directory, "data/deep/feature_camera_91k.mat"

@@ -237,7 +237,6 @@ class ArgumentsBase(object):
         return self.opt
 
 
-
 class Arguments(ArgumentsBase):
     def __init__(self):
         super().__init__()
