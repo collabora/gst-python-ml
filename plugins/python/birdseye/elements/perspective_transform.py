@@ -24,7 +24,13 @@ device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 class Perspective_Transform:
     def __init__(self):
         self.query_index = 0
-        self.current_directory = os.path.join(os.getcwd(), "weights")
+
+        # Calculate the weights directory relative to the file's directory
+        current_dir = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+        self.current_directory = os.path.join(current_dir, "weights")
+
+        print(f"Using weights directory: {self.current_directory}")
+
 
         # Deep features
         deep_database_directory = os.path.join(
