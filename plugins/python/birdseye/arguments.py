@@ -216,11 +216,21 @@ class ArgumentsBase(object):
             if id >= 0:
                 self.opt.gpu_ids.append(id)
 
-        # set gpu ids
+        # Set GPU IDs
         if len(self.opt.gpu_ids) > 0:
             torch.cuda.set_device(self.opt.gpu_ids[0])
 
+        # Normalize all paths
+        script_dir = os.path.dirname(os.path.abspath(__file__))
+        self.opt.yolov5_model = os.path.join(script_dir, self.opt.yolov5_model)
+        self.opt.deepsort_config = os.path.join(script_dir, self.opt.deepsort_config)
+        self.opt.output = os.path.join(script_dir, self.opt.output)
+        self.opt.source = os.path.join(script_dir, self.opt.source)
+        self.opt.checkpoints_dir = os.path.join(script_dir, self.opt.checkpoints_dir)
+        self.opt.name = os.path.join(script_dir, self.opt.name)
+
         return self.opt
+
 
 
 class Arguments(ArgumentsBase):
