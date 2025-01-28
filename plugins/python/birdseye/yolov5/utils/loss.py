@@ -3,8 +3,8 @@
 import torch
 import torch.nn as nn
 
-from utils.general import bbox_iou
-from utils.torch_utils import is_parallel
+from yolov5.utils.general import bbox_iou
+from yolov5.utils.torch_utils import is_parallel
 
 
 def smooth_BCE(
