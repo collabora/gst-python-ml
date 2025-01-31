@@ -1,4 +1,6 @@
 include requirements.txt
 include README.md
-include LICENSE
+include INSTALL.md
+include PIPELINES.md
+include COPYING
 recursive-include plugins/python *
