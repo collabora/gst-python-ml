@@ -1,7 +1,5 @@
 include requirements.txt
 include README.md
-include INSTALL.md
-include PIPELINES.md
 include COPYING
 recursive-include plugins/python *
 global-exclude __pycache__/*
