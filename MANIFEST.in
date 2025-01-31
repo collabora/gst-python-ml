@@ -4,3 +4,5 @@ include INSTALL.md
 include PIPELINES.md
 include COPYING
 recursive-include plugins/python *
+global-exclude __pycache__/*
+global-exclude *.pyc
