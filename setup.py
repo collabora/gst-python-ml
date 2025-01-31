@@ -17,7 +17,7 @@ def find_py_files(directory):
 
 setup(
     name="gst-python-ml",  # Package name
-    version="1.24.0",  # Version
+    version="0.1.0",  # Version
     packages=['gst_pyml', 'gst_pyml.engine'],  # Manually specify packages
     package_dir={"gst_pyml": "plugins/python"},  # Map everything to gst_pyml
     package_data={  # Manually include all .py files
