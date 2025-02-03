@@ -92,9 +92,9 @@ class Overlay(GstBase.BaseTransform):
         self.extracted_metadata = {}
         self.frame_counter = 0
         self.tracking_display = TrackingDisplay()
-        super().do_set_dims(0, 0)
+        self.do_set_dims(0, 0)
         self.overlay_graphics = OverlayGraphicsFactory.create(
-            GraphicsType.CAIRO, self.width, self, height
+            GraphicsType.CAIRO, self.width, self.height
         )
 
     def do_get_property(self, prop: GObject.ParamSpec):
