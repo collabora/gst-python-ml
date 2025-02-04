@@ -90,6 +90,7 @@ class Overlay(GstBase.BaseTransform):
     def __init__(self):
         super().__init__()
         self.extracted_metadata = {}
+        self.from_file = False
         self.frame_counter = 0
         self.tracking_display = TrackingDisplay()
         self.do_set_dims(0, 0)
@@ -141,22 +142,29 @@ class Overlay(GstBase.BaseTransform):
         self.width = width
         self.height = height
 
-    def get_metadata_for_frame(self, frame_index):
-        return self.extracted_metadata.get(frame_index, [])
-
     def do_transform_ip(self, buf):
         # first try to extract metadata from frame meta
-        if ANALYTICS_UTILS_AVAILABLE and not self.extracted_metadata:
+        if ANALYTICS_UTILS_AVAILABLE and not self.from_file:
             analytics_utils = AnalyticsUtils()
-            self.extracted_metadata = analytics_utils.extract_analytics_metadata(buf)
-        # if not available, then try from file
+            extracted = analytics_utils.extract_analytics_metadata(buf)
+            if extracted:
+                self.extracted_metadata = extracted
+        # if not available from meta or not previously loaded from file, then try from file
         if not self.extracted_metadata:
             self.extracted_metadata = load_metadata(self.meta_path)
+            self.from_file = True
+        # no metdata - exit gracefully
         if not self.extracted_metadata:
             self.frame_counter += 1
             return Gst.FlowReturn.OK
 
-        frame_metadata = self.get_metadata_for_frame(self.frame_counter)
+        frame_metadata = None
+        if self.from_file:
+            frame_metadata = self.extracted_metadata.get(self.frame_counter, [])
+        else:
+            frame_metadata = self.extracted_metadata
+
+        # no frame metadata - exit gracefully
         if not frame_metadata:
             self.frame_counter += 1
             return Gst.FlowReturn.OK
