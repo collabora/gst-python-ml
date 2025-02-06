@@ -29,7 +29,7 @@ gi.require_version("GstBase", "1.0")
 gi.require_version("GObject", "2.0")
 from gi.repository import Gst, GObject, GstBase  # noqa: E402
 
-from aggregator_base import AggregatorBase
+from aggregator_base import AggregatorBase  # noqa: E402
 
 sys.stdout.reconfigure(encoding="utf-8")
 sys.stderr.reconfigure(encoding="utf-8")

@@ -18,13 +18,9 @@
 
 import os
 import json
-import gi
 import cairo
 from abc import ABC, abstractmethod
 from enum import Enum
-
-gi.require_version("Gst", "1.0")
-from gi.repository import Gst  # noqa: E402
 
 
 class Color:
@@ -306,7 +302,7 @@ def load_metadata(meta_path, logger):
                 frame.get("frame_index"): frame.get("objects", [])
                 for frame in frame_data
             }
-            self.logger.info(f"Loaded metadata for {len(metadata)} frames.")
+            logger.info(f"Loaded metadata for {len(metadata)} frames.")
             return metadata
     except json.JSONDecodeError as e:
         logger.error(f"Failed to parse JSON file: {e}")

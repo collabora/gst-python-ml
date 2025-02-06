@@ -23,7 +23,7 @@ gi.require_version("Gst", "1.0")
 gi.require_version("GstBase", "1.0")
 from gi.repository import Gst, GObject, GstBase  # noqa: E402
 
-from log.logger_factory import LoggerFactory
+from log.logger_factory import LoggerFactory  # noqa: E402
 
 
 class BatchBuffer:
