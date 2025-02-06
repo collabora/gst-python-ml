@@ -16,16 +16,9 @@
 # Free Software Foundation, Inc., 51 Franklin Street, Fifth Floor,
 # Boston, MA 02110-1301, USA.
 
-import gi
 import numpy as np
 import tensorflow as tf  # TensorFlow Lite interpreter
 from .gst_ml_engine import GstMLEngine
-
-gi.require_version("Gst", "1.0")
-gi.require_version("GstBase", "1.0")
-gi.require_version("GLib", "2.0")
-from gi.repository import Gst  # noqa: E402
-
 
 class GstTFLiteEngine(GstMLEngine):
     def __init__(self, device="cpu"):

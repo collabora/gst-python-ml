@@ -16,14 +16,9 @@
 # Free Software Foundation, Inc., 51 Franklin Street, Fifth Floor,
 # Boston, MA 02110-1301, USA.
 
-import gi
 import numpy as np
 from openvino.runtime import Core
 from .gst_ml_engine import GstMLEngine
-
-gi.require_version("Gst", "1.0")
-from gi.repository import Gst  # noqa: E402
-
 
 class GstOpenVinoEngine(GstMLEngine):
     def __init__(self, device="CPU"):

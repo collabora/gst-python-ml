@@ -16,14 +16,9 @@
 # Free Software Foundation, Inc., 51 Franklin Street, Fifth Floor,
 # Boston, MA 02110-1301, USA.
 
-import gi
 import numpy as np
 from ultralytics import YOLO
 from .gst_pytorch_engine import GstPyTorchEngine
-
-gi.require_version("Gst", "1.0")
-from gi.repository import Gst  # noqa: E402
-
 
 class GstPyTorchYoloEngine(GstPyTorchEngine):
     def load_model(self, model_name, **kwargs):
@@ -68,7 +63,7 @@ class GstPyTorchYoloEngine(GstPyTorchEngine):
                 )
                 return []
 
-            Gst.debug(f"forward: Inference results received: {results}")
+            self.logger.debug(f"forward: Inference results received: {results}")
             return results
 
         except Exception as e:

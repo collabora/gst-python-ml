@@ -16,12 +16,7 @@
 # Free Software Foundation, Inc., 51 Franklin Street, Fifth Floor,
 # Boston, MA 02110-1301, USA.
 
-import gi
 from abc import ABC, abstractmethod
-
-gi.require_version("Gst", "1.0")
-from gi.repository import Gst  # noqa: E402
-
 
 class GstDeviceQueue(ABC):
     def __init__(self, queue_handle):

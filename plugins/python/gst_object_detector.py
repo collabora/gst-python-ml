@@ -196,7 +196,7 @@ class GstObjectDetector(GstVideoTransform):
         try:
             # Ensure the model is loaded
             if self.get_model() is None:
-                Gst.debug("do_transform_ip: Model not loaded, calling do_load_model()")
+                self.logger.debug("do_transform_ip: Model not loaded, calling do_load_model()")
                 self.do_load_model()
 
             # Set a valid timestamp if none is set
@@ -224,7 +224,7 @@ class GstObjectDetector(GstVideoTransform):
                         "do_transform_ip: Frame data is None or not an ndarray."
                     )
                     return Gst.FlowReturn.ERROR
-                Gst.debug(f"do_transform_ip: Frame shape {frame.shape}")
+                self.logger.debug(f"do_transform_ip: Frame shape {frame.shape}")
 
                 # Perform inference
                 results = self.forward(frame)

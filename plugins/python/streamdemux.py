@@ -62,7 +62,7 @@ class StreamDemux(Gst.Element):
             name = f"src_{self.pad_count}"  # Increment pad count for unique name
             self.pad_count += 1
 
-        Gst.debug(f"Requesting new pad: {name}")
+        self.logger.debug(f"Requesting new pad: {name}")
 
         # Create and add the dynamic src pad
         if "src_" in name:
@@ -74,7 +74,7 @@ class StreamDemux(Gst.Element):
 
     def do_release_pad(self, pad):
         pad_name = pad.get_name()
-        Gst.debug(f"Releasing pad: {pad_name}")
+        self.logger.debug(f"Releasing pad: {pad_name}")
         self.remove_pad(pad)  # Remove the dynamic pad
 
     def process_src_pad(self, pad, src_pad, buffer, memory_chunk):
@@ -94,7 +94,7 @@ class StreamDemux(Gst.Element):
             self.logger.error(f"Failed to push buffer on {src_pad.get_name()}: {ret}")
 
     def chain(self, pad, parent, buffer):
-        Gst.debug("Processing buffer in chain function")
+        self.logger.debug("Processing buffer in chain function")
 
         # Get the number of memory chunks in the incoming buffer
         num_memory_chunks = buffer.n_memory()
@@ -121,7 +121,7 @@ class StreamDemux(Gst.Element):
         return Gst.FlowReturn.OK
 
     def event(self, pad, parent, event):
-        Gst.debug(f"Received event: {event.type}")
+        self.logger.debug(f"Received event: {event.type}")
         return Gst.PadProbeReturn.OK
 
 
