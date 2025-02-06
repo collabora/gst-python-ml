@@ -1,11 +1,11 @@
-from logger import Logger, PythonLogger
+from .logger import Logger, PythonLogger
 import logging
 
 GST_LOGGER_AVAILABLE = False
 
 # Try importing GstLogger, set the flag if successful
 try:
-    from gst_logger import GstLogger
+    from .gst_logger import GstLogger
 
     GST_LOGGER_AVAILABLE = True
 except ImportError:
@@ -16,13 +16,16 @@ except ImportError:
 class LoggerFactory:
     """Factory for creating logger instances."""
 
+    LOGGER_TYPE_GST = "gst"
+    LOGGER_TYPE_PYTHON = "python"
+
     @staticmethod
-    def get_logger(logger_type: str = "gst") -> Logger:
+    def get(logger_type: str = LOGGER_TYPE_GST) -> Logger:
         """Return an instance of the requested logger.
 
         If 'gst' is requested but unavailable, warns and falls back to PythonLogger.
         """
-        if logger_type == "gst":
+        if logger_type == LoggerFactory.LOGGER_TYPE_GST:
             if GST_LOGGER_AVAILABLE:
                 return GstLogger()
             else:
@@ -31,7 +34,7 @@ class LoggerFactory:
                 )
                 return PythonLogger()
 
-        elif logger_type == "python":
+        elif logger_type == LoggerFactory.LOGGER_TYPE_PYTHON:
             return PythonLogger()
 
         else:

@@ -16,6 +16,7 @@
 # Free Software Foundation, Inc., 51 Franklin Street, Fifth Floor,
 # Boston, MA 02110-1301, USA.
 
+from log.logger_factory import LoggerFactory
 
 from analytics_utils import ANALYTICS_UTILS_AVAILABLE
 
@@ -89,6 +90,7 @@ class Overlay(GstBase.BaseTransform):
 
     def __init__(self):
         super().__init__()
+        self.logger = LoggerFactory.get(LoggerFactory.LOGGER_TYPE_GST)
         self.extracted_metadata = {}
         self.from_file = False
         self.frame_counter = 0
@@ -111,13 +113,13 @@ class Overlay(GstBase.BaseTransform):
             self.meta_path = value
         elif prop.name == "tracking":
             self.tracking = value
-            Gst.info(f"Tracking set to: {self.tracking}")
+            self.logger.info(f"Tracking set to: {self.tracking}")
         else:
             raise AttributeError(f"Unknown property {prop.name}")
 
     def on_message(self, bus, message):
         if message.type == Gst.MessageType.EOS:
-            Gst.info("Reset frame counter.")
+            self.logger.info("Reset frame counter.")
             self.frame_counter = 0
 
     def do_start(self):
@@ -132,7 +134,7 @@ class Overlay(GstBase.BaseTransform):
     def do_set_caps(self, incaps, outcaps):
         video_info = GstVideo.VideoInfo.new_from_caps(incaps)
         self.do_set_dims(video_info.width, video_info.height)
-        Gst.info(f"Video caps set: width={self.width}, height={self.height}")
+        self.logger.info(f"Video caps set: width={self.width}, height={self.height}")
         self.overlay_graphics = OverlayGraphicsFactory.create(
             GraphicsType.CAIRO, self.width, self.height
         )
@@ -171,7 +173,7 @@ class Overlay(GstBase.BaseTransform):
 
         video_meta = GstVideo.buffer_get_video_meta(buf)
         if not video_meta:
-            Gst.error("No video meta available, cannot proceed with overlay")
+            self.logger.error("No video meta available, cannot proceed with overlay")
             return Gst.FlowReturn.ERROR
 
         success, map_info = buf.map(Gst.MapFlags.WRITE)

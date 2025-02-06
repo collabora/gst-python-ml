@@ -16,6 +16,8 @@
 # Free Software Foundation, Inc., 51 Franklin Street, Fifth Floor,
 # Boston, MA 02110-1301, USA.
 
+from log.logger_factory import LoggerFactory
+
 CAN_REGISTER_ELEMENT = True
 try:
     import gi
@@ -130,6 +132,7 @@ class YOLOTransform(GstObjectDetector):
 
     def __init__(self):
         super().__init__()
+        self.logger = LoggerFactory.get(LoggerFactory.LOGGER_TYPE_GST)
         self.ml_engine = "pytorch-yolo"
 
     def do_decode(self, buf, result):
@@ -144,7 +147,7 @@ class YOLOTransform(GstObjectDetector):
             masks = result.masks  # Extract masks for segmentation (if available)
 
         if boxes is None or len(boxes) == 0:
-            Gst.info("No detections found.")
+            self.logger.info("No detections found.")
             return
 
         # Iterate over the detected boxes and add metadata
@@ -185,7 +188,7 @@ class YOLOTransform(GstObjectDetector):
                     score.item(),
                 )
                 if not ret:
-                    Gst.error("Failed to add object detection metadata")
+                    self.logger.error("Failed to add object detection metadata")
 
                 if tracking_mtd is not None:
                     ret = GstAnalytics.RelationMeta.set_relation(
@@ -195,7 +198,7 @@ class YOLOTransform(GstObjectDetector):
                         tracking_mtd.id,
                     )
                     if not ret:
-                        Gst.error(
+                        self.logger.error(
                             "Failed to relate object detection and tracking meta data"
                         )
 
@@ -214,7 +217,7 @@ class YOLOTransform(GstObjectDetector):
         """
         Adds segmentation mask metadata to the buffer.
         """
-        Gst.info("Adding segmentation mask metadata")
+        self.logger.info("Adding segmentation mask metadata")
         pass
 
 

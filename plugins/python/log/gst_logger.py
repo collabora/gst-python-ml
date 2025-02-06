@@ -1,12 +1,8 @@
-from logger import Logger
+from .logger import Logger
 
 import gi
-
 gi.require_version("Gst", "1.0")
-from gi.repository import Gst
-
-Gst.init(None)
-
+from gi.repository import Gst  # noqa: E402
 
 class GstLogger(Logger):
     """Logger implementation using GStreamer."""
