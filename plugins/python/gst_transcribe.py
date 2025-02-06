@@ -29,7 +29,7 @@ gi.require_version("GstBase", "1.0")
 gi.require_version("GObject", "2.0")
 from gi.repository import Gst, GObject, GstBase  # noqa: E402
 
-from gst_aggregator import GstAggregator
+from aggregator_base import AggregatorBase
 
 sys.stdout.reconfigure(encoding="utf-8")
 sys.stderr.reconfigure(encoding="utf-8")
@@ -53,7 +53,7 @@ ICAPS = Gst.Caps(
 OCAPS = Gst.Caps(Gst.Structure("text/x-raw", format="utf8"))
 
 
-class GstTranscribe(GstAggregator):
+class GstTranscribe(AggregatorBase):
     __gstmetadata__ = (
         "GstTranscribe",
         "Text Output",

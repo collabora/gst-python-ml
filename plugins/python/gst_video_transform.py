@@ -22,10 +22,10 @@ gi.require_version("GstBase", "1.0")
 gi.require_version("GstVideo", "1.0")
 from gi.repository import Gst, GObject  # noqa: E402
 
-from gst_base_transform import GstBaseTransform
+from transform_base import TransformBase
 
 
-class GstVideoTransform(GstBaseTransform):
+class GstVideoTransform(TransformBase):
     """
     GStreamer element for video transformation using a PyTorch model.
     """

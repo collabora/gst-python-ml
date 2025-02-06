@@ -1,4 +1,4 @@
-# GstBaseTransform
+# TransformBase
 # Copyright (C) 2024-2025 Collabora Ltd.
 #
 # This library is free software; you can redistribute it and/or
@@ -71,7 +71,7 @@ class BatchBuffer:
         self.timestamps.clear()
 
 
-class GstBaseTransform(GstBase.BaseTransform):
+class TransformBase(GstBase.BaseTransform):
     """
     Base class for GStreamer transform elements that perform
     inference with a machine learning model. This class manages shared properties
@@ -79,7 +79,7 @@ class GstBaseTransform(GstBase.BaseTransform):
     """
 
     __gstmetadata__ = (
-        "GstBaseTransform",
+        "TransformBase",
         "Transform",
         "Generic machine learning model transform element",
         "Aaron Boxer <aaron.boxer@collabora.com>",

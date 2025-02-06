@@ -25,10 +25,10 @@ gi.require_version("GLib", "2.0")
 
 from gi.repository import Gst  # noqa: E402
 
-from gst_aggregator import GstAggregator
+from aggregator_base import AggregatorBase
 
 
-class GstLLM(GstAggregator):
+class GstLLM(AggregatorBase):
     """
     GStreamer base element that performs language model inference
     with a PyTorch model.

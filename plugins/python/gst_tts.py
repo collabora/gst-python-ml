@@ -22,7 +22,7 @@ import asyncio
 import soundfile as sf
 import gi
 
-from gst_aggregator import GstAggregator
+from aggregator_base import AggregatorBase
 
 gi.require_version("Gst", "1.0")
 gi.require_version("GstBase", "1.0")
@@ -32,7 +32,7 @@ from gi.repository import Gst, GObject, GstBase, GstAudio  # noqa: E402
 ICAPS = Gst.Caps(Gst.Structure("text/x-raw", format="utf8"))
 
 
-class GstTTS(GstAggregator):
+class GstTTS(AggregatorBase):
     __gstmetadata__ = (
         "GstTTS",
         "Aggregator",

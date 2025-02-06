@@ -19,7 +19,7 @@
 import gi
 
 from transformers import MarianMTModel, MarianTokenizer
-from gst_aggregator import GstAggregator
+from aggregator_base import AggregatorBase
 
 gi.require_version("Gst", "1.0")
 gi.require_version("GstBase", "1.0")
@@ -30,7 +30,7 @@ ICAPS = Gst.Caps(Gst.Structure("text/x-raw", format="utf8"))
 OCAPS = Gst.Caps(Gst.Structure("text/x-raw", format="utf8"))
 
 
-class GstTranslate(GstAggregator):
+class GstTranslate(AggregatorBase):
     __gstmetadata__ = (
         "GstTranslate",
         "Aggregator",
