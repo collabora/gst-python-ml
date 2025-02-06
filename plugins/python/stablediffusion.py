@@ -16,6 +16,8 @@
 # Free Software Foundation, Inc., 51 Franklin Street, Fifth Floor,
 # Boston, MA 02110-1301, USA.
 
+from global_logger import GlobalLogger
+
 CAN_REGISTER_ELEMENT = True
 try:
     import asyncio
@@ -30,7 +32,7 @@ try:
     from diffusers import StableDiffusionPipeline
 except ImportError as e:
     CAN_REGISTER_ELEMENT = False
-    self.logger.warning(
+    GlobalLogger().warning(
         f"The 'pyml_stablediffusion' element will not be available. Error: {e}"
     )
 
@@ -160,6 +162,6 @@ if CAN_REGISTER_ELEMENT:
         StableDiffusion,
     )
 else:
-    self.logger.warning(
+    GlobalLogger().warning(
         "The 'pyml_stablediffusion' element will not be registered because required modules are missing."
     )

@@ -16,6 +16,8 @@
 # Free Software Foundation, Inc., 51 Franklin Street, Fifth Floor,
 # Boston, MA 02110-1301, USA.
 
+from global_logger import GlobalLogger
+
 CAN_REGISTER_ELEMENT = True
 try:
     from gi.repository import Gst, GObject
@@ -23,7 +25,7 @@ try:
     from overlay import Overlay
     from overlay_utils import Color
 except ImportError as e:
-    self.logger.warning(
+    GlobalLogger().warning(
         f"The 'OverlayCounter' element cannot be registered because: {e}"
     )
     CAN_REGISTER_ELEMENT = False
@@ -70,4 +72,4 @@ if CAN_REGISTER_ELEMENT:
     GObject.type_register(OverlayCounter)
     __gstelementfactory__ = ("pyml_overlay_counter", Gst.Rank.NONE, OverlayCounter)
 else:
-    self.logger.warning("Failed to register the 'pyml_overlay_counter' element.")
+    GlobalLogger().warning("Failed to register the 'pyml_overlay_counter' element.")

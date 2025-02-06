@@ -16,6 +16,8 @@
 # Free Software Foundation, Inc., 51 Franklin Street, Fifth Floor,
 # Boston, MA 02110-1301, USA.
 
+from global_logger import GlobalLogger
+
 CAN_REGISTER_ELEMENT = True
 try:
     import gi
@@ -32,7 +34,9 @@ try:
     from video_transform import VideoTransform
 except ImportError as e:
     CAN_REGISTER_ELEMENT = False
-    self.logger.warning(f"The 'pyml_caption' element will not be available. Error {e}")
+    GlobalLogger().warning(
+        f"The 'pyml_caption' element will not be available. Error {e}"
+    )
 
 
 class Caption(VideoTransform):
@@ -221,6 +225,6 @@ if CAN_REGISTER_ELEMENT:
     GObject.type_register(Caption)
     __gstelementfactory__ = ("pyml_caption", Gst.Rank.NONE, Caption)
 else:
-    self.logger.warning(
+    GlobalLogger().warning(
         "The 'pyml_caption' element will not be registered because required modules are missing."
     )

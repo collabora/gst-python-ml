@@ -16,6 +16,8 @@
 # Free Software Foundation, Inc., 51 Franklin Street, Fifth Floor,
 # Boston, MA 02110-1301, USA.
 
+from global_logger import GlobalLogger
+
 CAN_REGISTER_ELEMENT = True
 try:
     import gi
@@ -25,7 +27,7 @@ try:
     from llm_base import LlmBase
 except ImportError as e:
     CAN_REGISTER_ELEMENT = False
-    self.logger.warning(f"The 'pyml_llm' element will not be available. Error {e}")
+    GlobalLogger().warning(f"The 'pyml_llm' element will not be available. Error {e}")
 
 
 class LLM(LlmBase):
@@ -41,6 +43,6 @@ if CAN_REGISTER_ELEMENT:
     GObject.type_register(LLM)
     __gstelementfactory__ = ("pyml_llm", Gst.Rank.NONE, LLM)
 else:
-    self.logger.warning(
+    GlobalLogger().warning(
         "The 'pyml_llm' element will not be registered because required modules are missing."
     )

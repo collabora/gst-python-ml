@@ -16,6 +16,8 @@
 # Free Software Foundation, Inc., 51 Franklin Street, Fifth Floor,
 # Boston, MA 02110-1301, USA.
 
+from global_logger import GlobalLogger
+
 CAN_REGISTER_ELEMENT = True
 try:
     import gi
@@ -29,7 +31,7 @@ try:
     from object_detector_base import ObjectDetectorBase
 except ImportError as e:
     CAN_REGISTER_ELEMENT = False
-    self.logger.warning(f"The 'yolo' element will not be available. Error {e}")
+    GlobalLogger().warning(f"The 'yolo' element will not be available. Error {e}")
 
 COCO_CLASSES = {
     0: "person",
@@ -222,6 +224,6 @@ if CAN_REGISTER_ELEMENT:
     GObject.type_register(YOLOTransform)
     __gstelementfactory__ = ("pyml_yolo", Gst.Rank.NONE, YOLOTransform)
 else:
-    self.logger.warning(
+    GlobalLogger().warning(
         "The 'pyml_yolo' element will not be registered because required modules are missing."
     )

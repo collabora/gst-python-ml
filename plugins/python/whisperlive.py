@@ -16,6 +16,8 @@
 # Free Software Foundation, Inc., 51 Franklin Street, Fifth Floor,
 # Boston, MA 02110-1301, USA.
 
+from global_logger import GlobalLogger
+
 CAN_REGISTER_ELEMENT = True
 try:
     import gi
@@ -32,7 +34,7 @@ try:
     from faster_whisper import WhisperModel
 except ImportError as e:
     CAN_REGISTER_ELEMENT = False
-    self.logger.warning(
+    GlobalLogger().warning(
         f"The 'pyml_whisperlive' element will not be available. Error: {e}"
     )
 
@@ -220,6 +222,6 @@ if CAN_REGISTER_ELEMENT:
     GObject.type_register(WhisperLive)
     __gstelementfactory__ = ("pyml_whisperlive", Gst.Rank.NONE, WhisperLive)
 else:
-    self.logger.warning(
+    GlobalLogger().warning(
         "The 'pyml_whisperlive' element will not be registered because required modules were missing."
     )

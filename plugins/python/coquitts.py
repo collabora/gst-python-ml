@@ -16,7 +16,8 @@
 # Free Software Foundation, Inc., 51 Franklin Street, Fifth Floor,
 # Boston, MA 02110-1301, USA.
 
-# Check for the availability of TTS module
+from global_logger import GlobalLogger
+
 CAN_REGISTER_ELEMENT = True
 try:
     import gi
@@ -28,7 +29,7 @@ try:
     from TTS.api import TTS
 except ImportError as e:
     CAN_REGISTER_ELEMENT = False
-    self.logger.warning(
+    GlobalLogger().warning(
         f"The 'pyml_coquitts' element will not be available. Error: {e}"
     )
 
@@ -87,6 +88,6 @@ if CAN_REGISTER_ELEMENT:
     GObject.type_register(CoquiTTS)
     __gstelementfactory__ = ("pyml_coquitts", Gst.Rank.NONE, CoquiTTS)
 else:
-    self.logger.warning(
+    GlobalLogger().warning(
         "The 'pyml_coquitts' element will not be registered because required modules are missing."
     )

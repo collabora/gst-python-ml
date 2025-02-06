@@ -16,6 +16,7 @@
 # Free Software Foundation, Inc., 51 Franklin Street, Fifth Floor,
 # Boston, MA 02110-1301, USA.
 
+from global_logger import GlobalLogger
 
 CAN_REGISTER_ELEMENT = True
 try:
@@ -32,7 +33,9 @@ try:
     from object_detector_base import ObjectDetectorBase
 except ImportError as e:
     CAN_REGISTER_ELEMENT = False
-    self.logger.warning(f"The 'pyml_maskrcnn' element will not be available. Error {e}")
+    GlobalLogger().warning(
+        f"The 'pyml_maskrcnn' element will not be available. Error {e}"
+    )
 
 
 class MaskRCNN(ObjectDetectorBase):
@@ -112,6 +115,6 @@ if CAN_REGISTER_ELEMENT:
     GObject.type_register(MaskRCNN)
     __gstelementfactory__ = ("pyml_maskrcnn", Gst.Rank.NONE, MaskRCNN)
 else:
-    self.logger.warning(
+    GlobalLogger().warning(
         "The 'pyml_maskrcnn' element will not be registered because required modules are missing."
     )

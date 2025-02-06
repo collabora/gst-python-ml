@@ -16,6 +16,8 @@
 # Free Software Foundation, Inc., 51 Franklin Street, Fifth Floor,
 # Boston, MA 02110-1301, USA.
 
+from global_logger import GlobalLogger
+
 CAN_REGISTER_ELEMENT = True
 try:
     import gi
@@ -25,7 +27,7 @@ try:
     from translate_base import TranslateBase
 except ImportError as e:
     CAN_REGISTER_ELEMENT = False
-    self.logger.warning(
+    GlobalLogger().warning(
         f"The 'pyml_mariantranslate' element will not be available. Element {e}"
     )
 
@@ -43,6 +45,6 @@ if CAN_REGISTER_ELEMENT:
     GObject.type_register(MarianTranslate)
     __gstelementfactory__ = ("pyml_mariantranslate", Gst.Rank.NONE, MarianTranslate)
 else:
-    self.logger.warning(
+    GlobalLogger().warning(
         "The 'pyml_mariantranslate' element will not be registered because required modules are missing."
     )

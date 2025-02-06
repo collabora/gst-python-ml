@@ -16,6 +16,8 @@
 # Free Software Foundation, Inc., 51 Franklin Street, Fifth Floor,
 # Boston, MA 02110-1301, USA.
 
+from global_logger import GlobalLogger
+
 CAN_REGISTER_ELEMENT = True
 try:
     import os
@@ -41,7 +43,7 @@ try:
     from birds_eye_module import BirdsEyeView
     from video_transform import VideoTransform
 except ImportError as e:
-    self.logger.warning(f"The 'BirdsEye' element cannot be registered because: {e}")
+    GlobalLogger().warning(f"The 'BirdsEye' element cannot be registered because: {e}")
     CAN_REGISTER_ELEMENT = False
 
 
@@ -125,4 +127,4 @@ if CAN_REGISTER_ELEMENT:
     GObject.type_register(BirdsEye)
     __gstelementfactory__ = ("pyml_birdseye", Gst.Rank.NONE, BirdsEye)
 else:
-    self.logger.warning("Failed to register the 'BirdsEye' element.")
+    GlobalLogger().warning("Failed to register the 'BirdsEye' element.")

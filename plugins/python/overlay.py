@@ -16,6 +16,7 @@
 # Free Software Foundation, Inc., 51 Franklin Street, Fifth Floor,
 # Boston, MA 02110-1301, USA.
 
+from global_logger import GlobalLogger
 
 from analytics_utils import ANALYTICS_UTILS_AVAILABLE
 
@@ -44,7 +45,9 @@ try:
     from log.logger_factory import LoggerFactory
 except ImportError as e:
     CAN_REGISTER_ELEMENT = False
-    self.logger.warning(f"The 'pyml_overlay' element will not be available. Error: {e}")
+    GlobalLogger().warning(
+        f"The 'pyml_overlay' element will not be available. Error: {e}"
+    )
 
 VIDEO_FORMATS = "video/x-raw, format=(string){ RGBA, ARGB, BGRA, ABGR }"
 OVERLAY_CAPS = Gst.Caps.from_string(VIDEO_FORMATS)
@@ -202,6 +205,6 @@ if CAN_REGISTER_ELEMENT:
     GObject.type_register(Overlay)
     __gstelementfactory__ = ("pyml_overlay", Gst.Rank.NONE, Overlay)
 else:
-    self.logger.warning(
+    GlobalLogger().warning(
         "The 'pyml_overlay' element will not be registered because a module is missing."
     )
