@@ -33,12 +33,13 @@ try:
     if utils_path not in sys.path:
         sys.path.append(utils_path)
 
-    from birds_eye_module import BirdsEyeView
     from arguments import Arguments
-    from gst_video_transform import GstVideoTransform
     from gi.repository import Gst, GObject
     import numpy as np
     import cv2
+
+    from birds_eye_module import BirdsEyeView
+    from gst_video_transform import GstVideoTransform
 except ImportError as e:
     Gst.warning(f"The 'BirdsEye' element cannot be registered because: {e}")
     CAN_REGISTER_ELEMENT = False

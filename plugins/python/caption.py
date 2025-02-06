@@ -27,9 +27,9 @@ try:
     gi.require_version("GstAnalytics", "1.0")
 
     from gi.repository import Gst, GObject, GstAnalytics, GLib  # noqa: E402
-    from gst_video_transform import GstVideoTransform
     import numpy as np
     import cv2
+    from gst_video_transform import GstVideoTransform
 except ImportError as e:
     CAN_REGISTER_ELEMENT = False
     Gst.warning(f"The 'pyml_caption' element will not be available. Error {e}")

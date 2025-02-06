@@ -25,6 +25,8 @@ try:
     gi.require_version("GLib", "2.0")
     gi.require_version("GstAnalytics", "1.0")
     from gi.repository import Gst, GstAnalytics, GLib  # noqa: E402
+
+    from log.logger_factory import LoggerFactory
 except ImportError:
     ANALYTICS_UTILS_AVAILABLE = False
 

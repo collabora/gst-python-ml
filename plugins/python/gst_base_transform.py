@@ -23,6 +23,8 @@ gi.require_version("Gst", "1.0")
 gi.require_version("GstBase", "1.0")
 from gi.repository import Gst, GObject, GstBase  # noqa: E402
 
+from log.logger_factory import LoggerFactory
+
 
 class BatchBuffer:
     def __init__(self, batch_size):
@@ -138,6 +140,7 @@ class GstBaseTransform(GstBase.BaseTransform):
 
     def __init__(self):
         super().__init__()
+        self.logger = LoggerFactory.get(LoggerFactory.LOGGER_TYPE_GST)
         self.ml_engine = GstEngineFactory.PYTORCH_ENGINE
         self.engine = None
         self.kwargs = {}

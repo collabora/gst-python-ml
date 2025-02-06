@@ -18,12 +18,14 @@
 
 from abc import abstractmethod
 import gi
-from engine.gst_engine_factory import GstEngineFactory
 
 gi.require_version("Gst", "1.0")
 gi.require_version("GstBase", "1.0")
 gi.require_version("GLib", "2.0")
 from gi.repository import Gst, GObject, GstBase  # noqa: E402
+
+from engine.gst_engine_factory import GstEngineFactory
+from log.logger_factory import LoggerFactory
 
 
 class GstAggregator(GstBase.Aggregator):
@@ -94,6 +96,7 @@ class GstAggregator(GstBase.Aggregator):
 
     def __init__(self):
         super().__init__()
+        self.logger = LoggerFactory.get(LoggerFactory.LOGGER_TYPE_GST)
         self.ml_engine = GstEngineFactory.PYTORCH_ENGINE
         self.engine = None
         self.kwargs = {}

@@ -25,7 +25,6 @@ gi.require_version("Gst", "1.0")
 gi.require_version("GstBase", "1.0")
 from gi.repository import Gst, GObject, GstBase  # noqa: E402
 
-
 # Define input and output caps for text/x-raw format
 ICAPS = Gst.Caps(Gst.Structure("text/x-raw", format="utf8"))
 OCAPS = Gst.Caps(Gst.Structure("text/x-raw", format="utf8"))

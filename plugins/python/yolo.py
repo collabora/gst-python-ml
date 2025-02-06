@@ -16,8 +16,6 @@
 # Free Software Foundation, Inc., 51 Franklin Street, Fifth Floor,
 # Boston, MA 02110-1301, USA.
 
-from log.logger_factory import LoggerFactory
-
 CAN_REGISTER_ELEMENT = True
 try:
     import gi
@@ -132,7 +130,6 @@ class YOLOTransform(GstObjectDetector):
 
     def __init__(self):
         super().__init__()
-        self.logger = LoggerFactory.get(LoggerFactory.LOGGER_TYPE_GST)
         self.ml_engine = "pytorch-yolo"
 
     def do_decode(self, buf, result):

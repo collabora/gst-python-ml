@@ -16,6 +16,7 @@
 # Free Software Foundation, Inc., 51 Franklin Street, Fifth Floor,
 # Boston, MA 02110-1301, USA.
 
+
 CAN_REGISTER_ELEMENT = True
 try:
     import gi
@@ -27,6 +28,7 @@ try:
     gi.require_version("GLib", "2.0")
     from gi.repository import Gst, GObject, GstAnalytics, GLib  # noqa: E402
     import numpy as np
+
     from gst_object_detector import GstObjectDetector
 except ImportError as e:
     CAN_REGISTER_ELEMENT = False

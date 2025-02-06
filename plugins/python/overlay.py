@@ -16,7 +16,6 @@
 # Free Software Foundation, Inc., 51 Franklin Street, Fifth Floor,
 # Boston, MA 02110-1301, USA.
 
-from log.logger_factory import LoggerFactory
 
 from analytics_utils import ANALYTICS_UTILS_AVAILABLE
 
@@ -42,6 +41,7 @@ try:
         GstVideo,
         GObject,
     )  # noqa: E402
+    from log.logger_factory import LoggerFactory
 except ImportError as e:
     CAN_REGISTER_ELEMENT = False
     Gst.warning(f"The 'pyml_overlay' element will not be available. Error: {e}")

@@ -18,9 +18,10 @@
 
 CAN_REGISTER_ELEMENT = True
 try:
+    from gi.repository import Gst, GObject
+
     from overlay import Overlay
     from overlay_utils import Color
-    from gi.repository import Gst, GObject
 except ImportError as e:
     Gst.warning(f"The 'OverlayCounter' element cannot be registered because: {e}")
     CAN_REGISTER_ELEMENT = False

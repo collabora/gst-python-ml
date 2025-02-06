@@ -19,16 +19,17 @@
 import collections
 import sys
 from abc import abstractmethod
-import gi
+
 import numpy as np
 from pysilero_vad import SileroVoiceActivityDetector
-from gst_aggregator import GstAggregator
+import gi
 
 gi.require_version("Gst", "1.0")
 gi.require_version("GstBase", "1.0")
 gi.require_version("GObject", "2.0")
 from gi.repository import Gst, GObject, GstBase  # noqa: E402
 
+from gst_aggregator import GstAggregator
 
 sys.stdout.reconfigure(encoding="utf-8")
 sys.stderr.reconfigure(encoding="utf-8")

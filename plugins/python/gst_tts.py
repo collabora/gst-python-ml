@@ -29,7 +29,6 @@ gi.require_version("GstBase", "1.0")
 gi.require_version("GstAudio", "1.0")
 from gi.repository import Gst, GObject, GstBase, GstAudio  # noqa: E402
 
-
 ICAPS = Gst.Caps(Gst.Structure("text/x-raw", format="utf8"))
 
 
