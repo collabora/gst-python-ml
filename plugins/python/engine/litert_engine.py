@@ -1,4 +1,4 @@
-# GstTFLiteEngine
+# LiteRTEngine
 # Copyright (C) 2024-2025 Collabora Ltd.
 #
 # This library is free software; you can redistribute it and/or
@@ -18,9 +18,9 @@
 
 import numpy as np
 import tensorflow as tf  # TensorFlow Lite interpreter
-from .gst_ml_engine import GstMLEngine
+from .ml_engine import MLEngine
 
-class GstTFLiteEngine(GstMLEngine):
+class LiteRTEngine(MLEngine):
     def __init__(self, device="cpu"):
         """
         Initializes the TFLite engine and attempts to load the delegate if provided.

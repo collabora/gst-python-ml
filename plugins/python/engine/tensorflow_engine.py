@@ -1,4 +1,4 @@
-# GstTensorFlowEngine
+# TensorFlowEngine
 # Copyright (C) 2024-2025 Collabora Ltd.
 #
 # This library is free software; you can redistribute it and/or
@@ -17,9 +17,9 @@
 # Boston, MA 02110-1301, USA.
 
 import tensorflow as tf  # Standard TensorFlow
-from .gst_ml_engine import GstMLEngine
+from .ml_engine import MLEngine
 
-class GstTensorFlowEngine(GstMLEngine):
+class TensorFlowEngine(MLEngine):
     def load_model(self, model_name, **kwargs):
         """Load a TensorFlow SavedModel or a model from a file."""
         try:

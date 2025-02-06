@@ -1,4 +1,4 @@
-# GstMLEngine
+# MLEngine
 # Copyright (C) 2024-2025 Collabora Ltd.
 #
 # This library is free software; you can redistribute it and/or
@@ -20,7 +20,7 @@ from abc import ABC, abstractmethod
 
 from log.logger_factory import LoggerFactory
 
-class GstMLEngine(ABC):
+class MLEngine(ABC):
     def __init__(self, device="cpu"):
         self.logger = LoggerFactory.get(LoggerFactory.LOGGER_TYPE_GST)
         self.device = device

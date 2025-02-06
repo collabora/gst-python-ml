@@ -1,4 +1,4 @@
-# GstDeviceQueuePool
+# DeviceQueuePool
 # Copyright (C) 2024-2025 Collabora Ltd.
 #
 # This library is free software; you can redistribute it and/or
@@ -18,7 +18,7 @@
 
 from abc import ABC, abstractmethod
 
-class GstDeviceQueue(ABC):
+class DeviceQueue(ABC):
     def __init__(self, queue_handle):
         """
         Initialize the DeviceQueue with a given queue handle.
@@ -39,7 +39,7 @@ class GstDeviceQueue(ABC):
         return f"DeviceQueue(handle={self.queue_handle})"
 
 
-class GstDeviceQueuePool:
+class DeviceQueuePool:
     def __init__(self):
         """
         Initialize the DeviceQueuePool with an empty dictionary to map IDs to DeviceQueues.
@@ -74,7 +74,7 @@ class GstDeviceQueuePool:
         return queue
 
     def __repr__(self):
-        return f"GstDeviceQueuePool(queues={self.queues})"
+        return f"DeviceQueuePool(queues={self.queues})"
 
 
 class DeviceQueueManager:

@@ -1,4 +1,4 @@
-# GstPyTorchYoloEngine
+# PyTorchYoloEngine
 # Copyright (C) 2024-2025 Collabora Ltd.
 #
 # This library is free software; you can redistribute it and/or
@@ -18,9 +18,9 @@
 
 import numpy as np
 from ultralytics import YOLO
-from .gst_pytorch_engine import GstPyTorchEngine
+from .pytorch_engine import PyTorchEngine
 
-class GstPyTorchYoloEngine(GstPyTorchEngine):
+class PyTorchYoloEngine(PyTorchEngine):
     def load_model(self, model_name, **kwargs):
         """
         Override base method to load the YOLO model (detection or segmentation).

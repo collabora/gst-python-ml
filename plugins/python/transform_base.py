@@ -17,7 +17,7 @@
 # Boston, MA 02110-1301, USA.
 
 import gi
-from engine.gst_engine_factory import GstEngineFactory
+from engine.engine_factory import EngineFactory
 
 gi.require_version("Gst", "1.0")
 gi.require_version("GstBase", "1.0")
@@ -141,7 +141,7 @@ class TransformBase(GstBase.BaseTransform):
     def __init__(self):
         super().__init__()
         self.logger = LoggerFactory.get(LoggerFactory.LOGGER_TYPE_GST)
-        self.ml_engine = GstEngineFactory.PYTORCH_ENGINE
+        self.ml_engine = EngineFactory.PYTORCH_ENGINE
         self.engine = None
         self.kwargs = {}
 
@@ -183,7 +183,7 @@ class TransformBase(GstBase.BaseTransform):
                 self.do_load_model()
         elif prop.name == "ml-engine":
             if self.device:
-                self.ml_engine = GstEngineFactory.create_engine(value, self.device)
+                self.ml_engine = EngineFactory.create_engine(value, self.device)
                 self.initialize_engine()
                 self.do_load_model()
         elif prop.name == "device-queue-id":
@@ -201,7 +201,7 @@ class TransformBase(GstBase.BaseTransform):
     def initialize_engine(self):
         """Initialize the machine learning engine based on the ml_engine property."""
         if self.ml_engine is not None:
-            self.engine = GstEngineFactory.create_engine(self.ml_engine, self.device)
+            self.engine = EngineFactory.create_engine(self.ml_engine, self.device)
             self.engine.batch_size = self.batch_size
             self.engine.frame_stride = self.frame_stride
             if self.device_queue_id:

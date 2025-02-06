@@ -1,4 +1,4 @@
-# GstPyTorchEngine
+# PyTorchEngine
 # Copyright (C) 2024-2025 Collabora Ltd.
 #
 # This library is free software; you can redistribute it and/or
@@ -29,10 +29,10 @@ from transformers import (
     VisionEncoderDecoderModel,
     AutoProcessor,
 )
-from .gst_ml_engine import GstMLEngine
+from .ml_engine import MLEngine
 
 
-class GstPyTorchEngine(GstMLEngine):
+class PyTorchEngine(MLEngine):
     def load_model(self, model_name, **kwargs):
         """Load a pre-trained model by name from TorchVision, Transformers, or a local path."""
         processor_name = kwargs.get("processor_name")

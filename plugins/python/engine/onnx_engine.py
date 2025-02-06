@@ -1,4 +1,4 @@
-# GstONNXEngine
+# ONNXEngine
 # Copyright (C) 2024-2025 Collabora Ltd.
 #
 # This library is free software; you can redistribute it and/or
@@ -18,9 +18,9 @@
 
 import numpy as np
 import onnxruntime as ort  # ONNX Runtime for executing ONNX models
-from .gst_ml_engine import GstMLEngine
+from .ml_engine import MLEngine
 
-class GstONNXEngine(GstMLEngine):
+class ONNXEngine(MLEngine):
     def __init__(self, device="cpu"):
         """
         Initialize the ONNX engine with the specified device.

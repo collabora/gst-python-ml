@@ -24,7 +24,7 @@ gi.require_version("GstBase", "1.0")
 gi.require_version("GLib", "2.0")
 from gi.repository import Gst, GObject, GstBase  # noqa: E402
 
-from engine.gst_engine_factory import GstEngineFactory
+from engine.engine_factory import EngineFactory
 from log.logger_factory import LoggerFactory
 
 
@@ -97,7 +97,7 @@ class AggregatorBase(GstBase.Aggregator):
     def __init__(self):
         super().__init__()
         self.logger = LoggerFactory.get(LoggerFactory.LOGGER_TYPE_GST)
-        self.ml_engine = GstEngineFactory.PYTORCH_ENGINE
+        self.ml_engine = EngineFactory.PYTORCH_ENGINE
         self.engine = None
         self.kwargs = {}
         self.segment_pushed = False
@@ -141,7 +141,7 @@ class AggregatorBase(GstBase.Aggregator):
                 self.do_load_model()
         elif prop.name == "ml-engine":
             if self.device:
-                self.ml_engine = GstEngineFactory.create_engine(value, self.device)
+                self.ml_engine = EngineFactory.create_engine(value, self.device)
                 self.initialize_engine()
                 self.do_load_model()
         elif prop.name == "device-queue-id":
@@ -159,7 +159,7 @@ class AggregatorBase(GstBase.Aggregator):
     def initialize_engine(self):
         """Initialize the machine learning engine based on the ml_engine property."""
         if self.ml_engine is not None:
-            self.engine = GstEngineFactory.create_engine(self.ml_engine, self.device)
+            self.engine = EngineFactory.create_engine(self.ml_engine, self.device)
             self.engine.batch_size = self.batch_size
             self.engine.frame_stride = self.frame_stride
             if self.device_queue_id:
