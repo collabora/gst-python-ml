@@ -153,7 +153,7 @@ class Overlay(GstBase.BaseTransform):
                 self.extracted_metadata = extracted
         # if not available from meta or not previously loaded from file, then try from file
         if not self.extracted_metadata:
-            self.extracted_metadata = load_metadata(self.meta_path)
+            self.extracted_metadata = load_metadata(self.meta_path, self.logger)
             self.from_file = True
         # no metdata - exit gracefully
         if not self.extracted_metadata:

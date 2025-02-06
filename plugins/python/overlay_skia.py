@@ -39,6 +39,7 @@ try:
         GLib,
         GObject,
     )  # noqa: E402
+    from log.logger_factory import LoggerFactory
 except ImportError as e:
     CAN_REGISTER_ELEMENT = False
     self.logger.warning(
@@ -82,6 +83,7 @@ class OverlaySkia(GstBase.BaseTransform):
 
     def __init__(self):
         super().__init__()
+        self.logger = LoggerFactory.get(LoggerFactory.LOGGER_TYPE_GST)
         self.meta_path = None
         self.preloaded_metadata = {}
         self.frame_counter = 0
@@ -211,7 +213,7 @@ class OverlaySkia(GstBase.BaseTransform):
 
     def do_transform_ip(self, buf):
         if not self.preloaded_metadata:
-            self.preloaded_metadata = load_metadata(self.meta_path)
+            self.preloaded_metadata = load_metadata(self.meta_path, self.logger)
         metadata = self.extract_metadata(buf)
         frame_metadata = self.get_metadata_for_frame(self.frame_counter)
 

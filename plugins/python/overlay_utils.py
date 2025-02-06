@@ -280,7 +280,7 @@ class OverlayGraphicsFactory:
             raise ValueError(f"Unknown graphics type: {graphics_type}")
 
 
-def load_metadata(meta_path):
+def load_metadata(meta_path, logger):
     """Load JSON metadata from a file and return a dictionary indexed by frame index.
 
     Args:
@@ -290,11 +290,11 @@ def load_metadata(meta_path):
         dict: Metadata indexed by frame index.
     """
     if not meta_path:
-        self.logger.error("Frame metadata file path not set.")
+        logger.error("Frame metadata file path not set.")
         return {}
 
     if not os.path.exists(meta_path):
-        self.logger.error(f"JSON file not found: {meta_path}")
+        logger.error(f"JSON file not found: {meta_path}")
         return {}
 
     try:
@@ -309,8 +309,8 @@ def load_metadata(meta_path):
             self.logger.info(f"Loaded metadata for {len(metadata)} frames.")
             return metadata
     except json.JSONDecodeError as e:
-        self.logger.error(f"Failed to parse JSON file: {e}")
+        logger.error(f"Failed to parse JSON file: {e}")
         return {}
     except Exception as e:
-        self.logger.error(f"Unexpected error while loading metadata: {e}")
+        logger.error(f"Unexpected error while loading metadata: {e}")
         return {}
