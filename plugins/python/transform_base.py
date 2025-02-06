@@ -182,8 +182,8 @@ class TransformBase(GstBase.BaseTransform):
                 self.engine.set_device(value)
                 self.do_load_model()
         elif prop.name == "ml-engine":
+            self.ml_engine = value
             if self.device:
-                self.ml_engine = EngineFactory.create_engine(value, self.device)
                 self.initialize_engine()
                 self.do_load_model()
         elif prop.name == "device-queue-id":
