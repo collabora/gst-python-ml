@@ -28,7 +28,7 @@ class Logger(ABC):
         pass
 
     @abstractmethod
-    def warn(self, message: str, *args):
+    def warning(self, message: str, *args):
         pass
 
     @abstractmethod
@@ -49,7 +49,7 @@ class PythonLogger(Logger):
     def error(self, message, *args):
         logging.error(message % args if args else message)
 
-    def warn(self, message, *args):
+    def warning(self, message, *args):
         logging.warning(message % args if args else message)
 
     def info(self, message, *args):

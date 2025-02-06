@@ -17,9 +17,10 @@
 # Boston, MA 02110-1301, USA.
 
 from log.logger_factory import LoggerFactory
+from log.logger import Logger
 
 
-class GlobalLogger:
+class GlobalLogger(Logger):
     """Singleton class for logging using the existing LoggerFactory."""
 
     _instance = None  # Singleton instance
@@ -35,8 +36,8 @@ class GlobalLogger:
     def error(self, message, *args):
         self.logger.error(message, *args)
 
-    def warn(self, message, *args):
-        self.logger.warn(message, *args)
+    def warning(self, message, *args):
+        self.logger.warning(message, *args)
 
     def info(self, message, *args):
         self.logger.info(message, *args)

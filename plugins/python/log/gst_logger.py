@@ -31,7 +31,7 @@ class GstLogger(Logger):
     def error(self, message, *args):
         Gst.error(message % args if args else message)
 
-    def warn(self, message, *args):
+    def warning(self, message, *args):
         Gst.warning(message % args if args else message)
 
     def info(self, message, *args):
