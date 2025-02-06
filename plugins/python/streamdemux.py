@@ -91,7 +91,7 @@ class StreamDemux(Gst.Element):
         # Push the buffer to the src pad
         ret = src_pad.push(out_buffer)
         if ret != Gst.FlowReturn.OK:
-            Gst.error(f"Failed to push buffer on {src_pad.get_name()}: {ret}")
+            self.logger.error(f"Failed to push buffer on {src_pad.get_name()}: {ret}")
 
     def chain(self, pad, parent, buffer):
         Gst.debug("Processing buffer in chain function")
@@ -112,7 +112,7 @@ class StreamDemux(Gst.Element):
                     self.get_pad_template("src_%u"), pad_name, None
                 )
                 if src_pad is None:
-                    Gst.error(f"Failed to request or create pad: {pad_name}")
+                    self.logger.error(f"Failed to request or create pad: {pad_name}")
                     continue
 
             # Push the memory chunk to the corresponding src pad

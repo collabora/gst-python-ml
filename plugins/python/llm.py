@@ -25,7 +25,7 @@ try:
     from gst_llm import GstLLM
 except ImportError as e:
     CAN_REGISTER_ELEMENT = False
-    Gst.warning(f"The 'pyml_llm' element will not be available. Error {e}")
+    self.logger.warning(f"The 'pyml_llm' element will not be available. Error {e}")
 
 
 class LLM(GstLLM):
@@ -41,6 +41,6 @@ if CAN_REGISTER_ELEMENT:
     GObject.type_register(LLM)
     __gstelementfactory__ = ("pyml_llm", Gst.Rank.NONE, LLM)
 else:
-    Gst.warning(
+    self.logger.warning(
         "The 'pyml_llm' element will not be registered because required modules are missing."
     )

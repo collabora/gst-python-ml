@@ -28,7 +28,9 @@ try:
     from TTS.api import TTS
 except ImportError as e:
     CAN_REGISTER_ELEMENT = False
-    Gst.warning(f"The 'pyml_coquitts' element will not be available. Error: {e}")
+    self.logger.warning(
+        f"The 'pyml_coquitts' element will not be available. Error: {e}"
+    )
 
 TTS_SAMPLE_RATE = 22050
 
@@ -62,7 +64,7 @@ class CoquiTTS(GstTTS):
     )
 
     def do_load_model(self):
-        Gst.info(f"Initializing Coqui TTS model on device: {self.device}")
+        self.logger.info(f"Initializing Coqui TTS model on device: {self.device}")
         self.set_model(
             TTS(
                 model_name="tts_models/multilingual/multi-dataset/xtts_v2",
@@ -85,6 +87,6 @@ if CAN_REGISTER_ELEMENT:
     GObject.type_register(CoquiTTS)
     __gstelementfactory__ = ("pyml_coquitts", Gst.Rank.NONE, CoquiTTS)
 else:
-    Gst.warning(
+    self.logger.warning(
         "The 'pyml_coquitts' element will not be registered because required modules are missing."
     )

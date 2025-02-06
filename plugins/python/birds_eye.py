@@ -41,7 +41,7 @@ try:
     from birds_eye_module import BirdsEyeView
     from gst_video_transform import GstVideoTransform
 except ImportError as e:
-    Gst.warning(f"The 'BirdsEye' element cannot be registered because: {e}")
+    self.logger.warning(f"The 'BirdsEye' element cannot be registered because: {e}")
     CAN_REGISTER_ELEMENT = False
 
 
@@ -69,15 +69,15 @@ class BirdsEye(GstVideoTransform):
         """
         try:
             # Debugging sys.path and Arguments
-            Gst.warning(f"sys.path: {sys.path}")
+            self.logger.warning(f"sys.path: {sys.path}")
             config = Arguments().parse()  # Uses Arguments to provide defaults
-            Gst.warning(f"Arguments parsed: {config}")
+            self.logger.warning(f"Arguments parsed: {config}")
 
             # Initialize BirdsEyeView
             self.processor = BirdsEyeView(config)
-            Gst.warning("BirdsEyeView initialized successfully.")
+            self.logger.warning("BirdsEyeView initialized successfully.")
         except Exception as e:
-            Gst.error(f"Failed to initialize BirdsEyeView: {e}")
+            self.logger.error(f"Failed to initialize BirdsEyeView: {e}")
             self.processor = None
 
     def do_transform_ip(self, buf):
@@ -85,17 +85,17 @@ class BirdsEye(GstVideoTransform):
         In-place transformation using the BirdsEyeView class.
         """
         if not self.processor:
-            Gst.error("BirdsEyeView processor is not initialized.")
+            self.logger.error("BirdsEyeView processor is not initialized.")
             return Gst.FlowReturn.ERROR
 
         try:
             with buf.map(Gst.MapFlags.READ | Gst.MapFlags.WRITE) as info:
                 if info.data is None:
-                    Gst.error("Buffer mapping returned None data.")
+                    self.logger.error("Buffer mapping returned None data.")
                     return Gst.FlowReturn.ERROR
 
                 # Debugging frame dimensions
-                Gst.warning(
+                self.logger.warning(
                     f"Frame dimensions: width={self.width}, height={self.height}"
                 )
 
@@ -117,7 +117,7 @@ class BirdsEye(GstVideoTransform):
 
             return Gst.FlowReturn.OK
         except Exception as e:
-            Gst.error(f"Unexpected error during transformation: {e}")
+            self.logger.error(f"Unexpected error during transformation: {e}")
             return Gst.FlowReturn.ERROR
 
 
@@ -125,4 +125,4 @@ if CAN_REGISTER_ELEMENT:
     GObject.type_register(BirdsEye)
     __gstelementfactory__ = ("pyml_birdseye", Gst.Rank.NONE, BirdsEye)
 else:
-    Gst.warning("Failed to register the 'BirdsEye' element.")
+    self.logger.warning("Failed to register the 'BirdsEye' element.")

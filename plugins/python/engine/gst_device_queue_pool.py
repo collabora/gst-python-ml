@@ -59,7 +59,7 @@ class GstDeviceQueuePool:
         :param device_queue: A DeviceQueue object to add to the pool.
         """
         if queue_id in self.queues:
-            Gst.warning(
+            self.logger.warning(
                 f"DeviceQueue with ID {queue_id} already exists. Not adding again."
             )
             return
@@ -75,7 +75,7 @@ class GstDeviceQueuePool:
         """
         queue = self.queues.get(queue_id, None)
         if queue is None:
-            Gst.warning(f"No DeviceQueue found for ID {queue_id}.")
+            self.logger.warning(f"No DeviceQueue found for ID {queue_id}.")
         return queue
 
     def __repr__(self):
@@ -103,7 +103,7 @@ class DeviceQueueManager:
             return  # Do not add if it already exists
 
         self._device_queue_pools[device] = queue_pool
-        Gst.info(f"Added DeviceQueuePool for device {device}.")
+        self.logger.info(f"Added DeviceQueuePool for device {device}.")
 
     def get_pool(self, device):
         """
@@ -114,7 +114,7 @@ class DeviceQueueManager:
         """
         pool = self._device_queue_pools.get(device, None)
         if pool is None:
-            Gst.warning(f"No DeviceQueuePool found for device {device}.")
+            self.logger.warning(f"No DeviceQueuePool found for device {device}.")
         return pool
 
     def __repr__(self):

@@ -43,7 +43,9 @@ class GstOpenVinoEngine(GstMLEngine):
             model_path = f"{model_name}.xml"
             self.model = self.core.read_model(model=model_path)
             self.compiled_model = self.core.compile_model(self.model, self.device)
-            Gst.info(f"Model '{model_name}' loaded successfully on {self.device}")
+            self.logger.info(
+                f"Model '{model_name}' loaded successfully on {self.device}"
+            )
 
             # Inspect input shape to determine the type of model
             input_shape = self.compiled_model.input(0).shape
@@ -52,10 +54,10 @@ class GstOpenVinoEngine(GstMLEngine):
                 len(input_shape) == 4 and input_shape[1] == 3
             ):  # Expecting image input (batch, 3 channels, height, width)
                 self.is_vision_model = True
-                Gst.info("Model identified as a vision model.")
+                self.logger.info("Model identified as a vision model.")
             elif len(input_shape) == 2:  # Expecting LLM input (batch, sequence_length)
                 self.is_llm = True
-                Gst.info("Model identified as a large language model (LLM).")
+                self.logger.info("Model identified as a large language model (LLM).")
 
             if self.is_llm:
                 # Load a tokenizer for the LLM (Hugging Face for instance)

@@ -172,7 +172,7 @@ class GstTranscribe(GstAggregator):
             # Map the buffer to access the audio data
             success, map_info = buf.map(Gst.MapFlags.READ)
             if not success:
-                Gst.error("Failed to map input buffer")
+                self.logger.error("Failed to map input buffer")
                 buf.unmap(map_info)
                 return Gst.FlowReturn.OK
 
@@ -181,7 +181,7 @@ class GstTranscribe(GstAggregator):
             audio_collected = True
 
             if len(audio_data) < vad_chunk_size:
-                Gst.warning("Insufficient audio data for processing")
+                self.logger.warning("Insufficient audio data for processing")
                 buf.unmap(map_info)
                 return Gst.FlowReturn.OK
 
@@ -195,7 +195,7 @@ class GstTranscribe(GstAggregator):
                     if self.streaming:
                         transcript = self._transcribe_audio(vad_chunk)
                         if transcript is None:
-                            Gst.warning("Empty transcript")
+                            self.logger.warning("Empty transcript")
                             buf.unmap(map_info)
                             return Gst.FlowReturn.ERROR
 
@@ -219,7 +219,7 @@ class GstTranscribe(GstAggregator):
                             # Perform transcription in batch mode
                             transcript = self._transcribe_audio(self.clip_buffer)
                             if transcript is None:
-                                Gst.warning("Empty transcript")
+                                self.logger.warning("Empty transcript")
                                 buf.unmap(map_info)
                                 return Gst.FlowReturn.ERROR
 
@@ -227,10 +227,10 @@ class GstTranscribe(GstAggregator):
                             self.clip_buffer.clear()  # Clear the buffer for the next speech
             buf.unmap(map_info)
         except Exception as e:
-            Gst.error(f"Error during buffer processing: {e}")
+            self.logger.error(f"Error during buffer processing: {e}")
 
         if not audio_collected:
-            Gst.warning("No audio data collected from sink pads.")
+            self.logger.warning("No audio data collected from sink pads.")
             return Gst.FlowReturn.ERROR
 
         return Gst.FlowReturn.OK
@@ -259,9 +259,9 @@ class GstTranscribe(GstAggregator):
             result = self.do_transcribe(audio_data, task)
             # Combine all segments into a single transcript
             transcript = " ".join([seg.text.strip() for seg in list(result)])
-            Gst.info(f"transcription: {transcript}")
+            self.logger.info(f"transcription: {transcript}")
             return transcript
 
         except Exception as e:
-            Gst.error(f"Error during streaming transcription: {e}")
+            self.logger.error(f"Error during streaming transcription: {e}")
             return ""

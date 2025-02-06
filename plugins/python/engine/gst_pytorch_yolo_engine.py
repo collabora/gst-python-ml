@@ -33,7 +33,9 @@ class GstPyTorchYoloEngine(GstPyTorchEngine):
         try:
             self.set_model(YOLO(f"{model_name}.pt"))
             self.execute_with_stream(lambda: self.model.to(self.device))
-            Gst.info(f"YOLO model '{model_name}' loaded successfully on {self.device}")
+            self.logger.info(
+                f"YOLO model '{model_name}' loaded successfully on {self.device}"
+            )
         except Exception as e:
             raise ValueError(f"Failed to load YOLO model '{model_name}'. Error: {e}")
 
@@ -47,7 +49,7 @@ class GstPyTorchYoloEngine(GstPyTorchEngine):
         # Ensure model is loaded before attempting inference
         model = self.get_model()
         if model is None:
-            Gst.error("forward: Model is not loaded.")
+            self.logger.error("forward: Model is not loaded.")
             return []
 
         try:
@@ -61,7 +63,7 @@ class GstPyTorchYoloEngine(GstPyTorchEngine):
 
             # Log and handle None results explicitly
             if results is None:
-                Gst.warning(
+                self.logger.warning(
                     "forward: Inference returned None; defaulting to an empty list."
                 )
                 return []
@@ -70,5 +72,5 @@ class GstPyTorchYoloEngine(GstPyTorchEngine):
             return results
 
         except Exception as e:
-            Gst.error(f"forward: Error during inference: {e}")
+            self.logger.error(f"forward: Error during inference: {e}")
             return []

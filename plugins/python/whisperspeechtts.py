@@ -28,7 +28,7 @@ try:
     from gst_tts import GstTTS
 except ImportError as e:
     CAN_REGISTER_ELEMENT = False
-    Gst.warning(
+    self.logger.warning(
         f"The 'pyml_whisperspeechtts' element will not be available. Error: {e}"
     )
 
@@ -66,19 +66,21 @@ class WhisperSpeechTTS(GstTTS):
     )
 
     def do_load_model(self):
-        Gst.info(f"Initializing WhisperSpeech TTS model on device: {self.device}")
+        self.logger.info(
+            f"Initializing WhisperSpeech TTS model on device: {self.device}"
+        )
         try:
             self.set_model(
                 Pipeline(s2a_ref=model_ref, device=self.device, torch_compile=True)
             )
             if self.get_model() is not None:
-                Gst.info(
+                self.logger.info(
                     f"WhisperSpeech Pipeline initialized successfully: {self.get_model()}"
                 )
             else:
-                Gst.error("Failed to create WhisperSpeech model")
+                self.logger.error("Failed to create WhisperSpeech model")
         except Exception as e:
-            Gst.error(f"Exception during model initialization: {e}")
+            self.logger.error(f"Exception during model initialization: {e}")
 
     def do_generate_speech(self, transcript):
         audio_tensor = self.get_model().generate(transcript, lang=self.language)
@@ -101,6 +103,6 @@ if CAN_REGISTER_ELEMENT:
     GObject.type_register(WhisperSpeechTTS)
     __gstelementfactory__ = ("pyml_whisperspeechtts", Gst.Rank.NONE, WhisperSpeechTTS)
 else:
-    Gst.warning(
+    self.logger.warning(
         "The 'pyml_whisperspeechtts' element will not be registered because required modules were missing."
     )

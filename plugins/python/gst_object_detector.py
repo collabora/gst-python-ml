@@ -210,7 +210,9 @@ class GstObjectDetector(GstVideoTransform):
             # Map the buffer to read data
             with buf.map(Gst.MapFlags.READ | Gst.MapFlags.WRITE) as info:
                 if info.data is None:
-                    Gst.error("do_transform_ip: Buffer mapping returned None data.")
+                    self.logger.error(
+                        "do_transform_ip: Buffer mapping returned None data."
+                    )
                     return Gst.FlowReturn.ERROR
 
                 format = self._get_video_format(buf, self.sinkpad)
@@ -218,7 +220,9 @@ class GstObjectDetector(GstVideoTransform):
 
                 # Check if frame is mapped correctly
                 if frame is None or not isinstance(frame, np.ndarray):
-                    Gst.error("do_transform_ip: Frame data is None or not an ndarray.")
+                    self.logger.error(
+                        "do_transform_ip: Frame data is None or not an ndarray."
+                    )
                     return Gst.FlowReturn.ERROR
                 Gst.debug(f"do_transform_ip: Frame shape {frame.shape}")
 
@@ -227,12 +231,12 @@ class GstObjectDetector(GstVideoTransform):
 
                 # Verify results is a list
                 if results is None:
-                    Gst.warning(
+                    self.logger.warning(
                         "do_transform_ip: forward() returned None; defaulting to an empty list."
                     )
                     results = []
                 elif not isinstance(results, list):
-                    Gst.error(
+                    self.logger.error(
                         f"do_transform_ip: Expected list from forward, got {type(results)}."
                     )
                     return Gst.FlowReturn.ERROR
@@ -240,27 +244,31 @@ class GstObjectDetector(GstVideoTransform):
                 # Process inference results
                 for i, result in enumerate(results):
                     if result is None:
-                        Gst.warning(
+                        self.logger.warning(
                             f"do_transform_ip: Result at index {i} is None, skipping."
                         )
                         continue
                     try:
                         self.do_decode(buf, result)
                     except Exception as e:
-                        Gst.error(
+                        self.logger.error(
                             f"do_transform_ip: Error in do_decode for result at index {i}: {e}"
                         )
 
             return Gst.FlowReturn.OK
 
         except Gst.MapError as e:
-            Gst.error(f"do_transform_ip: Mapping error: {e}")
+            self.logger.error(f"do_transform_ip: Mapping error: {e}")
             return Gst.FlowReturn.ERROR
         except TypeError as e:
-            Gst.error(f"do_transform_ip: Type error likely due to NoneType: {e}")
+            self.logger.error(
+                f"do_transform_ip: Type error likely due to NoneType: {e}"
+            )
             return Gst.FlowReturn.ERROR
         except Exception as e:
-            Gst.error(f"do_transform_ip: Unexpected error during transformation: {e}")
+            self.logger.error(
+                f"do_transform_ip: Unexpected error during transformation: {e}"
+            )
             return Gst.FlowReturn.ERROR
 
     def do_decode(self, buf, output):
@@ -272,12 +280,12 @@ class GstObjectDetector(GstVideoTransform):
         scores = output["scores"]
 
         # Log buffer pointer and metadata information
-        Gst.info(f"Processing buffer at address: {hex(id(buf))}")
-        Gst.info(f"Processing {len(boxes)} detections.")
+        self.logger.info(f"Processing buffer at address: {hex(id(buf))}")
+        self.logger.info(f"Processing {len(boxes)} detections.")
 
         for i, (box, label, score) in enumerate(zip(boxes, labels, scores)):
             x1, y1, x2, y2 = box
-            Gst.info(
+            self.logger.info(
                 f"Detection {i}: Box coordinates (x1={x1}, y1={y1}, x2={x2}, y2={y2}), "
                 f"Label={label}, Score={score:.2f}"
             )
@@ -288,21 +296,21 @@ class GstObjectDetector(GstVideoTransform):
                 qk = GLib.quark_from_string(f"label_{label}")
                 ret, mtd = meta.add_od_mtd(qk, x1, y1, x2 - x1, y2 - y1, score)
                 # if ret:
-                #     Gst.info(
+                #     self.logger.info(
                 #         f"Successfully added object detection metadata with quark {qk} and mtd {mtd}"
                 #     )
                 if not ret:
-                    Gst.error("Failed to add object detection metadata")
+                    self.logger.error("Failed to add object detection metadata")
             else:
-                Gst.error("Failed to add GstAnalytics metadata to buffer")
+                self.logger.error("Failed to add GstAnalytics metadata to buffer")
 
         # Log buffer state after metadata attachment
         attached_meta = GstAnalytics.buffer_get_analytics_relation_meta(buf)
         # if attached_meta:
-        #     Gst.info(
+        #     self.logger.info(
         #         f"Metadata successfully attached to buffer at address: {hex(id(buf))}"
         #     )
         if not attached_meta:
-            Gst.warning(
+            self.logger.warning(
                 f"Failed to retrieve attached metadata immediately after addition for buffer: {hex(id(buf))}"
             )

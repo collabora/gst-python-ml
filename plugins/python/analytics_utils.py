@@ -32,6 +32,10 @@ except ImportError:
 
 
 class AnalyticsUtils:
+    def __init__(self):
+        super().__init__()
+        self.logger = LoggerFactory.get(LoggerFactory.LOGGER_TYPE_GST)
+
     def extract_analytics_metadata(self, buffer):
         metadata = []
         meta = GstAnalytics.buffer_get_analytics_relation_meta(buffer)
@@ -60,7 +64,7 @@ class AnalyticsUtils:
                         }
                     )
         except Exception as e:
-            Gst.error(f"Error while extracting analytics metadata: {e}")
+            self.logger.error(f"Error while extracting analytics metadata: {e}")
         return metadata
 
     def extract_id_from_label(self, label):

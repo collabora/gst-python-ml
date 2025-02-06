@@ -54,9 +54,11 @@ class GstONNXEngine(GstMLEngine):
             self.input_names = [inp.name for inp in self.session.get_inputs()]
             self.output_names = [out.name for out in self.session.get_outputs()]
 
-            Gst.info(f"ONNX model '{model_name}' loaded successfully on {self.device}.")
+            self.logger.info(
+                f"ONNX model '{model_name}' loaded successfully on {self.device}."
+            )
         except Exception as e:
-            Gst.error(f"Failed to load ONNX model '{model_name}'. Error: {e}")
+            self.logger.error(f"Failed to load ONNX model '{model_name}'. Error: {e}")
 
     def set_device(self, device):
         """
@@ -95,5 +97,5 @@ class GstONNXEngine(GstMLEngine):
             )  # Return single result or list of results
 
         except Exception as e:
-            Gst.error(f"Error during ONNX inference: {e}")
+            self.logger.error(f"Error during ONNX inference: {e}")
             return None

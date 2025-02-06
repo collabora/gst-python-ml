@@ -46,10 +46,12 @@ class GstTFLiteEngine(GstMLEngine):
         """Creates a TFLite delegate from the provided path."""
         try:
             delegate = tf.lite.experimental.load_delegate(self.device)
-            Gst.info(f"Delegate loaded successfully from '{self.device}'")
+            self.logger.info(f"Delegate loaded successfully from '{self.device}'")
             return delegate
         except Exception as e:
-            Gst.error(f"Failed to load delegate from '{self.device}'. Error: {e}")
+            self.logger.error(
+                f"Failed to load delegate from '{self.device}'. Error: {e}"
+            )
             return None  # Fall back to no delegate if loading fails
 
     def load_model(self, model_name, **kwargs):
@@ -66,9 +68,9 @@ class GstTFLiteEngine(GstMLEngine):
             self.input_details = self.interpreter.get_input_details()
             self.output_details = self.interpreter.get_output_details()
 
-            Gst.info(f"TFLite model '{model_name}' loaded successfully.")
+            self.logger.info(f"TFLite model '{model_name}' loaded successfully.")
         except Exception as e:
-            Gst.error(f"Failed to load TFLite model '{model_name}'. Error: {e}")
+            self.logger.error(f"Failed to load TFLite model '{model_name}'. Error: {e}")
 
     def set_device(self, device):
         """TFLite does not require explicit device management in Python, but delegates handle this."""

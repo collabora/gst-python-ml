@@ -23,7 +23,9 @@ try:
     from overlay import Overlay
     from overlay_utils import Color
 except ImportError as e:
-    Gst.warning(f"The 'OverlayCounter' element cannot be registered because: {e}")
+    self.logger.warning(
+        f"The 'OverlayCounter' element cannot be registered because: {e}"
+    )
     CAN_REGISTER_ELEMENT = False
 
 
@@ -68,4 +70,4 @@ if CAN_REGISTER_ELEMENT:
     GObject.type_register(OverlayCounter)
     __gstelementfactory__ = ("pyml_overlay_counter", Gst.Rank.NONE, OverlayCounter)
 else:
-    Gst.warning("Failed to register the 'pyml_overlay_counter' element.")
+    self.logger.warning("Failed to register the 'pyml_overlay_counter' element.")

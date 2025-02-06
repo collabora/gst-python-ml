@@ -94,7 +94,7 @@ class GstTTS(GstAggregator):
             self.language = value
         elif property_name == "streaming":
             self.streaming_enabled = value
-            Gst.info(f"Streaming mode {'enabled' if value else 'disabled'}")
+            self.logger.info(f"Streaming mode {'enabled' if value else 'disabled'}")
         else:
             super().set_property(property_name, value)
 
@@ -119,7 +119,7 @@ class GstTTS(GstAggregator):
         try:
             success, map_info = buf.map(Gst.MapFlags.READ)
             if not success:
-                Gst.error("Failed to map input buffer")
+                self.logger.error("Failed to map input buffer")
                 return Gst.FlowReturn.ERROR
 
             byte_data = bytes(map_info.data)
@@ -130,11 +130,11 @@ class GstTTS(GstAggregator):
             try:
                 byte_data = byte_data.decode("utf-8", errors="replace")
             except Exception as e:
-                Gst.error(f"Error decoding text data: {e}")
+                self.logger.error(f"Error decoding text data: {e}")
                 buf.unmap(map_info)
                 return Gst.FlowReturn.ERROR
 
-            Gst.info(f"TTS: received text: {byte_data}")
+            self.logger.info(f"TTS: received text: {byte_data}")
 
             if self.streaming_enabled:
                 self.convert_text_to_audio_streaming_async(byte_data)
@@ -144,7 +144,7 @@ class GstTTS(GstAggregator):
             buf.unmap(map_info)
 
         except Exception as e:
-            Gst.error(f"Error processing text buffer: {e}")
+            self.logger.error(f"Error processing text buffer: {e}")
             return Gst.FlowReturn.ERROR
 
     async def process_transcript(self, transcript):
@@ -168,7 +168,7 @@ class GstTTS(GstAggregator):
 
             self.push_audio_to_pipeline(audio_bytes)
         except Exception as e:
-            Gst.error(f"Error processing TTS: {e}")
+            self.logger.error(f"Error processing TTS: {e}")
 
     def convert_text_to_audio_async(self, text):
         asyncio.run(self.process_transcript(text))
@@ -195,7 +195,7 @@ class GstTTS(GstAggregator):
             if ret != Gst.FlowReturn.OK:
                 raise RuntimeError(f"Error pushing audio to pipeline: {ret}")
 
-            Gst.info("TTS: audio generated and pushed downstream successfully.")
+            self.logger.info("TTS: audio generated and pushed downstream successfully.")
 
         except Exception as e:
-            Gst.error(f"Error pushing audio to pipeline: {e}")
+            self.logger.error(f"Error pushing audio to pipeline: {e}")

@@ -32,7 +32,7 @@ try:
     from gst_object_detector import GstObjectDetector
 except ImportError as e:
     CAN_REGISTER_ELEMENT = False
-    Gst.warning(f"The 'pyml_maskrcnn' element will not be available. Error {e}")
+    self.logger.warning(f"The 'pyml_maskrcnn' element will not be available. Error {e}")
 
 
 class MaskRCNN(GstObjectDetector):
@@ -54,7 +54,7 @@ class MaskRCNN(GstObjectDetector):
     # @model_name.setter
     # def model_name(self, value):
     #     # Emit a warning if someone tries to set the model-name property
-    #     Gst.warning(
+    #     self.logger.warning(
     #         f"Attempt to change the model-name property to '{value}' is not allowed. "
     #         "MaskRCNN will always use 'maskrcnn_resnet50_fpn'."
     #     )
@@ -69,14 +69,14 @@ class MaskRCNN(GstObjectDetector):
         scores = output["scores"]
         masks = output["masks"]  # Additional mask outputs for Mask R-CNN
 
-        Gst.info(f"Processing buffer at address: {hex(id(buf))}")
-        Gst.info(f"Processing {len(boxes)} detections.")
+        self.logger.info(f"Processing buffer at address: {hex(id(buf))}")
+        self.logger.info(f"Processing {len(boxes)} detections.")
 
         for i, (box, label, score, mask) in enumerate(
             zip(boxes, labels, scores, masks)
         ):
             x1, y1, x2, y2 = box
-            Gst.info(
+            self.logger.info(
                 f"Detection {i}: Box coordinates (x1={x1}, y1={y1}, x2={x2}, y2={y2}), "
                 f"Label={label}, Score={score:.2f}"
             )
@@ -89,21 +89,21 @@ class MaskRCNN(GstObjectDetector):
                 qk = GLib.quark_from_string(f"label_{label}")
                 ret, mtd = meta.add_od_mtd(qk, x1, y1, x2 - x1, y2 - y1, score)
                 if ret:
-                    Gst.info(
+                    self.logger.info(
                         f"Successfully added object detection metadata with quark {qk} and mtd {mtd}"
                     )
                 else:
-                    Gst.error("Failed to add object detection metadata")
+                    self.logger.error("Failed to add object detection metadata")
             else:
-                Gst.error("Failed to add GstAnalytics metadata to buffer")
+                self.logger.error("Failed to add GstAnalytics metadata to buffer")
 
         attached_meta = GstAnalytics.buffer_get_analytics_relation_meta(buf)
         if attached_meta:
-            Gst.info(
+            self.logger.info(
                 f"Metadata successfully attached to buffer at address: {hex(id(buf))}"
             )
         else:
-            Gst.warning(
+            self.logger.warning(
                 f"Failed to retrieve attached metadata immediately after addition for buffer: {hex(id(buf))}"
             )
 
@@ -112,6 +112,6 @@ if CAN_REGISTER_ELEMENT:
     GObject.type_register(MaskRCNN)
     __gstelementfactory__ = ("pyml_maskrcnn", Gst.Rank.NONE, MaskRCNN)
 else:
-    Gst.warning(
+    self.logger.warning(
         "The 'pyml_maskrcnn' element will not be registered because required modules are missing."
     )

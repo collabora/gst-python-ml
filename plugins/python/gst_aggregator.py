@@ -165,7 +165,7 @@ class GstAggregator(GstBase.Aggregator):
             if self.device_queue_id:
                 self.engine.device_queue_id = self.device_queue_id
         else:
-            Gst.error(f"Unsupported ML engine: {self.ml_engine}")
+            self.logger.error(f"Unsupported ML engine: {self.ml_engine}")
             return
 
     def do_load_model(self):
@@ -173,7 +173,7 @@ class GstAggregator(GstBase.Aggregator):
         if self.engine and self.model_name:
             self.engine.load_model(self.model_name, **self.kwargs)
         else:
-            Gst.warning("Engine is not present, unable to load the model.")
+            self.logger.warning("Engine is not present, unable to load the model.")
 
     def get_model(self):
         """Gets the model from the engine."""
@@ -182,7 +182,7 @@ class GstAggregator(GstBase.Aggregator):
         if self.engine:
             return self.engine.get_model()
         else:
-            Gst.warning("Engine is not present, unable to get the model.")
+            self.logger.warning("Engine is not present, unable to get the model.")
             return None
 
     def set_model(self, model):
@@ -192,7 +192,7 @@ class GstAggregator(GstBase.Aggregator):
         if self.engine:
             self.engine.set_model(model)
         else:
-            Gst.warning("Engine is not present, unable to set the model.")
+            self.logger.warning("Engine is not present, unable to set the model.")
 
     def get_tokenizer(self):
         """Gets the model from the engine."""
@@ -203,7 +203,7 @@ class GstAggregator(GstBase.Aggregator):
         if self.engine:
             return self.engine.tokenizer
         else:
-            Gst.warning("Engine is not present, unable to get the tokenizer.")
+            self.logger.warning("Engine is not present, unable to get the tokenizer.")
             return None
 
     def push_segment_if_needed(self):

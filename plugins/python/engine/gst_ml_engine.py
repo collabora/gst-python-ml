@@ -18,9 +18,12 @@
 
 from abc import ABC, abstractmethod
 
+from log.logger_factory import LoggerFactory
+
 
 class GstMLEngine(ABC):
     def __init__(self, device="cpu"):
+        self.logger = LoggerFactory.get(LoggerFactory.LOGGER_TYPE_GST)
         self.device = device
         self.device_index = 0
         self.model = None

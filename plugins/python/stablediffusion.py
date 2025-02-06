@@ -30,7 +30,9 @@ try:
     from diffusers import StableDiffusionPipeline
 except ImportError as e:
     CAN_REGISTER_ELEMENT = False
-    Gst.warning(f"The 'pyml_stablediffusion' element will not be available. Error: {e}")
+    self.logger.warning(
+        f"The 'pyml_stablediffusion' element will not be available. Error: {e}"
+    )
 
 # Set output caps to image format (e.g., PNG)
 ICAPS = Gst.Caps(Gst.Structure("text/plain", format="utf8"))
@@ -66,7 +68,7 @@ class StableDiffusion(GstAggregator):
         """
         Initialize the Stable Diffusion model
         """
-        Gst.info(f"Initializing Stable Diffusion model on {self.device}")
+        self.logger.info(f"Initializing Stable Diffusion model on {self.device}")
         self.set_model(
             StableDiffusionPipeline.from_pretrained("CompVis/stable-diffusion-v1-4")
         )
@@ -76,7 +78,7 @@ class StableDiffusion(GstAggregator):
         try:
             success, map_info = buf.map(Gst.MapFlags.READ)
             if not success:
-                Gst.error("Failed to map input buffer")
+                self.logger.error("Failed to map input buffer")
                 return Gst.FlowReturn.ERROR
 
             byte_data = bytes(map_info.data)
@@ -87,11 +89,11 @@ class StableDiffusion(GstAggregator):
             try:
                 byte_data = byte_data.decode("utf-8", errors="replace")
             except Exception as e:
-                Gst.error(f"Error decoding text data: {e}")
+                self.logger.error(f"Error decoding text data: {e}")
                 buf.unmap(map_info)
                 return Gst.FlowReturn.ERROR
 
-            Gst.info(f"Text to Image: received text: {byte_data}")
+            self.logger.info(f"Text to Image: received text: {byte_data}")
 
             # Generate the image asynchronously
             self.convert_text_to_image_async(byte_data)
@@ -99,7 +101,7 @@ class StableDiffusion(GstAggregator):
             buf.unmap(map_info)
 
         except Exception as e:
-            Gst.error(f"Error processing text buffer: {e}")
+            self.logger.error(f"Error processing text buffer: {e}")
             return Gst.FlowReturn.ERROR
 
     async def process_text(self, text):
@@ -113,7 +115,7 @@ class StableDiffusion(GstAggregator):
             self.push_image_to_pipeline(image_data)
 
         except Exception as e:
-            Gst.error(f"Error processing text to image: {e}")
+            self.logger.error(f"Error processing text to image: {e}")
 
     def convert_text_to_image_async(self, text):
         asyncio.run(self.process_text(text))
@@ -122,7 +124,7 @@ class StableDiffusion(GstAggregator):
         """
         Generate image from text prompt using Stable Diffusion.
         """
-        Gst.info(f"Generating image for prompt: {prompt}")
+        self.logger.info(f"Generating image for prompt: {prompt}")
         image = self.get_model()(prompt).images[0]  # Generate image for the prompt
 
         # Convert the PIL image to raw RGBA format
@@ -144,10 +146,10 @@ class StableDiffusion(GstAggregator):
             if ret != Gst.FlowReturn.OK:
                 raise RuntimeError(f"Error pushing image to pipeline: {ret}")
 
-            Gst.info("Raw image generated and pushed downstream successfully.")
+            self.logger.info("Raw image generated and pushed downstream successfully.")
 
         except Exception as e:
-            Gst.error(f"Error pushing image to pipeline: {e}")
+            self.logger.error(f"Error pushing image to pipeline: {e}")
 
 
 if CAN_REGISTER_ELEMENT:
@@ -158,6 +160,6 @@ if CAN_REGISTER_ELEMENT:
         StableDiffusion,
     )
 else:
-    Gst.warning(
+    self.logger.warning(
         "The 'pyml_stablediffusion' element will not be registered because required modules are missing."
     )

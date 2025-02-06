@@ -32,7 +32,9 @@ try:
     from faster_whisper import WhisperModel
 except ImportError as e:
     CAN_REGISTER_ELEMENT = False
-    Gst.warning(f"The 'pyml_whisperlive' element will not be available. Error: {e}")
+    self.logger.warning(
+        f"The 'pyml_whisperlive' element will not be available. Error: {e}"
+    )
 
 TTS_SAMPLE_RATE = 24000
 model_ref = "collabora/whisperspeech:s2a-q4-base-en+pl.model"
@@ -96,7 +98,7 @@ class WhisperLive(GstTranscribe):
     def do_load_model(self):
         """Initialize or update the Whisper model when the device changes."""
         compute_type = "float16" if self.device.startswith("cuda") else "int8"
-        Gst.info(
+        self.logger.info(
             f"Loading Whisper model on device: {self.device} with compute_type: {compute_type}"
         )
         self.set_model(
@@ -105,30 +107,32 @@ class WhisperLive(GstTranscribe):
         self.old_device = self.device
 
         # load WhisperSpeech TTS model
-        Gst.info(f"Initializing WhisperSpeech TTS model on device: {self.device}")
+        self.logger.info(
+            f"Initializing WhisperSpeech TTS model on device: {self.device}"
+        )
         try:
             self.pipeline = Pipeline(
                 s2a_ref=model_ref, device=self.device, torch_compile=True
             )
             if self.pipeline is not None:
-                Gst.info(
+                self.logger.info(
                     f"WhisperSpeech pipeline initialized successfully: {self.get_model()}"
                 )
             else:
-                Gst.error("Failed to create WhisperSpeech pipeline")
+                self.logger.error("Failed to create WhisperSpeech pipeline")
         except Exception as e:
-            Gst.error(f"Exception during model initialization: {e}")
+            self.logger.error(f"Exception during model initialization: {e}")
 
         # load LLM
         """
         Load the tokenizer and model using the specified model path or a default model.
         """
         if not self.llm_model_name:
-            Gst.error("LLM model name is not set. Cannot load model.")
+            self.logger.error("LLM model name is not set. Cannot load model.")
             return
 
         try:
-            Gst.info(f"Loading model and tokenizer for: {self.llm_model_name}")
+            self.logger.info(f"Loading model and tokenizer for: {self.llm_model_name}")
             self.llm_tokenizer = AutoTokenizer.from_pretrained(self.llm_model_name)
             self.llm_model = AutoModelForCausalLM.from_pretrained(
                 self.llm_model_name,
@@ -136,9 +140,9 @@ class WhisperLive(GstTranscribe):
                 device_map="auto",
             )
             self.llm_model.eval()
-            Gst.info(f"Model {self.llm_model_name} loaded successfully.")
+            self.logger.info(f"Model {self.llm_model_name} loaded successfully.")
         except Exception as e:
-            Gst.error(f"Error loading model: {e}")
+            self.logger.error(f"Error loading model: {e}")
             self.llm_tokenizer = None
             self.llm_model = None
 
@@ -157,7 +161,7 @@ class WhisperLive(GstTranscribe):
 
         # Ensure LLM model and tokenizer are initialized
         if not self.llm_tokenizer or not self.llm_model:
-            Gst.error("Tokenizer or model not initialized.")
+            self.logger.error("Tokenizer or model not initialized.")
             return None
 
         # Tokenize input text for the LLM
@@ -174,21 +178,23 @@ class WhisperLive(GstTranscribe):
             outputs[0], skip_special_tokens=False
         )  # Keep special tokens for detection
 
-        Gst.info(f"Generated text using LLM: {generated_text}")
+        self.logger.info(f"Generated text using LLM: {generated_text}")
 
         # Check for the End-of-Text (EOT) token
         eot_token = (
             self.llm_tokenizer.eos_token
         )  # Typically <|endoftext|> for GPT models
         if eot_token in generated_text:
-            Gst.info(f"EOT detected: {eot_token}")
+            self.logger.info(f"EOT detected: {eot_token}")
             # Trim the text before the EOT token
             generated_text = generated_text.split(eot_token)[0].strip()
-            Gst.info(f"Trimmed text after EOT detection: {generated_text}")
+            self.logger.info(f"Trimmed text after EOT detection: {generated_text}")
 
         # If there is no text left after trimming, return None
         if not generated_text:
-            Gst.info("No valid text generated before EOT. Skipping further processing.")
+            self.logger.info(
+                "No valid text generated before EOT. Skipping further processing."
+            )
             return None
 
         # Pass the valid trimmed text to TTS and return the audio buffer
@@ -214,6 +220,6 @@ if CAN_REGISTER_ELEMENT:
     GObject.type_register(WhisperLive)
     __gstelementfactory__ = ("pyml_whisperlive", Gst.Rank.NONE, WhisperLive)
 else:
-    Gst.warning(
+    self.logger.warning(
         "The 'pyml_whisperlive' element will not be registered because required modules were missing."
     )

@@ -44,7 +44,7 @@ try:
     from log.logger_factory import LoggerFactory
 except ImportError as e:
     CAN_REGISTER_ELEMENT = False
-    Gst.warning(f"The 'pyml_overlay' element will not be available. Error: {e}")
+    self.logger.warning(f"The 'pyml_overlay' element will not be available. Error: {e}")
 
 VIDEO_FORMATS = "video/x-raw, format=(string){ RGBA, ARGB, BGRA, ABGR }"
 OVERLAY_CAPS = Gst.Caps.from_string(VIDEO_FORMATS)
@@ -126,9 +126,9 @@ class Overlay(GstBase.BaseTransform):
         if self.bus:
             self.bus.add_signal_watch()
             self.bus.connect("message", self.on_message)
-            Gst.info("Added signal watch to pipeline's bus.")
+            self.logger.info("Added signal watch to pipeline's bus.")
         else:
-            Gst.error("Could not get the bus from the pipeline.")
+            self.logger.error("Could not get the bus from the pipeline.")
         return True
 
     def do_set_caps(self, incaps, outcaps):
@@ -202,6 +202,6 @@ if CAN_REGISTER_ELEMENT:
     GObject.type_register(Overlay)
     __gstelementfactory__ = ("pyml_overlay", Gst.Rank.NONE, Overlay)
 else:
-    Gst.warning(
+    self.logger.warning(
         "The 'pyml_overlay' element will not be registered because a module is missing."
     )

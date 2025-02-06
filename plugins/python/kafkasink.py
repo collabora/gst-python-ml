@@ -31,7 +31,9 @@ try:
     from confluent_kafka import Producer
 except ImportError as e:
     CAN_REGISTER_ELEMENT = False
-    Gst.warning(f"The 'pyml_kafkasink' element will not be available. Error {e}")
+    self.logger.warning(
+        f"The 'pyml_kafkasink' element will not be available. Error {e}"
+    )
 
 
 class KafkaSink(Gst.Element):
@@ -127,37 +129,37 @@ class KafkaSink(Gst.Element):
     def do_set_property(self, prop: GObject.GParamSpec, value):
         if prop.name == "broker":
             self.broker = value
-            Gst.info(f"Setting Kafka broker to: {self.broker}")
+            self.logger.info(f"Setting Kafka broker to: {self.broker}")
             self.initialize_producer()
         elif prop.name == "topic":
             self.topic = value
-            Gst.info(f"Setting Kafka topic to: {self.topic}")
+            self.logger.info(f"Setting Kafka topic to: {self.topic}")
             self.initialize_producer()
         elif prop.name == "schema-file":
             self.schema_file_path = value
             self.load_schema_from_file(value)
         elif prop.name == "source-id":
             self.source_id = value
-            Gst.info(f"Setting source ID to: {self.source_id}")
+            self.logger.info(f"Setting source ID to: {self.source_id}")
         elif prop.name == "linger-ms":
             self.linger_ms = value if value is not None else 0
-            Gst.info(f"Setting Kafka producer linger-ms to: {self.linger_ms}")
+            self.logger.info(f"Setting Kafka producer linger-ms to: {self.linger_ms}")
         elif prop.name == "batch-size":
             self.batch_size = value if value is not None else 10000
-            Gst.info(f"Setting Kafka producer batch size to: {self.batch_size}")
+            self.logger.info(f"Setting Kafka producer batch size to: {self.batch_size}")
         elif prop.name == "message-timeout-ms":
             self.message_timeout_ms = value if value is not None else 30000
-            Gst.info(
+            self.logger.info(
                 f"Setting Kafka producer message timeout to: {self.message_timeout_ms}"
             )
         elif prop.name == "compression-type":
             self.compression_type = value if value is not None else "none"
-            Gst.info(
+            self.logger.info(
                 f"Setting Kafka producer compression type to: {self.compression_type}"
             )
         elif prop.name == "acks":
             self.acks = value if value is not None else 1
-            Gst.info(f"Setting Kafka producer acks to: {self.acks}")
+            self.logger.info(f"Setting Kafka producer acks to: {self.acks}")
 
     def do_get_property(self, prop: GObject.GParamSpec):
         if prop.name == "broker":
@@ -193,11 +195,13 @@ class KafkaSink(Gst.Element):
                     "acks": str(self.acks),
                 }
                 self.producer = Producer(config)
-                Gst.info("Kafka producer initialized successfully.")
+                self.logger.info("Kafka producer initialized successfully.")
             except Exception as e:
-                Gst.error(f"Failed to initialize Kafka producer: {e}")
+                self.logger.error(f"Failed to initialize Kafka producer: {e}")
         else:
-            Gst.warning("Kafka broker or topic is not set, producer not initialized.")
+            self.logger.warning(
+                "Kafka broker or topic is not set, producer not initialized."
+            )
 
     def load_schema_from_file(self, file_path):
         """Load schema from a JSON file on disk."""
@@ -205,12 +209,14 @@ class KafkaSink(Gst.Element):
             try:
                 with open(file_path, "r") as f:
                     self.schema = json.load(f)
-                Gst.info(f"Loaded schema from {file_path}")
+                self.logger.info(f"Loaded schema from {file_path}")
             except (OSError, json.JSONDecodeError) as e:
-                Gst.error(f"Failed to load or parse schema file: {e}")
+                self.logger.error(f"Failed to load or parse schema file: {e}")
                 self.schema = None
         else:
-            Gst.error(f"Schema file {file_path} does not exist or is not a file.")
+            self.logger.error(
+                f"Schema file {file_path} does not exist or is not a file."
+            )
 
     def chain(self, pad, parent, buffer):
         metadata = self.extract_metadata(buffer)
@@ -219,7 +225,7 @@ class KafkaSink(Gst.Element):
             if formatted_metadata:
                 self.send_to_kafka(formatted_metadata)
         else:
-            Gst.warning("No metadata extracted from buffer to send to Kafka.")
+            self.logger.warning("No metadata extracted from buffer to send to Kafka.")
         return Gst.FlowReturn.OK
 
     def extract_metadata(self, buffer):
@@ -228,7 +234,7 @@ class KafkaSink(Gst.Element):
 
         meta = GstAnalytics.buffer_get_analytics_relation_meta(buffer)
         if not meta:
-            Gst.warning("No GstAnalytics metadata found on buffer.")
+            self.logger.warning("No GstAnalytics metadata found on buffer.")
             return metadata
 
         try:
@@ -257,17 +263,17 @@ class KafkaSink(Gst.Element):
                         }
                     )
                 else:
-                    Gst.warning(
+                    self.logger.warning(
                         "Presence flag in location is False. Skipping this entry."
                     )
 
         except Exception as e:
-            Gst.error(f"Error while extracting metadata: {e}")
+            self.logger.error(f"Error while extracting metadata: {e}")
 
         if not metadata:
-            Gst.warning("No metadata extracted from buffer.")
+            self.logger.warning("No metadata extracted from buffer.")
         else:
-            Gst.info(f"Extracted metadata: {metadata}")
+            self.logger.info(f"Extracted metadata: {metadata}")
 
         return metadata
 
@@ -295,11 +301,11 @@ class KafkaSink(Gst.Element):
         if self.producer is None:
             self.initialize_producer()
             if self.producer is None:
-                Gst.error("Kafka producer is not initialized.")
+                self.logger.error("Kafka producer is not initialized.")
                 return
 
         metadata_str = json.dumps(metadata)
-        Gst.info(f"Sending metadata to Kafka: {metadata_str}")
+        self.logger.info(f"Sending metadata to Kafka: {metadata_str}")
 
         try:
             self.producer.produce(
@@ -307,14 +313,14 @@ class KafkaSink(Gst.Element):
             )
             self.producer.flush()
         except Exception as e:
-            Gst.error(f"Failed to send message to Kafka: {e}")
+            self.logger.error(f"Failed to send message to Kafka: {e}")
 
     def delivery_report(self, err, msg):
         """Callback to handle delivery reports from Kafka."""
         if err is not None:
-            Gst.error(f"Message delivery failed: {err}")
+            self.logger.error(f"Message delivery failed: {err}")
         else:
-            Gst.info(f"Message delivered to {msg.topic()} [{msg.partition()}]")
+            self.logger.info(f"Message delivered to {msg.topic()} [{msg.partition()}]")
 
     def do_finalize(self):
         if self.producer:
@@ -325,6 +331,6 @@ if CAN_REGISTER_ELEMENT:
     GObject.type_register(KafkaSink)
     __gstelementfactory__ = (KafkaSink.GST_PLUGIN_NAME, Gst.Rank.NONE, KafkaSink)
 else:
-    Gst.warning(
+    self.logger.warning(
         "The 'pyml_kafkasink' element will not be registered because confluent_kafka module is missing."
     )

@@ -82,9 +82,11 @@ class GstTranslate(GstAggregator):
         try:
             self.tokenizer = MarianTokenizer.from_pretrained(model_name)
             self.set_model(MarianMTModel.from_pretrained(model_name))
-            Gst.info(f"Loaded translation model for {self.src} to {self.target}")
+            self.logger.info(
+                f"Loaded translation model for {self.src} to {self.target}"
+            )
         except Exception as e:
-            Gst.error(f"Error loading model: {e}")
+            self.logger.error(f"Error loading model: {e}")
 
     def do_translate_text(self, text):
         """
@@ -98,7 +100,7 @@ class GstTranslate(GstAggregator):
             translated = self.get_model().generate(**inputs)
             return self.tokenizer.decode(translated[0], skip_special_tokens=True)
         else:
-            Gst.error("Model or tokenizer is not available.")
+            self.logger.error("Model or tokenizer is not available.")
             return ""
 
     def do_process(self, buf):
@@ -109,7 +111,7 @@ class GstTranslate(GstAggregator):
         try:
             success, map_info = buf.map(Gst.MapFlags.READ)
             if not success:
-                Gst.error("Failed to map input buffer")
+                self.logger.error("Failed to map input buffer")
                 return Gst.FlowReturn.ERROR
 
             byte_data = bytes(map_info.data)
@@ -121,16 +123,16 @@ class GstTranslate(GstAggregator):
             try:
                 text_data = byte_data.decode("utf-8", errors="replace")
             except Exception as e:
-                Gst.error(f"Error decoding text data: {e}")
+                self.logger.error(f"Error decoding text data: {e}")
                 return Gst.FlowReturn.ERROR
 
-            Gst.info(f"Translating text: {text_data}")
+            self.logger.info(f"Translating text: {text_data}")
 
             # Translate the text using the MarianMT model
             translated_text = self.do_translate_text(text_data)
 
             if translated_text:
-                Gst.info(f"Translated text: {translated_text}")
+                self.logger.info(f"Translated text: {translated_text}")
                 # Convert the translated text to a GstBuffer and push it downstream
                 outbuf = self.convert_text_to_buf(translated_text, buf)
                 self.finish_buffer(outbuf)
@@ -138,7 +140,7 @@ class GstTranslate(GstAggregator):
             return Gst.FlowReturn.OK
 
         except Exception as e:
-            Gst.error(f"Error processing text buffer: {e}")
+            self.logger.error(f"Error processing text buffer: {e}")
             return Gst.FlowReturn.ERROR
 
     def convert_text_to_buf(self, translated_text, inbuf):
@@ -160,5 +162,5 @@ class GstTranslate(GstAggregator):
 
             return outbuf
         except Exception as e:
-            Gst.error(f"Error converting text to buffer: {e}")
+            self.logger.error(f"Error converting text to buffer: {e}")
             return None

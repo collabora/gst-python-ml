@@ -58,22 +58,22 @@ class GstLLM(GstAggregator):
             # Map buffer to read input text
             success, map_info = buf.map(Gst.MapFlags.READ)
             if not success:
-                Gst.error("Failed to map buffer")
+                self.logger.error("Failed to map buffer")
                 return Gst.FlowReturn.ERROR
 
             # Convert memoryview to bytes and decode to string
             input_text = bytes(map_info.data).decode("utf-8")
-            Gst.info(f"Received text for LLM processing: {input_text}")
+            self.logger.info(f"Received text for LLM processing: {input_text}")
 
             # Check if model and tokenizer are initialized
             if not self.get_tokenizer() or not self.get_model():
-                Gst.error("Tokenizer or model not initialized.")
+                self.logger.error("Tokenizer or model not initialized.")
                 buf.unmap(map_info)
                 return Gst.FlowReturn.ERROR
 
             # Decode the output to text
             generated_text = self.engine.generate(input_text)
-            Gst.info(f"Generated text: {generated_text}")
+            self.logger.info(f"Generated text: {generated_text}")
 
             buf.unmap(map_info)
 
@@ -83,7 +83,7 @@ class GstLLM(GstAggregator):
             return Gst.FlowReturn.OK
 
         except Exception as e:
-            Gst.error(f"Error in LLM processing: {e}")
+            self.logger.error(f"Error in LLM processing: {e}")
             return Gst.FlowReturn.ERROR
 
     def push_generated_text(self, generated_text):
@@ -95,7 +95,7 @@ class GstLLM(GstAggregator):
             outbuf = Gst.Buffer.new_allocate(None, len(generated_bytes), None)
             success, map_info_out = outbuf.map(Gst.MapFlags.WRITE)
             if not success:
-                Gst.error("Failed to map output buffer for writing")
+                self.logger.error("Failed to map output buffer for writing")
                 return Gst.FlowReturn.ERROR
 
             map_info_out.data[: len(generated_bytes)] = generated_bytes
@@ -103,7 +103,7 @@ class GstLLM(GstAggregator):
 
             # Push the buffer downstream
             self.srcpad.push(outbuf)
-            Gst.info("Pushed generated text downstream")
+            self.logger.info("Pushed generated text downstream")
 
         except Exception as e:
-            Gst.error(f"Error pushing generated text: {e}")
+            self.logger.error(f"Error pushing generated text: {e}")

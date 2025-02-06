@@ -41,7 +41,9 @@ try:
     )  # noqa: E402
 except ImportError as e:
     CAN_REGISTER_ELEMENT = False
-    Gst.warning(f"The 'pyml_overlay_skia' element will not be available. Error: {e}")
+    self.logger.warning(
+        f"The 'pyml_overlay_skia' element will not be available. Error: {e}"
+    )
 
 VIDEO_FORMATS = "video/x-raw, format=(string){ RGBA, ARGB, BGRA, ABGR }"
 OVERLAY_CAPS = Gst.Caps.from_string(VIDEO_FORMATS)
@@ -128,7 +130,7 @@ class OverlaySkia(GstBase.BaseTransform):
     def do_start(self):
         # Setup trail surface for fading circles
         self.trail_surface = skia.Surface(self.width, self.height)
-        Gst.info("Skia trail surface initialized.")
+        self.logger.info("Skia trail surface initialized.")
         return True
 
     def do_stop(self):
@@ -136,14 +138,14 @@ class OverlaySkia(GstBase.BaseTransform):
         if self.trail_surface:
             del self.trail_surface
             self.trail_surface = None
-        Gst.info("OverlaySkia stopped, resources cleaned.")
+        self.logger.info("OverlaySkia stopped, resources cleaned.")
         return True
 
     def do_set_caps(self, incaps, outcaps):
         video_info = GstVideo.VideoInfo.new_from_caps(incaps)
         self.width = video_info.width
         self.height = video_info.height
-        Gst.info(f"Video caps set: width={self.width}, height={self.height}")
+        self.logger.info(f"Video caps set: width={self.width}, height={self.height}")
         return True
 
     def get_color_for_id(self, track_id):
@@ -196,7 +198,7 @@ class OverlaySkia(GstBase.BaseTransform):
                         }
                     )
         except Exception as e:
-            Gst.error(f"Error while extracting metadata: {e}")
+            self.logger.error(f"Error while extracting metadata: {e}")
         return metadata
 
     def create_overlay_surface(self, map_info, width, height):
@@ -218,13 +220,13 @@ class OverlaySkia(GstBase.BaseTransform):
 
         # Skip processing if no metadata exists for the current frame
         if not metadata:
-            Gst.warning(f"No metadata found for frame {self.frame_counter}.")
+            self.logger.warning(f"No metadata found for frame {self.frame_counter}.")
             self.frame_counter += 1
             return Gst.FlowReturn.OK
 
         video_meta = GstVideo.buffer_get_video_meta(buf)
         if not video_meta:
-            Gst.error("No video meta available, cannot proceed with overlay")
+            self.logger.error("No video meta available, cannot proceed with overlay")
             return Gst.FlowReturn.ERROR
 
         success, map_info = buf.map(Gst.MapFlags.WRITE)
@@ -346,6 +348,6 @@ if CAN_REGISTER_ELEMENT:
     GObject.type_register(OverlaySkia)
     __gstelementfactory__ = ("pyml_overlay_skia", Gst.Rank.NONE, OverlaySkia)
 else:
-    Gst.warning(
+    self.logger.warning(
         "The 'pyml_overlay_skia' element will not be registered because a required module is missing."
     )

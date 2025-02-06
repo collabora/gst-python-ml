@@ -28,7 +28,7 @@ try:
     from faster_whisper import WhisperModel
 except ImportError as e:
     CAN_REGISTER_ELEMENT = False
-    Gst.warning(
+    self.logger.warning(
         f"The 'pyml_whispertranscribe' element will not be available. Error: {e}"
     )
 
@@ -47,7 +47,7 @@ class WhisperTranscribe(GstTranscribe):
 
     def do_load_model(self):
         compute_type = "float16" if self.device.startswith("cuda") else "int8"
-        Gst.info(
+        self.logger.info(
             f"Loading Whisper model on device: {self.device} with compute_type: {compute_type}"
         )
         # Set the model and ensure it is not None
@@ -55,9 +55,9 @@ class WhisperTranscribe(GstTranscribe):
             WhisperModel(self.model_name, device=self.device, compute_type=compute_type)
         )
         if self.get_model() is None:
-            Gst.error("Failed to load Whisper model.")
+            self.logger.error("Failed to load Whisper model.")
         else:
-            Gst.info(f"Whisper model loaded successfully on {self.device}")
+            self.logger.info(f"Whisper model loaded successfully on {self.device}")
         self.old_device = self.device
 
     def do_transcribe(self, audio_data, task):
@@ -74,6 +74,6 @@ if CAN_REGISTER_ELEMENT:
     GObject.type_register(WhisperTranscribe)
     __gstelementfactory__ = ("pyml_whispertranscribe", Gst.Rank.NONE, WhisperTranscribe)
 else:
-    Gst.warning(
+    self.logger.warning(
         "The 'pyml_whispertranscribe' element will not be registered because gst_transcribe module is missing."
     )

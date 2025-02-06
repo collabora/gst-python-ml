@@ -27,7 +27,9 @@ try:
     from gst_object_detector import GstObjectDetector
 except ImportError as e:
     CAN_REGISTER_ELEMENT = False
-    Gst.warning(f"The 'objectdetector_pylm' element will not be available. Error: {e}")
+    self.logger.warning(
+        f"The 'objectdetector_pylm' element will not be available. Error: {e}"
+    )
 
 
 class ObjectDetector(GstObjectDetector):
@@ -44,7 +46,7 @@ class ObjectDetector(GstObjectDetector):
 
     def __init__(self):
         super().__init__()
-        Gst.info(
+        self.logger.info(
             "ObjectDetector created without a model. Please set the 'model-name' property."
         )
 
@@ -53,6 +55,6 @@ if CAN_REGISTER_ELEMENT:
     GObject.type_register(ObjectDetector)
     __gstelementfactory__ = ("pyml_objectdetector", Gst.Rank.NONE, ObjectDetector)
 else:
-    Gst.warning(
+    self.logger.warning(
         "The 'pyml_objectdetector' element will not be registered because gst_object_detector module is missing."
     )

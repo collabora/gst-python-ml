@@ -32,21 +32,23 @@ class GstTensorFlowEngine(GstMLEngine):
         try:
             # Load the TensorFlow model
             self.model = tf.saved_model.load(model_name)
-            Gst.info(f"TensorFlow model '{model_name}' loaded successfully.")
+            self.logger.info(f"TensorFlow model '{model_name}' loaded successfully.")
         except Exception as e:
-            Gst.error(f"Failed to load TensorFlow model '{model_name}'. Error: {e}")
+            self.logger.error(
+                f"Failed to load TensorFlow model '{model_name}'. Error: {e}"
+            )
 
     def set_device(self, device):
         """Set the device for TensorFlow."""
         self.device = device
-        Gst.info(f"TensorFlow device set to {device}")
+        self.logger.info(f"TensorFlow device set to {device}")
 
     def forward(self, frame):
         """
         Perform inference using the TensorFlow model.
         """
         if self.model is None:
-            Gst.error("No TensorFlow model loaded.")
+            self.logger.error("No TensorFlow model loaded.")
             return None
 
         # Preprocess the frame (resize, normalize, etc.)
@@ -68,5 +70,5 @@ class GstTensorFlowEngine(GstMLEngine):
 
             return results
         except Exception as e:
-            Gst.error(f"Error during TensorFlow inference: {e}")
+            self.logger.error(f"Error during TensorFlow inference: {e}")
             return None

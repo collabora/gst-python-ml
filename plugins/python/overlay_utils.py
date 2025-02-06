@@ -290,11 +290,11 @@ def load_metadata(meta_path):
         dict: Metadata indexed by frame index.
     """
     if not meta_path:
-        Gst.error("Frame metadata file path not set.")
+        self.logger.error("Frame metadata file path not set.")
         return {}
 
     if not os.path.exists(meta_path):
-        Gst.error(f"JSON file not found: {meta_path}")
+        self.logger.error(f"JSON file not found: {meta_path}")
         return {}
 
     try:
@@ -306,11 +306,11 @@ def load_metadata(meta_path):
                 frame.get("frame_index"): frame.get("objects", [])
                 for frame in frame_data
             }
-            Gst.info(f"Loaded metadata for {len(metadata)} frames.")
+            self.logger.info(f"Loaded metadata for {len(metadata)} frames.")
             return metadata
     except json.JSONDecodeError as e:
-        Gst.error(f"Failed to parse JSON file: {e}")
+        self.logger.error(f"Failed to parse JSON file: {e}")
         return {}
     except Exception as e:
-        Gst.error(f"Unexpected error while loading metadata: {e}")
+        self.logger.error(f"Unexpected error while loading metadata: {e}")
         return {}

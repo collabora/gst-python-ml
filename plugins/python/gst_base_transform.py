@@ -208,7 +208,7 @@ class GstBaseTransform(GstBase.BaseTransform):
                 self.engine.device_queue_id = self.device_queue_id
             self.do_load_model()
         else:
-            Gst.error(f"Unsupported ML engine: {self.ml_engine}")
+            self.logger.error(f"Unsupported ML engine: {self.ml_engine}")
             return
 
     def do_load_model(self):
@@ -216,7 +216,7 @@ class GstBaseTransform(GstBase.BaseTransform):
         if self.engine and self.model_name:
             self.engine.load_model(self.model_name, **self.kwargs)
         else:
-            Gst.warning("Engine is not present, unable to load the model.")
+            self.logger.warning("Engine is not present, unable to load the model.")
 
     def get_model(self):
         """Gets the model from the engine."""
@@ -230,6 +230,6 @@ class GstBaseTransform(GstBase.BaseTransform):
         """Sets the model in the engine."""
         if self.engine:
             self.engine.set_model(model)  # Set the model in the engine
-            Gst.info("Model set successfully in the engine.")
+            self.logger.info("Model set successfully in the engine.")
         else:
             Gst.Error("Engine is not initialized.")

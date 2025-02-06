@@ -29,7 +29,7 @@ try:
     from gst_object_detector import GstObjectDetector
 except ImportError as e:
     CAN_REGISTER_ELEMENT = False
-    Gst.warning(f"The 'yolo' element will not be available. Error {e}")
+    self.logger.warning(f"The 'yolo' element will not be available. Error {e}")
 
 COCO_CLASSES = {
     0: "person",
@@ -169,10 +169,10 @@ class YOLOTransform(GstObjectDetector):
                             track_id, Gst.util_get_timestamp()
                         )
                         if not ret:
-                            Gst.error("Failed to add tracking metadata")
+                            self.logger.error("Failed to add tracking metadata")
 
                         track_id_int = int(track_id.item())
-                        # Gst.info(f"Track ID {track_id_int} found for object {i}")
+                        # self.logger.info(f"Track ID {track_id_int} found for object {i}")
                         qk_string = f"id_{track_id_int}"
 
                 qk = GLib.quark_from_string(qk_string)
@@ -206,7 +206,7 @@ class YOLOTransform(GstObjectDetector):
         # Log buffer state after metadata attachment
         attached_meta = GstAnalytics.buffer_get_analytics_relation_meta(buf)
         if not attached_meta:
-            Gst.warning(
+            self.logger.warning(
                 f"Failed to retrieve attached metadata immediately after addition for buffer: {hex(id(buf))}"
             )
 
@@ -222,6 +222,6 @@ if CAN_REGISTER_ELEMENT:
     GObject.type_register(YOLOTransform)
     __gstelementfactory__ = ("pyml_yolo", Gst.Rank.NONE, YOLOTransform)
 else:
-    Gst.warning(
+    self.logger.warning(
         "The 'pyml_yolo' element will not be registered because required modules are missing."
     )

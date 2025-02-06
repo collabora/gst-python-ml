@@ -32,7 +32,7 @@ try:
     from gst_video_transform import GstVideoTransform
 except ImportError as e:
     CAN_REGISTER_ELEMENT = False
-    Gst.warning(f"The 'pyml_caption' element will not be available. Error {e}")
+    self.logger.warning(f"The 'pyml_caption' element will not be available. Error {e}")
 
 
 class Caption(GstVideoTransform):
@@ -97,18 +97,20 @@ class Caption(GstVideoTransform):
         """
         Attempts to find and link the `text_src` pad to a downstream `text_sink` pad.
         """
-        Gst.info("Attempting to link text_src pad to downstream text_sink pad")
+        self.logger.info("Attempting to link text_src pad to downstream text_sink pad")
         src_peer = self.get_static_pad("src").get_peer()
         if src_peer:
             downstream_element = src_peer.get_parent()
             text_sink_pad = downstream_element.get_static_pad("text_sink")
             if text_sink_pad:
                 self.text_src_pad.link(text_sink_pad)
-                Gst.info("Successfully linked text_src to downstream text_sink")
+                self.logger.info("Successfully linked text_src to downstream text_sink")
             else:
-                Gst.warning("No text_sink pad found downstream to link with text_src")
+                self.logger.warning(
+                    "No text_sink pad found downstream to link with text_src"
+                )
         else:
-            Gst.warning("No downstream peer found to link text_src")
+            self.logger.warning("No downstream peer found to link text_src")
 
     def push_text_buffer(self, text, buf_pts, buf_duration):
         """
@@ -130,7 +132,7 @@ class Caption(GstVideoTransform):
         # Push the buffer
         ret = self.text_src_pad.push(text_buffer)
         if ret != Gst.FlowReturn.OK:
-            Gst.error(f"Failed to push text buffer: {ret}")
+            self.logger.error(f"Failed to push text buffer: {ret}")
 
     def do_transform_ip(self, buf):
         """
@@ -176,7 +178,7 @@ class Caption(GstVideoTransform):
 
                 # Replace the original frame's content with the resized one
                 frame = resized_frame
-                Gst.info(
+                self.logger.info(
                     f"resized to dimensions {self.downsampled_width}, {self.downsampled_height}"
                 )
 
@@ -189,27 +191,29 @@ class Caption(GstVideoTransform):
                         qk = GLib.quark_from_string(f"{result}")
                         ret, mtd = meta.add_one_cls_mtd(0, qk)
                         if ret:
-                            Gst.info(f"Successfully added caption {result}")
+                            self.logger.info(f"Successfully added caption {result}")
                         else:
-                            Gst.error("Failed to add classification metadata")
+                            self.logger.error("Failed to add classification metadata")
                     else:
-                        Gst.error("Failed to add GstAnalytics metadata to buffer")
+                        self.logger.error(
+                            "Failed to add GstAnalytics metadata to buffer"
+                        )
 
             # Send text data through the `text_src` pad if it is linked
             if self.text_src_pad and self.text_src_pad.is_linked():
                 self.push_text_buffer(self.caption, buf.pts, buf.duration)
             else:
-                Gst.warning(
+                self.logger.warning(
                     "TextExtract: text_src pad is not linked, cannot push text buffer."
                 )
 
             return Gst.FlowReturn.OK
 
         except Gst.MapError as e:
-            Gst.error(f"Mapping error: {e}")
+            self.logger.error(f"Mapping error: {e}")
             return Gst.FlowReturn.ERROR
         except Exception as e:
-            Gst.error(f"Error during transformation: {e}")
+            self.logger.error(f"Error during transformation: {e}")
             return Gst.FlowReturn.ERROR
 
 
@@ -217,6 +221,6 @@ if CAN_REGISTER_ELEMENT:
     GObject.type_register(Caption)
     __gstelementfactory__ = ("pyml_caption", Gst.Rank.NONE, Caption)
 else:
-    Gst.warning(
+    self.logger.warning(
         "The 'pyml_caption' element will not be registered because required modules are missing."
     )

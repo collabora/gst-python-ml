@@ -56,7 +56,9 @@ class GstPyTorchEngine(GstMLEngine):
                 self.processor = AutoProcessor.from_pretrained(
                     "microsoft/Phi-3-vision-128k-instruct", trust_remote_code=True
                 )
-                Gst.info("Phi-3-vision model and processor loaded successfully.")
+                self.logger.info(
+                    "Phi-3-vision model and processor loaded successfully."
+                )
                 self.vision_language_model = True
                 self.model.eval()  # Set model to evaluation mode
 
@@ -64,13 +66,13 @@ class GstPyTorchEngine(GstMLEngine):
             elif os.path.isfile(model_name):
                 # Load the model from the local path
                 self.model = torch.load(model_name)
-                Gst.info(f"Model loaded from local path: {model_name}")
+                self.logger.info(f"Model loaded from local path: {model_name}")
 
             else:
                 # Check for TorchVision models
                 if hasattr(models, model_name):
                     self.model = getattr(models, model_name)(pretrained=True)
-                    Gst.info(
+                    self.logger.info(
                         f"Pre-trained vision model '{model_name}' loaded from TorchVision"
                     )
 
@@ -79,7 +81,7 @@ class GstPyTorchEngine(GstMLEngine):
                     self.model = getattr(models.detection, model_name)(
                         weights="DEFAULT"
                     )
-                    Gst.info(
+                    self.logger.info(
                         f"Pre-trained detection model '{model_name}' loaded from TorchVision.detection"
                     )
 
@@ -89,18 +91,22 @@ class GstPyTorchEngine(GstMLEngine):
                     self.image_processor = AutoImageProcessor.from_pretrained(
                         processor_name
                     )
-                    Gst.info(f"Image processor '{processor_name}' loaded successfully.")
+                    self.logger.info(
+                        f"Image processor '{processor_name}' loaded successfully."
+                    )
 
                     # Load the tokenizer (for text outputs)
                     self.tokenizer = AutoTokenizer.from_pretrained(tokenizer_name)
-                    Gst.info(f"Tokenizer '{tokenizer_name}' loaded successfully.")
+                    self.logger.info(
+                        f"Tokenizer '{tokenizer_name}' loaded successfully."
+                    )
 
                     # Load the vision-text model using VisionEncoderDecoderModel
                     self.set_model(
                         VisionEncoderDecoderModel.from_pretrained(model_name)
                     )
                     self.frame_stride = self.model.config.encoder.num_frames
-                    Gst.info(
+                    self.logger.info(
                         f"Vision-Text model '{model_name}' loaded with processor and tokenizer."
                     )
 
@@ -121,16 +127,16 @@ class GstPyTorchEngine(GstMLEngine):
                         )
                     )
                     self.get_model().eval()
-                    Gst.info(
+                    self.logger.info(
                         f"Pre-trained LLM model '{model_name}' loaded from Transformers."
                     )
 
             # Move the model to the specified device with the specified CUDA stream
             self.execute_with_stream(lambda: self.model.to(self.device))
-            Gst.info(f"Model moved to {self.device}")
+            self.logger.info(f"Model moved to {self.device}")
 
         except Exception as e:
-            Gst.error(f"Error loading model '{model_name}': {e}")
+            self.logger.error(f"Error loading model '{model_name}': {e}")
 
     def set_device(self, device):
         """
@@ -142,7 +148,7 @@ class GstPyTorchEngine(GstMLEngine):
             # Check if the model is already on a valid device and avoid unnecessary transfers
             if "cuda" in device:
                 if not torch.cuda.is_available():
-                    Gst.error("CUDA is not available. Falling back to CPU.")
+                    self.logger.error("CUDA is not available. Falling back to CPU.")
                     self.device = "cpu"
                     self.model = self.model.cpu()
                     return
@@ -153,22 +159,24 @@ class GstPyTorchEngine(GstMLEngine):
                     # Set the specific CUDA device
                     torch.cuda.set_device(int(self.device_index))
                     self.execute_with_stream(lambda: self.model.to(self.device))
-                    Gst.info(f"Model moved to device {device}")
+                    self.logger.info(f"Model moved to device {device}")
                 except Exception as e:
-                    Gst.error(f"Failed to set device to {device}: {e}")
+                    self.logger.error(f"Failed to set device to {device}: {e}")
                     self.model = self.model.cpu()  # Fallback to CPU if failed
             elif device == "cpu":
                 try:
                     # Only move the model if it's not a meta tensor
                     if not any(p.is_meta for p in self.model.parameters()):
                         self.model = self.model.cpu()
-                        Gst.info(f"Model moved to device {device}")
+                        self.logger.info(f"Model moved to device {device}")
                     else:
-                        Gst.error("Model contains meta tensors, cannot move to CPU.")
+                        self.logger.error(
+                            "Model contains meta tensors, cannot move to CPU."
+                        )
                 except Exception as e:
-                    Gst.error(f"Error moving model to CPU: {e}")
+                    self.logger.error(f"Error moving model to CPU: {e}")
             else:
-                Gst.error(f"Invalid device specified: {device}")
+                self.logger.error(f"Invalid device specified: {device}")
 
     def forward(self, frame):
         """Handle inference for different types of models and accumulate frames only for vision-text models."""
@@ -221,7 +229,7 @@ class GstPyTorchEngine(GstMLEngine):
                     clean_up_tokenization_spaces=False,
                 )[0]
 
-                Gst.info(f"Generated response: {response}")
+                self.logger.info(f"Generated response: {response}")
 
                 # Explicitly free memory for unnecessary tensors and clear cache
                 del inputs, generate_ids  # Only delete intermediate tensors
@@ -231,7 +239,9 @@ class GstPyTorchEngine(GstMLEngine):
                 return response
 
             except Exception as e:
-                Gst.error(f"Failed to process frame for Phi-3-vision. Error: {e}")
+                self.logger.error(
+                    f"Failed to process frame for Phi-3-vision. Error: {e}"
+                )
 
         elif self.image_processor and self.tokenizer:
             # Add every self.model.config.encoder.num_frames'th
@@ -242,7 +252,7 @@ class GstPyTorchEngine(GstMLEngine):
 
             # Check if we have accumulated enough frames
             if len(self.frame_buffer) >= self.batch_size:
-                Gst.info(f"Processing {self.batch_size} frames")
+                self.logger.info(f"Processing {self.batch_size} frames")
                 try:
                     # generate caption
                     gen_kwargs = {
@@ -258,12 +268,12 @@ class GstPyTorchEngine(GstMLEngine):
                         tokens, skip_special_tokens=True
                     )
                     for i, caption in enumerate(captions):
-                        Gst.info(f"{caption}")
+                        self.logger.info(f"{caption}")
 
                     return captions[0]
 
                 except Exception as e:
-                    Gst.info(f"Failed to process frames. Error: {e}")
+                    self.logger.info(f"Failed to process frames. Error: {e}")
                 finally:
                     # Clear the frame buffer after processing
                     self.frame_buffer = []
@@ -330,12 +340,12 @@ class GstPyTorchEngine(GstMLEngine):
                 generated_text = self.tokenizer.batch_decode(
                     generated_tokens, skip_special_tokens=True
                 )
-                Gst.info(f"Generated text: {generated_text}")
+                self.logger.info(f"Generated text: {generated_text}")
 
                 return generated_text
 
             except Exception as e:
-                Gst.error(f"Failed to process text input. Error: {e}")
+                self.logger.error(f"Failed to process text input. Error: {e}")
 
         else:
             raise ValueError("Unsupported model type or missing processor/tokenizer.")
@@ -349,7 +359,7 @@ class GstPyTorchEngine(GstMLEngine):
 
         # Decode the output to text
         generated_text = self.tokenizer.decode(outputs[0], skip_special_tokens=True)
-        Gst.info(f"Generated text: {generated_text}")
+        self.logger.info(f"Generated text: {generated_text}")
         return generated_text
 
     def execute_with_stream(self, func, *args, **kwargs):
