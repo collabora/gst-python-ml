@@ -19,6 +19,7 @@
 from abc import ABC, abstractmethod
 import logging
 
+
 class Logger(ABC):
     """Abstract interface for logging."""
 

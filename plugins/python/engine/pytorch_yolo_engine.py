@@ -20,6 +20,7 @@ import numpy as np
 from ultralytics import YOLO
 from .pytorch_engine import PyTorchEngine
 
+
 class PyTorchYoloEngine(PyTorchEngine):
     def load_model(self, model_name, **kwargs):
         """

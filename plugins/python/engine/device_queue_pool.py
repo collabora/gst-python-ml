@@ -18,6 +18,7 @@
 
 from abc import ABC, abstractmethod
 
+
 class DeviceQueue(ABC):
     def __init__(self, queue_handle):
         """

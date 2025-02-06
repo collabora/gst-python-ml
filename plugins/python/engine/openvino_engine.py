@@ -20,6 +20,7 @@ import numpy as np
 from openvino.runtime import Core
 from .ml_engine import MLEngine
 
+
 class OpenVinoEngine(MLEngine):
     def __init__(self, device="CPU"):
         self.device = device

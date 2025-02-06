@@ -196,7 +196,9 @@ class ObjectDetectorBase(VideoTransform):
         try:
             # Ensure the model is loaded
             if self.get_model() is None:
-                self.logger.debug("do_transform_ip: Model not loaded, calling do_load_model()")
+                self.logger.debug(
+                    "do_transform_ip: Model not loaded, calling do_load_model()"
+                )
                 self.do_load_model()
 
             # Set a valid timestamp if none is set

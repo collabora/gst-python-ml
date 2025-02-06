@@ -20,6 +20,7 @@ import numpy as np
 import onnxruntime as ort  # ONNX Runtime for executing ONNX models
 from .ml_engine import MLEngine
 
+
 class ONNXEngine(MLEngine):
     def __init__(self, device="cpu"):
         """

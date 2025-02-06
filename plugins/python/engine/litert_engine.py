@@ -20,6 +20,7 @@ import numpy as np
 import tensorflow as tf  # TensorFlow Lite interpreter
 from .ml_engine import MLEngine
 
+
 class LiteRTEngine(MLEngine):
     def __init__(self, device="cpu"):
         """
