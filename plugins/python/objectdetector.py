@@ -24,7 +24,7 @@ try:
     gi.require_version("GstBase", "1.0")
     gi.require_version("GLib", "2.0")
     from gi.repository import Gst, GObject  # noqa: E402
-    from gst_object_detector import GstObjectDetector
+    from object_detector_base import ObjectDetectorBase
 except ImportError as e:
     CAN_REGISTER_ELEMENT = False
     self.logger.warning(
@@ -32,7 +32,7 @@ except ImportError as e:
     )
 
 
-class ObjectDetector(GstObjectDetector):
+class ObjectDetector(ObjectDetectorBase):
     """
     GStreamer element for a general object detector where the user sets the model-name property.
     """
@@ -56,5 +56,5 @@ if CAN_REGISTER_ELEMENT:
     __gstelementfactory__ = ("pyml_objectdetector", Gst.Rank.NONE, ObjectDetector)
 else:
     self.logger.warning(
-        "The 'pyml_objectdetector' element will not be registered because gst_object_detector module is missing."
+        "The 'pyml_objectdetector' element will not be registered because object_detector_base module is missing."
     )

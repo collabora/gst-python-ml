@@ -25,7 +25,7 @@ try:
     from gi.repository import Gst, GObject, GstBase  # noqa: E402
     import numpy as np
     from whisperspeech.pipeline import Pipeline
-    from gst_tts import GstTTS
+    from tts_base import TtsBase
 except ImportError as e:
     CAN_REGISTER_ELEMENT = False
     self.logger.warning(
@@ -47,7 +47,7 @@ OCAPS = Gst.Caps(
 )
 
 
-class WhisperSpeechTTS(GstTTS):
+class WhisperSpeechTTS(TtsBase):
     __gstmetadata__ = (
         "WhisperSpeechTTS",
         "Aggregator",

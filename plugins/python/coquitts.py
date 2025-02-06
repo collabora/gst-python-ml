@@ -24,7 +24,7 @@ try:
     gi.require_version("Gst", "1.0")
     gi.require_version("GstBase", "1.0")
     from gi.repository import Gst, GObject, GstBase  # noqa: E402
-    from gst_tts import GstTTS
+    from tts_base import TtsBase
     from TTS.api import TTS
 except ImportError as e:
     CAN_REGISTER_ELEMENT = False
@@ -45,7 +45,7 @@ OCAPS = Gst.Caps(
 )
 
 
-class CoquiTTS(GstTTS):
+class CoquiTTS(TtsBase):
     __gstmetadata__ = (
         "CoquiTTS",
         "Aggregator",

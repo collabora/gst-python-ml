@@ -39,13 +39,13 @@ try:
     import cv2
 
     from birds_eye_module import BirdsEyeView
-    from gst_video_transform import GstVideoTransform
+    from video_transform import VideoTransform
 except ImportError as e:
     self.logger.warning(f"The 'BirdsEye' element cannot be registered because: {e}")
     CAN_REGISTER_ELEMENT = False
 
 
-class BirdsEye(GstVideoTransform):
+class BirdsEye(VideoTransform):
     """
     GStreamer element for transforming the entire video frame using BirdsEyeView.
     """

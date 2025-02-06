@@ -26,7 +26,7 @@ try:
     gi.require_version("GstAnalytics", "1.0")
     gi.require_version("GLib", "2.0")
     from gi.repository import Gst, GObject, GstAnalytics, GLib  # noqa: E402
-    from gst_object_detector import GstObjectDetector
+    from object_detector_base import ObjectDetectorBase
 except ImportError as e:
     CAN_REGISTER_ELEMENT = False
     self.logger.warning(f"The 'yolo' element will not be available. Error {e}")
@@ -115,7 +115,7 @@ COCO_CLASSES = {
 }
 
 
-class YOLOTransform(GstObjectDetector):
+class YOLOTransform(ObjectDetectorBase):
     """
     GStreamer element for YOLO model inference on video frames
     (detection, segmentation, and tracking).

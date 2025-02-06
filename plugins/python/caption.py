@@ -29,13 +29,13 @@ try:
     from gi.repository import Gst, GObject, GstAnalytics, GLib  # noqa: E402
     import numpy as np
     import cv2
-    from gst_video_transform import GstVideoTransform
+    from video_transform import VideoTransform
 except ImportError as e:
     CAN_REGISTER_ELEMENT = False
     self.logger.warning(f"The 'pyml_caption' element will not be available. Error {e}")
 
 
-class Caption(GstVideoTransform):
+class Caption(VideoTransform):
     """
     GStreamer element for captioning video frames.
     """
