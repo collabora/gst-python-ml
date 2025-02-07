@@ -16,26 +16,39 @@
 # Free Software Foundation, Inc., 51 Franklin Street, Fifth Floor,
 # Boston, MA 02110-1301, USA.
 
-
-from .logger import Logger
-
+import inspect
 import gi
 
 gi.require_version("Gst", "1.0")
 from gi.repository import Gst  # noqa: E402
+from .logger import Logger
 
 
 class GstLogger(Logger):
-    """Logger implementation using GStreamer."""
+    """Logger implementation using GStreamer with caller file and line number."""
+
+    def _log_with_caller(self, log_func, message, *args):
+        """
+        Logs a message with the correct caller file and line number.
+        """
+        frame = inspect.stack()[2]  # Get the caller (not this method)
+        filename = frame.filename.split("/")[-1]  # Get only filename
+        lineno = frame.lineno  # Get line number
+
+        # Format the message with caller info
+        log_message = f"{filename}:{lineno} - {message % args if args else message}"
+
+        # Call the correct GStreamer logging function
+        log_func(log_message)
 
     def error(self, message, *args):
-        Gst.error(message % args if args else message)
+        self._log_with_caller(Gst.error, message, *args)
 
     def warning(self, message, *args):
-        Gst.warning(message % args if args else message)
+        self._log_with_caller(Gst.warning, message, *args)
 
     def info(self, message, *args):
-        Gst.info(message % args if args else message)
+        self._log_with_caller(Gst.info, message, *args)
 
     def debug(self, message, *args):
-        Gst.debug(message % args if args else message)
+        self._log_with_caller(Gst.debug, message, *args)
