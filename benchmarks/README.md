@@ -23,6 +23,12 @@ $ docker run --gpus all -it --rm --network=host \
   nvcr.io/nvidia/deepstream:7.1-triton-multiarch
 ```
 
+Note: after customizing the container, it will run as
+
+```
+docker run --gpus all -it --rm --network=host deepstream-7.1-custom
+```
+
 4. list TensorRT engines
 
 `$ find /opt/nvidia/deepstream -name "*.engine"`
