@@ -239,6 +239,13 @@ Note: make sure to set the following in `.bashrc` file :
 
 `GST_DEBUG=4 gst-launch-1.0 filesrc location=data/soccer_single_camera.mp4 ! decodebin ! videorate ! video/x-raw,framerate=30/1 ! videoconvert ! pyml_birdseye ! videoconvert ! openh264enc ! h264parse ! matroskamux ! filesink location=output.mkv`
 
+### Classification
+
+```
+GST_DEBUG=4 gst-launch-1.0  filesrc location=data/people.mp4 ! decodebin ! videoconvert ! videoscale ! video/x-raw,width=640,height=480 ! pyml_classifier model-name=resnet18 device=cuda !  videoconvert !  autovideosink
+```
+
+
 ### Object Detection
 
 #### TorchVision

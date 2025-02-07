@@ -173,6 +173,28 @@ class PyTorchEngine(MLEngine):
             else:
                 self.logger.error(f"Invalid device specified: {device}")
 
+    def _forward_classification(self, frame):
+        """
+        Handles inference for classification models like ResNet.
+        Converts tensor output to a list for compatibility.
+        """
+        self.model.eval()
+
+        # Convert frame to PyTorch tensor
+        img_tensor = (
+            torch.from_numpy(np.array(frame, copy=True)).permute(2, 0, 1).float()
+        )
+        img_tensor /= 255.0  # Normalize
+
+        # Move to device
+        img_tensor = img_tensor.to(self.device).unsqueeze(0)  # Add batch dimension
+
+        # Run inference
+        with torch.inference_mode():
+            results = self.model(img_tensor)  # Expected: torch.Tensor
+
+        return results.squeeze().cpu().tolist()  # Convert tensor to list
+
     def forward(self, frame):
         """Handle inference for different types of models and accumulate frames only for vision-text models."""
         # Initialize frame buffer if it's not set and only for vision-text models
@@ -280,6 +302,61 @@ class PyTorchEngine(MLEngine):
             """
             # Set the model to evaluation mode to avoid training-related behavior
             self.model.eval()
+
+            # If model is a classification model (like ResNet), return top prediction
+            if "resnet" in self.model.__class__.__name__.lower():
+                preds = self._forward_classification(frame)  # Run classification
+
+                # ✅ Convert list to NumPy array if necessary
+                if isinstance(preds, list):
+                    preds = np.array(preds)
+
+                # ✅ Convert Torch tensor to NumPy if necessary
+                if isinstance(preds, torch.Tensor):
+                    preds = preds.cpu().numpy()
+
+                # ✅ Log predictions
+                # self.logger.info(f"Raw predictions shape: {preds.shape}, values: {preds}")
+
+                # Ensure the array has correct dimensions
+                if preds.ndim == 1:
+                    preds = np.expand_dims(
+                        preds, axis=0
+                    )  # Convert (num_classes,) → (1, num_classes)
+
+                # ✅ Validate predictions
+                if preds.shape[1] == 0:
+                    self.logger.error(
+                        "Classification model returned empty predictions!"
+                    )
+                    return None
+
+                # Compute softmax to get probabilities
+                probs = np.exp(preds) / np.sum(np.exp(preds), axis=1, keepdims=True)
+
+                # Get the highest probability class
+                top_class = np.argmax(probs, axis=1)[0]  # Convert to int
+                confidence = float(np.max(probs, axis=1)[0])  # Convert to float
+
+                # ✅ Log classification output
+                self.logger.info(
+                    f"Top class: {top_class}, Confidence score: {confidence:.4f}"
+                )
+
+                # ✅ Check for missing labels/scores
+                if top_class is None or confidence is None:
+                    self.logger.warning(
+                        "Engine: classification result missing label or score."
+                    )
+
+                return {
+                    "labels": np.array(
+                        [top_class]
+                    ),  # Ensure labels are in list/array format
+                    "scores": np.array(
+                        [confidence]
+                    ),  # Ensure scores are in list/array format
+                }
 
             # Make a writable copy of the frame to avoid non-writable tensor warnings
             writable_frame = np.array(frame, copy=True)
