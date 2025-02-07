@@ -2,7 +2,6 @@ from elements.yolo import YOLO
 from elements.deep_sort import DEEPSORT
 from elements.perspective_transform import Perspective_Transform
 from elements.assets import transform_matrix, detect_color
-from arguments import Arguments
 from yolov5.utils.plots import plot_one_box
 
 import torch

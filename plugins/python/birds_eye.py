@@ -38,7 +38,6 @@ try:
     from arguments import Arguments
     from gi.repository import Gst, GObject
     import numpy as np
-    import cv2
 
     from birds_eye_module import BirdsEyeView
     from video_transform import VideoTransform

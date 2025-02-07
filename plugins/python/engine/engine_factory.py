@@ -72,7 +72,6 @@ class EngineFactory:
     def create_engine(engine_type, device="cpu"):
         """
         Factory method to create the appropriate engine based on the engine type.
-
         :param engine_type: The type of the ML engine, e.g., "pytorch" or "tflite".
         :param device: The device to run the engine on (default is "cpu").
         :return: An instance of the appropriate ML engine class.

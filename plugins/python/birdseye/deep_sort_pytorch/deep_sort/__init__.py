@@ -1,3 +1,4 @@
+import os
 from .deep_sort import DeepSort
 
 
