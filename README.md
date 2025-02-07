@@ -241,15 +241,22 @@ Note: make sure to set the following in `.bashrc` file :
 
 ### Object Detection
 
-Possible model names:
-`fasterrcnn_resnet50_fpn`
-`retinanet_resnet50_fpn`
+#### TorchVision
 
-#### fasterrcnn
+`pyml_objectdetector` supports all TorchVision  object detection models.
+Simply choose a suitable model name and set it on the `model-name` property.
+A few possible model names:
+
+```
+fasterrcnn_resnet50_fpn
+ssdlite320_mobilenet_v3_large
+```
+
+##### fasterrcnn
 
 `GST_DEBUG=4 gst-launch-1.0  filesrc location=data/people.mp4 ! decodebin ! videoconvert ! videoscale ! video/x-raw,width=640,height=480 ! pyml_objectdetector model-name=fasterrcnn_resnet50_fpn device=cuda batch-size=4 ! videoconvert ! pyml_overlay ! videoconvert ! autovideosink`
 
-#### fasterrcnn/kafka
+##### fasterrcnn/kafka
 
 `GST_DEBUG=4 gst-launch-1.0  filesrc location=data/people.mp4 ! decodebin ! videoconvert ! videoscale ! video/x-raw,width=640,height=480 ! pyml_objectdetector model-name=fasterrcnn_resnet50_fpn device=cuda batch-size=4 ! pyml_kafkasink schema-file=data/pyml_object_detector.json broker=kafka:9092 topic=test-kafkasink-topic  2>&1 | grep pyml_kafkasink`
 
