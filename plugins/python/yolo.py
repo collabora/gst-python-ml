@@ -132,7 +132,7 @@ class YOLOTransform(ObjectDetectorBase):
 
     def __init__(self):
         super().__init__()
-        self.ml_engine = "pytorch-yolo"
+        self.engine_name = "pytorch-yolo"
 
     def do_decode(self, buf, result):
         """

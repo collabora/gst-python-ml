@@ -120,7 +120,7 @@ class TransformBase(GstBase.BaseTransform):
         flags=GObject.ParamFlags.READWRITE,
     )
 
-    ml_engine = GObject.Property(
+    engine_name = GObject.Property(
         type=str,
         default=None,
         nick="ML Engine",
@@ -141,7 +141,7 @@ class TransformBase(GstBase.BaseTransform):
     def __init__(self):
         super().__init__()
         self.logger = LoggerFactory.get(LoggerFactory.LOGGER_TYPE_GST)
-        self.ml_engine = EngineFactory.PYTORCH_ENGINE
+        self.engine_name = EngineFactory.PYTORCH_ENGINE
         self.engine = None
         self.kwargs = {}
 
@@ -156,8 +156,8 @@ class TransformBase(GstBase.BaseTransform):
             if self.engine:
                 return self.engine.get_device()
             return None
-        elif prop.name == "ml-engine":
-            return self.ml_engine
+        elif prop.name == "engine-name":
+            return self.engine_name
         elif prop.name == "device-queue-id":
             return self.device_queue_id
         else:
@@ -181,8 +181,8 @@ class TransformBase(GstBase.BaseTransform):
             if self.engine:
                 self.engine.set_device(value)
                 self.do_load_model()
-        elif prop.name == "ml-engine":
-            self.ml_engine = value
+        elif prop.name == "engine-name":
+            self.engine_name = value
             if self.device:
                 self.initialize_engine()
                 self.do_load_model()
@@ -195,20 +195,20 @@ class TransformBase(GstBase.BaseTransform):
 
     def _initialize_engine_if_needed(self):
         """Initialize the engine if it hasn't been initialized yet."""
-        if not self.engine and self.ml_engine:
+        if not self.engine and self.engine_name:
             self.initialize_engine()
 
     def initialize_engine(self):
-        """Initialize the machine learning engine based on the ml_engine property."""
-        if self.ml_engine is not None:
-            self.engine = EngineFactory.create_engine(self.ml_engine, self.device)
+        """Initialize the machine learning engine based on the engine_name property."""
+        if self.engine_name is not None:
+            self.engine = EngineFactory.create_engine(self.engine_name, self.device)
             self.engine.batch_size = self.batch_size
             self.engine.frame_stride = self.frame_stride
             if self.device_queue_id:
                 self.engine.device_queue_id = self.device_queue_id
             self.do_load_model()
         else:
-            self.logger.error(f"Unsupported ML engine: {self.ml_engine}")
+            self.logger.error(f"Unsupported ML engine: {self.engine_name}")
             return
 
     def do_load_model(self):

@@ -53,7 +53,7 @@ class ObjectDetectorBase(VideoTransform):
         if prop.name == "track":
             self.track = value
             if self.engine:
-                self.engine.track = value  # Set the track flag on the ml_engine
+                self.engine.track = value  # Set the track flag on the engine_name
         else:
             raise AttributeError(f"Unknown property {prop.name}")
 
@@ -61,7 +61,7 @@ class ObjectDetectorBase(VideoTransform):
         """Get the properties of the object."""
         if prop.name == "track":
             if self.engine:
-                return self.engine.track  # Get the track flag from the ml_engine
+                return self.engine.track  # Get the track flag from the engine_name
             return self.track
         else:
             raise AttributeError(f"Unknown property {prop.name}")
