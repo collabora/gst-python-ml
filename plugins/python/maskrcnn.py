@@ -30,7 +30,7 @@ try:
     from gi.repository import Gst, GObject, GstAnalytics, GLib  # noqa: E402
     import numpy as np
 
-    from object_detector_base import ObjectDetectorBase
+    from objectdetector_base import ObjectDetectorBase
 except ImportError as e:
     CAN_REGISTER_ELEMENT = False
     GlobalLogger().warning(

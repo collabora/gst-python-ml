@@ -28,7 +28,7 @@ try:
     gi.require_version("GstAnalytics", "1.0")
     gi.require_version("GLib", "2.0")
     from gi.repository import Gst, GObject, GstAnalytics, GLib  # noqa: E402
-    from object_detector_base import ObjectDetectorBase
+    from objectdetector_base import ObjectDetectorBase
 except ImportError as e:
     CAN_REGISTER_ELEMENT = False
     GlobalLogger().warning(f"The 'yolo' element will not be available. Error {e}")

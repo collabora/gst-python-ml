@@ -26,7 +26,7 @@ try:
     gi.require_version("GstBase", "1.0")
     gi.require_version("GLib", "2.0")
     from gi.repository import Gst, GObject  # noqa: E402
-    from object_detector_base import ObjectDetectorBase
+    from objectdetector_base import ObjectDetectorBase
 except ImportError as e:
     CAN_REGISTER_ELEMENT = False
     GlobalLogger().warning(
@@ -58,5 +58,5 @@ if CAN_REGISTER_ELEMENT:
     __gstelementfactory__ = ("pyml_objectdetector", Gst.Rank.NONE, ObjectDetector)
 else:
     GlobalLogger().warning(
-        "The 'pyml_objectdetector' element will not be registered because object_detector_base module is missing."
+        "The 'pyml_objectdetector' element will not be registered because objectdetector_base module is missing."
     )

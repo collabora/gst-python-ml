@@ -297,10 +297,6 @@ class ObjectDetectorBase(VideoTransform):
             if meta:
                 qk = GLib.quark_from_string(f"label_{label}")
                 ret, mtd = meta.add_od_mtd(qk, x1, y1, x2 - x1, y2 - y1, score)
-                # if ret:
-                #     self.logger.info(
-                #         f"Successfully added object detection metadata with quark {qk} and mtd {mtd}"
-                #     )
                 if not ret:
                     self.logger.error("Failed to add object detection metadata")
             else:
@@ -308,10 +304,6 @@ class ObjectDetectorBase(VideoTransform):
 
         # Log buffer state after metadata attachment
         attached_meta = GstAnalytics.buffer_get_analytics_relation_meta(buf)
-        # if attached_meta:
-        #     self.logger.info(
-        #         f"Metadata successfully attached to buffer at address: {hex(id(buf))}"
-        #     )
         if not attached_meta:
             self.logger.warning(
                 f"Failed to retrieve attached metadata immediately after addition for buffer: {hex(id(buf))}"
