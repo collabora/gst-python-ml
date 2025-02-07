@@ -231,31 +231,27 @@ class ObjectDetectorBase(VideoTransform):
                 # Perform inference
                 results = self.forward(frame)
 
-                # Verify results is a list
-                if results is None:
-                    self.logger.warning(
-                        "do_transform_ip: forward() returned None; defaulting to an empty list."
-                    )
-                    results = []
-                elif not isinstance(results, list):
+                # ✅ Fix: Handle object detection dict separately
+                if isinstance(results, dict):
+                    self.do_decode(buf, results)  # Directly process the dict
+                elif isinstance(results, list):
+                    for i, result in enumerate(results):
+                        if result is None:
+                            self.logger.warning(
+                                f"do_transform_ip: Result at index {i} is None, skipping."
+                            )
+                            continue
+                        try:
+                            self.do_decode(buf, result)
+                        except Exception as e:
+                            self.logger.error(
+                                f"do_transform_ip: Error in do_decode for result at index {i}: {e}"
+                            )
+                else:
                     self.logger.error(
-                        f"do_transform_ip: Expected list from forward, got {type(results)}."
+                        f"do_transform_ip: Expected dict or list from forward, got {type(results)}."
                     )
                     return Gst.FlowReturn.ERROR
-
-                # Process inference results
-                for i, result in enumerate(results):
-                    if result is None:
-                        self.logger.warning(
-                            f"do_transform_ip: Result at index {i} is None, skipping."
-                        )
-                        continue
-                    try:
-                        self.do_decode(buf, result)
-                    except Exception as e:
-                        self.logger.error(
-                            f"do_transform_ip: Error in do_decode for result at index {i}: {e}"
-                        )
 
             return Gst.FlowReturn.OK
 
