@@ -23,6 +23,8 @@ gi.require_version("GstBase", "1.0")
 gi.require_version("GObject", "2.0")
 from gi.repository import Gst, GObject, GstBase  # noqa: E402
 
+from log.logger_factory import LoggerFactory
+
 
 class StreamMux(GstBase.Aggregator):
     __gstmetadata__ = (
@@ -53,61 +55,79 @@ class StreamMux(GstBase.Aggregator):
         type=int,
         default=5000,
         nick="Timeout",
-        blurb="Timeout for batch aggregation (in miliseconds)",
+        blurb="Timeout for batch aggregation (in milliseconds)",
     )
 
     def __init__(self):
         super().__init__()
+        self.logger = LoggerFactory.get(LoggerFactory.LOGGER_TYPE_GST)
         self.batch_buffer = []
         self.timestamps = []
         self.timeout_source = None
+        self.batch_size = 1  # Default batch size, dynamically adjusted
         self.start_timeout()
 
     def start_timeout(self):
+        """Start timeout for batch processing if not already running."""
         if self.timeout_source:
-            self.timeout_source.destroy()
-
+            return  # Already running
         self.timeout_source = GObject.timeout_add(self.timeout, self.handle_timeout)
 
     def stop_timeout(self):
+        """Stop the timeout if it is running."""
         if self.timeout_source:
             GObject.source_remove(self.timeout_source)
             self.timeout_source = None
 
+    def do_request_new_pad(self, templ, name, caps):
+        """Handles requests for new sink pads."""
+        self.logger.info(f"Requesting new sink pad: {name}")
+        pad = Gst.Pad.new_from_template(templ, name)
+
+        if not pad:
+            self.logger.error(f"Failed to create pad {name}")
+            return None
+
+        self.add_pad(pad)
+        return pad
+
     def handle_timeout(self):
+        """Handle timeout event: process batch if not full yet."""
         if len(self.batch_buffer) > 0:
             self.output_batch()
         return True  # Keep the timeout active
 
     def do_aggregate(self, timeout):
-        """
-        Aggregates frames from all sink pads into a single batch.
-        """
-        # Dynamically set batch size based on the number of active sink pads
+        """Aggregates frames from all sink pads into a single batch."""
         self.batch_size = len(self.sinkpads)
 
-        # Clear the previous batch
         self.batch_buffer.clear()
         self.timestamps.clear()
 
-        # Collect frames from all sink pads
         self.foreach_sink_pad(self.collect_frame, None)
 
-        # If the batch is full, output it downstream
+        for pad in self.sinkpads:
+            buf = pad.peek_buffer()
+            if buf:
+                pad_index = list(self.sinkpads).index(pad)
+                structure = Gst.Structure.new_empty("selected-sample")
+                self.selected_samples(buf.pts, buf.dts, buf.duration, structure)
+
         if len(self.batch_buffer) == self.batch_size:
             self.output_batch()
 
         return Gst.FlowReturn.OK
 
     def collect_frame(self, agg, pad, data):
+        """Collect frames from all sink pads."""
         buf = pad.pop_buffer()
         if buf:
             self.batch_buffer.append(buf)
             self.timestamps.append(buf.pts)
-
         return True
 
     def output_batch(self):
+        """Creates and sends a batched buffer downstream."""
         if len(self.batch_buffer) == 0:
             return
 
@@ -119,11 +139,19 @@ class StreamMux(GstBase.Aggregator):
             memory = buf.peek_memory(0)
             batch_buffer.append_memory(memory)
 
-        # Set the PTS of the batched buffer to the minimum timestamp from the batch
+        # Set PTS using the **minimum timestamp** (syncing multiple sources)
         batch_buffer.pts = min(self.timestamps)
 
         # Send the batched buffer downstream
         self.finish_buffer(batch_buffer)
+
+    def do_sink_event(self, pad, event):
+        """Handles sink pad events, including latency queries."""
+        if event.type == Gst.EventType.LATENCY:
+            self.logger.info("Received LATENCY event, updating pipeline latency.")
+            self.aggregator_update_latency()
+            return True  # Mark event as handled
+        return GstBase.Aggregator.do_sink_event(self, pad, event)
 
     def do_set_property(self, prop, value):
         if prop.name == "timeout":

@@ -24,6 +24,8 @@ gi.require_version("GLib", "2.0")
 
 from gi.repository import Gst, GObject  # noqa: E402
 
+from log.logger_factory import LoggerFactory
+
 
 class StreamDemux(Gst.Element):
     __gstmetadata__ = (
@@ -50,6 +52,7 @@ class StreamDemux(Gst.Element):
 
     def __init__(self):
         super().__init__()
+        self.logger = LoggerFactory.get(LoggerFactory.LOGGER_TYPE_GST)
         self.sinkpad = Gst.Pad.new_from_template(self.get_pad_template("sink"), "sink")
         self.sinkpad.set_event_function_full(self.event)
         self.sinkpad.set_chain_function_full(self.chain)
