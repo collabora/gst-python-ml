@@ -26,6 +26,7 @@ from gi.repository import Gst, GObject, GstBase  # noqa: E402
 
 from engine.engine_factory import EngineFactory
 from log.logger_factory import LoggerFactory
+from model_engine_helper import ModelEngineHelper
 
 
 class AggregatorBase(GstBase.Aggregator):
@@ -86,9 +87,9 @@ class AggregatorBase(GstBase.Aggregator):
 
     device_queue_id = GObject.Property(
         type=int,
-        default=0,  # Default to queue ID 0
+        default=0,
         minimum=0,
-        maximum=32,  # You can adjust the maximum depending on the size of your pool
+        maximum=32,
         nick="Device Queue ID",
         blurb="ID of the DeviceQueue from the pool to use",
         flags=GObject.ParamFlags.READWRITE,
@@ -97,8 +98,8 @@ class AggregatorBase(GstBase.Aggregator):
     def __init__(self):
         super().__init__()
         self.logger = LoggerFactory.get(LoggerFactory.LOGGER_TYPE_GST)
-        self.engine_name = EngineFactory.PYTORCH_ENGINE
-        self.engine = None
+        self.engine_helper = ModelEngineHelper(self.logger)
+        self.engine_name = self.engine_helper.engine_name
         self.kwargs = {}
         self.segment_pushed = False
 
@@ -110,10 +111,7 @@ class AggregatorBase(GstBase.Aggregator):
         elif prop.name == "model-name":
             return self.model_name
         elif prop.name == "device":
-            if self.engine:
-                return self.engine.get_device()
-            else:
-                return None
+            return self.device  # Return from AggregatorBase, not from helper
         elif prop.name == "engine-name":
             return self.engine_name
         elif prop.name == "device-queue-id":
@@ -124,84 +122,70 @@ class AggregatorBase(GstBase.Aggregator):
     def do_set_property(self, prop: GObject.ParamSpec, value):
         if prop.name == "batch-size":
             self.batch_size = value
-            if self.engine:
-                self.engine.batch_size = value
+            if self.engine_helper.engine:
+                self.engine_helper.engine.batch_size = value
         elif prop.name == "frame-stride":
             self.frame_stride = value
-            if self.engine:
-                self.engine.frame_stride = value
+            if self.engine_helper.engine:
+                self.engine_helper.engine.frame_stride = value
         elif prop.name == "model-name":
             self.model_name = value
-            self.do_load_model()
+            self.engine_helper.load_model(value)
         elif prop.name == "device":
             self.device = value
-            # Only set the device if the engine is initialized
-            if self.engine:
-                self.engine.set_device(value)
-                self.do_load_model()
+            self.engine_helper.set_device(value)  # Update device in helper
+            self.engine_helper.initialize_engine(self.engine_name)
+            self.engine_helper.load_model(self.model_name)
         elif prop.name == "engine-name":
             self.engine_name = value
-            if self.device:
-                self.initialize_engine()
-                self.do_load_model()
+            self.engine_helper.initialize_engine(value)
+            self.engine_helper.load_model(self.model_name)
         elif prop.name == "device-queue-id":
             self.device_queue_id = value
-            if self.engine:
-                self.engine.device_queue_id = value
+            if self.engine_helper.engine:
+                self.engine_helper.engine.device_queue_id = value
         else:
             raise AttributeError(f"Unknown property {prop.name}")
 
     def _initialize_engine_if_needed(self):
-        """Initialize the engine if it hasn't been initialized yet."""
-        if not self.engine and self.engine_name:
-            self.initialize_engine()
+        if not self.engine_helper.engine and self.engine_name:
+            self.engine_helper.initialize_engine(self.engine_name)
 
     def initialize_engine(self):
-        """Initialize the machine learning engine based on the engine_name property."""
         if self.engine_name is not None:
-            self.engine = EngineFactory.create_engine(self.engine_name, self.device)
-            self.engine.batch_size = self.batch_size
-            self.engine.frame_stride = self.frame_stride
+            self.engine_helper.initialize_engine(self.engine_name)
+            self.engine_helper.engine.batch_size = self.batch_size
+            self.engine_helper.engine.frame_stride = self.frame_stride
             if self.device_queue_id:
-                self.engine.device_queue_id = self.device_queue_id
+                self.engine_helper.engine.device_queue_id = self.device_queue_id
         else:
             self.logger.error(f"Unsupported ML engine: {self.engine_name}")
-            return
 
     def do_load_model(self):
-        """Loads the model using the current engine."""
-        if self.engine and self.model_name:
-            self.engine.load_model(self.model_name, **self.kwargs)
+        if self.engine_helper.engine and self.model_name:
+            self.engine_helper.load_model(self.model_name)
         else:
             self.logger.warning("Engine is not present, unable to load the model.")
 
     def get_model(self):
-        """Gets the model from the engine."""
         self._initialize_engine_if_needed()
-        """Gets the model from the engine."""
-        if self.engine:
-            return self.engine.get_model()
+        if self.engine_helper.engine:
+            return self.engine_helper.get_model()
         else:
             self.logger.warning("Engine is not present, unable to get the model.")
             return None
 
     def set_model(self, model):
-        """Gets the model from the engine."""
         self._initialize_engine_if_needed()
-        """Sets the model in the engine."""
-        if self.engine:
-            self.engine.set_model(model)
+        if self.engine_helper.engine:
+            self.engine_helper.set_model(model)
         else:
             self.logger.warning("Engine is not present, unable to set the model.")
 
     def get_tokenizer(self):
-        """Gets the model from the engine."""
         self._initialize_engine_if_needed()
-        if self.get_model() is None:
-            self.do_load_model()
-        """Gets the model from the engine."""
-        if self.engine:
-            return self.engine.tokenizer
+        if self.engine_helper.engine:
+            return self.engine_helper.get_tokenizer()
         else:
             self.logger.warning("Engine is not present, unable to get the tokenizer.")
             return None
@@ -218,10 +202,6 @@ class AggregatorBase(GstBase.Aggregator):
             self.segment_pushed = True
 
     def do_aggregate(self, timeout):
-        """
-        Aggregates the buffers from the sink pads,
-        processes with the model, and pushes the result downstream.
-        """
         self.push_segment_if_needed()
         self.process_all_sink_pads()
         return Gst.FlowReturn.OK
@@ -235,5 +215,4 @@ class AggregatorBase(GstBase.Aggregator):
 
     @abstractmethod
     def do_process(self, buf):
-        """Process a buffer using the loaded model."""
         pass

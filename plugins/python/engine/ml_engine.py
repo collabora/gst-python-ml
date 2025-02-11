@@ -32,6 +32,7 @@ class MLEngine(ABC):
         self.image_processor = None
         self.batch_size = 1
         self.frame_buffer = []
+        self.frame_stride = None
         self.counter = 0
         self.device_queue_id = None
         self.track = False
