@@ -281,10 +281,11 @@ ssdlite320_mobilenet_v3_large
  `gst-launch-1.0   filesrc location=data/soccer_tracking.mp4 ! decodebin ! videoconvert ! videoscale ! video/x-raw,width=640,height=480 ! pyml_yolo model-name=yolo11m device=cuda:0 track=True !  pyml_overlay ! videoconvert !  autovideosink`
 
 
-### streammux pipeline
+### streammux/streamdemux pipeline
 
-`GST_DEBUG=4 gst-launch-1.0 pyml_streammux name=mux  ! videoconvert ! fakesink videotestsrc ! mux. videotestsrc pattern=ball ! mux. videotestsrc pattern=snow ! mux.`
-
+```
+gst-launch-1.0     videotestsrc pattern=ball ! video/x-raw, width=320, height=240 ! queue ! pyml_streammux name=mux     videotestsrc pattern=smpte ! video/x-raw, width=320, height=240 ! queue ! mux.sink_0     videotestsrc pattern=zone-plate ! video/x-raw, width=320, height=240 ! queue ! mux.sink_1     mux.src ! queue ! pyml_streamdemux name=demux     demux.src_0 ! queue ! glimagesink     demux.src_1 ! queue ! glimagesink
+```
 
 ### Transcription
 
