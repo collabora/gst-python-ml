@@ -128,22 +128,44 @@ class StreamMux(GstBase.Aggregator):
 
     def output_batch(self):
         """Creates and sends a batched buffer downstream."""
-        if len(self.batch_buffer) == 0:
+        if len(self.batch_buffer) == 0 or len(self.timestamps) == 0:
+            self.logger.warning("No buffers available, skipping batch output.")
             return
 
-        # Create a new buffer to store the batched frames
         batch_buffer = Gst.Buffer.new()
 
-        # Add each sub-buffer as separate GstMemory to the batched buffer
         for buf in self.batch_buffer:
             memory = buf.peek_memory(0)
             batch_buffer.append_memory(memory)
 
-        # Set PTS using the **minimum timestamp** (syncing multiple sources)
-        batch_buffer.pts = min(self.timestamps)
+        # 🚨 Log stream-start event
+        if not hasattr(self, "stream_started"):
+            self.logger.info("Sending STREAM-START event from StreamMux")
+            self.srcpad.push_event(Gst.Event.new_stream_start("mux-stream"))
+            self.stream_started = True
 
-        # Send the batched buffer downstream
+        # 🚨 Log caps negotiation
+        first_pad = next(iter(self.sinkpads), None)
+        if first_pad and first_pad.has_current_caps():
+            in_caps = first_pad.get_current_caps()
+            self.logger.info(f"Setting CAPS on StreamMux src pad: {in_caps}")
+            self.srcpad.set_caps(in_caps)
+        else:
+            self.logger.error("No input caps available in StreamMux!")
+
+        # 🚨 Log segment event
+        segment = Gst.Segment()
+        segment.init(Gst.Format.TIME)
+        segment.start = min(self.timestamps) if self.timestamps else 0
+        self.logger.info(f"Sending SEGMENT event with start={segment.start}")
+        self.srcpad.push_event(Gst.Event.new_segment(segment))
+
+        # 🚨 Log buffer push
+        batch_buffer.pts = segment.start
+        self.logger.info("Pushing buffer from StreamMux")
         self.finish_buffer(batch_buffer)
+
+
 
     def do_sink_event(self, pad, event):
         """Handles sink pad events, including latency queries."""

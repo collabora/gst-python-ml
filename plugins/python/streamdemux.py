@@ -60,20 +60,33 @@ class StreamDemux(Gst.Element):
         self.pad_count = 0  # Keep track of dynamic pads
 
     def do_request_new_pad(self, template, name, caps):
-        # If no name is provided, generate a unique one
         if name is None:
-            name = f"src_{self.pad_count}"  # Increment pad count for unique name
+            name = f"src_{self.pad_count}"
             self.pad_count += 1
 
         self.logger.debug(f"Requesting new pad: {name}")
 
-        # Create and add the dynamic src pad
         if "src_" in name:
             pad = Gst.Pad.new_from_template(template, name)
-            self.add_pad(pad)  # Add the dynamically created pad to the element
-            return pad
+            self.add_pad(pad)
 
+            # Ensure stream-start event is pushed FIRST
+            if not hasattr(pad, "stream_started"):
+                pad.push_event(Gst.Event.new_stream_start(f"demux-stream-{name}"))
+                pad.stream_started = True
+
+            # Ensure caps are set from sinkpad BEFORE pushing any buffer
+            if self.sinkpad.has_current_caps():
+                caps = self.sinkpad.get_current_caps()
+                self.logger.info(f"Setting caps on {pad.get_name()}: {caps}")
+                pad.set_caps(caps)
+            else:
+                self.logger.warning(f"Cannot set caps on {pad.get_name()}, sinkpad has no caps!")
+
+            return pad
         return None
+
+
 
     def do_release_pad(self, pad):
         pad_name = pad.get_name()
@@ -99,14 +112,11 @@ class StreamDemux(Gst.Element):
     def chain(self, pad, parent, buffer):
         self.logger.debug("Processing buffer in chain function")
 
-        # Get the number of memory chunks in the incoming buffer
         num_memory_chunks = buffer.n_memory()
 
-        # Iterate over the memory chunks
         for idx in range(num_memory_chunks):
-            memory_chunk = buffer.peek_memory(idx)  # Get the memory chunk
+            memory_chunk = buffer.peek_memory(idx)
 
-            # Request or find the corresponding src pad
             pad_name = f"src_{idx}"
             src_pad = self.get_static_pad(pad_name)
 
@@ -118,10 +128,37 @@ class StreamDemux(Gst.Element):
                     self.logger.error(f"Failed to request or create pad: {pad_name}")
                     continue
 
-            # Push the memory chunk to the corresponding src pad
+            # 🚨 Ensure stream-start event
+            if not hasattr(src_pad, "stream_started"):
+                self.logger.info(f"Sending STREAM-START event on {src_pad.get_name()}")
+                src_pad.push_event(Gst.Event.new_stream_start(f"demux-stream-{idx}"))
+                src_pad.stream_started = True
+
+            # 🚨 Ensure caps are set
+            if not src_pad.has_current_caps():
+                if self.sinkpad.has_current_caps():
+                    caps = self.sinkpad.get_current_caps()
+                    self.logger.info(f"Setting CAPS on {src_pad.get_name()}: {caps}")
+                    src_pad.set_caps(caps)
+                else:
+                    self.logger.error(f"No CAPS found on sinkpad. Cannot push buffer.")
+                    return Gst.FlowReturn.NOT_NEGOTIATED
+
+            # 🚨 Ensure segment event
+            if not hasattr(src_pad, "segment_pushed"):
+                segment = Gst.Segment()
+                segment.init(Gst.Format.TIME)
+                segment.start = buffer.pts
+                self.logger.info(f"Sending SEGMENT event on {src_pad.get_name()} with start={segment.start}")
+                src_pad.push_event(Gst.Event.new_segment(segment))
+                src_pad.segment_pushed = True
+
+            # 🚨 Log buffer push
+            self.logger.info(f"Pushing buffer on {src_pad.get_name()}")
             self.process_src_pad(pad, src_pad, buffer, memory_chunk)
 
         return Gst.FlowReturn.OK
+
 
     def event(self, pad, parent, event):
         self.logger.debug(f"Received event: {event.type}")
