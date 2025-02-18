@@ -165,8 +165,6 @@ class StreamMux(GstBase.Aggregator):
         self.logger.info("Pushing buffer from StreamMux")
         self.finish_buffer(batch_buffer)
 
-
-
     def do_sink_event(self, pad, event):
         """Handles sink pad events, including latency queries."""
         if event.type == Gst.EventType.LATENCY:

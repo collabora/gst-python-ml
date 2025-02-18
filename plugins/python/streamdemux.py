@@ -81,12 +81,12 @@ class StreamDemux(Gst.Element):
                 self.logger.info(f"Setting caps on {pad.get_name()}: {caps}")
                 pad.set_caps(caps)
             else:
-                self.logger.warning(f"Cannot set caps on {pad.get_name()}, sinkpad has no caps!")
+                self.logger.warning(
+                    f"Cannot set caps on {pad.get_name()}, sinkpad has no caps!"
+                )
 
             return pad
         return None
-
-
 
     def do_release_pad(self, pad):
         pad_name = pad.get_name()
@@ -149,7 +149,9 @@ class StreamDemux(Gst.Element):
                 segment = Gst.Segment()
                 segment.init(Gst.Format.TIME)
                 segment.start = buffer.pts
-                self.logger.info(f"Sending SEGMENT event on {src_pad.get_name()} with start={segment.start}")
+                self.logger.info(
+                    f"Sending SEGMENT event on {src_pad.get_name()} with start={segment.start}"
+                )
                 src_pad.push_event(Gst.Event.new_segment(segment))
                 src_pad.segment_pushed = True
 
@@ -158,7 +160,6 @@ class StreamDemux(Gst.Element):
             self.process_src_pad(pad, src_pad, buffer, memory_chunk)
 
         return Gst.FlowReturn.OK
-
 
     def event(self, pad, parent, event):
         self.logger.debug(f"Received event: {event.type}")

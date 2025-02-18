@@ -25,6 +25,7 @@ from gi.repository import Gst, GObject, GstBase  # noqa: E402
 
 from log.logger_factory import LoggerFactory  # noqa: E402
 
+
 class TransformBase(GstBase.BaseTransform):
     """
     Base class for GStreamer transform elements that perform
