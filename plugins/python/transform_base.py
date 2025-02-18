@@ -25,52 +25,6 @@ from gi.repository import Gst, GObject, GstBase  # noqa: E402
 
 from log.logger_factory import LoggerFactory  # noqa: E402
 
-
-class BatchBuffer:
-    def __init__(self, batch_size):
-        self.batch_size = batch_size
-        self.sub_buffers = []  # Store sub-buffers (frames)
-        self.timestamps = []  # Store timestamps for each sub-buffer
-
-    def add_sub_buffer(self, buf, pts):
-        """
-        Adds a sub-buffer (frame) to the batch buffer.
-        """
-        self.sub_buffers.append(buf)
-        self.timestamps.append(pts)
-
-    def get_sub_buffer(self, index):
-        """
-        Gets a specific sub-buffer by index.
-        """
-        return self.sub_buffers[index] if index < len(self.sub_buffers) else None
-
-    def get_batch_size(self):
-        """
-        Returns the number of sub-buffers in the batch.
-        """
-        return len(self.sub_buffers)
-
-    def get_min_timestamp(self):
-        """
-        Returns the minimum timestamp from the batch.
-        """
-        return min(self.timestamps) if self.timestamps else None
-
-    def is_full(self):
-        """
-        Checks if the batch is full.
-        """
-        return self.get_batch_size() >= self.batch_size
-
-    def clear(self):
-        """
-        Clears the batch buffer.
-        """
-        self.sub_buffers.clear()
-        self.timestamps.clear()
-
-
 class TransformBase(GstBase.BaseTransform):
     """
     Base class for GStreamer transform elements that perform
