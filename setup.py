@@ -18,7 +18,7 @@ def parse_extra_requirements(directory):
 
 setup(
     name="gst-python-ml",
-    version="0.1.0",
+    version="0.2.0",
     packages=find_packages(where="plugins/python"),
     package_dir={"": "plugins/python"},
     include_package_data=True,
