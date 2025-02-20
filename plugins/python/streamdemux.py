@@ -94,23 +94,51 @@ class StreamDemux(Gst.Element):
         self.remove_pad(pad)  # Remove the dynamic pad
 
     def process_src_pad(self, pad, src_pad, buffer, memory_chunk):
-        """Push memory chunk to the src pad."""
-        out_buffer = Gst.Buffer.new()  # Create a new buffer for the memory chunk
-        out_buffer.append_memory(memory_chunk)  # Add the memory chunk to the buffer
-
-        # Copy buffer's timestamp and other relevant metadata
+        out_buffer = Gst.Buffer.new()
+        out_buffer.append_memory(memory_chunk)
         out_buffer.pts = buffer.pts
         out_buffer.duration = buffer.duration
         out_buffer.dts = buffer.dts
         out_buffer.offset = buffer.offset
 
-        # Push the buffer to the src pad
         ret = src_pad.push(out_buffer)
         if ret != Gst.FlowReturn.OK:
             self.logger.error(f"Failed to push buffer on {src_pad.get_name()}: {ret}")
+            if ret == Gst.FlowReturn.FLUSHING:
+                self.logger.info(f"Pad {src_pad.get_name()} is flushing, retrying later")
+                return  # Skip this push, let the pipeline recover
+            elif ret == Gst.FlowReturn.ERROR:
+                self.logger.warning(f"Error on {src_pad.get_name()}, continuing")
+                return
+        self.logger.info(f"Successfully pushed buffer on {src_pad.get_name()}")
 
     def chain(self, pad, parent, buffer):
         self.logger.debug("Processing buffer in chain function")
+
+        if buffer.n_memory() > 0:
+            first_memory = buffer.peek_memory(0)  # Get first memory block
+            with first_memory.map(Gst.MapFlags.READ) as map_info:  # Map for reading
+                data_bytes = map_info.data  # Get raw bytes
+                self.logger.info(f"First memory chunk raw: {data_bytes.hex()}")
+
+                if len(data_bytes) >= 4:
+                    num_sources = int.from_bytes(data_bytes[:4], "little")
+                    self.logger.info(f"Decoded num_sources: {num_sources}")
+                else:
+                    self.logger.error(
+                        f"Memory chunk too short: {len(data_bytes)} bytes"
+                    )
+
+        # 🚀 Create a new buffer without the first memory chunk
+        new_buffer = Gst.Buffer.new()
+        for i in range(1, buffer.n_memory()):  # Start from 1, skipping first memory
+            new_buffer.append_memory(buffer.peek_memory(i))
+
+        # 🚀 Preserve timestamps and metadata
+        new_buffer.pts = buffer.pts
+        new_buffer.dts = buffer.dts
+        new_buffer.duration = buffer.duration
+        buffer = new_buffer
 
         num_memory_chunks = buffer.n_memory()
 

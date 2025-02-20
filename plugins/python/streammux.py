@@ -132,11 +132,36 @@ class StreamMux(GstBase.Aggregator):
             self.logger.warning("No buffers available, skipping batch output.")
             return
 
+        num_sources = len(self.sinkpads)  # 🚀 Dynamically get active sink pads
+        self.logger.info(f"Embedding num-sources={num_sources} into buffer memory")
+
+        # 🚀 Convert num_sources to bytes (4-byte little-endian integer)
+        num_sources_bytes = num_sources.to_bytes(4, "little")
+
+        # 🚀 Create a Gst.Memory block containing num_sources
+        num_sources_memory = Gst.Memory.new_wrapped(
+            Gst.MemoryFlags.READONLY,  # Memory flags
+            num_sources_bytes,  # Data (bytes)
+            len(num_sources_bytes),  # Size
+            0,  # Offset
+            len(num_sources_bytes),  # Max size
+            None,  # User data
+        )
+
+        with num_sources_memory.map(Gst.MapFlags.READ) as map_info:
+            self.logger.info(
+                f"Muxer - Created num_sources memory: {map_info.data.hex()}"
+            )
+
+        # 🚀 Create a new buffer & attach the num-sources memory block
+        # Create a new buffer & attach a copy of the num-sources memory block
         batch_buffer = Gst.Buffer.new()
+        batch_buffer.append_memory(num_sources_memory.copy(0, -1))  # Explicit copy
 
         for buf in self.batch_buffer:
-            memory = buf.peek_memory(0)
-            batch_buffer.append_memory(memory)
+            for i in range(buf.n_memory()):
+                memory = buf.peek_memory(i)
+                batch_buffer.append_memory(memory)
 
         # 🚨 Log stream-start event
         if not hasattr(self, "stream_started"):
@@ -163,6 +188,11 @@ class StreamMux(GstBase.Aggregator):
         # 🚨 Log buffer push
         batch_buffer.pts = segment.start
         self.logger.info("Pushing buffer from StreamMux")
+
+        # Add this debugging block
+        with batch_buffer.peek_memory(0).map(Gst.MapFlags.READ) as map_info:
+            self.logger.info(f"Buffer first memory before push: {map_info.data.hex()}")
+
         self.finish_buffer(batch_buffer)
 
     def do_sink_event(self, pad, event):

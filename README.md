@@ -299,7 +299,7 @@ ssdlite320_mobilenet_v3_large
 ### streammux/streamdemux pipeline
 
 ```
-gst-launch-1.0     videotestsrc pattern=ball ! video/x-raw, width=320, height=240 ! queue ! pyml_streammux name=mux     videotestsrc pattern=smpte ! video/x-raw, width=320, height=240 ! queue ! mux.sink_0     videotestsrc pattern=zone-plate ! video/x-raw, width=320, height=240 ! queue ! mux.sink_1     mux.src ! queue ! pyml_streamdemux name=demux     demux.src_0 ! queue ! glimagesink     demux.src_1 ! queue ! glimagesink
+ GST_DEBUG=4 gst-launch-1.0   videotestsrc pattern=ball ! video/x-raw, width=320, height=240 ! queue ! pyml_streammux name=mux   videotestsrc pattern=smpte ! video/x-raw, width=320, height=240 ! queue ! mux.sink_1   videotestsrc pattern=smpte ! video/x-raw, width=320, height=240 ! queue ! mux.sink_2   mux.src ! queue ! pyml_streamdemux name=demux   demux.src_0 ! queue ! glimagesink  demux.src_1 ! queue ! glimagesink   demux.src_2 ! queue  ! glimagesink
 ```
 
 ### Transcription
