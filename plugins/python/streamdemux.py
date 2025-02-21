@@ -25,6 +25,7 @@ gi.require_version("GLib", "2.0")
 from gi.repository import Gst, GObject  # noqa: E402
 
 from log.logger_factory import LoggerFactory
+from utils import StreamMetadata
 
 
 class StreamDemux(Gst.Element):
@@ -58,6 +59,8 @@ class StreamDemux(Gst.Element):
         self.sinkpad.set_chain_function_full(self.chain)
         self.add_pad(self.sinkpad)
         self.pad_count = 0  # Keep track of dynamic pads
+        # Initialize StreamMetadata with format '<I' (little-endian unsigned int)
+        self.metadata = StreamMetadata("<I")
 
     def do_request_new_pad(self, template, name, caps):
         if name is None:
@@ -105,7 +108,9 @@ class StreamDemux(Gst.Element):
         if ret != Gst.FlowReturn.OK:
             self.logger.error(f"Failed to push buffer on {src_pad.get_name()}: {ret}")
             if ret == Gst.FlowReturn.FLUSHING:
-                self.logger.info(f"Pad {src_pad.get_name()} is flushing, retrying later")
+                self.logger.info(
+                    f"Pad {src_pad.get_name()} is flushing, retrying later"
+                )
                 return  # Skip this push, let the pipeline recover
             elif ret == Gst.FlowReturn.ERROR:
                 self.logger.warning(f"Error on {src_pad.get_name()}, continuing")
@@ -116,18 +121,10 @@ class StreamDemux(Gst.Element):
         self.logger.debug("Processing buffer in chain function")
 
         if buffer.n_memory() > 0:
-            first_memory = buffer.peek_memory(0)  # Get first memory block
-            with first_memory.map(Gst.MapFlags.READ) as map_info:  # Map for reading
-                data_bytes = map_info.data  # Get raw bytes
-                self.logger.info(f"First memory chunk raw: {data_bytes.hex()}")
-
-                if len(data_bytes) >= 4:
-                    num_sources = int.from_bytes(data_bytes[:4], "little")
-                    self.logger.info(f"Decoded num_sources: {num_sources}")
-                else:
-                    self.logger.error(
-                        f"Memory chunk too short: {len(data_bytes)} bytes"
-                    )
+            first_memory = buffer.peek_memory(0)
+            # Use StreamMetadata to read the metadata
+            (num_sources,) = self.metadata.read_memory(first_memory)
+            self.logger.info(f"Decoded num_sources: {num_sources}")
 
         # 🚀 Create a new buffer without the first memory chunk
         new_buffer = Gst.Buffer.new()

@@ -24,6 +24,7 @@ gi.require_version("GObject", "2.0")
 from gi.repository import Gst, GObject, GstBase  # noqa: E402
 
 from log.logger_factory import LoggerFactory
+from utils import StreamMetadata
 
 
 class StreamMux(GstBase.Aggregator):
@@ -65,6 +66,8 @@ class StreamMux(GstBase.Aggregator):
         self.timestamps = []
         self.timeout_source = None
         self.batch_size = 1  # Default batch size, dynamically adjusted
+        # Initialize StreamMetadata with format '<I' (little-endian unsigned int)
+        self.metadata = StreamMetadata("<I")
         self.start_timeout()
 
     def start_timeout(self):
@@ -132,36 +135,33 @@ class StreamMux(GstBase.Aggregator):
             self.logger.warning("No buffers available, skipping batch output.")
             return
 
-        num_sources = len(self.sinkpads)  # 🚀 Dynamically get active sink pads
+        num_sources = len(self.sinkpads)
         self.logger.info(f"Embedding num-sources={num_sources} into buffer memory")
 
-        # 🚀 Convert num_sources to bytes (4-byte little-endian integer)
-        num_sources_bytes = num_sources.to_bytes(4, "little")
-
-        # 🚀 Create a Gst.Memory block containing num_sources
-        num_sources_memory = Gst.Memory.new_wrapped(
-            Gst.MemoryFlags.READONLY,  # Memory flags
-            num_sources_bytes,  # Data (bytes)
-            len(num_sources_bytes),  # Size
-            0,  # Offset
-            len(num_sources_bytes),  # Max size
-            None,  # User data
-        )
-
+        num_sources_memory, num_sources_bytes = self.metadata.create_memory(
+            num_sources
+        )  # Keep bytes alive
         with num_sources_memory.map(Gst.MapFlags.READ) as map_info:
             self.logger.info(
-                f"Muxer - Created num_sources memory: {map_info.data.hex()}"
+                f"Muxer - Before append memory (hex): {map_info.data.hex()}"
             )
 
-        # 🚀 Create a new buffer & attach the num-sources memory block
-        # Create a new buffer & attach a copy of the num-sources memory block
         batch_buffer = Gst.Buffer.new()
-        batch_buffer.append_memory(num_sources_memory.copy(0, -1))  # Explicit copy
+        batch_buffer.append_memory(num_sources_memory)  # Direct append
+        with num_sources_memory.map(Gst.MapFlags.READ) as map_info:
+            self.logger.info(
+                f"Muxer - After append memory (hex): {map_info.data.hex()}"
+            )
 
         for buf in self.batch_buffer:
             for i in range(buf.n_memory()):
                 memory = buf.peek_memory(i)
                 batch_buffer.append_memory(memory)
+
+        with batch_buffer.peek_memory(0).map(Gst.MapFlags.READ) as map_info:
+            self.logger.info(
+                f"Muxer - First memory in batch_buffer (hex): {map_info.data.hex()}"
+            )
 
         # 🚨 Log stream-start event
         if not hasattr(self, "stream_started"):
