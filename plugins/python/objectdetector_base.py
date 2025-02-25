@@ -29,51 +29,11 @@ gi.require_version("GLib", "2.0")
 from gi.repository import Gst, GstAnalytics, GObject, GLib  # noqa: E402
 
 
-class ObjectDetectorBase(VideoTransform):
-    """
-    GStreamer element for object detection with a machine learning model.
-    """
+class FormatConverter:
+    """Handles video format conversion and extraction for RGB data."""
 
-    track = GObject.Property(
-        type=bool,
-        default=False,
-        nick="Track Mode",
-        blurb="Enable or disable tracking mode",
-        flags=GObject.ParamFlags.READWRITE,
-    )
-
-    def __init__(self):
-        super().__init__()
-        runtime_check_gstreamer_version()
-        self.framerate_num = 30
-        self.framerate_denom = 1
-
-    def do_set_property(self, prop, value):
-        """Set the properties of the object."""
-        if prop.name == "track":
-            self.track = value
-            if self.engine:
-                self.engine.track = value  # Set the track flag on the engine_name
-        else:
-            raise AttributeError(f"Unknown property {prop.name}")
-
-    def do_get_property(self, prop):
-        """Get the properties of the object."""
-        if prop.name == "track":
-            if self.engine:
-                return self.engine.track  # Get the track flag from the engine_name
-            return self.track
-        else:
-            raise AttributeError(f"Unknown property {prop.name}")
-
-    def forward(self, frame):
-        if self.engine:
-            self.engine.track = self.track
-            return self.engine.forward(frame)
-        else:
-            return None
-
-    def _extract_rgb(self, data: np.ndarray, format: str) -> np.ndarray:
+    @staticmethod
+    def extract_rgb(data: np.ndarray, format: str) -> np.ndarray:
         """
         Extracts the RGB channels from an image in ABGR, BGRA, RGBA, RGB, or BGR format.
 
@@ -120,13 +80,15 @@ class ObjectDetectorBase(VideoTransform):
 
         return rgb_data
 
-    def _get_rgb_frame(self, info, format: str) -> np.ndarray:
+    def get_rgb_frame(self, info, format: str, height: int, width: int) -> np.ndarray:
         """
         Extracts the RGB channels from the GStreamer buffer's data in ABGR, BGRA, RGBA, RGB, or BGR format.
 
         Parameters:
             info (GstVideo.VideoFrame): The GStreamer video frame containing data.
             format (str): The format of the input data. Expected values are 'ABGR', 'BGRA', 'RGBA', 'RGB', or 'BGR'.
+            height (int): The height of the video frame.
+            width (int): The width of the video frame.
 
         Returns:
             np.ndarray: A new image array with only the RGB channels, shape (height, width, 3).
@@ -134,7 +96,7 @@ class ObjectDetectorBase(VideoTransform):
         if format in ["RGB", "BGR"]:
             # For RGB or BGR formats (3 channels)
             frame = np.ndarray(
-                shape=(self.height, self.width, 3),
+                shape=(height, width, 3),
                 dtype=np.uint8,
                 buffer=info.data,
             )
@@ -145,12 +107,12 @@ class ObjectDetectorBase(VideoTransform):
         elif format in ["ABGR", "BGRA", "RGBA"]:
             # For formats with 4 channels (ABGR, BGRA, RGBA)
             frame = np.ndarray(
-                shape=(self.height, self.width, 4),
+                shape=(height, width, 4),
                 dtype=np.uint8,
                 buffer=info.data,
             )
-            # Extract RGB using the _extract_rgb method
-            frame = self._extract_rgb(frame, format)
+            # Extract RGB using the extract_rgb method
+            frame = self.extract_rgb(frame, format)
 
         else:
             raise ValueError(
@@ -159,7 +121,8 @@ class ObjectDetectorBase(VideoTransform):
 
         return frame
 
-    def _get_video_format(self, buffer: Gst.Buffer, pad: Gst.Pad) -> str:
+    @staticmethod
+    def get_video_format(buffer: Gst.Buffer, pad: Gst.Pad) -> str:
         """
         Retrieves the video format from the GStreamer buffer's caps.
 
@@ -189,6 +152,52 @@ class ObjectDetectorBase(VideoTransform):
 
         return None
 
+
+class ObjectDetectorBase(VideoTransform):
+    """
+    GStreamer element for object detection with a machine learning model.
+    """
+
+    track = GObject.Property(
+        type=bool,
+        default=False,
+        nick="Track Mode",
+        blurb="Enable or disable tracking mode",
+        flags=GObject.ParamFlags.READWRITE,
+    )
+
+    def __init__(self):
+        super().__init__()
+        runtime_check_gstreamer_version()
+        self.framerate_num = 30
+        self.framerate_denom = 1
+        self.format_converter = FormatConverter()
+
+    def do_set_property(self, prop, value):
+        """Set the properties of the object."""
+        if prop.name == "track":
+            self.track = value
+            if self.engine:
+                self.engine.track = value  # Set the track flag on the engine_name
+        else:
+            raise AttributeError(f"Unknown property {prop.name}")
+
+    def do_get_property(self, prop):
+        """Get the properties of the object."""
+        if prop.name == "track":
+            if self.engine:
+                return self.engine.track  # Get the track flag from the engine_name
+            return self.track
+        else:
+            raise AttributeError(f"Unknown property {prop.name}")
+
+    def forward(self, frame):
+        if self.engine:
+            self.engine.track = self.track
+            return self.engine.forward(frame)
+        else:
+            return None
+
     def do_transform_ip(self, buf):
         """
         In-place transformation for object detection inference.
@@ -217,8 +226,10 @@ class ObjectDetectorBase(VideoTransform):
                     )
                     return Gst.FlowReturn.ERROR
 
-                format = self._get_video_format(buf, self.sinkpad)
-                frame = self._get_rgb_frame(info, format)
+                format = self.format_converter.get_video_format(buf, self.sinkpad)
+                frame = self.format_converter.get_rgb_frame(
+                    info, format, self.height, self.width
+                )
 
                 # Check if frame is mapped correctly
                 if frame is None or not isinstance(frame, np.ndarray):
