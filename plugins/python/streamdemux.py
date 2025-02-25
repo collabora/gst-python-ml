@@ -24,8 +24,8 @@ gi.require_version("GLib", "2.0")
 
 from gi.repository import Gst, GObject  # noqa: E402
 
-from log.logger_factory import LoggerFactory
-from utils import StreamMetadata
+from log.logger_factory import LoggerFactory  # noqa: E402
+from utils import StreamMetadata  # noqa: E402
 
 
 class StreamDemux(Gst.Element):
@@ -123,7 +123,7 @@ class StreamDemux(Gst.Element):
         if buffer.n_memory() > 0:
             first_memory = buffer.peek_memory(0)
             # Use StreamMetadata to read the metadata
-            (num_sources,) = self.metadata.read_memory(first_memory)
+            (num_sources,) = self.metadata.read(first_memory)
             self.logger.info(f"Decoded num_sources: {num_sources}")
 
         # 🚀 Create a new buffer without the first memory chunk
@@ -166,7 +166,7 @@ class StreamDemux(Gst.Element):
                     self.logger.info(f"Setting CAPS on {src_pad.get_name()}: {caps}")
                     src_pad.set_caps(caps)
                 else:
-                    self.logger.error(f"No CAPS found on sinkpad. Cannot push buffer.")
+                    self.logger.error("No CAPS found on sinkpad. Cannot push buffer.")
                     return Gst.FlowReturn.NOT_NEGOTIATED
 
             # 🚨 Ensure segment event

@@ -23,8 +23,8 @@ gi.require_version("GstBase", "1.0")
 gi.require_version("GObject", "2.0")
 from gi.repository import Gst, GObject, GstBase  # noqa: E402
 
-from log.logger_factory import LoggerFactory
-from utils import StreamMetadata
+from log.logger_factory import LoggerFactory  # noqa: E402
+from utils import StreamMetadata  # noqa: E402
 
 
 class StreamMux(GstBase.Aggregator):
@@ -112,7 +112,6 @@ class StreamMux(GstBase.Aggregator):
         for pad in self.sinkpads:
             buf = pad.peek_buffer()
             if buf:
-                pad_index = list(self.sinkpads).index(pad)
                 structure = Gst.Structure.new_empty("selected-sample")
                 self.selected_samples(buf.pts, buf.dts, buf.duration, structure)
 
@@ -135,23 +134,11 @@ class StreamMux(GstBase.Aggregator):
             self.logger.warning("No buffers available, skipping batch output.")
             return
 
+        batch_buffer = Gst.Buffer.new()
+
         num_sources = len(self.sinkpads)
         self.logger.info(f"Embedding num-sources={num_sources} into buffer memory")
-
-        num_sources_memory, num_sources_bytes = self.metadata.create_memory(
-            num_sources
-        )  # Keep bytes alive
-        with num_sources_memory.map(Gst.MapFlags.READ) as map_info:
-            self.logger.info(
-                f"Muxer - Before append memory (hex): {map_info.data.hex()}"
-            )
-
-        batch_buffer = Gst.Buffer.new()
-        batch_buffer.append_memory(num_sources_memory)  # Direct append
-        with num_sources_memory.map(Gst.MapFlags.READ) as map_info:
-            self.logger.info(
-                f"Muxer - After append memory (hex): {map_info.data.hex()}"
-            )
+        self.metadata.create(batch_buffer, num_sources)
 
         for buf in self.batch_buffer:
             for i in range(buf.n_memory()):

@@ -22,45 +22,41 @@ from gi.repository import Gst
 
 from log.logger_factory import LoggerFactory
 
+
 class StreamMetadata:
     def __init__(self, format_string):
         self.format_string = format_string
         self.struct_size = struct.calcsize(format_string)
         self.logger = LoggerFactory.get(LoggerFactory.LOGGER_TYPE_GST)
 
-    def create_memory(self, *values):
-        if (
-            len(values)
-            != struct.unpack(self.format_string, b"\x00" * self.struct_size).__len__()
-        ):
+    def create(self, buffer, *values):
+        """
+        Creates structured data and attaches it directly to the provided GstBuffer.
+
+        Args:
+            buffer: GstBuffer to attach the memory to
+            *values: Values to pack according to format_string
+
+        Raises:
+            ValueError: If values don't match the format string in count or type
+        """
+        try:
+            data_bytes = struct.pack(self.format_string, *values)
+            memory = Gst.Memory.new_wrapped(
+                Gst.MemoryFlags.READONLY,
+                data_bytes,
+                len(data_bytes),
+                0,
+                len(data_bytes),
+                None,
+            )
+            buffer.append_memory(memory)
+        except struct.error as e:
             raise ValueError(
-                f"Expected {struct.unpack(self.format_string, b'\x00' * self.struct_size).__len__()} values for format {self.format_string}, got {len(values)}"
-            )
+                f"Failed to pack values into format {self.format_string}: {str(e)}"
+            ) from e
 
-        data_bytes = struct.pack(self.format_string, *values)
-        self.logger.info(f"Serialized data (hex): {data_bytes.hex()}")
-
-        memory = Gst.Memory.new_wrapped(
-            Gst.MemoryFlags.READONLY,
-            data_bytes,
-            len(data_bytes),
-            0,
-            len(data_bytes),
-            None,  # No callback, just like the original
-        )
-
-        with memory.map(Gst.MapFlags.READ) as map_info:
-            self.logger.info(
-                f"Memory contents after creation (hex): {map_info.data.hex()}"
-            )
-            if map_info.data.hex() != data_bytes.hex():
-                self.logger.error(
-                    f"Memory mismatch! Expected {data_bytes.hex()}, got {map_info.data.hex()}"
-                )
-
-        return memory, data_bytes  # Return data_bytes to keep it alive
-
-    def read_memory(self, memory):
+    def read(self, memory):
         with memory.map(Gst.MapFlags.READ) as map_info:
             data_bytes = map_info.data
             if len(data_bytes) < self.struct_size:
@@ -68,9 +64,6 @@ class StreamMetadata:
                     f"Memory chunk too short: {len(data_bytes)} bytes, expected {self.struct_size}"
                 )
             return struct.unpack(self.format_string, data_bytes[: self.struct_size])
-
-    def get_size(self):
-        return self.struct_size
 
 
 def runtime_check_gstreamer_version(min_version="1.24"):
