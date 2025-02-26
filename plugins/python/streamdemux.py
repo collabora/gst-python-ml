@@ -25,7 +25,7 @@ gi.require_version("GLib", "2.0")
 from gi.repository import Gst, GObject  # noqa: E402
 
 from log.logger_factory import LoggerFactory  # noqa: E402
-from utils import StreamMetadata  # noqa: E402
+from utils import Metadata  # noqa: E402
 
 
 class StreamDemux(Gst.Element):
@@ -59,8 +59,8 @@ class StreamDemux(Gst.Element):
         self.sinkpad.set_chain_function_full(self.chain)
         self.add_pad(self.sinkpad)
         self.pad_count = 0  # Keep track of dynamic pads
-        # Initialize StreamMetadata with format '<I' (little-endian unsigned int)
-        self.metadata = StreamMetadata("<I")
+        # Initialize Metadata with format '<I' (little-endian unsigned int)
+        self.metadata = Metadata("<I")
 
     def do_request_new_pad(self, template, name, caps):
         if name is None:
@@ -122,7 +122,7 @@ class StreamDemux(Gst.Element):
 
         if buffer.n_memory() > 0:
             first_memory = buffer.peek_memory(0)
-            # Use StreamMetadata to read the metadata
+            # Use Metadata to read the metadata
             (num_sources,) = self.metadata.read(first_memory)
             self.logger.info(f"Decoded num_sources: {num_sources}")
 

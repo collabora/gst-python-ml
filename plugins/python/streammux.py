@@ -24,7 +24,7 @@ gi.require_version("GObject", "2.0")
 from gi.repository import Gst, GObject, GstBase  # noqa: E402
 
 from log.logger_factory import LoggerFactory  # noqa: E402
-from utils import StreamMetadata  # noqa: E402
+from utils import Metadata  # noqa: E402
 
 
 class StreamMux(GstBase.Aggregator):
@@ -66,8 +66,8 @@ class StreamMux(GstBase.Aggregator):
         self.timestamps = []
         self.timeout_source = None
         self.batch_size = 1  # Default batch size, dynamically adjusted
-        # Initialize StreamMetadata with format '<I' (little-endian unsigned int)
-        self.metadata = StreamMetadata("<I")
+        # Initialize Metadata with format '<I' (little-endian unsigned int)
+        self.metadata = Metadata("<I")
         self.start_timeout()
 
     def start_timeout(self):
