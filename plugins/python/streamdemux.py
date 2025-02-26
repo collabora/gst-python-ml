@@ -25,7 +25,7 @@ gi.require_version("GLib", "2.0")
 from gi.repository import Gst, GObject  # noqa: E402
 
 from log.logger_factory import LoggerFactory  # noqa: E402
-from utils import Metadata  # noqa: E402
+from metadata import Metadata  # noqa: E402
 
 
 class StreamDemux(Gst.Element):
