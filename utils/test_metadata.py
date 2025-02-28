@@ -7,7 +7,7 @@ import struct
 # Initialize GStreamer
 Gst.init(None)
 
-class StreamMetadata:
+class Metadata:
     SIGNATURE = b"CUSTOM-META"
 
     def __init__(self, format_string: str):
@@ -79,7 +79,7 @@ class MetadataAdder(GstBase.BaseTransform):
 
     def __init__(self):
         super().__init__()
-        self.metadata = StreamMetadata("if")
+        self.metadata = Metadata("if")
         self.frame_count = 0
         self.set_in_place(True)  # Transform in-place
 
@@ -150,7 +150,7 @@ def sink_pad_probe(pad, info, metadata):
 # Main function
 def main():
     pipeline = create_pipeline()
-    metadata = StreamMetadata("if")
+    metadata = Metadata("if")
 
     # Add probe on sink pad
     sink = pipeline.get_by_name("sink")
