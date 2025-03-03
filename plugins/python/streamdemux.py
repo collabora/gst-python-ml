@@ -58,7 +58,7 @@ class StreamDemux(Gst.Element):
         self.sinkpad.set_chain_function_full(self.chain)
         self.add_pad(self.sinkpad)
         self.pad_count = 0  # Keep track of dynamic pads
-        self.metadata = Metadata("i")  # Use "i" for num_sources as integer
+        self.metadata = Metadata("si")  # Use "si" for string ID and num_sources
 
     def do_request_new_pad(self, template, name, caps):
         if name is None:
@@ -118,9 +118,8 @@ class StreamDemux(Gst.Element):
 
         if buffer.n_memory() > 0:
             try:
-                num_sources_tuple = self.metadata.read(buffer)
-                num_sources = num_sources_tuple[0]  # Extract integer from tuple
-                self.logger.info(f"Decoded num_sources: {num_sources}")
+                id_str, num_sources = self.metadata.read(buffer)  # Unpack string and integer
+                self.logger.info(f"Decoded ID: {id_str}, num_sources: {num_sources}")
             except ValueError as e:
                 self.logger.error(str(e))
 

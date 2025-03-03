@@ -98,7 +98,7 @@ class Metadata:
 
         last_memory = buffer.peek_memory(buffer.n_memory() - 1)
         with last_memory.map(Gst.MapFlags.READ) as map_info:
-            data_bytes = map_info.data
+            data_bytes = bytes(map_info.data)  # Convert memoryview to bytes
             header_len = len(self.HEADER)
             if len(data_bytes) < header_len:
                 raise ValueError(f"Memory chunk too short: {len(data_bytes)} bytes")

@@ -65,7 +65,7 @@ class StreamMux(GstBase.Aggregator):
         self.timestamps = []
         self.timeout_source = None
         self.batch_size = 1  # Default batch size, dynamically adjusted
-        self.metadata = Metadata("i")  # Use "i" for num_sources as integer
+        self.metadata = Metadata("si")  # Use "si" for string ID and num_sources
         self.start_timeout()
 
     def start_timeout(self):
@@ -145,8 +145,8 @@ class StreamMux(GstBase.Aggregator):
                 memory = buf.peek_memory(i)
                 batch_buffer.append_memory(memory)
 
-        # Append metadata LAST using Metadata class
-        self.metadata.write(batch_buffer, num_sources)
+        # Append metadata LAST with string ID "mux/demux" and num_sources
+        self.metadata.write(batch_buffer, "mux/demux", num_sources)
 
         # Log metadata memory
         with batch_buffer.peek_memory(batch_buffer.n_memory() - 1).map(Gst.MapFlags.READ) as map_info:
