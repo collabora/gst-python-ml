@@ -135,22 +135,24 @@ class StreamMux(GstBase.Aggregator):
         num_sources = len(self.sinkpads)  # 🚀 Dynamically get active sink pads
         self.logger.info(f"Embedding num-sources={num_sources} into buffer memory")
 
-        # 🚀 Convert num_sources to bytes (4-byte little-endian integer)
+        # 🚀 Create metadata with header "GST-PYTHON-ML" followed by num_sources
+        header = b"GST-PYTHON-ML"
         num_sources_bytes = num_sources.to_bytes(4, "little")
+        metadata_bytes = header + num_sources_bytes
 
-        # 🚀 Create a Gst.Memory block containing num_sources
-        num_sources_memory = Gst.Memory.new_wrapped(
+        # 🚀 Create a Gst.Memory block containing metadata
+        metadata_memory = Gst.Memory.new_wrapped(
             Gst.MemoryFlags.READONLY,  # Memory flags
-            num_sources_bytes,  # Data (bytes)
-            len(num_sources_bytes),  # Size
+            metadata_bytes,  # Data (header + num_sources)
+            len(metadata_bytes),  # Size
             0,  # Offset
-            len(num_sources_bytes),  # Max size
+            len(metadata_bytes),  # Max size
             None,  # User data
         )
 
-        with num_sources_memory.map(Gst.MapFlags.READ) as map_info:
+        with metadata_memory.map(Gst.MapFlags.READ) as map_info:
             self.logger.info(
-                f"Muxer - Created num_sources memory: {map_info.data.hex()}"
+                f"Muxer - Created metadata memory: {map_info.data.hex()}"
             )
 
         # Create a new buffer
@@ -162,8 +164,8 @@ class StreamMux(GstBase.Aggregator):
                 memory = buf.peek_memory(i)
                 batch_buffer.append_memory(memory)
 
-        # Append num_sources memory LAST
-        batch_buffer.append_memory(num_sources_memory.copy(0, -1))  # Explicit copy
+        # Append metadata memory LAST
+        batch_buffer.append_memory(metadata_memory.copy(0, -1))  # Explicit copy
 
         # 🚨 Log stream-start event
         if not hasattr(self, "stream_started"):

@@ -121,9 +121,14 @@ class StreamDemux(Gst.Element):
                 data_bytes = map_info.data  # Get raw bytes
                 self.logger.info(f"Last memory chunk raw: {data_bytes.hex()}")
 
-                if len(data_bytes) >= 4:
-                    num_sources = int.from_bytes(data_bytes[:4], "little")
-                    self.logger.info(f"Decoded num_sources: {num_sources}")
+                header = b"GST-PYTHON-ML"
+                header_len = len(header)
+                if len(data_bytes) >= header_len + 4:
+                    if data_bytes[:header_len] == header:
+                        num_sources = int.from_bytes(data_bytes[header_len:header_len + 4], "little")
+                        self.logger.info(f"Decoded num_sources: {num_sources}")
+                    else:
+                        self.logger.error("Invalid metadata header")
                 else:
                     self.logger.error(
                         f"Memory chunk too short: {len(data_bytes)} bytes"
