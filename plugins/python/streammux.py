@@ -21,10 +21,9 @@ import gi
 gi.require_version("Gst", "1.0")
 gi.require_version("GstBase", "1.0")
 gi.require_version("GObject", "2.0")
-from gi.repository import Gst, GObject, GstBase
+from gi.repository import Gst, GObject, GstBase  # noqa: E402
 
 from log.logger_factory import LoggerFactory
-from metadata import Metadata  # Your new Metadata class
 
 
 class StreamMux(GstBase.Aggregator):
@@ -65,14 +64,13 @@ class StreamMux(GstBase.Aggregator):
         self.batch_buffer = []
         self.timestamps = []
         self.timeout_source = None
-        self.batch_size = 1
-        self.metadata = Metadata("ifs")
+        self.batch_size = 1  # Default batch size, dynamically adjusted
         self.start_timeout()
 
     def start_timeout(self):
         """Start timeout for batch processing if not already running."""
         if self.timeout_source:
-            return
+            return  # Already running
         self.timeout_source = GObject.timeout_add(self.timeout, self.handle_timeout)
 
     def stop_timeout(self):
@@ -97,7 +95,7 @@ class StreamMux(GstBase.Aggregator):
         """Handle timeout event: process batch if not full yet."""
         if len(self.batch_buffer) > 0:
             self.output_batch()
-        return True
+        return True  # Keep the timeout active
 
     def do_aggregate(self, timeout):
         """Aggregates frames from all sink pads into a single batch."""
@@ -111,6 +109,7 @@ class StreamMux(GstBase.Aggregator):
         for pad in self.sinkpads:
             buf = pad.peek_buffer()
             if buf:
+                pad_index = list(self.sinkpads).index(pad)
                 structure = Gst.Structure.new_empty("selected-sample")
                 self.selected_samples(buf.pts, buf.dts, buf.duration, structure)
 
@@ -133,42 +132,46 @@ class StreamMux(GstBase.Aggregator):
             self.logger.warning("No buffers available, skipping batch output.")
             return
 
+        num_sources = len(self.sinkpads)  # 🚀 Dynamically get active sink pads
+        self.logger.info(f"Embedding num-sources={num_sources} into buffer memory")
+
+        # 🚀 Convert num_sources to bytes (4-byte little-endian integer)
+        num_sources_bytes = num_sources.to_bytes(4, "little")
+
+        # 🚀 Create a Gst.Memory block containing num_sources
+        num_sources_memory = Gst.Memory.new_wrapped(
+            Gst.MemoryFlags.READONLY,  # Memory flags
+            num_sources_bytes,  # Data (bytes)
+            len(num_sources_bytes),  # Size
+            0,  # Offset
+            len(num_sources_bytes),  # Max size
+            None,  # User data
+        )
+
+        with num_sources_memory.map(Gst.MapFlags.READ) as map_info:
+            self.logger.info(
+                f"Muxer - Created num_sources memory: {map_info.data.hex()}"
+            )
+
+        # Create a new buffer
         batch_buffer = Gst.Buffer.new()
 
-        # Append video data FIRST
+        # Append video memory chunks FIRST
         for buf in self.batch_buffer:
             for i in range(buf.n_memory()):
                 memory = buf.peek_memory(i)
-                batch_buffer.append_memory(memory.copy(0, -1))  # Fixed copy args
+                batch_buffer.append_memory(memory)
 
-        # Append metadata LAST
-        num_sources = len(self.sinkpads)
-        self.logger.info(f"Embedding num-sources={num_sources} into buffer memory")
-        self.metadata.write(batch_buffer, num_sources, 3.14, "batch")
+        # Append num_sources memory LAST
+        batch_buffer.append_memory(num_sources_memory.copy(0, -1))  # Explicit copy
 
-        # Debug all memory chunks
-        self.logger.debug(f"Batch buffer has {batch_buffer.n_memory()} memory chunks")
-        for i in range(batch_buffer.n_memory()):
-            with batch_buffer.peek_memory(i).map(Gst.MapFlags.READ) as map_info:
-                preview_size = min(32, map_info.size)
-                self.logger.debug(
-                    f"Chunk {i} first {preview_size} bytes (hex): {map_info.data[:preview_size].hex()}"
-                )
-
-        # Log LAST memory chunk (metadata)
-        with batch_buffer.peek_memory(batch_buffer.n_memory() - 1).map(
-            Gst.MapFlags.READ
-        ) as map_info:
-            preview_size = min(32, map_info.size)
-            self.logger.info(
-                f"Muxer - Last {preview_size} bytes of batch_buffer (hex): {map_info.data[:preview_size].hex()}"
-            )
-
+        # 🚨 Log stream-start event
         if not hasattr(self, "stream_started"):
             self.logger.info("Sending STREAM-START event from StreamMux")
             self.srcpad.push_event(Gst.Event.new_stream_start("mux-stream"))
             self.stream_started = True
 
+        # 🚨 Log caps negotiation
         first_pad = next(iter(self.sinkpads), None)
         if first_pad and first_pad.has_current_caps():
             in_caps = first_pad.get_current_caps()
@@ -177,23 +180,20 @@ class StreamMux(GstBase.Aggregator):
         else:
             self.logger.error("No input caps available in StreamMux!")
 
+        # 🚨 Log segment event
         segment = Gst.Segment()
         segment.init(Gst.Format.TIME)
         segment.start = min(self.timestamps) if self.timestamps else 0
         self.logger.info(f"Sending SEGMENT event with start={segment.start}")
         self.srcpad.push_event(Gst.Event.new_segment(segment))
 
+        # 🚨 Log buffer push
         batch_buffer.pts = segment.start
         self.logger.info("Pushing buffer from StreamMux")
 
-        # Log LAST memory chunk (metadata) before push
-        with batch_buffer.peek_memory(batch_buffer.n_memory() - 1).map(
-            Gst.MapFlags.READ
-        ) as map_info:
-            preview_size = min(32, map_info.size)
-            self.logger.info(
-                f"Buffer last {preview_size} bytes before push (hex): {map_info.data[:preview_size].hex()}"
-            )
+        # Add this debugging block
+        with batch_buffer.peek_memory(batch_buffer.n_memory() - 1).map(Gst.MapFlags.READ) as map_info:
+            self.logger.info(f"Buffer last memory before push: {map_info.data.hex()}")
 
         self.finish_buffer(batch_buffer)
 
@@ -202,7 +202,7 @@ class StreamMux(GstBase.Aggregator):
         if event.type == Gst.EventType.LATENCY:
             self.logger.info("Received LATENCY event, updating pipeline latency.")
             self.aggregator_update_latency()
-            return True
+            return True  # Mark event as handled
         return GstBase.Aggregator.do_sink_event(self, pad, event)
 
     def do_set_property(self, prop, value):
