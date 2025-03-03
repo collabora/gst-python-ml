@@ -25,7 +25,7 @@ gi.require_version("GLib", "2.0")
 from gi.repository import Gst, GObject  # noqa: E402
 
 from log.logger_factory import LoggerFactory
-
+from metadata import Metadata  # Import Metadata class
 
 class StreamDemux(Gst.Element):
     __gstmetadata__ = (
@@ -58,6 +58,7 @@ class StreamDemux(Gst.Element):
         self.sinkpad.set_chain_function_full(self.chain)
         self.add_pad(self.sinkpad)
         self.pad_count = 0  # Keep track of dynamic pads
+        self.metadata = Metadata()  # Initialize Metadata instance
 
     def do_request_new_pad(self, template, name, caps):
         if name is None:
@@ -116,23 +117,11 @@ class StreamDemux(Gst.Element):
         self.logger.debug("Processing buffer in chain function")
 
         if buffer.n_memory() > 0:
-            last_memory = buffer.peek_memory(buffer.n_memory() - 1)  # Get last memory block
-            with last_memory.map(Gst.MapFlags.READ) as map_info:  # Map for reading
-                data_bytes = map_info.data  # Get raw bytes
-                self.logger.info(f"Last memory chunk raw: {data_bytes.hex()}")
-
-                header = b"GST-PYTHON-ML"
-                header_len = len(header)
-                if len(data_bytes) >= header_len + 4:
-                    if data_bytes[:header_len] == header:
-                        num_sources = int.from_bytes(data_bytes[header_len:header_len + 4], "little")
-                        self.logger.info(f"Decoded num_sources: {num_sources}")
-                    else:
-                        self.logger.error("Invalid metadata header")
-                else:
-                    self.logger.error(
-                        f"Memory chunk too short: {len(data_bytes)} bytes"
-                    )
+            try:
+                num_sources = self.metadata.read(buffer)
+                self.logger.info(f"Decoded num_sources: {num_sources}")
+            except ValueError as e:
+                self.logger.error(str(e))
 
         # 🚀 Create a new buffer without the last memory chunk
         new_buffer = Gst.Buffer.new()

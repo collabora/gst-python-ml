@@ -24,7 +24,7 @@ gi.require_version("GObject", "2.0")
 from gi.repository import Gst, GObject, GstBase  # noqa: E402
 
 from log.logger_factory import LoggerFactory
-
+from metadata import Metadata  # Import Metadata class
 
 class StreamMux(GstBase.Aggregator):
     __gstmetadata__ = (
@@ -65,6 +65,7 @@ class StreamMux(GstBase.Aggregator):
         self.timestamps = []
         self.timeout_source = None
         self.batch_size = 1  # Default batch size, dynamically adjusted
+        self.metadata = Metadata()  # Initialize Metadata instance
         self.start_timeout()
 
     def start_timeout(self):
@@ -135,26 +136,6 @@ class StreamMux(GstBase.Aggregator):
         num_sources = len(self.sinkpads)  # 🚀 Dynamically get active sink pads
         self.logger.info(f"Embedding num-sources={num_sources} into buffer memory")
 
-        # 🚀 Create metadata with header "GST-PYTHON-ML" followed by num_sources
-        header = b"GST-PYTHON-ML"
-        num_sources_bytes = num_sources.to_bytes(4, "little")
-        metadata_bytes = header + num_sources_bytes
-
-        # 🚀 Create a Gst.Memory block containing metadata
-        metadata_memory = Gst.Memory.new_wrapped(
-            Gst.MemoryFlags.READONLY,  # Memory flags
-            metadata_bytes,  # Data (header + num_sources)
-            len(metadata_bytes),  # Size
-            0,  # Offset
-            len(metadata_bytes),  # Max size
-            None,  # User data
-        )
-
-        with metadata_memory.map(Gst.MapFlags.READ) as map_info:
-            self.logger.info(
-                f"Muxer - Created metadata memory: {map_info.data.hex()}"
-            )
-
         # Create a new buffer
         batch_buffer = Gst.Buffer.new()
 
@@ -164,8 +145,12 @@ class StreamMux(GstBase.Aggregator):
                 memory = buf.peek_memory(i)
                 batch_buffer.append_memory(memory)
 
-        # Append metadata memory LAST
-        batch_buffer.append_memory(metadata_memory.copy(0, -1))  # Explicit copy
+        # Append metadata LAST using Metadata class
+        self.metadata.write(batch_buffer, num_sources)
+
+        # Log metadata memory
+        with batch_buffer.peek_memory(batch_buffer.n_memory() - 1).map(Gst.MapFlags.READ) as map_info:
+            self.logger.info(f"Muxer - Created metadata memory: {map_info.data.hex()}")
 
         # 🚨 Log stream-start event
         if not hasattr(self, "stream_started"):
@@ -193,7 +178,7 @@ class StreamMux(GstBase.Aggregator):
         batch_buffer.pts = segment.start
         self.logger.info("Pushing buffer from StreamMux")
 
-        # Add this debugging block
+        # Debug metadata
         with batch_buffer.peek_memory(batch_buffer.n_memory() - 1).map(Gst.MapFlags.READ) as map_info:
             self.logger.info(f"Buffer last memory before push: {map_info.data.hex()}")
 
