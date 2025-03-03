@@ -19,13 +19,11 @@
 import gi
 
 gi.require_version("Gst", "1.0")
-gi.require_version("GstBase", "1.0")
 gi.require_version("GLib", "2.0")
+from gi.repository import Gst, GObject
 
-from gi.repository import Gst, GObject  # noqa: E402
-
-from log.logger_factory import LoggerFactory  # noqa: E402
-from metadata import Metadata  # noqa: E402
+from log.logger_factory import LoggerFactory
+from metadata import Metadata  # Your new Metadata class
 
 
 class StreamDemux(Gst.Element):
@@ -55,12 +53,15 @@ class StreamDemux(Gst.Element):
         super().__init__()
         self.logger = LoggerFactory.get(LoggerFactory.LOGGER_TYPE_GST)
         self.sinkpad = Gst.Pad.new_from_template(self.get_pad_template("sink"), "sink")
-        self.sinkpad.set_event_function_full(self.event)
-        self.sinkpad.set_chain_function_full(self.chain)
+        self.sinkpad.set_event_function(self.event)
+        # Switch to set_chain_function_full with debug
+        self.logger.debug("Registering chain function with set_chain_function_full")
+        self.sinkpad.set_chain_function_full(
+            self.chain, None
+        )  # Explicit user_data=None
         self.add_pad(self.sinkpad)
-        self.pad_count = 0  # Keep track of dynamic pads
-        # Initialize Metadata with format '<I' (little-endian unsigned int)
-        self.metadata = Metadata("<I")
+        self.pad_count = 0
+        self.metadata = Metadata("ifs")
 
     def do_request_new_pad(self, template, name, caps):
         if name is None:
@@ -73,12 +74,10 @@ class StreamDemux(Gst.Element):
             pad = Gst.Pad.new_from_template(template, name)
             self.add_pad(pad)
 
-            # Ensure stream-start event is pushed FIRST
             if not hasattr(pad, "stream_started"):
                 pad.push_event(Gst.Event.new_stream_start(f"demux-stream-{name}"))
                 pad.stream_started = True
 
-            # Ensure caps are set from sinkpad BEFORE pushing any buffer
             if self.sinkpad.has_current_caps():
                 caps = self.sinkpad.get_current_caps()
                 self.logger.info(f"Setting caps on {pad.get_name()}: {caps}")
@@ -94,7 +93,7 @@ class StreamDemux(Gst.Element):
     def do_release_pad(self, pad):
         pad_name = pad.get_name()
         self.logger.debug(f"Releasing pad: {pad_name}")
-        self.remove_pad(pad)  # Remove the dynamic pad
+        self.remove_pad(pad)
 
     def process_src_pad(self, pad, src_pad, buffer, memory_chunk):
         out_buffer = Gst.Buffer.new()
@@ -111,27 +110,28 @@ class StreamDemux(Gst.Element):
                 self.logger.info(
                     f"Pad {src_pad.get_name()} is flushing, retrying later"
                 )
-                return  # Skip this push, let the pipeline recover
+                return
             elif ret == Gst.FlowReturn.ERROR:
                 self.logger.warning(f"Error on {src_pad.get_name()}, continuing")
                 return
         self.logger.info(f"Successfully pushed buffer on {src_pad.get_name()}")
 
     def chain(self, pad, parent, buffer):
+        # Debug to confirm arguments
+        self.logger.debug(
+            f"Chain called with pad={pad}, parent={parent}, buffer={buffer}"
+        )
+
         self.logger.debug("Processing buffer in chain function")
+        num_sources, some_float, some_string = self.metadata.read(buffer)
+        self.logger.info(
+            f"Decoded num_sources: {num_sources}, float: {some_float}, string: {some_string}"
+        )
 
-        if buffer.n_memory() > 0:
-            first_memory = buffer.peek_memory(0)
-            # Use Metadata to read the metadata
-            (num_sources,) = self.metadata.read(first_memory)
-            self.logger.info(f"Decoded num_sources: {num_sources}")
-
-        # 🚀 Create a new buffer without the first memory chunk
         new_buffer = Gst.Buffer.new()
-        for i in range(1, buffer.n_memory()):  # Start from 1, skipping first memory
+        for i in range(buffer.n_memory() - 1):  # Skip last chunk (metadata)
             new_buffer.append_memory(buffer.peek_memory(i))
 
-        # 🚀 Preserve timestamps and metadata
         new_buffer.pts = buffer.pts
         new_buffer.dts = buffer.dts
         new_buffer.duration = buffer.duration
@@ -153,13 +153,11 @@ class StreamDemux(Gst.Element):
                     self.logger.error(f"Failed to request or create pad: {pad_name}")
                     continue
 
-            # 🚨 Ensure stream-start event
             if not hasattr(src_pad, "stream_started"):
                 self.logger.info(f"Sending STREAM-START event on {src_pad.get_name()}")
                 src_pad.push_event(Gst.Event.new_stream_start(f"demux-stream-{idx}"))
                 src_pad.stream_started = True
 
-            # 🚨 Ensure caps are set
             if not src_pad.has_current_caps():
                 if self.sinkpad.has_current_caps():
                     caps = self.sinkpad.get_current_caps()
@@ -169,7 +167,6 @@ class StreamDemux(Gst.Element):
                     self.logger.error("No CAPS found on sinkpad. Cannot push buffer.")
                     return Gst.FlowReturn.NOT_NEGOTIATED
 
-            # 🚨 Ensure segment event
             if not hasattr(src_pad, "segment_pushed"):
                 segment = Gst.Segment()
                 segment.init(Gst.Format.TIME)
@@ -180,7 +177,6 @@ class StreamDemux(Gst.Element):
                 src_pad.push_event(Gst.Event.new_segment(segment))
                 src_pad.segment_pushed = True
 
-            # 🚨 Log buffer push
             self.logger.info(f"Pushing buffer on {src_pad.get_name()}")
             self.process_src_pad(pad, src_pad, buffer, memory_chunk)
 
