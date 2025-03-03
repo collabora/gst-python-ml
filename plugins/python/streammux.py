@@ -65,7 +65,7 @@ class StreamMux(GstBase.Aggregator):
         self.timestamps = []
         self.timeout_source = None
         self.batch_size = 1  # Default batch size, dynamically adjusted
-        self.metadata = Metadata()  # Initialize Metadata instance
+        self.metadata = Metadata("i")  # Use "i" for num_sources as integer
         self.start_timeout()
 
     def start_timeout(self):
