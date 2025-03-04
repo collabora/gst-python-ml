@@ -22,6 +22,7 @@ import gi
 gi.require_version("Gst", "1.0")
 from gi.repository import Gst  # noqa: E402
 
+
 class Metadata:
     HEADER = b"GST-PYTHON-ML"
 
@@ -51,15 +52,25 @@ class Metadata:
         """Write values with header to the buffer as a memory chunk."""
         if self.is_list:
             if not isinstance(values[0], (list, tuple)):
-                raise ValueError(f"Expected a list for format '{self.format_string}', got {type(values[0])}")
+                raise ValueError(
+                    f"Expected a list for format '{self.format_string}', got {type(values[0])}"
+                )
             items = values[0]
             meta_bytes = struct.pack("I", len(items))  # Pack list length
             for item in items:
                 if len(item) != len(self.struct_format):
-                    raise ValueError(f"Struct length mismatch: expected {len(self.struct_format)}, got {len(item)}")
+                    raise ValueError(
+                        f"Struct length mismatch: expected {len(self.struct_format)}, got {len(item)}"
+                    )
                 fixed_values = [v for v, f in zip(item, self.struct_format) if f != "s"]
-                string_values = [v for v, f in zip(item, self.struct_format) if f == "s"]
-                fixed_bytes = struct.pack("".join(self.fixed_fields), *fixed_values) if fixed_values else b""
+                string_values = [
+                    v for v, f in zip(item, self.struct_format) if f == "s"
+                ]
+                fixed_bytes = (
+                    struct.pack("".join(self.fixed_fields), *fixed_values)
+                    if fixed_values
+                    else b""
+                )
                 string_bytes = b""
                 for s in string_values:
                     s_bytes = str(s).encode("utf-8")
@@ -67,10 +78,16 @@ class Metadata:
                 meta_bytes += fixed_bytes + string_bytes
         else:
             if len(values) != len(self.struct_format):
-                raise ValueError(f"Value length mismatch: expected {len(self.struct_format)}, got {len(values)}")
+                raise ValueError(
+                    f"Value length mismatch: expected {len(self.struct_format)}, got {len(values)}"
+                )
             fixed_values = [v for v, f in zip(values, self.struct_format) if f != "s"]
             string_values = [v for v, f in zip(values, self.struct_format) if f == "s"]
-            fixed_bytes = struct.pack("".join(self.fixed_fields), *fixed_values) if fixed_values else b""
+            fixed_bytes = (
+                struct.pack("".join(self.fixed_fields), *fixed_values)
+                if fixed_values
+                else b""
+            )
             string_bytes = b""
             for s in string_values:
                 s_bytes = str(s).encode("utf-8")
@@ -103,24 +120,30 @@ class Metadata:
             if len(data_bytes) < header_len:
                 raise ValueError(f"Memory chunk too short: {len(data_bytes)} bytes")
             if data_bytes[:header_len] != self.HEADER:
-                raise ValueError(f"Invalid metadata header: {data_bytes[:header_len].hex()}")
+                raise ValueError(
+                    f"Invalid metadata header: {data_bytes[:header_len].hex()}"
+                )
 
             offset = header_len
             if self.is_list:
-                list_len = struct.unpack("I", data_bytes[offset:offset + 4])[0]
+                list_len = struct.unpack("I", data_bytes[offset : offset + 4])[0]
                 offset += 4
                 result = []
                 for _ in range(list_len):
                     fixed_values = []
                     if self.fixed_fields:
-                        fixed_bytes = data_bytes[offset:offset + self.fixed_size]
-                        fixed_values = list(struct.unpack("".join(self.fixed_fields), fixed_bytes))
+                        fixed_bytes = data_bytes[offset : offset + self.fixed_size]
+                        fixed_values = list(
+                            struct.unpack("".join(self.fixed_fields), fixed_bytes)
+                        )
                         offset += self.fixed_size
                     string_values = []
                     for _ in range(self.string_count):
-                        str_len = struct.unpack("I", data_bytes[offset:offset + 4])[0]
+                        str_len = struct.unpack("I", data_bytes[offset : offset + 4])[0]
                         offset += 4
-                        string_values.append(data_bytes[offset:offset + str_len].decode("utf-8"))
+                        string_values.append(
+                            data_bytes[offset : offset + str_len].decode("utf-8")
+                        )
                         offset += str_len
                     struct_values = []
                     fixed_idx = 0
@@ -137,14 +160,18 @@ class Metadata:
             else:
                 fixed_values = []
                 if self.fixed_fields:
-                    fixed_bytes = data_bytes[offset:offset + self.fixed_size]
-                    fixed_values = list(struct.unpack("".join(self.fixed_fields), fixed_bytes))
+                    fixed_bytes = data_bytes[offset : offset + self.fixed_size]
+                    fixed_values = list(
+                        struct.unpack("".join(self.fixed_fields), fixed_bytes)
+                    )
                     offset += self.fixed_size
                 string_values = []
                 for _ in range(self.string_count):
-                    str_len = struct.unpack("I", data_bytes[offset:offset + 4])[0]
+                    str_len = struct.unpack("I", data_bytes[offset : offset + 4])[0]
                     offset += 4
-                    string_values.append(data_bytes[offset:offset + str_len].decode("utf-8"))
+                    string_values.append(
+                        data_bytes[offset : offset + str_len].decode("utf-8")
+                    )
                     offset += str_len
                 result = []
                 fixed_idx = 0

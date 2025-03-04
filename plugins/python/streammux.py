@@ -26,6 +26,7 @@ from gi.repository import Gst, GObject, GstBase  # noqa: E402
 from log.logger_factory import LoggerFactory
 from metadata import Metadata  # Import Metadata class
 
+
 class StreamMux(GstBase.Aggregator):
     __gstmetadata__ = (
         "StreamMux",
@@ -149,7 +150,9 @@ class StreamMux(GstBase.Aggregator):
         self.metadata.write(batch_buffer, "mux/demux", num_sources)
 
         # Log metadata memory
-        with batch_buffer.peek_memory(batch_buffer.n_memory() - 1).map(Gst.MapFlags.READ) as map_info:
+        with batch_buffer.peek_memory(batch_buffer.n_memory() - 1).map(
+            Gst.MapFlags.READ
+        ) as map_info:
             self.logger.info(f"Muxer - Created metadata memory: {map_info.data.hex()}")
 
         # 🚨 Log stream-start event
@@ -179,7 +182,9 @@ class StreamMux(GstBase.Aggregator):
         self.logger.info("Pushing buffer from StreamMux")
 
         # Debug metadata
-        with batch_buffer.peek_memory(batch_buffer.n_memory() - 1).map(Gst.MapFlags.READ) as map_info:
+        with batch_buffer.peek_memory(batch_buffer.n_memory() - 1).map(
+            Gst.MapFlags.READ
+        ) as map_info:
             self.logger.info(f"Buffer last memory before push: {map_info.data.hex()}")
 
         self.finish_buffer(batch_buffer)

@@ -27,6 +27,7 @@ from gi.repository import Gst, GObject  # noqa: E402
 from log.logger_factory import LoggerFactory
 from metadata import Metadata  # Import Metadata class
 
+
 class StreamDemux(Gst.Element):
     __gstmetadata__ = (
         "StreamDemux",
@@ -106,7 +107,9 @@ class StreamDemux(Gst.Element):
         if ret != Gst.FlowReturn.OK:
             self.logger.error(f"Failed to push buffer on {src_pad.get_name()}: {ret}")
             if ret == Gst.FlowReturn.FLUSHING:
-                self.logger.info(f"Pad {src_pad.get_name()} is flushing, retrying later")
+                self.logger.info(
+                    f"Pad {src_pad.get_name()} is flushing, retrying later"
+                )
                 return  # Skip this push, let the pipeline recover
             elif ret == Gst.FlowReturn.ERROR:
                 self.logger.warning(f"Error on {src_pad.get_name()}, continuing")
@@ -118,7 +121,9 @@ class StreamDemux(Gst.Element):
 
         if buffer.n_memory() > 0:
             try:
-                id_str, num_sources = self.metadata.read(buffer)  # Unpack string and integer
+                id_str, num_sources = self.metadata.read(
+                    buffer
+                )  # Unpack string and integer
                 self.logger.info(f"Decoded ID: {id_str}, num_sources: {num_sources}")
             except ValueError as e:
                 self.logger.error(str(e))
