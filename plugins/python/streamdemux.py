@@ -20,9 +20,10 @@ import gi
 
 gi.require_version("Gst", "1.0")
 gi.require_version("GstBase", "1.0")
+gi.require_version("GstAnalytics", "1.0")
 gi.require_version("GLib", "2.0")
 
-from gi.repository import Gst, GObject  # noqa: E402
+from gi.repository import Gst, GObject, GstAnalytics, GLib  # noqa: E402
 
 from log.logger_factory import LoggerFactory  # noqa: E402
 from metadata import Metadata  # noqa: E402
@@ -32,7 +33,7 @@ class StreamDemux(Gst.Element):
     __gstmetadata__ = (
         "StreamDemux",
         "Demuxer",
-        "Custom stream demuxer",
+        "Custom stream demuxer with metadata splitting",
         "Aaron Boxer <aaron.boxer@collabora.com>",
     )
 
@@ -72,12 +73,10 @@ class StreamDemux(Gst.Element):
             pad = Gst.Pad.new_from_template(template, name)
             self.add_pad(pad)
 
-            # Ensure stream-start event is pushed FIRST
             if not hasattr(pad, "stream_started"):
                 pad.push_event(Gst.Event.new_stream_start(f"demux-stream-{name}"))
                 pad.stream_started = True
 
-            # Ensure caps are set from sinkpad BEFORE pushing any buffer
             if self.sinkpad.has_current_caps():
                 caps = self.sinkpad.get_current_caps()
                 self.logger.info(f"Setting caps on {pad.get_name()}: {caps}")
@@ -93,15 +92,42 @@ class StreamDemux(Gst.Element):
     def do_release_pad(self, pad):
         pad_name = pad.get_name()
         self.logger.debug(f"Releasing pad: {pad_name}")
-        self.remove_pad(pad)  # Remove the dynamic pad
+        self.remove_pad(pad)
 
-    def process_src_pad(self, pad, src_pad, buffer, memory_chunk):
+    def process_src_pad(self, pad, src_pad, buffer, memory_chunk, stream_idx):
         out_buffer = Gst.Buffer.new()
         out_buffer.append_memory(memory_chunk)
         out_buffer.pts = buffer.pts
         out_buffer.duration = buffer.duration
         out_buffer.dts = buffer.dts
         out_buffer.offset = buffer.offset
+
+        # Split and attach analytics metadata
+        meta = GstAnalytics.buffer_get_analytics_relation_meta(buffer)
+        if meta:
+            out_meta = GstAnalytics.buffer_add_analytics_relation_meta(out_buffer)
+            count = GstAnalytics.relation_get_length(meta)
+            self.logger.info(
+                f"Processing {count} analytics relations for {src_pad.get_name()}"
+            )
+            for i in range(count):
+                ret, od_mtd = meta.get_od_mtd(i)
+                if ret and od_mtd:
+                    label_quark = od_mtd.get_obj_type()
+                    label = GLib.quark_to_string(label_quark)
+                    if f"stream_{stream_idx}_" in label:
+                        presence, x, y, w, h, conf = od_mtd.get_location()
+                        if presence:
+                            qk = GLib.quark_from_string(label)
+                            ret, new_od_mtd = out_meta.add_od_mtd(qk, x, y, w, h, conf)
+                            if ret:
+                                self.logger.debug(
+                                    f"Attached metadata to {src_pad.get_name()}: {label}"
+                                )
+                            else:
+                                self.logger.error(
+                                    f"Failed to attach metadata to {src_pad.get_name()}: {label}"
+                                )
 
         ret = src_pad.push(out_buffer)
         if ret != Gst.FlowReturn.OK:
@@ -110,7 +136,7 @@ class StreamDemux(Gst.Element):
                 self.logger.info(
                     f"Pad {src_pad.get_name()} is flushing, retrying later"
                 )
-                return  # Skip this push, let the pipeline recover
+                return
             elif ret == Gst.FlowReturn.ERROR:
                 self.logger.warning(f"Error on {src_pad.get_name()}, continuing")
                 return
@@ -121,26 +147,12 @@ class StreamDemux(Gst.Element):
 
         if buffer.n_memory() > 0:
             try:
-                id_str, num_sources = self.metadata.read(
-                    buffer
-                )  # Unpack string and integer
+                id_str, num_sources = self.metadata.read(buffer)
                 self.logger.info(f"Decoded ID: {id_str}, num_sources: {num_sources}")
             except ValueError as e:
                 self.logger.error(str(e))
 
-        # 🚀 Create a new buffer without the last memory chunk
-        new_buffer = Gst.Buffer.new()
-        for i in range(buffer.n_memory() - 1):  # Exclude last memory
-            new_buffer.append_memory(buffer.peek_memory(i))
-
-        # 🚀 Preserve timestamps and metadata
-        new_buffer.pts = buffer.pts
-        new_buffer.dts = buffer.dts
-        new_buffer.duration = buffer.duration
-        buffer = new_buffer
-
-        num_memory_chunks = buffer.n_memory()
-
+        num_memory_chunks = buffer.n_memory() - 1  # Exclude metadata chunk
         for idx in range(num_memory_chunks):
             memory_chunk = buffer.peek_memory(idx)
 
@@ -155,13 +167,11 @@ class StreamDemux(Gst.Element):
                     self.logger.error(f"Failed to request or create pad: {pad_name}")
                     continue
 
-            # 🚨 Ensure stream-start event
             if not hasattr(src_pad, "stream_started"):
                 self.logger.info(f"Sending STREAM-START event on {src_pad.get_name()}")
                 src_pad.push_event(Gst.Event.new_stream_start(f"demux-stream-{idx}"))
                 src_pad.stream_started = True
 
-            # 🚨 Ensure caps are set
             if not src_pad.has_current_caps():
                 if self.sinkpad.has_current_caps():
                     caps = self.sinkpad.get_current_caps()
@@ -171,7 +181,6 @@ class StreamDemux(Gst.Element):
                     self.logger.error("No CAPS found on sinkpad. Cannot push buffer.")
                     return Gst.FlowReturn.NOT_NEGOTIATED
 
-            # 🚨 Ensure segment event
             if not hasattr(src_pad, "segment_pushed"):
                 segment = Gst.Segment()
                 segment.init(Gst.Format.TIME)
@@ -182,9 +191,8 @@ class StreamDemux(Gst.Element):
                 src_pad.push_event(Gst.Event.new_segment(segment))
                 src_pad.segment_pushed = True
 
-            # 🚨 Log buffer push
             self.logger.info(f"Pushing buffer on {src_pad.get_name()}")
-            self.process_src_pad(pad, src_pad, buffer, memory_chunk)
+            self.process_src_pad(pad, src_pad, buffer, memory_chunk, stream_idx=idx)
 
         return Gst.FlowReturn.OK
 

@@ -20,142 +20,20 @@ from utils import runtime_check_gstreamer_version
 import gi
 import numpy as np
 from video_transform import VideoTransform
+from format_converter import FormatConverter
 
 gi.require_version("Gst", "1.0")
 gi.require_version("GstBase", "1.0")
-gi.require_version("GstVideo", "1.0")
 gi.require_version("GstAnalytics", "1.0")
 gi.require_version("GLib", "2.0")
 from gi.repository import Gst, GstAnalytics, GObject, GLib  # noqa: E402
-
-
-class FormatConverter:
-    """Handles video format conversion and extraction for RGB data."""
-
-    @staticmethod
-    def extract_rgb(data: np.ndarray, format: str) -> np.ndarray:
-        """
-        Extracts the RGB channels from an image in ABGR, BGRA, RGBA, RGB, or BGR format.
-
-        Parameters:
-            data (np.ndarray): The input image data with either three or four channels,
-                            with shape (height, width, 3) or (height, width, 4).
-            format (str): The format of the input data. Expected values are 'ABGR', 'BGRA', 'RGBA', 'RGB', or 'BGR'.
-
-        Returns:
-            np.ndarray: A new image array with only the RGB channels, shape (height, width, 3).
-        """
-        # Check for correct number of channels based on format
-        if format in ("ABGR", "BGRA", "RGBA") and data.shape[-1] != 4:
-            raise ValueError(
-                "Input data must have four channels for ABGR, BGRA, or RGBA formats"
-            )
-        elif format in ("RGB", "BGR") and data.shape[-1] != 3:
-            raise ValueError(
-                "Input data must have three channels for RGB or BGR formats"
-            )
-
-        # Handle 4-channel formats
-        if format == "ABGR":
-            # ABGR -> RGB (select channels 3, 2, 1)
-            rgb_data = data[:, :, [3, 2, 1]]
-        elif format == "BGRA":
-            # BGRA -> RGB (select channels 2, 1, 0)
-            rgb_data = data[:, :, [2, 1, 0]]
-        elif format == "RGBA":
-            # RGBA -> RGB (select channels 0, 1, 2)
-            rgb_data = data[:, :, [0, 1, 2]]
-
-        # Handle 3-channel formats
-        elif format == "RGB":
-            # Already in RGB format, return as is
-            rgb_data = data
-        elif format == "BGR":
-            # BGR -> RGB (select channels 2, 1, 0)
-            rgb_data = data[:, :, [2, 1, 0]]
-        else:
-            raise ValueError(
-                "Unsupported format. Expected 'ABGR', 'BGRA', 'RGBA', 'RGB', or 'BGR'."
-            )
-
-        return rgb_data
-
-    def get_rgb_frame(self, info, format: str, height: int, width: int) -> np.ndarray:
-        """
-        Extracts the RGB channels from the GStreamer buffer's data in ABGR, BGRA, RGBA, RGB, or BGR format.
-
-        Parameters:
-            info (GstVideo.VideoFrame): The GStreamer video frame containing data.
-            format (str): The format of the input data. Expected values are 'ABGR', 'BGRA', 'RGBA', 'RGB', or 'BGR'.
-            height (int): The height of the video frame.
-            width (int): The width of the video frame.
-
-        Returns:
-            np.ndarray: A new image array with only the RGB channels, shape (height, width, 3).
-        """
-        if format in ["RGB", "BGR"]:
-            # For RGB or BGR formats (3 channels)
-            frame = np.ndarray(
-                shape=(height, width, 3),
-                dtype=np.uint8,
-                buffer=info.data,
-            )
-            if format == "BGR":
-                # Convert BGR to RGB by reordering channels
-                frame = frame[:, :, [2, 1, 0]]
-
-        elif format in ["ABGR", "BGRA", "RGBA"]:
-            # For formats with 4 channels (ABGR, BGRA, RGBA)
-            frame = np.ndarray(
-                shape=(height, width, 4),
-                dtype=np.uint8,
-                buffer=info.data,
-            )
-            # Extract RGB using the extract_rgb method
-            frame = self.extract_rgb(frame, format)
-
-        else:
-            raise ValueError(
-                "Unsupported format. Expected 'ABGR', 'BGRA', 'RGBA', 'RGB', or 'BGR'."
-            )
-
-        return frame
-
-    @staticmethod
-    def get_video_format(buffer: Gst.Buffer, pad: Gst.Pad) -> str:
-        """
-        Retrieves the video format from the GStreamer buffer's caps.
-
-        Parameters:
-            buffer (Gst.Buffer): The GStreamer buffer containing video data.
-            pad (Gst.Pad): The pad from which to retrieve the video caps.
-
-        Returns:
-            str: The video format (e.g., 'RGB', 'RGBA', 'BGRA') or None if not available.
-        """
-        # Get the caps from the pad
-        caps = pad.get_current_caps()
-        if not caps:
-            caps = pad.get_allowed_caps()
-
-        # Make sure the caps are valid and contain video information
-        if not caps or caps.get_size() == 0:
-            return None
-
-        # Get the structure of the first caps field (assuming a single format)
-        structure = caps.get_structure(0)
-
-        # Check if it's a video format and retrieve the 'format' field
-        if structure.has_name("video/x-raw"):
-            format_str = structure.get_string("format")
-            return format_str
-
-        return None
+from metadata import Metadata  # noqa: E402
 
 
 class ObjectDetectorBase(VideoTransform):
     """
-    GStreamer element for object detection with a machine learning model.
+    GStreamer element for object detection.
+    Batch handling with clean logs. Marker: WORKING_2025_03_04_V7.
     """
 
     track = GObject.Property(
@@ -172,45 +50,45 @@ class ObjectDetectorBase(VideoTransform):
         self.framerate_num = 30
         self.framerate_denom = 1
         self.format_converter = FormatConverter()
+        self.metadata = Metadata("si")
+        self.logger.info("Initialized ObjectDetectorBase - WORKING_2025_03_04_V7")
 
     def do_set_property(self, prop, value):
-        """Set the properties of the object."""
+        self.logger.info(f"Setting property {prop.name} to {value}")
         if prop.name == "track":
             self.track = value
             if self.engine:
-                self.engine.track = value  # Set the track flag on the engine_name
+                self.engine.track = value
         else:
             raise AttributeError(f"Unknown property {prop.name}")
 
     def do_get_property(self, prop):
-        """Get the properties of the object."""
+        self.logger.info(f"Getting property {prop.name}")
         if prop.name == "track":
             if self.engine:
-                return self.engine.track  # Get the track flag from the engine_name
+                return self.engine.track
             return self.track
         else:
             raise AttributeError(f"Unknown property {prop.name}")
 
     def forward(self, frame):
+        self.logger.info(
+            f"Forward called with frame shape: {frame.shape if frame is not None else 'None'}"
+        )
         if self.engine:
             self.engine.track = self.track
-            return self.engine.forward(frame)
-        else:
-            return None
+            result = self.engine.forward(frame)
+            self.logger.debug(f"Forward result: {result} (type: {type(result)})")
+            return result
+        return None
 
     def do_transform_ip(self, buf):
-        """
-        In-place transformation for object detection inference.
-        """
+        self.logger.info(f"Transforming buffer: {hex(id(buf))}")
         try:
-            # Ensure the model is loaded
             if self.get_model() is None:
-                self.logger.debug(
-                    "do_transform_ip: Model not loaded, calling do_load_model()"
-                )
+                self.logger.info("Loading model")
                 self.do_load_model()
 
-            # Set a valid timestamp if none is set
             if buf.pts == Gst.CLOCK_TIME_NONE:
                 buf.pts = Gst.util_uint64_scale(
                     Gst.util_get_timestamp(),
@@ -218,100 +96,148 @@ class ObjectDetectorBase(VideoTransform):
                     self.framerate_num * Gst.SECOND,
                 )
 
-            # Map the buffer to read data
-            with buf.map(Gst.MapFlags.READ | Gst.MapFlags.WRITE) as info:
-                if info.data is None:
+            num_chunks = buf.n_memory()
+            format = self.format_converter.get_video_format(buf, self.sinkpad)
+            self.logger.info(f"Chunks: {num_chunks}, format: {format}")
+
+            if num_chunks > 1:
+                self.logger.info(f"Processing batch with {num_chunks} chunks")
+                id_str, num_sources = self.metadata.read(buf)
+                self.logger.info(f"Metadata: ID={id_str}, num_sources={num_sources}")
+
+                batch_results = []
+                for i in range(num_chunks - 1):
+                    with buf.peek_memory(i).map(Gst.MapFlags.READ) as info:
+                        frame = self.format_converter.get_rgb_frame(
+                            info, format, self.height, self.width
+                        )
+                        result = self.forward(frame)
+                        self.logger.debug(
+                            f"Frame {i} result: {result} (type: {type(result)})"
+                        )
+                        batch_results.append(result)
+
+                if len(batch_results) != num_sources:
                     self.logger.error(
-                        "do_transform_ip: Buffer mapping returned None data."
+                        f"Expected {num_sources} results, got {len(batch_results)}"
                     )
                     return Gst.FlowReturn.ERROR
 
-                format = self.format_converter.get_video_format(buf, self.sinkpad)
-                frame = self.format_converter.get_rgb_frame(
-                    info, format, self.height, self.width
-                )
-
-                # Check if frame is mapped correctly
-                if frame is None or not isinstance(frame, np.ndarray):
-                    self.logger.error(
-                        "do_transform_ip: Frame data is None or not an ndarray."
+                for idx, result in enumerate(batch_results):
+                    if result is None:
+                        self.logger.warning(f"Frame {idx} result is None")
+                        continue
+                    self.logger.debug(f"Attaching metadata for frame {idx}")
+                    result_obj = (
+                        result[0]
+                        if isinstance(result, list) and len(result) > 0
+                        else result
                     )
-                    return Gst.FlowReturn.ERROR
-                self.logger.debug(f"do_transform_ip: Frame shape {frame.shape}")
+                    self.logger.debug(
+                        f"Before do_decode: {result_obj} (type: {type(result_obj)})"
+                    )
+                    # Pass stream index to do_decode
+                    self.do_decode(buf, result_obj, stream_idx=idx)
 
-                # Perform inference
-                results = self.forward(frame)
-
-                # ✅ Fix: Handle object detection dict separately
-                if isinstance(results, dict):
-                    self.do_decode(buf, results)  # Directly process the dict
-                elif isinstance(results, list):
-                    for i, result in enumerate(results):
-                        if result is None:
-                            self.logger.warning(
-                                f"do_transform_ip: Result at index {i} is None, skipping."
-                            )
-                            continue
-                        try:
-                            self.do_decode(buf, result)
-                        except Exception as e:
-                            self.logger.error(
-                                f"do_transform_ip: Error in do_decode for result at index {i}: {e}"
-                            )
+                attached_meta = GstAnalytics.buffer_get_analytics_relation_meta(buf)
+                if attached_meta:
+                    count = GstAnalytics.relation_get_length(attached_meta)
+                    self.logger.info(f"Total metadata relations attached: {count}")
                 else:
-                    self.logger.error(
-                        f"do_transform_ip: Expected dict or list from forward, got {type(results)}."
+                    self.logger.error("No metadata attached to buffer")
+
+            else:
+                self.logger.info("Single frame mode")
+                with buf.map(Gst.MapFlags.READ | Gst.MapFlags.WRITE) as info:
+                    if info.data is None:
+                        self.logger.error("Buffer map failed")
+                        return Gst.FlowReturn.ERROR
+                    frame = self.format_converter.get_rgb_frame(
+                        info, format, self.height, self.width
                     )
-                    return Gst.FlowReturn.ERROR
+                    if frame is None or not isinstance(frame, np.ndarray):
+                        self.logger.error("Invalid frame")
+                        return Gst.FlowReturn.ERROR
+                    results = self.forward(frame)
+                    self.logger.debug(
+                        f"Single frame result: {results} (type: {type(results)})"
+                    )
+                    if isinstance(results, dict):
+                        self.do_decode(buf, results, stream_idx=0)
+                    elif isinstance(results, list):
+                        for i, result in enumerate(results):
+                            if result is None:
+                                self.logger.warning(f"Result {i} is None")
+                                continue
+                            result_obj = (
+                                result if not isinstance(result, list) else result[0]
+                            )
+                            self.logger.debug(
+                                f"Before do_decode: {result_obj} (type: {type(result_obj)})"
+                            )
+                            self.do_decode(buf, result_obj, stream_idx=0)
+                    else:
+                        self.logger.error(f"Unexpected type: {type(results)}")
+                        return Gst.FlowReturn.ERROR
 
             return Gst.FlowReturn.OK
 
-        except Gst.MapError as e:
-            self.logger.error(f"do_transform_ip: Mapping error: {e}")
-            return Gst.FlowReturn.ERROR
-        except TypeError as e:
-            self.logger.error(
-                f"do_transform_ip: Type error likely due to NoneType: {e}"
-            )
-            return Gst.FlowReturn.ERROR
         except Exception as e:
-            self.logger.error(
-                f"do_transform_ip: Unexpected error during transformation: {e}"
-            )
+            self.logger.error(f"Transform error: {e}")
             return Gst.FlowReturn.ERROR
 
-    def do_decode(self, buf, output):
-        """
-        Decodes the output of the model and adds metadata to the buffer.
-        """
-        boxes = output["boxes"]
-        labels = output["labels"]
-        scores = output["scores"]
+    def do_decode(self, buf, output, stream_idx=0):
+        self.logger.info(
+            f"Decoding for stream {stream_idx}: {output} (type: {type(output)})"
+        )
+        if isinstance(output, dict):
+            self.logger.info(f"Stream {stream_idx} - Processing dict")
+            boxes = output["boxes"]
+            labels = output["labels"]
+            scores = output["scores"]
+        elif hasattr(output, "boxes"):  # Direct Results object
+            self.logger.info(f"Stream {stream_idx} - Processing Ultralytics Results")
+            boxes = output.boxes.xyxy.cpu().numpy()  # [N, 4]
+            scores = output.boxes.conf.cpu().numpy()  # [N]
+            labels = output.boxes.cls.cpu().numpy().astype(int)  # [N]
+        elif (
+            isinstance(output, list) and len(output) >= 6
+        ):  # [x1, y1, x2, y2, score, label]
+            self.logger.info(f"Stream {stream_idx} - Processing list of detections")
+            boxes = [[det[0], det[1], det[2], det[3]] for det in output]
+            scores = [det[4] for det in output]
+            labels = [int(det[5]) for det in output]
+        else:
+            self.logger.error(
+                f"Stream {stream_idx} - Unrecognized format: {output} (type: {type(output)})"
+            )
+            return
 
-        # Log buffer pointer and metadata information
-        self.logger.info(f"Processing buffer at address: {hex(id(buf))}")
-        self.logger.info(f"Processing {len(boxes)} detections.")
+        meta = GstAnalytics.buffer_add_analytics_relation_meta(buf)
+        if not meta:
+            self.logger.error(
+                f"Stream {stream_idx} - Failed to add analytics relation metadata"
+            )
+            return
 
+        self.logger.info(f"Stream {stream_idx} - Adding {len(boxes)} detections")
         for i, (box, label, score) in enumerate(zip(boxes, labels, scores)):
             x1, y1, x2, y2 = box
+            qk_string = f"stream_{stream_idx}_label_{label}"
+            qk = GLib.quark_from_string(qk_string)
+            ret, od_mtd = meta.add_od_mtd(qk, x1, y1, x2 - x1, y2 - y1, score)
+            if not ret:
+                self.logger.error(
+                    f"Stream {stream_idx} - Failed to add od_mtd for detection {i}"
+                )
+                continue
             self.logger.info(
-                f"Detection {i}: Box coordinates (x1={x1}, y1={y1}, x2={x2}, y2={y2}), "
-                f"Label={label}, Score={score:.2f}"
+                f"Stream {stream_idx} - Added detection {i}: label={qk_string}, x1={x1}, y1={y1}, w={x2-x1}, h={y2-y1}, score={score}"
             )
 
-            # Add GstAnalytics metadata to the buffer
-            meta = GstAnalytics.buffer_add_analytics_relation_meta(buf)
-            if meta:
-                qk = GLib.quark_from_string(f"label_{label}")
-                ret, mtd = meta.add_od_mtd(qk, x1, y1, x2 - x1, y2 - y1, score)
-                if not ret:
-                    self.logger.error("Failed to add object detection metadata")
-            else:
-                self.logger.error("Failed to add GstAnalytics metadata to buffer")
-
-        # Log buffer state after metadata attachment
         attached_meta = GstAnalytics.buffer_get_analytics_relation_meta(buf)
-        if not attached_meta:
-            self.logger.warning(
-                f"Failed to retrieve attached metadata immediately after addition for buffer: {hex(id(buf))}"
+        if attached_meta:
+            count = GstAnalytics.relation_get_length(attached_meta)
+            self.logger.info(
+                f"Stream {stream_idx} - Metadata relations after adding: {count}"
             )

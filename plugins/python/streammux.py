@@ -178,13 +178,13 @@ class StreamMux(GstBase.Aggregator):
 
         # 🚨 Log buffer push
         batch_buffer.pts = segment.start
-        self.logger.info("Pushing buffer from StreamMux")
+        self.logger.debug("Pushing buffer from StreamMux")
 
         # Debug metadata
         with batch_buffer.peek_memory(batch_buffer.n_memory() - 1).map(
             Gst.MapFlags.READ
         ) as map_info:
-            self.logger.info(f"Buffer last memory before push: {map_info.data.hex()}")
+            self.logger.debug(f"Buffer last memory before push: {map_info.data.hex()}")
 
         self.finish_buffer(batch_buffer)
 

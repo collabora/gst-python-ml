@@ -289,7 +289,14 @@ ssdlite320_mobilenet_v3_large
 
 #### yolo with tracking
 
-`GST_DEBUG=4 gst-launch-1.0   filesrc location=data/soccer_tracking.mp4 ! decodebin !  videoconvertscale ! video/x-raw,width=640,height=480 ! pyml_yolo model-name=yolo11m device=cuda:0 track=True ! pyml_overlay  ! videoconvert ! autovideosink`
+```
+GST_DEBUG=4 gst-launch-1.0   filesrc location=data/soccer_tracking.mp4 ! decodebin !  videoconvertscale ! video/x-raw,width=640,height=480 ! pyml_yolo model-name=yolo11m device=cuda:0 track=True ! pyml_overlay  ! videoconvert ! autovideosink
+```
+
+```
+GST_DEBUG=4 gst-launch-1.0   filesrc location=data/soccer_tracking.mp4 ! decodebin ! videoconvertscale ! video/x-raw,width=640,height=480,format=RGB ! pyml_streammux name=mux   filesrc location=data/soccer_tracking.mp4 ! decodebin ! videoconvertscale ! video/x-raw,width=640,height=480,format=RGB ! mux.   mux. ! pyml_yolo model-name=yolo11m device=cuda:0 track=True ! pyml_streamdemux name=demux   demux. ! queue ! videoconvert ! pyml_overlay ! videoconvert ! autovideosink sync=false   demux. ! queue ! videoconvert ! pyml_overlay ! videoconvert !  autovideosink sync=false
+
+```
 
 #### yolo with overlay
 

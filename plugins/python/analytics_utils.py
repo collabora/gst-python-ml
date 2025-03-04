@@ -40,39 +40,59 @@ class AnalyticsUtils:
         metadata = []
         meta = GstAnalytics.buffer_get_analytics_relation_meta(buffer)
         if not meta:
+            self.logger.info("No analytics relation metadata found on buffer")
             return metadata
 
         try:
             count = GstAnalytics.relation_get_length(meta)
+            self.logger.info(f"Found {count} analytics relations in metadata")
             for index in range(count):
                 ret, od_mtd = meta.get_od_mtd(index)
                 if not ret or od_mtd is None:
+                    self.logger.warning(f"Failed to get od_mtd at index {index}")
                     continue
 
                 label_quark = od_mtd.get_obj_type()
-                label = GLib.quark_to_string(label_quark)
-                track_id = self.extract_id_from_label(label)
+                full_label = GLib.quark_to_string(label_quark)
+                self.logger.debug(f"Extracted full label: {full_label}")
+                track_id, label = self.extract_id_from_label(full_label)
                 location = od_mtd.get_location()
                 presence, x, y, w, h, loc_conf_lvl = location
                 if presence:
                     metadata.append(
                         {
-                            "label": label,
+                            "label": label,  # Just id_<number> for TrackingDisplay
                             "track_id": track_id,
                             "confidence": loc_conf_lvl,
                             "box": {"x1": x, "y1": y, "x2": x + w, "y2": y + h},
                         }
                     )
+                    self.logger.debug(f"Added metadata entry: {metadata[-1]}")
         except Exception as e:
             self.logger.error(f"Error while extracting analytics metadata: {e}")
         return metadata
 
-    def extract_id_from_label(self, label):
-        """Extracts the numeric ID from a label formatted as 'id_<number>'."""
-        match = re.match(r"id_(\d+)", label)
+    def extract_id_from_label(self, full_label):
+        """Extracts the numeric ID and label from 'stream_<idx>_id_<number>'."""
+        match = re.match(r"stream_\d+_id_(\d+)", full_label)
         if match:
             track_id = int(match.group(1))
-            return track_id
+            label = f"id_{track_id}"
+            self.logger.debug(
+                f"Extracted track_id {track_id} and label '{label}' from '{full_label}'"
+            )
+            return track_id, label
         else:
-            print("No ID found in label")  # Optional debug message for unmatched format
-            return None  # Return None if the ID format is not found
+            self.logger.info(
+                f"No stream ID format in label '{full_label}', treating as plain label"
+            )
+            match = re.match(r"id_(\d+)", full_label)  # Fallback for single stream
+            if match:
+                track_id = int(match.group(1))
+                label = f"id_{track_id}"
+                self.logger.info(
+                    f"Extracted track_id {track_id} from plain label '{full_label}'"
+                )
+                return track_id, label
+            self.logger.info(f"No ID found in label '{full_label}'")
+            return None, full_label  # Fallback: full label if no match

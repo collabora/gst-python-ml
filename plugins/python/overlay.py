@@ -148,31 +148,41 @@ class Overlay(GstBase.BaseTransform):
         self.height = height
 
     def do_transform_ip(self, buf):
-        # first try to extract metadata from frame meta
+        # First try to extract metadata from frame meta
         if ANALYTICS_UTILS_AVAILABLE and not self.from_file:
             analytics_utils = AnalyticsUtils()
             extracted = analytics_utils.extract_analytics_metadata(buf)
+            self.logger.debug(f"Extracted buffer metadata: {extracted}")
             if extracted:
                 self.extracted_metadata = extracted
-        # if not available from meta or not previously loaded from file, then try from file
-        if not self.extracted_metadata:
+            else:
+                self.logger.warning(
+                    "No metadata extracted from buffer, checking file fallback"
+                )
+
+        # Fall back to file if buffer metadata is empty and meta_path is set
+        if not self.extracted_metadata and self.meta_path:
+            self.logger.info(f"Attempting to load metadata from file: {self.meta_path}")
             self.extracted_metadata = load_metadata(self.meta_path, self.logger)
             self.from_file = True
-        # no metdata - exit gracefully
+
+        # If no metadata from either source, pass through without overlay
         if not self.extracted_metadata:
+            self.logger.info(
+                "No metadata available from buffer or file, passing through buffer"
+            )
             self.frame_counter += 1
             return Gst.FlowReturn.OK
 
         frame_metadata = None
         if self.from_file:
             frame_metadata = self.extracted_metadata.get(self.frame_counter, [])
+            self.logger.info(
+                f"Using file metadata for frame {self.frame_counter}: {frame_metadata}"
+            )
         else:
             frame_metadata = self.extracted_metadata
-
-        # no frame metadata - exit gracefully
-        if not frame_metadata:
-            self.frame_counter += 1
-            return Gst.FlowReturn.OK
+            self.logger.debug(f"Using buffer metadata: {frame_metadata}")
 
         video_meta = GstVideo.buffer_get_video_meta(buf)
         if not video_meta:
