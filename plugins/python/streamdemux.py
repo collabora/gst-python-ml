@@ -24,8 +24,8 @@ gi.require_version("GLib", "2.0")
 
 from gi.repository import Gst, GObject  # noqa: E402
 
-from log.logger_factory import LoggerFactory
-from metadata import Metadata  # Import Metadata class
+from log.logger_factory import LoggerFactory  # noqa: E402
+from metadata import Metadata  # noqa: E402
 
 
 class StreamDemux(Gst.Element):
@@ -168,7 +168,7 @@ class StreamDemux(Gst.Element):
                     self.logger.info(f"Setting CAPS on {src_pad.get_name()}: {caps}")
                     src_pad.set_caps(caps)
                 else:
-                    self.logger.error(f"No CAPS found on sinkpad. Cannot push buffer.")
+                    self.logger.error("No CAPS found on sinkpad. Cannot push buffer.")
                     return Gst.FlowReturn.NOT_NEGOTIATED
 
             # 🚨 Ensure segment event

@@ -23,8 +23,8 @@ gi.require_version("GstBase", "1.0")
 gi.require_version("GObject", "2.0")
 from gi.repository import Gst, GObject, GstBase  # noqa: E402
 
-from log.logger_factory import LoggerFactory
-from metadata import Metadata  # Import Metadata class
+from log.logger_factory import LoggerFactory  # noqa: E402
+from metadata import Metadata  # noqa: E402
 
 
 class StreamMux(GstBase.Aggregator):
@@ -111,7 +111,6 @@ class StreamMux(GstBase.Aggregator):
         for pad in self.sinkpads:
             buf = pad.peek_buffer()
             if buf:
-                pad_index = list(self.sinkpads).index(pad)
                 structure = Gst.Structure.new_empty("selected-sample")
                 self.selected_samples(buf.pts, buf.dts, buf.duration, structure)
 
