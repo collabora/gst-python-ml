@@ -65,17 +65,15 @@ def get_pipelines_from_readme():
 PIPELINES = get_pipelines_from_readme()
 
 
-@pytest.mark.serial  # Force sequential execution
+@pytest.mark.serial
 @pytest.mark.parametrize("pipeline", PIPELINES, ids=lambda p: p)
 def test_pipeline(pipeline, tmp_path):
     """
-    Test a GStreamer pipeline for 100 frames, checking for errors.
+    Test a GStreamer pipeline for 100 frames, checking for errors, with latency tracing.
     """
-    # Ensure the log directory exists and force sync
     LOG_DIR.mkdir(parents=True, exist_ok=True)
     os.sync()
     unique_id = uuid.uuid4().hex[:8]
-    # Simplify log file name to avoid potential length issues
     log_file = LOG_DIR / f"test_{unique_id}.log"
 
     print(f"Testing pipeline: {pipeline}")
@@ -103,7 +101,7 @@ def test_pipeline(pipeline, tmp_path):
     print(f"Log dir writable: {os.access(str(LOG_DIR), os.W_OK)}")
     print(f"Log dir contents: {list(LOG_DIR.iterdir())}")
 
-    # Create the log file with os.open
+    # Create the log file
     try:
         fd = os.open(str(log_file), os.O_CREAT | os.O_WRONLY, 0o666)
         os.close(fd)
@@ -111,7 +109,12 @@ def test_pipeline(pipeline, tmp_path):
     except Exception as e:
         pytest.fail(f"Failed to create log file {log_file} with os.open: {e}")
 
-    time.sleep(0.1)  # Ensure filesystem sync
+    time.sleep(0.1)
+
+    # Set up environment with latency tracer
+    env = os.environ.copy()
+    env["GST_TRACERS"] = "latency"  # Enable latency tracer
+    # Optionally, filter to specific elements: env["GST_TRACERS"] = "latency;elements=decodebin,videoconvert"
 
     # Run the pipeline
     try:
@@ -122,7 +125,7 @@ def test_pipeline(pipeline, tmp_path):
                 stdout=log,
                 stderr=subprocess.STDOUT,
                 cwd=BASE_DIR,
-                env=os.environ.copy(),
+                env=env,
             )
             process.wait(timeout=30)
             return_code = process.returncode
