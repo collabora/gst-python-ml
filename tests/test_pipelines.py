@@ -26,38 +26,48 @@ def get_pipelines_from_readme():
     with open(readme_path, "r") as f:
         content = f.read()
 
-    pipeline_pattern = r"(GST_DEBUG=\d+\s+gst-launch-1\.0\s+.*?)(?=\n\n|\n\s*\n|$)"
+    # Match gst-launch-1.0 commands, accounting for Markdown backticks
+    pipeline_pattern = (
+        r"(?:`)?\s*(GST_DEBUG=\d+\s+gst-launch-1\.0\s+.*?)(?:`)?(?=\n\n|\n\s*\n|$)"
+    )
     pipelines = re.findall(pipeline_pattern, content, re.DOTALL)
 
     modified_pipelines = []
     for pipeline in pipelines:
+        pipeline = pipeline.strip().strip("`")
+        print(f"Raw pipeline after stripping: {pipeline}")
+
+        if not pipeline.startswith(("GST_DEBUG=", "gst-launch-1.0")):
+            print(f"Skipping invalid pipeline: {pipeline}")
+            continue
+
         parts = pipeline.split("!")
         modified = False
 
         for i, part in enumerate(parts):
-            if "videotestsrc" in part.strip():
-                if "num-buffers=" not in part:
-                    parts[i] = part.strip() + " num-buffers=100"
+            part_clean = part.strip()
+            if "videotestsrc" in part_clean:
+                if "num-buffers=" not in part_clean:
+                    # Append num-buffers=100 as part of the element, not after !
+                    parts[i] = f"{part_clean} num-buffers=100"
                 else:
-                    parts[i] = re.sub(
-                        r"num-buffers=\d+", "num-buffers=100", part.strip()
-                    )
+                    parts[i] = re.sub(r"num-buffers=\d+", "num-buffers=100", part_clean)
                 modified = True
                 break
 
         if not modified:
             for i, part in enumerate(parts):
-                if "filesrc" in part.strip():
-                    parts.insert(i + 1, " queue max-size-buffers=100 leaky=upstream ")
+                part_clean = part.strip()
+                if "filesrc" in part_clean:
+                    parts.insert(i + 1, "queue max-size-buffers=100 leaky=upstream")
                     modified = True
                     break
 
         if not modified:
-            print(
-                f"Warning: No filesrc or videotestsrc found in pipeline: {pipeline.strip()}"
-            )
+            print(f"Warning: No filesrc or videotestsrc found in pipeline: {pipeline}")
 
-        modified_pipeline = "!".join(parts).strip()
+        modified_pipeline = " ! ".join(parts).strip()
+        print(f"Modified pipeline: {modified_pipeline}")
         modified_pipelines.append(modified_pipeline)
     return modified_pipelines
 
@@ -113,8 +123,7 @@ def test_pipeline(pipeline, tmp_path):
 
     # Set up environment with latency tracer
     env = os.environ.copy()
-    env["GST_TRACERS"] = "latency"  # Enable latency tracer
-    # Optionally, filter to specific elements: env["GST_TRACERS"] = "latency;elements=decodebin,videoconvert"
+    env["GST_TRACERS"] = "latency"
 
     # Run the pipeline
     try:
