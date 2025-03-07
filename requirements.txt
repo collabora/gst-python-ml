@@ -10,3 +10,6 @@ huggingface-hub
 lap
 ultralytics
 pycairo
+
+
+pytest>=7.0
