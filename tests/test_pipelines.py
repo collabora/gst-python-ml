@@ -3,11 +3,19 @@ import os
 import re
 import pytest
 from pathlib import Path
+import shutil
+import uuid
+import stat
+import time
 
 # Base directory for the project
 BASE_DIR = Path(__file__).resolve().parent.parent
 LOG_DIR = BASE_DIR / "tests" / "logs"
-LOG_DIR.mkdir(exist_ok=True)
+
+# Check if gst-launch-1.0 is available
+if not shutil.which("gst-launch-1.0"):
+    raise RuntimeError("gst-launch-1.0 not found in PATH. Please install GStreamer.")
+
 
 # Read pipelines from README and modify for frame limit
 def get_pipelines_from_readme():
@@ -18,42 +26,94 @@ def get_pipelines_from_readme():
     with open(readme_path, "r") as f:
         content = f.read()
 
-    # Match gst-launch-1.0 commands
     pipeline_pattern = r"(GST_DEBUG=\d+\s+gst-launch-1\.0\s+.*?)(?=\n\n|\n\s*\n|$)"
     pipelines = re.findall(pipeline_pattern, content, re.DOTALL)
-    
-    # Modify each pipeline to limit to 100 frames
+
     modified_pipelines = []
     for pipeline in pipelines:
-        # Insert queue after first filesrc
         parts = pipeline.split("!")
+        modified = False
+
         for i, part in enumerate(parts):
-            if "filesrc" in part.strip():
-                parts.insert(i + 1, " queue max-size-buffers=100 leaky=upstream ")
+            if "videotestsrc" in part.strip():
+                if "num-buffers=" not in part:
+                    parts[i] = part.strip() + " num-buffers=100"
+                else:
+                    parts[i] = re.sub(
+                        r"num-buffers=\d+", "num-buffers=100", part.strip()
+                    )
+                modified = True
                 break
+
+        if not modified:
+            for i, part in enumerate(parts):
+                if "filesrc" in part.strip():
+                    parts.insert(i + 1, " queue max-size-buffers=100 leaky=upstream ")
+                    modified = True
+                    break
+
+        if not modified:
+            print(
+                f"Warning: No filesrc or videotestsrc found in pipeline: {pipeline.strip()}"
+            )
+
         modified_pipeline = "!".join(parts).strip()
         modified_pipelines.append(modified_pipeline)
     return modified_pipelines
 
+
 PIPELINES = get_pipelines_from_readme()
 
-@pytest.mark.parametrize("pipeline", PIPELINES, ids=lambda p: p.split("!")[0].strip())
+
+@pytest.mark.serial  # Force sequential execution
+@pytest.mark.parametrize("pipeline", PIPELINES, ids=lambda p: p)
 def test_pipeline(pipeline, tmp_path):
     """
     Test a GStreamer pipeline for 100 frames, checking for errors.
     """
-    log_file = LOG_DIR / f"test_{pipeline.split('!')[0].strip().replace(' ', '_')}.log"
-    
-    # Check if input file exists
+    # Ensure the log directory exists and force sync
+    LOG_DIR.mkdir(parents=True, exist_ok=True)
+    os.sync()
+    unique_id = uuid.uuid4().hex[:8]
+    # Simplify log file name to avoid potential length issues
+    log_file = LOG_DIR / f"test_{unique_id}.log"
+
+    print(f"Testing pipeline: {pipeline}")
+    print(f"Log file: {log_file}")
+
+    # Check if input file exists for filesrc
     match = re.search(r"filesrc location=([^\s!]+)", pipeline)
     if match:
         file_path = Path(match.group(1))
         if not file_path.is_absolute():
             file_path = BASE_DIR / file_path
         if not file_path.exists():
-            pytest.skip(f"Input file not found: {file_path}")
+            pytest.fail(f"Input file not found: {file_path}. Full pipeline: {pipeline}")
 
-    # Run the pipeline with a timeout
+    # Verify log directory state
+    if not LOG_DIR.exists():
+        pytest.fail(
+            f"Log directory {LOG_DIR} does not exist after mkdir. Check permissions."
+        )
+    if not os.access(str(LOG_DIR), os.W_OK):
+        perms = oct(stat.S_IMODE(os.stat(LOG_DIR).st_mode))
+        pytest.fail(f"No write permission for {LOG_DIR}. Current perms: {perms}")
+
+    print(f"Log dir exists: {LOG_DIR.exists()}")
+    print(f"Log dir writable: {os.access(str(LOG_DIR), os.W_OK)}")
+    print(f"Log dir contents: {list(LOG_DIR.iterdir())}")
+
+    # Create the log file with os.open
+    try:
+        fd = os.open(str(log_file), os.O_CREAT | os.O_WRONLY, 0o666)
+        os.close(fd)
+        print(f"Log file {log_file} created successfully with os.open")
+    except Exception as e:
+        pytest.fail(f"Failed to create log file {log_file} with os.open: {e}")
+
+    time.sleep(0.1)  # Ensure filesystem sync
+
+    # Run the pipeline
     try:
         with open(log_file, "w") as log:
             process = subprocess.Popen(
@@ -61,9 +121,9 @@ def test_pipeline(pipeline, tmp_path):
                 shell=True,
                 stdout=log,
                 stderr=subprocess.STDOUT,
-                cwd=BASE_DIR
+                cwd=BASE_DIR,
+                env=os.environ.copy(),
             )
-            # Wait up to 30 seconds for 100 frames to process
             process.wait(timeout=30)
             return_code = process.returncode
     except subprocess.TimeoutExpired:
@@ -72,30 +132,48 @@ def test_pipeline(pipeline, tmp_path):
             process.wait(timeout=2)
         except subprocess.TimeoutExpired:
             process.kill()
-        pytest.fail(f"Pipeline timed out after 30s. See {log_file}")
+        pytest.fail(
+            f"Pipeline timed out after 30s. Full pipeline: {pipeline}. See {log_file}"
+        )
     except Exception as e:
-        pytest.fail(f"Pipeline execution failed: {e}. See {log_file}")
+        pytest.fail(
+            f"Failed to execute pipeline: {e}. Full pipeline: {pipeline}. See {log_file}"
+        )
 
     # Check logs for errors
+    if not log_file.exists():
+        pytest.fail(f"Log file {log_file} was not created. Full pipeline: {pipeline}")
     with open(log_file, "r") as log:
         log_content = log.read()
-        error_lines = [line for line in log_content.splitlines() if "ERROR" in line or "WARN" in line]
+        error_lines = [
+            line
+            for line in log_content.splitlines()
+            if "ERROR" in line or "WARN" in line
+        ]
         if error_lines:
-            pytest.fail(f"Errors/Warnings found in pipeline:\n{''.join(error_lines)}\nSee {log_file}")
+            pytest.fail(
+                f"Errors/Warnings found in pipeline:\n{''.join(error_lines)}\nFull pipeline: {pipeline}\nSee {log_file}"
+            )
 
-    # Check exit code (0 or expected EOS code)
+    # Check exit code
     if return_code != 0:
-        # GStreamer might return non-zero for EOS with queue limit—check logs
-        if "End-Of-Stream" not in log_content and "reached end of stream" not in log_content:
-            pytest.fail(f"Pipeline failed with exit code {return_code}. See {log_file}")
-    
-    print(f"Pipeline {pipeline.split('!')[0]} processed 100 frames successfully")
+        if (
+            "End-Of-Stream" not in log_content
+            and "reached end of stream" not in log_content
+        ):
+            pytest.fail(
+                f"Pipeline failed with exit code {return_code}. Full pipeline: {pipeline}. See {log_file}"
+            )
+
+    print(f"Pipeline processed 100 frames successfully: {pipeline}")
+
 
 def test_pipelines_found():
     """Ensure at least one pipeline was found in README."""
     if not PIPELINES:
         pytest.fail("No gst-launch-1.0 pipelines found in README.md")
     print(f"Found {len(PIPELINES)} pipelines to test")
+
 
 if __name__ == "__main__":
     pytest.main(["-v", __file__])
