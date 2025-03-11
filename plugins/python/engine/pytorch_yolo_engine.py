@@ -23,9 +23,7 @@ from .pytorch_engine import PyTorchEngine
 
 class PyTorchYoloEngine(PyTorchEngine):
     def load_model(self, model_name, **kwargs):
-        """
-        Override base method to load the YOLO model (detection or segmentation).
-        """
+        """Load the YOLO model (detection or segmentation)."""
         try:
             self.set_model(YOLO(f"{model_name}.pt"))
             self.execute_with_stream(lambda: self.model.to(self.device))
@@ -35,38 +33,39 @@ class PyTorchYoloEngine(PyTorchEngine):
         except Exception as e:
             raise ValueError(f"Failed to load YOLO model '{model_name}'. Error: {e}")
 
-    def forward(self, frame):
-        """
-        Perform inference using the YOLO model.
-        """
-        # Make a writable copy of the frame to avoid non-writable tensor warnings
-        writable_frame = np.array(frame, copy=True)
+    def forward(self, frames):
+        """Perform inference using the YOLO model, supporting single frames or batches."""
+        is_batch = isinstance(frames, np.ndarray) and frames.ndim == 4  # (B, H, W, C)
+        writable_frames = np.array(frames, copy=True)
+        if not is_batch:
+            writable_frames = [writable_frames]  # YOLO expects a list for single frame
+        else:
+            writable_frames = list(writable_frames)  # Convert batch to list of frames
 
-        # Ensure model is loaded before attempting inference
         model = self.get_model()
         if model is None:
             self.logger.error("forward: Model is not loaded.")
-            return []
+            return [] if is_batch else None
 
         try:
-            # Perform tracking or regular inference
             if self.track:
                 results = self.execute_with_stream(
-                    lambda: model.track(source=writable_frame, persist=True)
+                    lambda: model.track(source=writable_frames, persist=True)
                 )
             else:
-                results = self.execute_with_stream(lambda: model([writable_frame]))
+                results = self.execute_with_stream(lambda: model(writable_frames))
 
-            # Log and handle None results explicitly
             if results is None:
                 self.logger.warning(
-                    "forward: Inference returned None; defaulting to an empty list."
+                    "Inference returned None; defaulting to empty results."
                 )
-                return []
+                return [] if is_batch else None
 
             self.logger.debug(f"forward: Inference results received: {results}")
-            return results
+            return (
+                results if is_batch else results[0]
+            )  # List for batch, single result otherwise
 
         except Exception as e:
             self.logger.error(f"forward: Error during inference: {e}")
-            return []
+            return [] if is_batch else None

@@ -32,8 +32,9 @@ from metadata import Metadata  # noqa: E402
 
 class ObjectDetectorBase(VideoTransform):
     """
-    GStreamer element for object detection.
-    Batch handling with clean logs. Marker: WORKING_2025_03_04_V7.
+    GStreamer element for object detection with batch processing support.
+    Handles both single-frame buffers (no metadata) and batch buffers (metadata in last chunk).
+    Marker: WORKING_2025_03_11_BATCH_V3.
     """
 
     track = GObject.Property(
@@ -51,7 +52,7 @@ class ObjectDetectorBase(VideoTransform):
         self.framerate_denom = 1
         self.format_converter = FormatConverter()
         self.metadata = Metadata("si")
-        self.logger.info("Initialized ObjectDetectorBase - WORKING_2025_03_04_V7")
+        self.logger.info("Initialized ObjectDetectorBase - WORKING_2025_03_11_BATCH_V3")
 
     def do_set_property(self, prop, value):
         self.logger.info(f"Setting property {prop.name} to {value}")
@@ -71,13 +72,13 @@ class ObjectDetectorBase(VideoTransform):
         else:
             raise AttributeError(f"Unknown property {prop.name}")
 
-    def forward(self, frame):
+    def forward(self, frames):
         self.logger.info(
-            f"Forward called with frame shape: {frame.shape if frame is not None else 'None'}"
+            f"Forward called with frames shape: {frames.shape if frames is not None else 'None'}"
         )
         if self.engine:
             self.engine.track = self.track
-            result = self.engine.forward(frame)
+            result = self.engine.forward(frames)
             self.logger.debug(f"Forward result: {result} (type: {type(result)})")
             return result
         return None
@@ -100,58 +101,14 @@ class ObjectDetectorBase(VideoTransform):
             format = self.format_converter.get_video_format(buf, self.sinkpad)
             self.logger.info(f"Chunks: {num_chunks}, format: {format}")
 
-            if num_chunks > 1:
-                self.logger.info(f"Processing batch with {num_chunks} chunks")
-                id_str, num_sources = self.metadata.read(buf)
-                self.logger.info(f"Metadata: ID={id_str}, num_sources={num_sources}")
+            if num_chunks < 1:
+                self.logger.error("Buffer has no memory chunks")
+                return Gst.FlowReturn.ERROR
 
-                batch_results = []
-                for i in range(num_chunks - 1):
-                    with buf.peek_memory(i).map(Gst.MapFlags.READ) as info:
-                        frame = self.format_converter.get_rgb_frame(
-                            info, format, self.height, self.width
-                        )
-                        result = self.forward(frame)
-                        self.logger.debug(
-                            f"Frame {i} result: {result} (type: {type(result)})"
-                        )
-                        batch_results.append(result)
-
-                if len(batch_results) != num_sources:
-                    self.logger.error(
-                        f"Expected {num_sources} results, got {len(batch_results)}"
-                    )
-                    return Gst.FlowReturn.ERROR
-
-                for idx, result in enumerate(batch_results):
-                    if result is None:
-                        self.logger.warning(f"Frame {idx} result is None")
-                        continue
-                    self.logger.debug(f"Attaching metadata for frame {idx}")
-                    result_obj = (
-                        result[0]
-                        if isinstance(result, list) and len(result) > 0
-                        else result
-                    )
-                    self.logger.debug(
-                        f"Before do_decode: {result_obj} (type: {type(result_obj)})"
-                    )
-                    # Pass stream index to do_decode
-                    self.do_decode(buf, result_obj, stream_idx=idx)
-
-                attached_meta = GstAnalytics.buffer_get_analytics_relation_meta(buf)
-                if attached_meta:
-                    count = GstAnalytics.relation_get_length(attached_meta)
-                    self.logger.info(f"Total metadata relations attached: {count}")
-                else:
-                    self.logger.error("No metadata attached to buffer")
-
-            else:
-                self.logger.info("Single frame mode")
-                with buf.map(Gst.MapFlags.READ | Gst.MapFlags.WRITE) as info:
-                    if info.data is None:
-                        self.logger.error("Buffer map failed")
-                        return Gst.FlowReturn.ERROR
+            # Single frame case: no metadata
+            if num_chunks == 1:
+                self.logger.info("Single frame mode (no metadata)")
+                with buf.peek_memory(0).map(Gst.MapFlags.READ) as info:
                     frame = self.format_converter.get_rgb_frame(
                         info, format, self.height, self.width
                     )
@@ -159,26 +116,61 @@ class ObjectDetectorBase(VideoTransform):
                         self.logger.error("Invalid frame")
                         return Gst.FlowReturn.ERROR
                     results = self.forward(frame)
-                    self.logger.debug(
-                        f"Single frame result: {results} (type: {type(results)})"
-                    )
-                    if isinstance(results, dict):
-                        self.do_decode(buf, results, stream_idx=0)
-                    elif isinstance(results, list):
-                        for i, result in enumerate(results):
-                            if result is None:
-                                self.logger.warning(f"Result {i} is None")
-                                continue
-                            result_obj = (
-                                result if not isinstance(result, list) else result[0]
-                            )
-                            self.logger.debug(
-                                f"Before do_decode: {result_obj} (type: {type(result_obj)})"
-                            )
-                            self.do_decode(buf, result_obj, stream_idx=0)
-                    else:
-                        self.logger.error(f"Unexpected type: {type(results)}")
+                    if results is None:
+                        self.logger.error("Inference returned None")
                         return Gst.FlowReturn.ERROR
+                    self.do_decode(buf, results, stream_idx=0)
+
+            # Batch case: last chunk is metadata
+            else:
+                self.logger.info(f"Batch mode with {num_chunks} chunks")
+                num_frames = num_chunks - 1
+                frames = []
+                for i in range(num_frames):
+                    with buf.peek_memory(i).map(Gst.MapFlags.READ) as info:
+                        frame = self.format_converter.get_rgb_frame(
+                            info, format, self.height, self.width
+                        )
+                        if frame is None or not isinstance(frame, np.ndarray):
+                            self.logger.error(f"Invalid frame at index {i}")
+                            return Gst.FlowReturn.ERROR
+                        frames.append(frame)
+
+                # Read metadata from the last chunk
+                id_str, num_sources = self.metadata.read(buf)
+                self.logger.info(f"Metadata: ID={id_str}, num_sources={num_sources}")
+                if num_sources != num_frames:
+                    self.logger.error(
+                        f"Metadata num_sources ({num_sources}) does not match frame count ({num_frames})"
+                    )
+                    return Gst.FlowReturn.ERROR
+
+                batch_frames = np.stack(frames, axis=0)
+                self.logger.info(f"Processing batch with shape: {batch_frames.shape}")
+                results = self.forward(batch_frames)
+                if results is None:
+                    self.logger.error("Inference returned None")
+                    return Gst.FlowReturn.ERROR
+
+                results_list = results if isinstance(results, list) else [results]
+                if len(results_list) != num_frames:
+                    self.logger.error(
+                        f"Expected {num_frames} results, got {len(results_list)}"
+                    )
+                    return Gst.FlowReturn.ERROR
+
+                for idx, result in enumerate(results_list):
+                    if result is None:
+                        self.logger.warning(f"Frame {idx} result is None")
+                        continue
+                    self.do_decode(buf, result, stream_idx=idx)
+
+            attached_meta = GstAnalytics.buffer_get_analytics_relation_meta(buf)
+            if attached_meta:
+                count = GstAnalytics.relation_get_length(attached_meta)
+                self.logger.info(f"Total metadata relations attached: {count}")
+            else:
+                self.logger.error("No metadata attached to buffer")
 
             return Gst.FlowReturn.OK
 
@@ -195,7 +187,7 @@ class ObjectDetectorBase(VideoTransform):
             boxes = output["boxes"]
             labels = output["labels"]
             scores = output["scores"]
-        elif hasattr(output, "boxes"):  # Direct Results object
+        elif hasattr(output, "boxes"):  # Direct Results object (e.g., Ultralytics YOLO)
             self.logger.info(f"Stream {stream_idx} - Processing Ultralytics Results")
             boxes = output.boxes.xyxy.cpu().numpy()  # [N, 4]
             scores = output.boxes.conf.cpu().numpy()  # [N]

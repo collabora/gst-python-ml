@@ -55,23 +55,18 @@ class PyTorchEngine(MLEngine):
                     "Phi-3-vision model and processor loaded successfully."
                 )
                 self.vision_language_model = True
-                self.model.eval()  # Set model to evaluation mode
+                self.model.eval()
 
-            # Check if model_name is a valid file path (local model)
             elif os.path.isfile(model_name):
-                # Load the model from the local path
                 self.model = torch.load(model_name)
                 self.logger.info(f"Model loaded from local path: {model_name}")
 
             else:
-                # Check for TorchVision models
                 if hasattr(models, model_name):
                     self.model = getattr(models, model_name)(pretrained=True)
                     self.logger.info(
                         f"Pre-trained vision model '{model_name}' loaded from TorchVision"
                     )
-
-                # Check for TorchVision detection models
                 elif hasattr(models.detection, model_name):
                     self.model = getattr(models.detection, model_name)(
                         weights="DEFAULT"
@@ -79,24 +74,11 @@ class PyTorchEngine(MLEngine):
                     self.logger.info(
                         f"Pre-trained detection model '{model_name}' loaded from TorchVision.detection"
                     )
-
-                # Handle Vision-Text models by passing processor and tokenizer names
                 elif processor_name and tokenizer_name:
-                    # Load the image processor (for vision inputs)
                     self.image_processor = AutoImageProcessor.from_pretrained(
                         processor_name
                     )
-                    self.logger.info(
-                        f"Image processor '{processor_name}' loaded successfully."
-                    )
-
-                    # Load the tokenizer (for text outputs)
                     self.tokenizer = AutoTokenizer.from_pretrained(tokenizer_name)
-                    self.logger.info(
-                        f"Tokenizer '{tokenizer_name}' loaded successfully."
-                    )
-
-                    # Load the vision-text model using VisionEncoderDecoderModel
                     self.set_model(
                         VisionEncoderDecoderModel.from_pretrained(model_name)
                     )
@@ -104,10 +86,7 @@ class PyTorchEngine(MLEngine):
                     self.logger.info(
                         f"Vision-Text model '{model_name}' loaded with processor and tokenizer."
                     )
-
-                # Handle general Hugging Face models (LLMs)
                 else:
-                    # Assume this is an LLM model
                     self.set_device(self.device)
                     self.tokenizer = AutoTokenizer.from_pretrained(model_name)
                     self.set_model(
@@ -126,7 +105,6 @@ class PyTorchEngine(MLEngine):
                         f"Pre-trained LLM model '{model_name}' loaded from Transformers."
                     )
 
-            # Move the model to the specified device with the specified CUDA stream
             self.execute_with_stream(lambda: self.model.to(self.device))
             self.logger.info(f"Model moved to {self.device}")
 
@@ -134,33 +112,25 @@ class PyTorchEngine(MLEngine):
             self.logger.error(f"Error loading model '{model_name}': {e}")
 
     def set_device(self, device):
-        """
-        Sets Pytorch device for the model and ensures the model
-        is on the correct device.
-        """
+        """Set PyTorch device for the model."""
         self.device = device
         if self.model:
-            # Check if the model is already on a valid device and avoid unnecessary transfers
             if "cuda" in device:
                 if not torch.cuda.is_available():
                     self.logger.error("CUDA is not available. Falling back to CPU.")
                     self.device = "cpu"
                     self.model = self.model.cpu()
                     return
-
                 try:
-                    # Default to cuda:0 if no index provided
                     self.device_index = device.split(":")[-1] if ":" in device else "0"
-                    # Set the specific CUDA device
                     torch.cuda.set_device(int(self.device_index))
                     self.execute_with_stream(lambda: self.model.to(self.device))
                     self.logger.info(f"Model moved to device {device}")
                 except Exception as e:
                     self.logger.error(f"Failed to set device to {device}: {e}")
-                    self.model = self.model.cpu()  # Fallback to CPU if failed
+                    self.model = self.model.cpu()
             elif device == "cpu":
                 try:
-                    # Only move the model if it's not a meta tensor
                     if not any(p.is_meta for p in self.model.parameters()):
                         self.model = self.model.cpu()
                         self.logger.info(f"Model moved to device {device}")
@@ -173,110 +143,90 @@ class PyTorchEngine(MLEngine):
             else:
                 self.logger.error(f"Invalid device specified: {device}")
 
-    def _forward_classification(self, frame):
-        """
-        Handles inference for classification models like ResNet.
-        Converts tensor output to a list for compatibility.
-        """
+    def _forward_classification(self, frames):
+        """Handle inference for classification models like ResNet."""
         self.model.eval()
-
-        # Convert frame to PyTorch tensor
+        is_batch = frames.ndim == 4  # (B, H, W, C) vs (H, W, C)
         img_tensor = (
-            torch.from_numpy(np.array(frame, copy=True)).permute(2, 0, 1).float()
+            torch.from_numpy(np.array(frames, copy=True))
+            .permute(
+                0 if is_batch else 2,
+                1 if is_batch else 0,
+                2 if is_batch else 1,
+                3 if is_batch else None,
+            )
+            .float()
         )
-        img_tensor /= 255.0  # Normalize
+        img_tensor /= 255.0
+        if not is_batch:
+            img_tensor = img_tensor.unsqueeze(0)  # Add batch dim for single frame
+        img_tensor = img_tensor.to(self.device)
 
-        # Move to device
-        img_tensor = img_tensor.to(self.device).unsqueeze(0)  # Add batch dimension
-
-        # Run inference
         with torch.inference_mode():
-            results = self.model(img_tensor)  # Expected: torch.Tensor
+            results = self.model(img_tensor)
+        return (
+            results.squeeze() if not is_batch else results
+        )  # Remove batch dim if single
 
-        return results.squeeze().cpu().tolist()  # Convert tensor to list
-
-    def forward(self, frame):
-        """Handle inference for different types of models and accumulate frames only for vision-text models."""
-        # Initialize frame buffer if it's not set and only for vision-text models
+    def forward(self, frames):
+        """Handle inference for different types of models, supporting single frames or batches."""
+        is_batch = isinstance(frames, np.ndarray) and frames.ndim == 4  # (B, H, W, C)
+        if not isinstance(frames, (np.ndarray, str)):
+            self.logger.error(f"Invalid input type for forward: {type(frames)}")
+            return None
 
         if self.vision_language_model and self.processor:
-            try:
-                # Convert the input frame (numpy array) to a PIL Image
-                image = Image.fromarray(np.uint8(frame))
-
-                # Define the conversation prompt
-                messages = [
-                    {
-                        "role": "user",
-                        "content": f"<|image_1|>\n{self.prompt}",
-                    }
-                ]
-
-                # Create the input prompt
-                prompt = self.processor.tokenizer.apply_chat_template(
-                    messages, tokenize=False, add_generation_prompt=True
+            # Vision-language models (e.g., Phi-3-vision) don’t support batch yet
+            if is_batch:
+                self.logger.error(
+                    "Batch processing not supported for vision-language models."
                 )
-
-                # Process the input prompt and image for the model
-                inputs = self.processor(prompt, [image], return_tensors="pt").to(
-                    self.device
-                )
-
-                # Set generation parameters
-                generation_args = {
-                    "max_new_tokens": 500,
-                    "temperature": 0.0,
-                    "do_sample": False,
-                }
-
-                # Generate response
+                return None
+            image = Image.fromarray(np.uint8(frames))
+            messages = [{"role": "user", "content": f"<|image_1|>\n{self.prompt}"}]
+            prompt = self.processor.tokenizer.apply_chat_template(
+                messages, tokenize=False, add_generation_prompt=True
+            )
+            inputs = self.processor(prompt, [image], return_tensors="pt").to(
+                self.device
+            )
+            generation_args = {
+                "max_new_tokens": 500,
+                "temperature": 0.0,
+                "do_sample": False,
+            }
+            with torch.inference_mode():
                 generate_ids = self.model.generate(
                     **inputs,
                     eos_token_id=self.processor.tokenizer.eos_token_id,
                     **generation_args,
                 )
-
-                # Remove input tokens from the response
-                generate_ids = generate_ids[:, inputs["input_ids"].shape[1] :]
-
-                # Decode the response
-                response = self.processor.batch_decode(
-                    generate_ids,
-                    skip_special_tokens=True,
-                    clean_up_tokenization_spaces=False,
-                )[0]
-
-                self.logger.info(f"Generated response: {response}")
-
-                # Explicitly free memory for unnecessary tensors and clear cache
-                del inputs, generate_ids  # Only delete intermediate tensors
-                torch.cuda.empty_cache()
-                gc.collect()
-
-                return response
-
-            except Exception as e:
-                self.logger.error(
-                    f"Failed to process frame for Phi-3-vision. Error: {e}"
-                )
+            generate_ids = generate_ids[:, inputs["input_ids"].shape[1] :]
+            response = self.processor.batch_decode(
+                generate_ids,
+                skip_special_tokens=True,
+                clean_up_tokenization_spaces=False,
+            )[0]
+            self.logger.info(f"Generated response: {response}")
+            del inputs, generate_ids
+            torch.cuda.empty_cache()
+            gc.collect()
+            return response
 
         elif self.image_processor and self.tokenizer:
-            # Add every self.model.config.encoder.num_frames'th
-            # incoming frame to the buffer
+            # Vision-text models with frame buffering
+            if is_batch:
+                self.logger.error(
+                    "Batch processing not supported for vision-text models with frame buffering."
+                )
+                return None
             self.counter += 1
             if self.counter % self.frame_stride == 0:
-                self.frame_buffer.append(frame)
-
-            # Check if we have accumulated enough frames
+                self.frame_buffer.append(frames)
             if len(self.frame_buffer) >= self.batch_size:
                 self.logger.info(f"Processing {self.batch_size} frames")
                 try:
-                    # generate caption
-                    gen_kwargs = {
-                        "min_length": 10,
-                        "max_length": 20,
-                        "num_beams": 8,
-                    }
+                    gen_kwargs = {"min_length": 10, "max_length": 20, "num_beams": 8}
                     pixel_values = self.image_processor(
                         self.frame_buffer, return_tensors="pt"
                     ).pixel_values.to(self.device)
@@ -284,175 +234,83 @@ class PyTorchEngine(MLEngine):
                     captions = self.tokenizer.batch_decode(
                         tokens, skip_special_tokens=True
                     )
-                    for i, caption in enumerate(captions):
-                        self.logger.info(f"{caption}")
-
-                    return captions[0]
-
-                except Exception as e:
-                    self.logger.info(f"Failed to process frames. Error: {e}")
-                finally:
-                    # Clear the frame buffer after processing
+                    self.logger.info(f"Captions: {captions}")
                     self.frame_buffer = []
-
-        # Vision-only models:
-        elif not self.tokenizer:
-            """
-            Perform object detection using the PyTorch model.
-            """
-            # Set the model to evaluation mode to avoid training-related behavior
-            self.model.eval()
-
-            # If model is a classification model (like ResNet), return top prediction
-            if "resnet" in self.model.__class__.__name__.lower():
-                preds = self._forward_classification(frame)  # Run classification
-
-                # ✅ Convert list to NumPy array if necessary
-                if isinstance(preds, list):
-                    preds = np.array(preds)
-
-                # ✅ Convert Torch tensor to NumPy if necessary
-                if isinstance(preds, torch.Tensor):
-                    preds = preds.cpu().numpy()
-
-                # ✅ Log predictions
-                # self.logger.info(f"Raw predictions shape: {preds.shape}, values: {preds}")
-
-                # Ensure the array has correct dimensions
-                if preds.ndim == 1:
-                    preds = np.expand_dims(
-                        preds, axis=0
-                    )  # Convert (num_classes,) → (1, num_classes)
-
-                # ✅ Validate predictions
-                if preds.shape[1] == 0:
-                    self.logger.error(
-                        "Classification model returned empty predictions!"
-                    )
+                    return captions[0]
+                except Exception as e:
+                    self.logger.error(f"Failed to process frames: {e}")
+                    self.frame_buffer = []
                     return None
+            return None
 
-                # Compute softmax to get probabilities
+        elif not self.tokenizer:
+            # Vision-only models (e.g., detection, classification)
+            self.model.eval()
+            if "resnet" in self.model.__class__.__name__.lower():
+                preds = self._forward_classification(frames)
+                preds = (
+                    preds.cpu().numpy() if isinstance(preds, torch.Tensor) else preds
+                )
+                if not is_batch:
+                    preds = np.expand_dims(preds, 0)
                 probs = np.exp(preds) / np.sum(np.exp(preds), axis=1, keepdims=True)
+                top_classes = np.argmax(probs, axis=1)
+                confidences = np.max(probs, axis=1)
+                results = [
+                    {"labels": [int(c)], "scores": [float(s)]}
+                    for c, s in zip(top_classes, confidences)
+                ]
+                self.logger.info(f"Classification results: {results}")
+                return results[0] if not is_batch else results
 
-                # Get the highest probability class
-                top_class = np.argmax(probs, axis=1)[0]  # Convert to int
-                confidence = float(np.max(probs, axis=1)[0])  # Convert to float
-
-                # ✅ Log classification output
-                self.logger.info(
-                    f"Top class: {top_class}, Confidence score: {confidence:.4f}"
-                )
-
-                # ✅ Check for missing labels/scores
-                if top_class is None or confidence is None:
-                    self.logger.warning(
-                        "Engine: classification result missing label or score."
-                    )
-
-                return {
-                    "labels": np.array(
-                        [top_class]
-                    ),  # Ensure labels are in list/array format
-                    "scores": np.array(
-                        [confidence]
-                    ),  # Ensure scores are in list/array format
-                }
-
-            # Make a writable copy of the frame to avoid non-writable tensor warnings
-            writable_frame = np.array(frame, copy=True)
-
-            # Convert the input frame (likely a NumPy array) to a PyTorch tensor
-            img_tensor = torch.from_numpy(writable_frame).permute(2, 0, 1).float()
-
-            # Normalize the tensor if needed
-            img_tensor /= 255.0
-
-            # Move the tensor to the appropriate device (e.g., GPU if available)
+            # Detection models (e.g., Mask R-CNN)
+            writable_frames = np.array(frames, copy=True)
+            if not is_batch:
+                writable_frames = np.expand_dims(writable_frames, 0)  # Add batch dim
+            img_tensor = (
+                torch.from_numpy(writable_frames).permute(0, 3, 1, 2).float() / 255.0
+            )
             img_tensor = img_tensor.to(self.device)
+            with torch.inference_mode():
+                results = self.model(img_tensor if is_batch else [img_tensor[0]])
+            output_np = []
+            for res in results:
+                res_np = {
+                    k: v.cpu().numpy() if isinstance(v, torch.Tensor) else v
+                    for k, v in res.items()
+                }
+                output_np.append(res_np)
+            return output_np if is_batch else output_np[0]
 
-            # Perform inference
-            results = None
-            if self.device_queue_id is not None and "cuda" in self.device:
-                # Create a CUDA stream
-                s = torch.cuda.Stream(
-                    device=self.device,
-                    device_index=self.device_index,
-                    device_type=1,  # Use an appropriate value for the device type
-                    priority=0,
-                    stream_id=self.device_queue_id,
-                )
-                with torch.cuda.stream(s), torch.inference_mode():
-                    results = self.model([img_tensor])[0]
-            else:
-                with torch.inference_mode():
-                    results = self.model([img_tensor])[0]
-            # Generic conversion of all PyTorch tensors in the output to NumPy arrays
-            output_np = {}
-            for key, value in results.items():
-                if isinstance(value, torch.Tensor):
-                    output_np[key] = (
-                        value.cpu().numpy()
-                    )  # Convert tensor to NumPy array
-                else:
-                    output_np[key] = value  # If not a tensor, leave it as is
-
-            return output_np
-
-        # LLM-only models:
         elif self.tokenizer and not self.image_processor:
-            try:
-                # Assume the frame is a text input for LLM
-                inputs = self.tokenizer(frame, return_tensors="pt").to(self.device)
-
-                # Generate text using the LLM model
-                with torch.inference_mode():
-                    generated_tokens = self.model.generate(**inputs)
-
-                # Decode the generated tokens to text
-                generated_text = self.tokenizer.batch_decode(
-                    generated_tokens, skip_special_tokens=True
-                )
-                self.logger.info(f"Generated text: {generated_text}")
-
-                return generated_text
-
-            except Exception as e:
-                self.logger.error(f"Failed to process text input. Error: {e}")
+            # LLM-only models
+            if is_batch:
+                self.logger.error("Batch processing not supported for LLM-only models.")
+                return None
+            inputs = self.tokenizer(frames, return_tensors="pt").to(self.device)
+            with torch.inference_mode():
+                generated_tokens = self.model.generate(**inputs)
+            generated_text = self.tokenizer.batch_decode(
+                generated_tokens, skip_special_tokens=True
+            )
+            self.logger.info(f"Generated text: {generated_text}")
+            return generated_text
 
         else:
             raise ValueError("Unsupported model type or missing processor/tokenizer.")
 
     def generate(self, input_text, max_length=100):
-        # Tokenize input text for LLM
         inputs = self.tokenizer(input_text, return_tensors="pt").to(self.device)
-
-        # Generate text using the model
-        outputs = self.model.generate(**inputs, max_length=100)
-
-        # Decode the output to text
+        outputs = self.model.generate(**inputs, max_length=max_length)
         generated_text = self.tokenizer.decode(outputs[0], skip_special_tokens=True)
         self.logger.info(f"Generated text: {generated_text}")
         return generated_text
 
     def execute_with_stream(self, func, *args, **kwargs):
-        """
-        Execute a function in the context of a CUDA stream if a valid device_queue_id is provided.
-
-        :param func: The function to execute.
-        :param args: Positional arguments to pass to the function.
-        :param kwargs: Keyword arguments to pass to the function.
-        :return: The result of the executed function.
-        """
         if self.device_queue_id is not None and "cuda" in self.device:
-            # Create a CUDA stream
             s = torch.cuda.Stream(
-                device=self.device,
-                device_index=self.device_index,
-                device_type=1,  # Use an appropriate value for the device type
-                priority=0,
-                stream_id=self.device_queue_id,
+                device=self.device, priority=0, stream_id=self.device_queue_id
             )
             with torch.cuda.stream(s):
                 return func(*args, **kwargs)
-        else:
-            return func(*args, **kwargs)
+        return func(*args, **kwargs)

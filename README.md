@@ -296,7 +296,7 @@ GST_DEBUG=4 gst-launch-1.0  filesrc location=data/people.mp4 ! decodebin ! video
 #### maskrcnn
 
 ```
-GST_DEBUG=4 gst-launch-1.0   filesrc location=data/people.mp4 ! decodebin ! videoconvert ! videoscale ! pyml_maskrcnn device=cuda batch-size=4 model-name=maskrcnn_resnet50_fpn ! videoconvert ! pyml_overlay ! autovideosink
+GST_DEBUG=4 gst-launch-1.0   filesrc location=data/people.mp4 ! decodebin ! videoconvert ! videoscale ! pyml_maskrcnn device=cuda batch-size=4 model-name=maskrcnn_resnet50_fpn ! videoconvert ! pyml_overlay ! videoconvert ! autovideosink
 ```
 
 #### yolo with tracking

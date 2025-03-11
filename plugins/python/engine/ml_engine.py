@@ -30,8 +30,8 @@ class MLEngine(ABC):
         self.vision_language_model = False
         self.tokenizer = None
         self.image_processor = None
-        self.batch_size = 1
-        self.frame_buffer = []
+        self.batch_size = 1  # Default batch size
+        self.frame_buffer = []  # For vision-text models or manual buffering
         self.frame_stride = None
         self.counter = 0
         self.device_queue_id = None
@@ -52,7 +52,7 @@ class MLEngine(ABC):
         return self.prompt
 
     def get_device(self):
-        """Return the loaded model for use in inference."""
+        """Return the device the model is running on."""
         return self.device
 
     @abstractmethod
@@ -69,11 +69,12 @@ class MLEngine(ABC):
         self.model = model
 
     @abstractmethod
-    def forward(self, frame):
-        """Execute inference (usually object detection)"""
+    def forward(self, frames):
+        """Execute inference (usually object detection) on a single frame or batch of frames.
+        Input can be a single NumPy array (H, W, C) or a batch (B, H, W, C)."""
         pass
 
     @abstractmethod
     def generate(self, input_text, max_length=100):
-        """Generate LLM text"""
+        """Generate LLM text."""
         pass
