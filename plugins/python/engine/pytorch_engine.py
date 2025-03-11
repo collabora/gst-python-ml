@@ -176,7 +176,6 @@ class PyTorchEngine(MLEngine):
             return None
 
         if self.vision_language_model and self.processor:
-            # Vision-language models (e.g., Phi-3-vision) don’t support batch yet
             if is_batch:
                 self.logger.error(
                     "Batch processing not supported for vision-language models."
@@ -214,7 +213,6 @@ class PyTorchEngine(MLEngine):
             return response
 
         elif self.image_processor and self.tokenizer:
-            # Vision-text models with frame buffering
             if is_batch:
                 self.logger.error(
                     "Batch processing not supported for vision-text models with frame buffering."
@@ -244,7 +242,6 @@ class PyTorchEngine(MLEngine):
             return None
 
         elif not self.tokenizer:
-            # Vision-only models (e.g., detection, classification)
             self.model.eval()
             if "resnet" in self.model.__class__.__name__.lower():
                 preds = self._forward_classification(frames)
@@ -263,27 +260,35 @@ class PyTorchEngine(MLEngine):
                 self.logger.info(f"Classification results: {results}")
                 return results[0] if not is_batch else results
 
-            # Detection models (e.g., Mask R-CNN)
+            # Detection models (e.g., Mask R-CNN) with true batch inference
             writable_frames = np.array(frames, copy=True)
-            if not is_batch:
-                writable_frames = np.expand_dims(writable_frames, 0)  # Add batch dim
-            img_tensor = (
-                torch.from_numpy(writable_frames).permute(0, 3, 1, 2).float() / 255.0
-            )
+            img_tensor = torch.from_numpy(writable_frames).float() / 255.0
+            if is_batch:
+                img_tensor = img_tensor.permute(
+                    0, 3, 1, 2
+                )  # (B, H, W, C) -> (B, C, H, W)
+            else:
+                img_tensor = img_tensor.permute(2, 0, 1)  # (H, W, C) -> (C, H, W)
+                img_tensor = img_tensor.unsqueeze(0)  # Add batch dim: (1, C, H, W)
             img_tensor = img_tensor.to(self.device)
+
             with torch.inference_mode():
-                results = self.model(img_tensor if is_batch else [img_tensor[0]])
-            output_np = []
-            for res in results:
-                res_np = {
+                results = self.model(img_tensor)  # Batch inference
+
+            # Convert results to NumPy for consistency
+            output_np = [
+                {
                     k: v.cpu().numpy() if isinstance(v, torch.Tensor) else v
                     for k, v in res.items()
                 }
-                output_np.append(res_np)
-            return output_np if is_batch else output_np[0]
+                for res in results
+            ]
+            self.logger.debug(
+                f"Batch inference results: {len(output_np)} frames processed"
+            )
+            return output_np[0] if not is_batch else output_np
 
         elif self.tokenizer and not self.image_processor:
-            # LLM-only models
             if is_batch:
                 self.logger.error("Batch processing not supported for LLM-only models.")
                 return None

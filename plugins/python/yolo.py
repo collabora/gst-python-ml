@@ -135,66 +135,44 @@ class YOLOTransform(ObjectDetectorBase):
         self.engine_name = "pytorch-yolo"
 
     def do_decode(self, buf, result, stream_idx=0):
-        """
-        Decode the YOLO model's output detections (and optionally segmentation masks)
-        and add metadata to the GStreamer buffer, tagged with stream index.
-        """
         self.logger.debug(
             f"Decoding YOLO result for buffer {hex(id(buf))}, stream {stream_idx}: {result}"
         )
-        # Extract relevant data from the result
-        boxes = result.boxes  # Extract boxes object
+        boxes = result.boxes
         masks = None
         if not self.engine.track:
-            masks = result.masks  # Extract masks for segmentation (if available)
+            masks = result.masks
 
         if boxes is None or len(boxes) == 0:
             self.logger.info("No detections found.")
             return
 
-        # Add analytics metadata to the buffer
         meta = GstAnalytics.buffer_add_analytics_relation_meta(buf)
         if not meta:
             self.logger.error(
-                f"Stream {stream_idx} - Failed to add analytics relation metadata to buffer"
+                f"Stream {stream_idx} - Failed to add analytics relation metadata"
             )
             return
 
         self.logger.debug(
             f"Stream {stream_idx} - Attaching metadata for {len(boxes)} detections"
         )
-        # Iterate over the detected boxes and add metadata
         for i in range(len(boxes)):
-            x1, y1, x2, y2 = boxes.xyxy[i]  # Extract bounding box coordinates
-            score = boxes.conf[i]  # Extract confidence score
-            label = boxes.cls[i]  # Extract class label
-
-            # Add object detection metadata
+            x1, y1, x2, y2 = boxes.xyxy[i]
+            score = boxes.conf[i]
+            label = boxes.cls[i]
             label_num = label.item()
-            qk_string = COCO_CLASSES.get(
-                label_num, f"unknown_{label_num}"
-            )  # Default to 'unknown' if label is not found
-            # Handle tracking if enabled
-            tracking_mtd = None
-            if self.engine.track:
-                track_id = result.boxes.id[i]  # Extract track ID
-                if track_id is not None:
-                    ret, tracking_mtd = meta.add_tracking_mtd(
-                        track_id, Gst.util_get_timestamp()
-                    )
-                    if not ret:
-                        self.logger.error(
-                            f"Stream {stream_idx} - Failed to add tracking metadata"
-                        )
-                        continue
+            class_name = COCO_CLASSES.get(label_num, f"unknown_{label_num}")
 
-                    track_id_int = int(track_id.item())
-                    self.logger.debug(
-                        f"Stream {stream_idx} - Track ID {track_id_int} found for object {i}"
-                    )
-                    qk_string = (
-                        f"stream_{stream_idx}_id_{track_id_int}"  # Stream-tagged label
-                    )
+            # Use class name for detection, track_id for tracking
+            if self.engine.track and hasattr(boxes, "id") and boxes.id is not None:
+                track_id = boxes.id[i]
+                track_id_int = int(track_id.item())
+                qk_string = f"stream_{stream_idx}_id_{track_id_int}"
+            else:
+                qk_string = (
+                    f"stream_{stream_idx}_{class_name}"  # No index, just class name
+                )
 
             qk = GLib.quark_from_string(qk_string)
             ret, od_mtd = meta.add_od_mtd(
@@ -214,12 +192,18 @@ class YOLOTransform(ObjectDetectorBase):
                 f"Stream {stream_idx} - Added od_mtd: label={qk_string}, x1={x1.item()}, y1={y1.item()}, w={x2.item()-x1.item()}, h={y2.item()-y1.item()}, score={score.item()}"
             )
 
-            if tracking_mtd is not None:
+            # Tracking metadata only when track=True
+            if self.engine.track and hasattr(boxes, "id") and boxes.id is not None:
+                ret, tracking_mtd = meta.add_tracking_mtd(
+                    track_id_int, Gst.util_get_timestamp()
+                )
+                if not ret:
+                    self.logger.error(
+                        f"Stream {stream_idx} - Failed to add tracking metadata"
+                    )
+                    continue
                 ret = GstAnalytics.RelationMeta.set_relation(
-                    meta,
-                    GstAnalytics.RelTypes.RELATE_TO,
-                    od_mtd.id,
-                    tracking_mtd.id,
+                    meta, GstAnalytics.RelTypes.RELATE_TO, od_mtd.id, tracking_mtd.id
                 )
                 if not ret:
                     self.logger.error(
@@ -230,15 +214,13 @@ class YOLOTransform(ObjectDetectorBase):
                         f"Stream {stream_idx} - Linked od_mtd {od_mtd.id} to tracking_mtd {tracking_mtd.id}"
                     )
 
-            # Handle segmentation masks (if available)
             if masks is not None:
                 self.add_segmentation_metadata(buf, masks[i], x1, y1, x2, y2)
 
-        # Log total relations attached
         attached_meta = GstAnalytics.buffer_get_analytics_relation_meta(buf)
         if attached_meta:
             count = GstAnalytics.relation_get_length(attached_meta)
-            self.logger.debug(
+            self.logger.info(
                 f"Stream {stream_idx} - Metadata attached to buffer {hex(id(buf))}: {count} relations"
             )
         else:
