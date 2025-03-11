@@ -16,12 +16,12 @@
 # Free Software Foundation, Inc., 51 Franklin Street, Fifth Floor,
 # Boston, MA 02110-1301, USA.
 
-from global_logger import GlobalLogger
-
 CAN_REGISTER_ELEMENT = True
 try:
     import json
     import os
+    from confluent_kafka import Producer
+
     import gi
 
     gi.require_version("Gst", "1.0")
@@ -29,8 +29,8 @@ try:
     gi.require_version("GLib", "2.0")
     from gi.repository import Gst, GObject, GLib, GstAnalytics  # noqa: E402
 
-    from utils import runtime_check_gstreamer_version
-    from confluent_kafka import Producer
+    from log.logger_factory import LoggerFactory  # noqa: E402
+    from utils import runtime_check_gstreamer_version  # noqa: E402
 except ImportError as e:
     CAN_REGISTER_ELEMENT = False
     GlobalLogger().warning(
@@ -114,6 +114,7 @@ class KafkaSink(Gst.Element):
 
     def __init__(self):
         super().__init__()
+        self.logger = LoggerFactory.get(LoggerFactory.LOGGER_TYPE_GST)
         runtime_check_gstreamer_version()
 
         self.sinkpad = Gst.Pad.new_from_template(

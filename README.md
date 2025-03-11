@@ -280,7 +280,18 @@ ssdlite320_mobilenet_v3_large
 
 ##### fasterrcnn/kafka
 
-`GST_DEBUG=4 gst-launch-1.0  filesrc location=data/people.mp4 ! decodebin ! videoconvert ! videoscale ! video/x-raw,width=640,height=480 ! pyml_objectdetector model-name=fasterrcnn_resnet50_fpn device=cuda batch-size=4 ! pyml_kafkasink schema-file=data/pyml_object_detector.json broker=kafka:9092 topic=test-kafkasink-topic  2>&1 | grep pyml_kafkasink`
+a) run pipeline from host
+
+```
+GST_DEBUG=4 gst-launch-1.0  filesrc location=data/people.mp4 ! decodebin ! videoconvert ! videoscale ! video/x-raw,width=640,height=480 ! pyml_objectdetector model-name=fasterrcnn_resnet50_fpn device=cuda batch-size=4 ! pyml_kafkasink schema-file=data/pyml_object_detector.json broker=localhost:29092 topic=test-kafkasink-topic
+```
+
+b) run pipeline from docker
+
+```
+GST_DEBUG=4 gst-launch-1.0  filesrc location=data/people.mp4 ! decodebin ! videoconvert ! videoscale ! video/x-raw,width=640,height=480 ! pyml_objectdetector model-name=fasterrcnn_resnet50_fpn device=cuda batch-size=4 ! pyml_kafkasink schema-file=data/pyml_object_detector.json broker=kafka:9092 topic=test-kafkasink-topic
+```
+
 
 #### maskrcnn
 
