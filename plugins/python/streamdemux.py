@@ -51,6 +51,18 @@ class StreamDemux(Gst.Element):
         ),
     )
 
+    __gproperties__ = {
+        "max-queue-size": (
+            GObject.TYPE_UINT,
+            "Maximum queue size",
+            "Maximum number of buffers to queue per source pad",
+            1,
+            1000,
+            10,
+            GObject.ParamFlags.READWRITE,
+        ),
+    }
+
     def __init__(self):
         super().__init__()
         self.logger = LoggerFactory.get(LoggerFactory.LOGGER_TYPE_GST)
@@ -62,6 +74,19 @@ class StreamDemux(Gst.Element):
         self.metadata = Metadata("si")
         self.buffer_queues = defaultdict(list)
         self.src_pads = {}
+        self.max_queue_size = 10
+        self.pads_requested = False  # Track initial pad creation
+
+    def do_set_property(self, prop, value):
+        if prop.name == "max-queue-size":
+            self.max_queue_size = value
+        else:
+            raise AttributeError(f"Unknown property: {prop.name}")
+
+    def do_get_property(self, prop):
+        if prop.name == "max-queue-size":
+            return self.max_queue_size
+        raise AttributeError(f"Unknown property: {prop.name}")
 
     def do_request_new_pad(self, template, name, caps):
         if name is None:
@@ -96,7 +121,6 @@ class StreamDemux(Gst.Element):
         out_buffer.duration = buffer.duration
         out_buffer.dts = buffer.dts
         out_buffer.offset = buffer.offset
-
         meta = GstAnalytics.buffer_get_analytics_relation_meta(buffer)
         if meta:
             out_meta = GstAnalytics.buffer_add_analytics_relation_meta(out_buffer)
@@ -124,9 +148,12 @@ class StreamDemux(Gst.Element):
         if ret != Gst.FlowReturn.OK:
             self.logger.error(f"Failed to push buffer on {pad_name}: {ret}")
             if ret not in (Gst.FlowReturn.FLUSHING, Gst.FlowReturn.ERROR):
-                self.buffer_queues[pad_name].append(
-                    buffer
-                )  # Queue if downstream not ready
+                if len(self.buffer_queues[pad_name]) < self.max_queue_size:
+                    self.buffer_queues[pad_name].append(buffer)
+                else:
+                    self.logger.warning(
+                        f"Dropping buffer on {pad_name}: queue full (size={self.max_queue_size})"
+                    )
             return False
         self.logger.debug(f"Successfully pushed buffer on {pad_name}")
         return True
@@ -137,6 +164,24 @@ class StreamDemux(Gst.Element):
             try:
                 id_str, num_sources = self.metadata.read(buffer)
                 self.logger.info(f"Decoded ID: {id_str}, num_sources: {num_sources}")
+                # Request all pads upfront on first buffer
+                if not self.pads_requested:
+                    for idx in range(num_sources):
+                        pad_name = f"src_{idx}"
+                        if pad_name not in self.src_pads:
+                            self.request_pad(
+                                self.get_pad_template("src_%u"), pad_name, None
+                            )
+                    self.pads_requested = True
+                    # Ensure caps are set on all pads
+                    if self.sinkpad.has_current_caps():
+                        caps = self.sinkpad.get_current_caps()
+                        for src_pad in self.src_pads.values():
+                            if not src_pad.has_current_caps():
+                                self.logger.info(
+                                    f"Setting caps on {src_pad.get_name()}: {caps}"
+                                )
+                                src_pad.set_caps(caps)
             except ValueError as e:
                 self.logger.error(str(e))
 
@@ -170,16 +215,13 @@ class StreamDemux(Gst.Element):
                 src_pad.segment_pushed = True
 
             out_buffer = self.process_src_pad(buffer, memory_chunk, stream_idx=idx)
-            # Try pushing queued buffers first
             while self.buffer_queues[pad_name]:
                 if self.push_buffer(
                     src_pad, self.buffer_queues[pad_name].pop(0), pad_name
                 ):
                     continue
                 break
-            # Push current buffer
             self.push_buffer(src_pad, out_buffer, pad_name)
-
         return Gst.FlowReturn.OK
 
     def event(self, pad, parent, event):
