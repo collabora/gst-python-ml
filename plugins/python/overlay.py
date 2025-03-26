@@ -36,10 +36,12 @@ try:
     gi.require_version("Gst", "1.0")
     gi.require_version("GstBase", "1.0")
     gi.require_version("GstVideo", "1.0")
+    gi.require_version("GstGL", "1.0")  # Add OpenGL support
     from gi.repository import (
         Gst,
         GstBase,
         GstVideo,
+        GstGL,
         GObject,
     )  # noqa: E402
     from log.logger_factory import LoggerFactory
@@ -49,7 +51,8 @@ except ImportError as e:
         f"The 'pyml_overlay' element will not be available. Error: {e}"
     )
 
-VIDEO_FORMATS = "video/x-raw, format=(string){ RGBA, ARGB, BGRA, ABGR }"
+# Support both CPU and GPU buffers
+VIDEO_FORMATS = "video/x-raw, format=(string){ RGBA, ARGB, BGRA, ABGR }; video/x-raw(memory:GLMemory), format=(string){ RGBA, ARGB, BGRA, ABGR }"
 OVERLAY_CAPS = Gst.Caps.from_string(VIDEO_FORMATS)
 
 
@@ -99,9 +102,12 @@ class Overlay(GstBase.BaseTransform):
         self.frame_counter = 0
         self.tracking_display = TrackingDisplay()
         self.do_set_dims(0, 0)
-        self.overlay_graphics = OverlayGraphicsFactory.create(
-            GraphicsType.CAIRO, self.width, self.height
-        )
+        self.overlay_graphics = None
+        self.graphics_type = None
+        self.gl_context = None
+        self.use_opengl = False
+        self.gl_display = None
+        self.context_set = False
 
     def do_get_property(self, prop: GObject.ParamSpec):
         if prop.name == "meta-path":
@@ -124,6 +130,27 @@ class Overlay(GstBase.BaseTransform):
         if message.type == Gst.MessageType.EOS:
             self.logger.info("Reset frame counter.")
             self.frame_counter = 0
+        elif message.type == Gst.MessageType.NEED_CONTEXT:
+            self.logger.info("Received NEED_CONTEXT message")
+            context = message.parse_context()
+            if context and context.get_context_type() == "gst.gl.app_context":
+                self.gl_context = context.get_gl_context()
+                if self.gl_context:
+                    self.logger.info(
+                        "Successfully acquired OpenGL context from NEED_CONTEXT"
+                    )
+                    self.use_opengl = True
+                    self.context_set = True
+                else:
+                    self.logger.warning(
+                        "Failed to get OpenGL context from NEED_CONTEXT"
+                    )
+            elif context and context.get_context_type() == "gst.gl.display":
+                self.gl_display = context.get_gl_display()
+                if self.gl_display:
+                    self.logger.info(
+                        "Successfully acquired GL display from NEED_CONTEXT"
+                    )
 
     def do_start(self):
         if self.bus:
@@ -138,9 +165,13 @@ class Overlay(GstBase.BaseTransform):
         video_info = GstVideo.VideoInfo.new_from_caps(incaps)
         self.do_set_dims(video_info.width, video_info.height)
         self.logger.info(f"Video caps set: width={self.width}, height={self.height}")
-        self.overlay_graphics = OverlayGraphicsFactory.create(
-            GraphicsType.CAIRO, self.width, self.height
-        )
+
+        # Check if the input caps are using GLMemory
+        self.use_opengl = "memory:GLMemory" in incaps.to_string()
+        self.logger.info(f"Using OpenGL: {self.use_opengl}")
+
+        # We’ll defer graphics backend initialization to do_transform_ip
+        # after the OpenGL context is retrieved via NEED_CONTEXT
         return True
 
     def do_set_dims(self, width, height):
@@ -184,23 +215,89 @@ class Overlay(GstBase.BaseTransform):
             frame_metadata = self.extracted_metadata
             self.logger.debug(f"Using buffer metadata: {frame_metadata}")
 
-        video_meta = GstVideo.buffer_get_video_meta(buf)
-        if not video_meta:
-            self.logger.error("No video meta available, cannot proceed with overlay")
-            return Gst.FlowReturn.ERROR
+        # Initialize the graphics backend if not already done
+        if self.overlay_graphics is None:
+            # If we expected OpenGL but the context isn't set, fall back to Cairo
+            if self.use_opengl and not self.context_set:
+                self.logger.warning("OpenGL context not set, falling back to Cairo")
+                self.use_opengl = False
 
-        success, map_info = buf.map(Gst.MapFlags.WRITE)
-        if not success:
-            return Gst.FlowReturn.ERROR
+            # Check if the buffer's memory is GLMemory
+            is_gl_buffer = False
+            if buf.n_memory() > 0:  # Ensure the buffer has at least one memory object
+                memory = buf.peek_memory(0)  # Get the first memory object
+                is_gl_buffer = GstGL.is_gl_memory(memory)
+            else:
+                self.logger.warning(
+                    "Buffer has no memory objects, falling back to Cairo"
+                )
+                is_gl_buffer = False
 
-        try:
-            self.overlay_graphics.initialize(map_info.data)
-            self.do_post_process(frame_metadata)
-            self.overlay_graphics.finalize()
-        finally:
-            buf.unmap(map_info)
-            self.frame_counter += 1
+            # If the buffer is not GLMemory, force Cairo rendering
+            if not is_gl_buffer:
+                self.logger.info("Buffer is not GLMemory, using Cairo rendering")
+                self.use_opengl = False
 
+            self.graphics_type = (
+                GraphicsType.OPENGL if self.use_opengl else GraphicsType.CAIRO
+            )
+            self.overlay_graphics = OverlayGraphicsFactory.create(
+                self.graphics_type, self.width, self.height
+            )
+            self.logger.info(f"Initialized graphics backend: {self.graphics_type}")
+
+        # Handle rendering based on the graphics type
+        if self.graphics_type == GraphicsType.OPENGL:
+            # Double-check that the buffer is GLMemory
+            is_gl_buffer = False
+            if buf.n_memory() > 0:
+                memory = buf.peek_memory(0)
+                is_gl_buffer = GstGL.is_gl_memory(memory)
+
+            if not is_gl_buffer:
+                self.logger.error(
+                    "Buffer is not in GLMemory, cannot proceed with OpenGL overlay"
+                )
+                return Gst.FlowReturn.ERROR
+
+            if not self.gl_context:
+                self.logger.error(
+                    "No OpenGL context available, cannot proceed with OpenGL overlay"
+                )
+                return Gst.FlowReturn.ERROR
+
+            try:
+                # Make the OpenGL context current
+                self.gl_context.make_current()
+                self.overlay_graphics.initialize(buf)
+                self.do_post_process(frame_metadata)
+                self.overlay_graphics.finalize()
+            except Exception as e:
+                self.logger.error(f"Error during OpenGL rendering: {e}")
+                return Gst.FlowReturn.ERROR
+            finally:
+                self.gl_context.make_current(False)
+        else:  # Cairo rendering
+            video_meta = GstVideo.buffer_get_video_meta(buf)
+            if not video_meta:
+                self.logger.error(
+                    "No video meta available, cannot proceed with overlay"
+                )
+                return Gst.FlowReturn.ERROR
+
+            success, map_info = buf.map(Gst.MapFlags.WRITE)
+            if not success:
+                self.logger.error("Failed to map buffer for writing")
+                return Gst.FlowReturn.ERROR
+
+            try:
+                self.overlay_graphics.initialize(map_info.data)
+                self.do_post_process(frame_metadata)
+                self.overlay_graphics.finalize()
+            finally:
+                buf.unmap(map_info)
+
+        self.frame_counter += 1
         return Gst.FlowReturn.OK
 
     def do_post_process(self, frame_metadata):

@@ -22,6 +22,13 @@ import cairo
 from abc import ABC, abstractmethod
 from enum import Enum
 
+# Add OpenGL imports for the new OpenGL-based overlay graphics
+try:
+    from OpenGL.GL import *
+    from OpenGL.GLU import *
+except ImportError as e:
+    raise ImportError(f"Failed to import OpenGL libraries: {e}")
+
 
 class Color:
     def __init__(self, r, g, b, a=1.0):
@@ -261,9 +268,145 @@ class CairoOverlayGraphics(OverlayGraphics):
         self.context.stroke()
 
 
+class OpenGLOverlayGraphics(OverlayGraphics):
+    def __init__(self, width, height):
+        self.width = width
+        self.height = height
+        self.fbo = None
+        self.texture = None
+        self.setup_opengl()
+
+    def setup_opengl(self):
+        """Setup OpenGL resources like FBO and texture for offscreen rendering."""
+        # Generate and bind a Framebuffer Object (FBO)
+        self.fbo = glGenFramebuffers(1)
+        glBindFramebuffer(GL_FRAMEBUFFER, self.fbo)
+
+        # Generate and bind a texture for the FBO
+        self.texture = glGenTextures(1)
+        glBindTexture(GL_TEXTURE_2D, self.texture)
+        glTexImage2D(
+            GL_TEXTURE_2D,
+            0,
+            GL_RGBA,
+            self.width,
+            self.height,
+            0,
+            GL_RGBA,
+            GL_UNSIGNED_BYTE,
+            None,
+        )
+        glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR)
+        glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR)
+
+        # Attach the texture to the FBO
+        glFramebufferTexture2D(
+            GL_FRAMEBUFFER, GL_COLOR_ATTACHMENT0, GL_TEXTURE_2D, self.texture, 0
+        )
+
+        # Check if the FBO is complete
+        if glCheckFramebufferStatus(GL_FRAMEBUFFER) != GL_FRAMEBUFFER_COMPLETE:
+            raise RuntimeError("Framebuffer setup failed")
+
+        # Unbind the FBO
+        glBindFramebuffer(GL_FRAMEBUFFER, 0)
+
+    def initialize(self, buffer_data):
+        """Initialize OpenGL context for rendering."""
+        # Bind the FBO for offscreen rendering
+        glBindFramebuffer(GL_FRAMEBUFFER, self.fbo)
+        glViewport(0, 0, self.width, self.height)
+
+        # Clear the buffer
+        glClearColor(0.0, 0.0, 0.0, 0.0)  # Clear with transparent background
+        glClear(GL_COLOR_BUFFER_BIT)
+
+        # Setup orthographic projection to match the video frame coordinates
+        glMatrixMode(GL_PROJECTION)
+        glLoadIdentity()
+        gluOrtho2D(0, self.width, self.height, 0)  # Flip y-axis to match video
+        glMatrixMode(GL_MODELVIEW)
+        glLoadIdentity()
+
+        # Enable blending for transparency
+        glEnable(GL_BLEND)
+        glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA)
+
+    def draw_metadata(self, metadata, tracking_display):
+        """Draw metadata and tracking points on the current frame."""
+        if tracking_display:
+            for point in tracking_display.history:
+                self.draw_tracking_point(
+                    point["center"], point["color"], point["opacity"]
+                )
+
+        for data in metadata:
+            box = data["box"]
+            self.draw_bounding_box(box)
+
+            label = data.get("label", "")
+            self.draw_text(label, box["x1"], box["y1"] - 10, Color(1, 0, 0, 1), 12)
+
+            if tracking_display:
+                track_id = data.get("track_id")
+                if track_id is not None:
+                    center = {
+                        "x": (box["x1"] + box["x2"]) / 2,
+                        "y": (box["y1"] + box["y2"]) / 2,
+                    }
+                    tracking_display.add_tracking_point(center, track_id)
+
+    def finalize(self):
+        """Finalize OpenGL rendering and clean up."""
+        # Unbind the FBO and flush the OpenGL commands
+        glBindFramebuffer(GL_FRAMEBUFFER, 0)
+        glFlush()
+
+    def draw_bounding_box(self, box):
+        """Draw a bounding box using OpenGL."""
+        glColor4f(1.0, 0.0, 0.0, 1.0)  # Red color
+        glLineWidth(2.0)
+        glBegin(GL_LINE_LOOP)
+        glVertex2f(box["x1"], box["y1"])
+        glVertex2f(box["x2"], box["y1"])
+        glVertex2f(box["x2"], box["y2"])
+        glVertex2f(box["x1"], box["y2"])
+        glEnd()
+
+    def draw_text(self, label, x, y, color, font_size):
+        """Draw text at the specified position (placeholder for texture atlas)."""
+        # Note: OpenGL doesn't have built-in text rendering.
+        # In a production environment, you should pre-render text into a texture atlas
+        # using a library like FreeType, then draw textured quads here.
+        # For now, this is a placeholder.
+        pass
+
+    def draw_tracking_point(self, center, color, opacity):
+        """Draw a tracking point with specified color and opacity."""
+        size = 10
+        half_size = size / 2
+        glColor4f(color.r, color.g, color.b, opacity)
+        glBegin(GL_QUADS)
+        glVertex2f(center["x"] - half_size, center["y"] - half_size)
+        glVertex2f(center["x"] + half_size, center["y"] - half_size)
+        glVertex2f(center["x"] + half_size, center["y"] + half_size)
+        glVertex2f(center["x"] - half_size, center["y"] + half_size)
+        glEnd()
+
+    def draw_line(self, start, end, color, width):
+        """Draw a line from start to end with specified color and width."""
+        glColor4f(color.r, color.g, color.b, color.a)
+        glLineWidth(width)
+        glBegin(GL_LINES)
+        glVertex2f(start["x"], start["y"])
+        glVertex2f(end["x"], end["y"])
+        glEnd()
+
+
 class GraphicsType(Enum):
     CAIRO = ("cairo",)
     SKIA = "skia"
+    OPENGL = "opengl"  # Add OpenGL as a graphics type
 
 
 class OverlayGraphicsFactory:
@@ -272,6 +415,8 @@ class OverlayGraphicsFactory:
         """Factory method to create an OverlayGraphics object based on type."""
         if graphics_type == GraphicsType.CAIRO:
             return CairoOverlayGraphics(width, height)
+        elif graphics_type == GraphicsType.OPENGL:
+            return OpenGLOverlayGraphics(width, height)
         else:
             raise ValueError(f"Unknown graphics type: {graphics_type}")
 
