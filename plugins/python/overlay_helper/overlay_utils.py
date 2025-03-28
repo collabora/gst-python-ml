@@ -19,7 +19,13 @@
 import os
 import json
 
-from overlay_utils_interface import Color, TrackingDisplay, OverlayGraphics, GraphicsType, OverlayGraphicsFactory
+from .overlay_utils_interface import (
+    Color,
+    TrackingDisplay,
+    OverlayGraphics,
+    GraphicsType,
+    OverlayGraphicsFactory,
+)
 
 
 def load_metadata(meta_path, logger):

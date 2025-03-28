@@ -18,6 +18,7 @@
 
 try:
     import gi
+
     gi.require_version("Gst", "1.0")
     gi.require_version("GstVulkan", "1.0")
     from gi.repository import Gst, GstVulkan
@@ -25,7 +26,7 @@ except ImportError as e:
     raise ImportError(f"Failed to import Vulkan libraries: {e}")
 
 import numpy as np
-from overlay_utils_interface import OverlayGraphics, Color
+from .overlay_utils_interface import OverlayGraphics, Color
 
 
 class VulkanOverlayGraphics(OverlayGraphics):
@@ -33,7 +34,7 @@ class VulkanOverlayGraphics(OverlayGraphics):
         self.width = width
         self.height = height
         self.vk_device = vk_device  # GstVulkanDevice
-        self.vk_queue = vk_queue    # GstVulkanQueue
+        self.vk_queue = vk_queue  # GstVulkanQueue
         self.vk_command_pool = None
         self.vk_command_buffer = None
         self.vk_image = None
@@ -44,7 +45,7 @@ class VulkanOverlayGraphics(OverlayGraphics):
         self.vk_pipeline_layout = None
         self.vk_vertex_buffer = None
         self.vertices = []  # List to store vertex data for batching
-        self.colors = []    # List to store color data for batching
+        self.colors = []  # List to store color data for batching
         self.setup_vulkan()
 
     def setup_vulkan(self):
@@ -55,7 +56,9 @@ class VulkanOverlayGraphics(OverlayGraphics):
             raise RuntimeError("Vulkan queue not provided")
 
         # Create a command pool
-        self.vk_command_pool = GstVulkan.CommandPool.new(self.vk_device, self.vk_queue.queue_family)
+        self.vk_command_pool = GstVulkan.CommandPool.new(
+            self.vk_device, self.vk_queue.queue_family
+        )
         if not self.vk_command_pool:
             raise RuntimeError("Failed to create Vulkan command pool")
 
@@ -72,7 +75,12 @@ class VulkanOverlayGraphics(OverlayGraphics):
         # Create a vertex buffer
         # We'll allocate enough space for a reasonable number of vertices (e.g., 1000 quads = 4000 vertices)
         vertex_buffer_size = 4000 * 6 * 4  # 6 floats per vertex (x, y, r, g, b, a)
-        self.vk_vertex_buffer = GstVulkan.Buffer.new(self.vk_device, vertex_buffer_size, GstVulkan.MemoryPropertyFlagBits.HOST_VISIBLE_BIT | GstVulkan.MemoryPropertyFlagBits.HOST_COHERENT_BIT)
+        self.vk_vertex_buffer = GstVulkan.Buffer.new(
+            self.vk_device,
+            vertex_buffer_size,
+            GstVulkan.MemoryPropertyFlagBits.HOST_VISIBLE_BIT
+            | GstVulkan.MemoryPropertyFlagBits.HOST_COHERENT_BIT,
+        )
         if not self.vk_vertex_buffer:
             raise RuntimeError("Failed to create Vulkan vertex buffer")
 
@@ -101,7 +109,9 @@ class VulkanOverlayGraphics(OverlayGraphics):
         """Create a Vulkan render pass."""
         attachment = GstVulkan.AttachmentDescription()
         attachment.format = GstVulkan.Format.R8G8B8A8_UNORM
-        attachment.load_op = GstVulkan.AttachmentLoadOp.LOAD  # Preserve existing content
+        attachment.load_op = (
+            GstVulkan.AttachmentLoadOp.LOAD
+        )  # Preserve existing content
         attachment.store_op = GstVulkan.AttachmentStoreOp.STORE
         attachment.initial_layout = GstVulkan.ImageLayout.TRANSFER_SRC_OPTIMAL
         attachment.final_layout = GstVulkan.ImageLayout.TRANSFER_SRC_OPTIMAL
@@ -151,7 +161,11 @@ class VulkanOverlayGraphics(OverlayGraphics):
             raise RuntimeError("Failed to get Vulkan image from buffer")
 
         # Create an image view
-        self.vk_image_view = GstVulkan.ImageView.new(self.vk_image, GstVulkan.ImageViewType.VIEW_2D, GstVulkan.Format.R8G8B8A8_UNORM)
+        self.vk_image_view = GstVulkan.ImageView.new(
+            self.vk_image,
+            GstVulkan.ImageViewType.VIEW_2D,
+            GstVulkan.Format.R8G8B8A8_UNORM,
+        )
         if not self.vk_image_view:
             raise RuntimeError("Failed to create Vulkan image view")
 
@@ -161,7 +175,13 @@ class VulkanOverlayGraphics(OverlayGraphics):
             raise RuntimeError("Failed to create Vulkan render pass")
 
         # Create a framebuffer
-        self.vk_framebuffer = GstVulkan.Framebuffer.new(self.vk_device, self.width, self.height, self.vk_render_pass, [self.vk_image_view])
+        self.vk_framebuffer = GstVulkan.Framebuffer.new(
+            self.vk_device,
+            self.width,
+            self.height,
+            self.vk_render_pass,
+            [self.vk_image_view],
+        )
         if not self.vk_framebuffer:
             raise RuntimeError("Failed to create Vulkan framebuffer")
 
@@ -176,7 +196,9 @@ class VulkanOverlayGraphics(OverlayGraphics):
         # Begin the render pass
         clear_color = GstVulkan.ClearColorValue()
         clear_color.float32 = [0.0, 0.0, 0.0, 0.0]  # Transparent clear
-        self.vk_command_buffer.begin_render_pass(self.vk_render_pass, self.vk_framebuffer, clear_color=clear_color)
+        self.vk_command_buffer.begin_render_pass(
+            self.vk_render_pass, self.vk_framebuffer, clear_color=clear_color
+        )
 
         # Set up viewport and scissor
         viewport = GstVulkan.Viewport()
@@ -315,12 +337,18 @@ class VulkanOverlayGraphics(OverlayGraphics):
         x, y = center["x"], center["y"]
 
         # Define the four corners of the quad
-        self.vertices.extend([
-            x - half_size, y - half_size,  # Bottom-left
-            x + half_size, y - half_size,  # Bottom-right
-            x + half_size, y + half_size,  # Top-right
-            x - half_size, y + half_size   # Top-left
-        ])
+        self.vertices.extend(
+            [
+                x - half_size,
+                y - half_size,  # Bottom-left
+                x + half_size,
+                y - half_size,  # Bottom-right
+                x + half_size,
+                y + half_size,  # Top-right
+                x - half_size,
+                y + half_size,  # Top-left
+            ]
+        )
 
         # Add the color for all four vertices
         self.colors.extend([color.r, color.g, color.b, opacity] * 4)
@@ -340,11 +368,17 @@ class VulkanOverlayGraphics(OverlayGraphics):
         perp_y = dx
         half_width = width / 2
 
-        self.vertices.extend([
-            start["x"] + perp_x * half_width, start["y"] + perp_y * half_width,
-            end["x"] + perp_x * half_width, end["y"] + perp_y * half_width,
-            end["x"] - perp_x * half_width, end["y"] - perp_y * half_width,
-            start["x"] - perp_x * half_width, start["y"] - perp_y * half_width
-        ])
+        self.vertices.extend(
+            [
+                start["x"] + perp_x * half_width,
+                start["y"] + perp_y * half_width,
+                end["x"] + perp_x * half_width,
+                end["y"] + perp_y * half_width,
+                end["x"] - perp_x * half_width,
+                end["y"] - perp_y * half_width,
+                start["x"] - perp_x * half_width,
+                start["y"] - perp_y * half_width,
+            ]
+        )
 
         self.colors.extend([color.r, color.g, color.b, color.a] * 4)

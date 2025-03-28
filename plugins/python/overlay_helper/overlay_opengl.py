@@ -23,7 +23,7 @@ try:
 except ImportError as e:
     raise ImportError(f"Failed to import OpenGL libraries: {e}")
 
-from overlay_utils_interface import OverlayGraphics, Color
+from .overlay_utils_interface import OverlayGraphics, Color
 
 
 class OpenGLOverlayGraphics(OverlayGraphics):
@@ -34,7 +34,7 @@ class OpenGLOverlayGraphics(OverlayGraphics):
         self.texture = None
         self.vbo = None
         self.vertices = []  # List to store vertex data for batching
-        self.colors = []   # List to store color data for batching
+        self.colors = []  # List to store color data for batching
         self.setup_opengl()
 
     def setup_opengl(self):
@@ -56,12 +56,24 @@ class OpenGLOverlayGraphics(OverlayGraphics):
         # Generate and bind a texture for the FBO
         self.texture = glGenTextures(1)
         glBindTexture(GL_TEXTURE_2D, self.texture)
-        glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA, self.width, self.height, 0, GL_RGBA, GL_UNSIGNED_BYTE, None)
+        glTexImage2D(
+            GL_TEXTURE_2D,
+            0,
+            GL_RGBA,
+            self.width,
+            self.height,
+            0,
+            GL_RGBA,
+            GL_UNSIGNED_BYTE,
+            None,
+        )
         glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR)
         glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR)
 
         # Attach the texture to the FBO
-        glFramebufferTexture2D(GL_FRAMEBUFFER, GL_COLOR_ATTACHMENT0, GL_TEXTURE_2D, self.texture, 0)
+        glFramebufferTexture2D(
+            GL_FRAMEBUFFER, GL_COLOR_ATTACHMENT0, GL_TEXTURE_2D, self.texture, 0
+        )
 
         # Check if the FBO is complete
         if glCheckFramebufferStatus(GL_FRAMEBUFFER) != GL_FRAMEBUFFER_COMPLETE:
@@ -216,12 +228,18 @@ class OpenGLOverlayGraphics(OverlayGraphics):
         x, y = center["x"], center["y"]
 
         # Define the four corners of the quad
-        self.vertices.extend([
-            x - half_size, y - half_size,  # Bottom-left
-            x + half_size, y - half_size,  # Bottom-right
-            x + half_size, y + half_size,  # Top-right
-            x - half_size, y + half_size   # Top-left
-        ])
+        self.vertices.extend(
+            [
+                x - half_size,
+                y - half_size,  # Bottom-left
+                x + half_size,
+                y - half_size,  # Bottom-right
+                x + half_size,
+                y + half_size,  # Top-right
+                x - half_size,
+                y + half_size,  # Top-left
+            ]
+        )
 
         # Add the color for all four vertices
         self.colors.extend([color.r, color.g, color.b, opacity] * 4)
@@ -245,12 +263,18 @@ class OpenGLOverlayGraphics(OverlayGraphics):
         half_width = width / 2
 
         # Define the four corners of the quad representing the line
-        self.vertices.extend([
-            start["x"] + perp_x * half_width, start["y"] + perp_y * half_width,  # Bottom-left
-            end["x"] + perp_x * half_width, end["y"] + perp_y * half_width,      # Bottom-right
-            end["x"] - perp_x * half_width, end["y"] - perp_y * half_width,      # Top-right
-            start["x"] - perp_x * half_width, start["y"] - perp_y * half_width   # Top-left
-        ])
+        self.vertices.extend(
+            [
+                start["x"] + perp_x * half_width,
+                start["y"] + perp_y * half_width,  # Bottom-left
+                end["x"] + perp_x * half_width,
+                end["y"] + perp_y * half_width,  # Bottom-right
+                end["x"] - perp_x * half_width,
+                end["y"] - perp_y * half_width,  # Top-right
+                start["x"] - perp_x * half_width,
+                start["y"] - perp_y * half_width,  # Top-left
+            ]
+        )
 
         # Add the color for all four vertices
         self.colors.extend([color.r, color.g, color.b, color.a] * 4)

@@ -25,7 +25,7 @@ if ANALYTICS_UTILS_AVAILABLE:
 
 CAN_REGISTER_ELEMENT = True
 try:
-    from overlay_utils import (
+    from overlay_helper.overlay_utils import (
         load_metadata,
         TrackingDisplay,
         GraphicsType,
@@ -147,28 +147,42 @@ class Overlay(GstBase.BaseTransform):
                 if context_type == "gst.gl.app_context":
                     self.gl_context = context.get_gl_context()
                     if self.gl_context:
-                        self.logger.info("Successfully acquired OpenGL context from NEED_CONTEXT")
+                        self.logger.info(
+                            "Successfully acquired OpenGL context from NEED_CONTEXT"
+                        )
                         self.use_opengl = True
                         self.context_set = True
                         self.context_received = True
                     else:
-                        self.logger.warning("Failed to get OpenGL context from NEED_CONTEXT: gl_context is None")
+                        self.logger.warning(
+                            "Failed to get OpenGL context from NEED_CONTEXT: gl_context is None"
+                        )
                 elif context_type == "gst.gl.display":
                     self.gl_display = context.get_gl_display()
                     if self.gl_display:
-                        self.logger.info("Successfully acquired GL display from NEED_CONTEXT")
+                        self.logger.info(
+                            "Successfully acquired GL display from NEED_CONTEXT"
+                        )
                     else:
-                        self.logger.warning("Failed to get GL display from NEED_CONTEXT: gl_display is None")
+                        self.logger.warning(
+                            "Failed to get GL display from NEED_CONTEXT: gl_display is None"
+                        )
                 elif context_type == "gst.vulkan.device":
                     self.vk_device = context.get_vulkan_device()
                     if self.vk_device:
-                        self.logger.info("Successfully acquired Vulkan device from NEED_CONTEXT")
-                        self.vk_queue = self.vk_device.get_queue(0)  # Get the first queue
+                        self.logger.info(
+                            "Successfully acquired Vulkan device from NEED_CONTEXT"
+                        )
+                        self.vk_queue = self.vk_device.get_queue(
+                            0
+                        )  # Get the first queue
                         self.use_vulkan = True
                         self.context_set = True
                         self.context_received = True
                     else:
-                        self.logger.warning("Failed to get Vulkan device from NEED_CONTEXT: vk_device is None")
+                        self.logger.warning(
+                            "Failed to get Vulkan device from NEED_CONTEXT: vk_device is None"
+                        )
                 else:
                     self.logger.warning(f"Unknown context type: {context_type}")
             else:
@@ -198,7 +212,9 @@ class Overlay(GstBase.BaseTransform):
                 self.context_set = True
                 self.context_received = True
             else:
-                self.logger.warning("Failed to get Vulkan device in do_start: vk_device is None")
+                self.logger.warning(
+                    "Failed to get Vulkan device in do_start: vk_device is None"
+                )
         else:
             self.logger.warning("No Vulkan context found in do_start, trying OpenGL")
             context = self.get_context("gst.gl.app_context")
@@ -211,9 +227,13 @@ class Overlay(GstBase.BaseTransform):
                     self.context_set = True
                     self.context_received = True
                 else:
-                    self.logger.warning("Failed to get OpenGL context in do_start: gl_context is None")
+                    self.logger.warning(
+                        "Failed to get OpenGL context in do_start: gl_context is None"
+                    )
             else:
-                self.logger.warning("No OpenGL context found in do_start, will wait for NEED_CONTEXT message")
+                self.logger.warning(
+                    "No OpenGL context found in do_start, will wait for NEED_CONTEXT message"
+                )
 
         return True
 
@@ -225,7 +245,9 @@ class Overlay(GstBase.BaseTransform):
         # Check if the input caps are using GLMemory or VulkanMemory
         self.use_opengl = "memory:GLMemory" in incaps.to_string()
         self.use_vulkan = "memory:VulkanMemory" in incaps.to_string()
-        self.logger.info(f"Using OpenGL: {self.use_opengl}, Using Vulkan: {self.use_vulkan}")
+        self.logger.info(
+            f"Using OpenGL: {self.use_opengl}, Using Vulkan: {self.use_vulkan}"
+        )
 
         return True
 
@@ -272,7 +294,9 @@ class Overlay(GstBase.BaseTransform):
 
         # Initialize the graphics backend if not already done
         if self.overlay_graphics is None:
-            self.logger.info(f"Initializing graphics backend. use_opengl={self.use_opengl}, use_vulkan={self.use_vulkan}")
+            self.logger.info(
+                f"Initializing graphics backend. use_opengl={self.use_opengl}, use_vulkan={self.use_vulkan}"
+            )
 
             # Check if the buffer's memory is GLMemory or VulkanMemory
             is_gl_buffer = False
@@ -282,7 +306,9 @@ class Overlay(GstBase.BaseTransform):
                 is_gl_buffer = GstGL.is_gl_memory(memory)
                 is_vulkan_buffer = GstVulkan.is_vulkan_memory(memory)
             else:
-                self.logger.warning("Buffer has no memory objects, falling back to Cairo")
+                self.logger.warning(
+                    "Buffer has no memory objects, falling back to Cairo"
+                )
                 is_gl_buffer = False
                 is_vulkan_buffer = False
 
@@ -299,11 +325,15 @@ class Overlay(GstBase.BaseTransform):
                             self.vk_queue = self.vk_device.get_queue(0)
                             self.context_set = True
                         else:
-                            self.logger.warning("Failed to get Vulkan device: vk_device is None")
+                            self.logger.warning(
+                                "Failed to get Vulkan device: vk_device is None"
+                            )
                             self.use_vulkan = False
                             self.graphics_type = GraphicsType.CAIRO
                     else:
-                        self.logger.warning("No Vulkan context found, falling back to Cairo")
+                        self.logger.warning(
+                            "No Vulkan context found, falling back to Cairo"
+                        )
                         self.use_vulkan = False
                         self.graphics_type = GraphicsType.CAIRO
             elif self.use_opengl and is_gl_buffer:
@@ -317,11 +347,15 @@ class Overlay(GstBase.BaseTransform):
                             self.logger.info("Successfully acquired OpenGL context")
                             self.context_set = True
                         else:
-                            self.logger.warning("Failed to get OpenGL context: gl_context is None")
+                            self.logger.warning(
+                                "Failed to get OpenGL context: gl_context is None"
+                            )
                             self.use_opengl = False
                             self.graphics_type = GraphicsType.CAIRO
                     else:
-                        self.logger.warning("No OpenGL context found, falling back to Cairo")
+                        self.logger.warning(
+                            "No OpenGL context found, falling back to Cairo"
+                        )
                         self.use_opengl = False
                         self.graphics_type = GraphicsType.CAIRO
             else:
@@ -341,7 +375,9 @@ class Overlay(GstBase.BaseTransform):
         # Handle rendering based on the graphics type
         if self.graphics_type == GraphicsType.VULKAN:
             if not GstVulkan.is_vulkan_memory(buf.peek_memory(0)):
-                self.logger.error("Buffer is not in VulkanMemory, cannot proceed with Vulkan overlay")
+                self.logger.error(
+                    "Buffer is not in VulkanMemory, cannot proceed with Vulkan overlay"
+                )
                 return Gst.FlowReturn.ERROR
 
             try:
@@ -354,11 +390,15 @@ class Overlay(GstBase.BaseTransform):
 
         elif self.graphics_type == GraphicsType.OPENGL:
             if not GstGL.is_gl_memory(buf.peek_memory(0)):
-                self.logger.error("Buffer is not in GLMemory, cannot proceed with OpenGL overlay")
+                self.logger.error(
+                    "Buffer is not in GLMemory, cannot proceed with OpenGL overlay"
+                )
                 return Gst.FlowReturn.ERROR
 
             if not self.gl_context:
-                self.logger.error("No OpenGL context available, cannot proceed with OpenGL overlay")
+                self.logger.error(
+                    "No OpenGL context available, cannot proceed with OpenGL overlay"
+                )
                 return Gst.FlowReturn.ERROR
 
             try:
@@ -375,7 +415,9 @@ class Overlay(GstBase.BaseTransform):
         else:  # Cairo rendering
             video_meta = GstVideo.buffer_get_video_meta(buf)
             if not video_meta:
-                self.logger.error("No video meta available, cannot proceed with overlay")
+                self.logger.error(
+                    "No video meta available, cannot proceed with overlay"
+                )
                 return Gst.FlowReturn.ERROR
 
             success, map_info = buf.map(Gst.MapFlags.WRITE)

@@ -17,7 +17,7 @@
 # Boston, MA 02110-1301, USA.
 
 import cairo
-from overlay_utils_interface import OverlayGraphics, Color
+from .overlay_utils_interface import OverlayGraphics, Color
 
 
 class CairoOverlayGraphics(OverlayGraphics):
