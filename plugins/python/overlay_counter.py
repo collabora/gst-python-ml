@@ -23,7 +23,7 @@ try:
     from gi.repository import Gst, GObject
 
     from overlay import Overlay
-    from overlay_utils import Color
+    from overlay_helper.overlay_utils import Color
 except ImportError as e:
     GlobalLogger().warning(
         f"The 'OverlayCounter' element cannot be registered because: {e}"
