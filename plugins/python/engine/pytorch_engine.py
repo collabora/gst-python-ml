@@ -94,6 +94,7 @@ class PyTorchEngine(MLEngine):
                     )
                     self.tokenizer = AutoTokenizer.from_pretrained(model_name)
                     self.logger.info(f"Loading language model {model_name}")
+                    quantization_config = BitsAndBytesConfig(load_in_4bit=True)
                     self.set_model(
                         AutoModelForCausalLM.from_pretrained(
                             model_name,
@@ -103,6 +104,7 @@ class PyTorchEngine(MLEngine):
                                 else torch.float32
                             ),
                             device_map="auto",
+                            quantization_config=quantization_config,
                         )
                     )
                     self.get_model().eval()
@@ -110,8 +112,8 @@ class PyTorchEngine(MLEngine):
                         f"Pre-trained LLM model '{model_name}' loaded from Transformers."
                     )
 
-                self.execute_with_stream(lambda: self.model.to(self.device))
-                self.logger.info(f"Model moved to {self.device}")
+            self.execute_with_stream(lambda: self.model.to(self.device))
+            self.logger.info(f"Model moved to {self.device}")
 
             return True
 
