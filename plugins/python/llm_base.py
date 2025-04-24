@@ -49,6 +49,10 @@ class LlmBase(AggregatorBase):
         ),
     )
 
+    def __init__(self):
+        super().__init__()
+        self.engine = None  # Explicitly initialize self.engine
+
     def do_process(self, buf):
         """
         Processes the input buffer with the language model
@@ -65,13 +69,36 @@ class LlmBase(AggregatorBase):
             input_text = bytes(map_info.data).decode("utf-8")
             self.logger.info(f"Received text for LLM processing: {input_text}")
 
-            # Check if model and tokenizer are initialized
-            if not self.get_tokenizer() or not self.get_model():
-                self.logger.error("Tokenizer or model not initialized.")
-                buf.unmap(map_info)
-                return Gst.FlowReturn.ERROR
+            # Ensure engine is initialized
+            if not self.engine_helper.engine:
+                self.logger.warning("Engine not initialized, initializing now")
+                self.engine_helper.initialize_engine(self.engine_name)
+                self.engine_helper.load_model(self.model_name)
+                self.engine = self.engine_helper.engine  # Set self.engine
 
-            # Decode the output to text
+            # Retry model loading if tokenizer or model is missing
+            tokenizer = self.get_tokenizer()
+            model = self.get_model()
+            self.logger.info(f"Tokenizer: {tokenizer}")
+            self.logger.info(f"Model: {model}")
+            if not tokenizer or not model:
+                self.logger.error(
+                    f"Tokenizer initialized: {tokenizer is not None}, Model initialized: {model is not None}"
+                )
+                self.logger.warning("Attempting to reload model")
+                if not self.engine_helper.load_model(self.model_name):
+                    self.logger.error("Model reload failed")
+                    buf.unmap(map_info)
+                    return Gst.FlowReturn.ERROR
+                self.engine = self.engine_helper.engine  # Update self.engine
+                tokenizer = self.get_tokenizer()
+                model = self.get_model()
+                if not tokenizer or not model:
+                    self.logger.error("Model reload failed again")
+                    buf.unmap(map_info)
+                    return Gst.FlowReturn.ERROR
+
+            # Generate text using the engine
             generated_text = self.engine.generate(input_text)
             self.logger.info(f"Generated text: {generated_text}")
 
