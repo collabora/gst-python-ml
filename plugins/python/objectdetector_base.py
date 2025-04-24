@@ -1,10 +1,10 @@
-# ObjectDetectorBase
+# object_detector_base.py
 # Copyright (C) 2024-2025 Collabora Ltd.
 #
 # This library is free software; you can redistribute it and/or
-# modify it under the terms of the GNU Library General Public
-# License as published by the Free Software Foundation; either
-# version 2 of the License, or (at your option) any later version.
+# modify it under the terms of the GNU Library General Public License
+# as published by the Free Software Foundation; either version 2
+# of the License, or (at your option) any later version.
 #
 # This library is distributed in the hope that it will be useful,
 # but WITHOUT ANY WARRANTY; without even the implied warranty of
@@ -21,6 +21,7 @@ import gi
 import numpy as np
 from video_transform import VideoTransform
 from format_converter import FormatConverter
+from muxed_buffer_processor import MuxedBufferProcessor  # Added import
 
 gi.require_version("Gst", "1.0")
 gi.require_version("GstBase", "1.0")
@@ -34,7 +35,6 @@ class ObjectDetectorBase(VideoTransform):
     """
     GStreamer element for object detection with batch processing support.
     Handles both single-frame buffers (no metadata) and batch buffers (metadata in last chunk).
-    Marker: WORKING_2025_03_11_BATCH_V3.
     """
 
     track = GObject.Property(
@@ -84,78 +84,48 @@ class ObjectDetectorBase(VideoTransform):
         return None
 
     def do_transform_ip(self, buf):
+        """
+        Transform the input buffer using MuxedBufferProcessor for frame extraction.
+        """
         self.logger.info(f"Transforming buffer: {hex(id(buf))}")
         try:
             if self.get_model() is None:
                 self.logger.info("Loading model")
                 self.do_load_model()
 
-            if buf.pts == Gst.CLOCK_TIME_NONE:
-                buf.pts = Gst.util_uint64_scale(
-                    Gst.util_get_timestamp(),
-                    self.framerate_denom,
-                    self.framerate_num * Gst.SECOND,
-                )
-
-            num_chunks = buf.n_memory()
-            format = self.format_converter.get_video_format(buf, self.sinkpad)
-            self.logger.info(f"Chunks: {num_chunks}, format: {format}")
-
-            if num_chunks < 1:
-                self.logger.error("Buffer has no memory chunks")
+            # Use MuxedBufferProcessor to extract frames and metadata
+            muxed_processor = MuxedBufferProcessor(
+                self.logger,
+                self.width,
+                self.height,
+                self.framerate_num,
+                self.framerate_denom,
+            )
+            frames, id_str, num_sources, format = muxed_processor.extract_frames(
+                buf, self.sinkpad
+            )
+            if frames is None:
+                self.logger.error("Failed to extract frames")
                 return Gst.FlowReturn.ERROR
 
-            # Single frame case: no metadata
-            if num_chunks == 1:
-                self.logger.info("Single frame mode (no metadata)")
-                with buf.peek_memory(0).map(Gst.MapFlags.READ) as info:
-                    frame = self.format_converter.get_rgb_frame(
-                        info, format, self.height, self.width
-                    )
-                    if frame is None or not isinstance(frame, np.ndarray):
-                        self.logger.error("Invalid frame")
-                        return Gst.FlowReturn.ERROR
-                    results = self.forward(frame)
-                    if results is None:
-                        self.logger.error("Inference returned None")
-                        return Gst.FlowReturn.ERROR
-                    self.do_decode(buf, results, stream_idx=0)
+            # Process frames (single or batch)
+            results = self.forward(frames)
+            if results is None:
+                self.logger.error("Inference returned None")
+                return Gst.FlowReturn.ERROR
 
-            # Batch case: last chunk is metadata
+            # Handle single-frame case
+            if num_sources == 1:
+                self.do_decode(buf, results, stream_idx=0)
+            # Handle batch case
             else:
-                self.logger.info(f"Batch mode with {num_chunks} chunks")
-                num_frames = num_chunks - 1
-                frames = []
-                for i in range(num_frames):
-                    with buf.peek_memory(i).map(Gst.MapFlags.READ) as info:
-                        frame = self.format_converter.get_rgb_frame(
-                            info, format, self.height, self.width
-                        )
-                        if frame is None or not isinstance(frame, np.ndarray):
-                            self.logger.error(f"Invalid frame at index {i}")
-                            return Gst.FlowReturn.ERROR
-                        frames.append(frame)
-
-                # Read metadata from the last chunk
-                id_str, num_sources = self.metadata.read(buf)
-                self.logger.info(f"Metadata: ID={id_str}, num_sources={num_sources}")
-                if num_sources != num_frames:
-                    self.logger.error(
-                        f"Metadata num_sources ({num_sources}) does not match frame count ({num_frames})"
-                    )
-                    return Gst.FlowReturn.ERROR
-
-                batch_frames = np.stack(frames, axis=0)
-                self.logger.info(f"Processing batch with shape: {batch_frames.shape}")
-                results = self.forward(batch_frames)
-                if results is None:
-                    self.logger.error("Inference returned None")
-                    return Gst.FlowReturn.ERROR
-
+                self.logger.info(
+                    f"Processing batch with ID={id_str}, num_sources={num_sources}"
+                )
                 results_list = results if isinstance(results, list) else [results]
-                if len(results_list) != num_frames:
+                if len(results_list) != num_sources:
                     self.logger.error(
-                        f"Expected {num_frames} results, got {len(results_list)}"
+                        f"Expected {num_sources} results, got {len(results_list)}"
                     )
                     return Gst.FlowReturn.ERROR
 
