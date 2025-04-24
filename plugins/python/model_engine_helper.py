@@ -42,11 +42,21 @@ class ModelEngineHelper:
 
     def load_model(self, model_name):
         if self.engine and model_name:
-            self.engine.load_model(model_name, **self.kwargs)
+            try:
+                self.logger.info(f"Loading model: {model_name}")
+                self.engine.load_model(model_name, **self.kwargs)
+                self.logger.info(f"Model {model_name} loaded successfully")
+                return True
+            except Exception as e:
+                self.logger.error(f"Failed to load model {model_name}: {e}")
+                self.engine.tokenizer = None
+                self.engine.model = None
+                return False
         else:
             self.logger.warning(
                 "Engine is not present or model name not provided, unable to load the model."
             )
+            return False
 
     def get_model(self):
         if self.engine:
