@@ -120,32 +120,40 @@ class AggregatorBase(GstBase.Aggregator):
             raise AttributeError(f"Unknown property {prop.name}")
 
     def do_set_property(self, prop: GObject.ParamSpec, value):
-        if prop.name == "batch-size":
-            self.batch_size = value
-            if self.engine_helper.engine:
-                self.engine_helper.engine.batch_size = value
-        elif prop.name == "frame-stride":
-            self.frame_stride = value
-            if self.engine_helper.engine:
-                self.engine_helper.engine.frame_stride = value
-        elif prop.name == "model-name":
-            self.model_name = value
-            self.engine_helper.load_model(value)
-        elif prop.name == "device":
-            self.device = value
-            self.engine_helper.set_device(value)  # Update device in helper
-            self.engine_helper.initialize_engine(self.engine_name)
-            self.engine_helper.load_model(self.model_name)
-        elif prop.name == "engine-name":
-            self.engine_name = value
-            self.engine_helper.initialize_engine(value)
-            self.engine_helper.load_model(self.model_name)
-        elif prop.name == "device-queue-id":
-            self.device_queue_id = value
-            if self.engine_helper.engine:
-                self.engine_helper.engine.device_queue_id = value
-        else:
-            raise AttributeError(f"Unknown property {prop.name}")
+        self.logger.info(f"Setting property {prop.name} to {value}")
+        try:
+            if prop.name == "batch-size":
+                self.batch_size = value
+                if self.engine_helper.engine:
+                    self.engine_helper.engine.batch_size = value
+            elif prop.name == "frame-stride":
+                self.frame_stride = value
+                if self.engine_helper.engine:
+                    self.engine_helper.engine.frame_stride = value
+            elif prop.name == "model-name":
+                self.model_name = value
+                if self.engine_helper.engine:
+                    self.engine_helper.load_model(value)
+            elif prop.name == "device":
+                self.device = value
+                self.engine_helper.set_device(value)
+                self.engine_helper.initialize_engine(self.engine_name)
+                if self.model_name and self.engine_helper.engine:
+                    self.engine_helper.load_model(self.model_name)
+            elif prop.name == "engine-name":
+                self.engine_name = value
+                self.engine_helper.initialize_engine(value)
+                if self.model_name and self.engine_helper.engine:
+                    self.engine_helper.load_model(self.model_name)
+            elif prop.name == "device-queue-id":
+                self.device_queue_id = value
+                if self.engine_helper.engine:
+                    self.engine_helper.engine.device_queue_id = value
+            else:
+                raise AttributeError(f"Unknown property {prop.name}")
+        except Exception as e:
+            self.logger.error(f"Error setting property {prop.name}: {e}")
+            raise
 
     def _initialize_engine_if_needed(self):
         if not self.engine_helper.engine and self.engine_name:
@@ -204,6 +212,7 @@ class AggregatorBase(GstBase.Aggregator):
     def do_aggregate(self, timeout):
         self.push_segment_if_needed()
         self.process_all_sink_pads()
+        self.selected_samples(Gst.CLOCK_TIME_NONE, 0, 0, None)
         return Gst.FlowReturn.OK
 
     def process_all_sink_pads(self):
