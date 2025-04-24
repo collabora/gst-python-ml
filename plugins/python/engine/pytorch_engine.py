@@ -28,7 +28,9 @@ from transformers import (
     AutoImageProcessor,
     VisionEncoderDecoderModel,
     AutoProcessor,
+    BitsAndBytesConfig,
 )
+
 from .ml_engine import MLEngine
 
 
@@ -40,27 +42,27 @@ class PyTorchEngine(MLEngine):
 
         try:
             # Special case for Phi-3-vision model from Hugging Face
-            if model_name == "phi-3-vision":
+            if model_name == "phi-3.5-vision":
+                quantization_config = BitsAndBytesConfig(load_in_4bit=True)
                 self.model = AutoModelForCausalLM.from_pretrained(
-                    "microsoft/Phi-3-vision-128k-instruct",
-                    device_map="cuda",
+                    "microsoft/Phi-3.5-vision-instruct",
+                    quantization_config=quantization_config,
+                    device_map="auto",
+                    torch_dtype=torch.float16,
                     trust_remote_code=True,
-                    torch_dtype="auto",
                     _attn_implementation="flash_attention_2",
-                ).to(self.device)
+                )
                 self.processor = AutoProcessor.from_pretrained(
-                    "microsoft/Phi-3-vision-128k-instruct", trust_remote_code=True
+                    "microsoft/Phi-3.5-vision-instruct", trust_remote_code=True
                 )
                 self.logger.info(
-                    "Phi-3-vision model and processor loaded successfully."
+                    "Phi-3.5-vision model and processor loaded successfully."
                 )
                 self.vision_language_model = True
                 self.model.eval()
-
             elif os.path.isfile(model_name):
                 self.model = torch.load(model_name)
                 self.logger.info(f"Model loaded from local path: {model_name}")
-
             else:
                 if hasattr(models, model_name):
                     self.model = getattr(models, model_name)(pretrained=True)
@@ -110,6 +112,7 @@ class PyTorchEngine(MLEngine):
 
         except Exception as e:
             self.logger.error(f"Error loading model '{model_name}': {e}")
+            raise
 
     def set_device(self, device):
         """Set PyTorch device for the model."""

@@ -69,7 +69,7 @@ class Caption(VideoTransform):
 
     def __init__(self):
         super().__init__()
-        self.model_name = "phi-3-vision"
+        self.model_name = "phi-3.5-vision"
         self.caption = "   "
 
     def do_set_property(self, property, value):

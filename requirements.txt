@@ -10,6 +10,6 @@ huggingface-hub
 lap
 ultralytics
 pycairo
-
+bitsandbytes
 
 pytest>=7.0
