@@ -248,6 +248,13 @@ Note: make sure to set the following in `.bashrc` file :
 `export GST_PLUGIN_PATH=/home/$USER/src/gst-python-ml/plugins:$GST_PLUGIN_PATH`
 
 
+### streammux/streamdemux pipeline
+
+```
+ GST_DEBUG=4 gst-launch-1.0   videotestsrc pattern=ball ! video/x-raw, width=320, height=240 ! queue ! pyml_streammux name=mux   videotestsrc pattern=smpte ! video/x-raw, width=320, height=240 ! queue ! mux.sink_1   videotestsrc pattern=smpte ! video/x-raw, width=320, height=240 ! queue ! mux.sink_2   mux.src ! queue ! pyml_streamdemux name=demux   demux.src_0 ! queue ! glimagesink  demux.src_1 ! queue ! glimagesink   demux.src_2 ! queue  ! glimagesink
+```
+
+
 ### Bird's Eye View
 
 `GST_DEBUG=4 gst-launch-1.0 filesrc location=data/soccer_single_camera.mp4 ! decodebin ! videoconvert ! pyml_birdseye ! videoconvert ! autovideosink`
@@ -310,17 +317,6 @@ GST_DEBUG=4 gst-launch-1.0   filesrc location=data/soccer_tracking.mp4 ! decodeb
 
 ```
 
-#### yolo with overlay
-
-```
- GST_DEBUG=4 gst-launch-1.0   filesrc location=data/soccer_tracking.mp4 ! decodebin ! videoconvert ! videoscale ! video/x-raw,width=640,height=480 ! pyml_yolo model-name=yolo11m device=cuda:0 track=True !  pyml_overlay ! videoconvert !  autovideosink
-```
-
-### streammux/streamdemux pipeline
-
-```
- GST_DEBUG=4 gst-launch-1.0   videotestsrc pattern=ball ! video/x-raw, width=320, height=240 ! queue ! pyml_streammux name=mux   videotestsrc pattern=smpte ! video/x-raw, width=320, height=240 ! queue ! mux.sink_1   videotestsrc pattern=smpte ! video/x-raw, width=320, height=240 ! queue ! mux.sink_2   mux.src ! queue ! pyml_streamdemux name=demux   demux.src_0 ! queue ! glimagesink  demux.src_1 ! queue ! glimagesink   demux.src_2 ! queue  ! glimagesink
-```
 
 ### Transcription
 
@@ -385,6 +381,6 @@ https://huggingface.co/models?sort=trending&search=Helsinki
 `GST_DEBUG=4 gst-launch-1.0   filesrc location=data/soccer_tracking.mp4 ! decodebin ! videoconvert ! videoscale ! video/x-raw,width=640,height=480 ! pyml_yolo model-name=yolo11m device=cuda:0 track=True ! pyml_caption device=cuda:0 ! textoverlay !  pyml_overlay ! videoconvert !  autovideosink`
 
 
-#### caption
+#### caption with prompt
 
 `GST_DEBUG=4 gst-launch-1.0   filesrc location=data/soccer_tracking.mp4 ! decodebin ! videoconvert ! pyml_caption device=cuda:0 downsampled_width=320 downsampled_height=240 prompt="What is the name of the game being played?" ! textoverlay !  glimagesink`
