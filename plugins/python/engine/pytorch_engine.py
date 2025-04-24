@@ -179,41 +179,76 @@ class PyTorchEngine(MLEngine):
             return None
 
         if self.vision_language_model and self.processor:
-            if is_batch:
-                self.logger.error(
-                    "Batch processing not supported for vision-language models."
+            try:
+                from PIL import Image
+                import torch
+                import gc
+
+                # Convert frames to PIL images
+                if is_batch:
+                    images = [Image.fromarray(np.uint8(frame)) for frame in frames]
+                else:
+                    images = [Image.fromarray(np.uint8(frames))]
+
+                # Create prompt with placeholders for all images
+                prompt_content = (
+                    "\n".join([f"<|image_{i+1}|>" for i in range(len(images))])
+                    + f"\n{self.prompt}"
                 )
+                messages = [{"role": "user", "content": prompt_content}]
+                prompt = self.processor.tokenizer.apply_chat_template(
+                    messages, tokenize=False, add_generation_prompt=True
+                )
+
+                # Process inputs for batch inference
+                inputs = self.processor(prompt, images, return_tensors="pt").to(
+                    self.device
+                )
+
+                # Run inference
+                generation_args = {
+                    "max_new_tokens": 500,
+                    "temperature": 0.0,
+                    "do_sample": False,
+                }
+                with torch.inference_mode():
+                    generate_ids = self.model.generate(
+                        **inputs,
+                        eos_token_id=self.processor.tokenizer.eos_token_id,
+                        **generation_args,
+                    )
+
+                # Decode response
+                generate_ids = generate_ids[:, inputs["input_ids"].shape[1] :]
+                response = self.processor.batch_decode(
+                    generate_ids,
+                    skip_special_tokens=True,
+                    clean_up_tokenization_spaces=False,
+                )[0]
+
+                # Split response into per-frame captions (adjust based on model output)
+                if is_batch:
+                    # Assume response contains captions separated by newlines or repeated
+                    captions = (
+                        response.split("\n")[: len(images)]
+                        if "\n" in response
+                        else [response] * len(images)
+                    )
+                else:
+                    captions = [response]
+
+                self.logger.info(f"Generated captions: {captions}")
+
+                # Clean up
+                del inputs, generate_ids
+                torch.cuda.empty_cache()
+                gc.collect()
+
+                return captions if is_batch else captions[0]
+
+            except Exception as e:
+                self.logger.error(f"Vision-language inference error: {e}")
                 return None
-            image = Image.fromarray(np.uint8(frames))
-            messages = [{"role": "user", "content": f"<|image_1|>\n{self.prompt}"}]
-            prompt = self.processor.tokenizer.apply_chat_template(
-                messages, tokenize=False, add_generation_prompt=True
-            )
-            inputs = self.processor(prompt, [image], return_tensors="pt").to(
-                self.device
-            )
-            generation_args = {
-                "max_new_tokens": 500,
-                "temperature": 0.0,
-                "do_sample": False,
-            }
-            with torch.inference_mode():
-                generate_ids = self.model.generate(
-                    **inputs,
-                    eos_token_id=self.processor.tokenizer.eos_token_id,
-                    **generation_args,
-                )
-            generate_ids = generate_ids[:, inputs["input_ids"].shape[1] :]
-            response = self.processor.batch_decode(
-                generate_ids,
-                skip_special_tokens=True,
-                clean_up_tokenization_spaces=False,
-            )[0]
-            self.logger.info(f"Generated response: {response}")
-            del inputs, generate_ids
-            torch.cuda.empty_cache()
-            gc.collect()
-            return response
 
         elif self.image_processor and self.tokenizer:
             if is_batch:
