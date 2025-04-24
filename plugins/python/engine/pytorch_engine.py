@@ -89,8 +89,11 @@ class PyTorchEngine(MLEngine):
                         f"Vision-Text model '{model_name}' loaded with processor and tokenizer."
                     )
                 else:
-                    self.set_device(self.device)
+                    self.logger.info(
+                        f"Loading tokenizer for language model {model_name}"
+                    )
                     self.tokenizer = AutoTokenizer.from_pretrained(model_name)
+                    self.logger.info(f"Loading language model {model_name}")
                     self.set_model(
                         AutoModelForCausalLM.from_pretrained(
                             model_name,
@@ -107,44 +110,83 @@ class PyTorchEngine(MLEngine):
                         f"Pre-trained LLM model '{model_name}' loaded from Transformers."
                     )
 
-            self.execute_with_stream(lambda: self.model.to(self.device))
-            self.logger.info(f"Model moved to {self.device}")
+                self.execute_with_stream(lambda: self.model.to(self.device))
+                self.logger.info(f"Model moved to {self.device}")
+
+            return True
 
         except Exception as e:
             self.logger.error(f"Error loading model '{model_name}': {e}")
-            raise
+            self.tokenizer = None
+            self.model = None
+            return False
 
     def set_device(self, device):
         """Set PyTorch device for the model."""
         self.device = device
-        if self.model:
-            if "cuda" in device:
-                if not torch.cuda.is_available():
-                    self.logger.error("CUDA is not available. Falling back to CPU.")
-                    self.device = "cpu"
+        self.logger.info(f"Setting device to {device}")
+
+        if "cuda" in device:
+            if not torch.cuda.is_available():
+                self.logger.warning("CUDA is not available, falling back to CPU")
+                self.device = "cpu"
+                if self.model:
+                    try:
+                        self.model = self.model.cpu()
+                        self.logger.info("Model moved to CPU due to unavailable CUDA")
+                    except Exception as e:
+                        self.logger.error(f"Failed to move model to CPU: {e}")
+                return
+
+            try:
+                # Extract device index (e.g., "cuda:0" -> "0")
+                self.device_index = device.split(":")[-1] if ":" in device else "0"
+                torch.cuda.set_device(int(self.device_index))
+                self.logger.info(f"CUDA device set to cuda:{self.device_index}")
+
+                # Model placement is handled by device_map="auto" in load_model
+                # Only move model if it exists and is not already on the correct device
+                if self.model:
+                    current_devices = {
+                        param.device for param in self.model.parameters()
+                    }
+                    if any(d.type != "cuda" for d in current_devices):
+                        self.logger.warning(
+                            f"Model tensors found on {current_devices}, moving to {device}"
+                        )
+                        try:
+                            self.model = self.model.to(device)
+                            self.logger.info(f"Model moved to {device}")
+                        except Exception as e:
+                            self.logger.error(f"Failed to move model to {device}: {e}")
+                            self.logger.warning("Falling back to CPU")
+                            self.device = "cpu"
+                            self.model = self.model.cpu()
+            except Exception as e:
+                self.logger.error(f"Failed to set CUDA device: {e}")
+                self.logger.warning("Falling back to CPU")
+                self.device = "cpu"
+                if self.model:
                     self.model = self.model.cpu()
-                    return
-                try:
-                    self.device_index = device.split(":")[-1] if ":" in device else "0"
-                    torch.cuda.set_device(int(self.device_index))
-                    self.execute_with_stream(lambda: self.model.to(self.device))
-                    self.logger.info(f"Model moved to device {device}")
-                except Exception as e:
-                    self.logger.error(f"Failed to set device to {device}: {e}")
-                    self.model = self.model.cpu()
-            elif device == "cpu":
+
+        elif device == "cpu":
+            if self.model:
                 try:
                     if not any(p.is_meta for p in self.model.parameters()):
                         self.model = self.model.cpu()
-                        self.logger.info(f"Model moved to device {device}")
+                        self.logger.info(f"Model moved to CPU")
                     else:
                         self.logger.error(
-                            "Model contains meta tensors, cannot move to CPU."
+                            "Model contains meta tensors, cannot move to CPU"
                         )
                 except Exception as e:
                     self.logger.error(f"Error moving model to CPU: {e}")
-            else:
-                self.logger.error(f"Invalid device specified: {device}")
+
+        else:
+            self.logger.error(f"Invalid device specified: {device}")
+            self.device = "cpu"
+            if self.model:
+                self.model = self.model.cpu()
 
     def _forward_classification(self, frames):
         """Handle inference for classification models like ResNet."""
