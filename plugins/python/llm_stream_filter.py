@@ -31,10 +31,10 @@ try:
     import numpy as np
     import cv2
 
-    from global_logger import GlobalLogger
     from muxed_buffer_processor import MuxedBufferProcessor
     from video_transform import VideoTransform
-
+    from model_engine_helper import ModelEngineHelper
+    from engine.engine_factory import EngineFactory
 except ImportError as e:
     CAN_REGISTER_ELEMENT = False
     GlobalLogger().warning(
@@ -85,18 +85,27 @@ class LLMStreamFilter(VideoTransform):
         blurb="Prompt for selecting the most interesting captions",
     )
 
+    llm_model_name = GObject.Property(
+        type=str,
+        default="microsoft/phi-2",
+        nick="LLM Model Name",
+        blurb="Name of the pre-trained LLM model to load",
+        flags=GObject.ParamFlags.READWRITE,
+    )
+
     def __init__(self):
         super().__init__()
-        self.model_name = "phi-3.5-vision"  # Caption model
-        self.llm_model_name = "llama-3.1"  # LLM model, adjust as needed
-        self.caption_engine = None
+        self.model_name = (
+            "phi-3.5-vision"  # Caption model, inherited from TransformBase
+        )
+        self.llm_engine_helper = ModelEngineHelper(GlobalLogger())
         self.llm_engine = None
         self.selected_streams = []
         self.logger = GlobalLogger()
 
     def do_set_property(self, prop, value):
         """
-        Handle property changes, including runtime updates to prompt and num_streams.
+        Handle property changes, including runtime updates to prompt, num_streams, and llm_model_name.
         """
         if prop.name == "num-streams":
             self.num_streams = value
@@ -104,8 +113,14 @@ class LLMStreamFilter(VideoTransform):
         elif prop.name == "prompt":
             self.prompt = value
             if self.llm_engine:
-                self.llm_engine.prompt = value  # Update LLM engine prompt if available
+                self.llm_engine.prompt = value
             self.logger.info(f"Updated prompt to: {value}")
+        elif prop.name == "llm-model-name":
+            self.llm_model_name = value
+            if self.llm_engine:
+                self.llm_engine_helper.load_model(self.llm_model_name)
+                self.llm_engine = self.llm_engine_helper.engine
+            self.logger.info(f"Updated llm_model_name to: {value}")
         else:
             super().do_set_property(prop, value)
 
@@ -117,6 +132,8 @@ class LLMStreamFilter(VideoTransform):
             return self.num_streams
         elif prop.name == "prompt":
             return self.prompt
+        elif prop.name == "llm-model-name":
+            return self.llm_model_name
         else:
             return super().do_get_property(prop)
 
@@ -124,16 +141,13 @@ class LLMStreamFilter(VideoTransform):
         """
         Initialize the element, including pads and engines.
         """
-        # Create the text_src pad
         self.text_src_pad = Gst.Pad.new_from_template(
             self.get_pad_template("text_src"), "text_src"
         )
         self.add_pad(self.text_src_pad)
 
-        # Initialize caption and LLM engines
-        self.do_load_model()
-        if not self.caption_engine or not self.llm_engine:
-            self.logger.error("Failed to initialize caption or LLM engine")
+        if not self.do_load_model():
+            self.logger.error("Failed to initialize engines or load models")
             return False
 
         self.link_to_downstream_text_sink()
@@ -141,22 +155,34 @@ class LLMStreamFilter(VideoTransform):
 
     def do_load_model(self):
         """
-        Load caption and LLM models.
+        Load caption model (via inherited engine) and LLM model (via separate engine).
         """
         try:
-            if not self.caption_engine:
-                self.caption_engine = self.get_engine(self.model_name)
-                if not self.caption_engine:
-                    self.logger.error("Failed to load caption engine")
+            # Initialize caption engine (inherited from TransformBase)
+            self._initialize_engine_if_needed()
+            if not self.engine:
+                self.initialize_engine()
+                if not self.engine:
+                    self.logger.error("Failed to initialize caption engine")
                     return False
+            self.engine.load_model(self.model_name)
+            if not self.engine.get_model():
+                self.logger.error("Failed to load caption model")
+                return False
+
+            # Initialize LLM engine
             if not self.llm_engine:
-                self.llm_engine = self.get_engine(self.llm_model_name)
+                self.llm_engine_helper.set_device(
+                    self.device if hasattr(self, "device") else "cuda:0"
+                )
+                self.llm_engine_helper.initialize_engine(EngineFactory.PYTORCH_ENGINE)
+                self.llm_engine_helper.load_model(self.llm_model_name)
+                self.llm_engine = self.llm_engine_helper.engine
                 if not self.llm_engine:
                     self.logger.error("Failed to load LLM engine")
                     return False
-            self.llm_engine.prompt = (
-                self.prompt
-            )  # Ensure LLM engine uses current prompt
+                self.llm_engine.prompt = self.prompt
+
             return True
         except Exception as e:
             self.logger.error(f"Error loading models: {e}")
@@ -204,7 +230,6 @@ class LLMStreamFilter(VideoTransform):
             generated_text = self.llm_engine.generate(prompt)
             self.logger.info(f"LLM output: {generated_text}")
 
-            # Parse LLM output (assuming it returns indices or captions)
             selected_indices = []
             for line in generated_text.split("\n"):
                 try:
@@ -224,12 +249,10 @@ class LLMStreamFilter(VideoTransform):
         In-place transformation: captions frames, selects N streams, and outputs results.
         """
         try:
-            if not self.caption_engine or not self.llm_engine:
-                self.do_load_model()
-                if not self.caption_engine or not self.llm_engine:
+            if not self.engine or not self.llm_engine:
+                if not self.do_load_model():
                     return Gst.FlowReturn.ERROR
 
-            # Initialize MuxedBufferProcessor
             muxed_processor = MuxedBufferProcessor(
                 self.logger,
                 self.width,
@@ -244,7 +267,6 @@ class LLMStreamFilter(VideoTransform):
                 self.logger.error("Failed to extract frames")
                 return Gst.FlowReturn.ERROR
 
-            # Set timestamps if none are set
             if buf.pts == Gst.CLOCK_TIME_NONE:
                 buf.pts = Gst.util_uint64_scale(
                     Gst.util_get_timestamp(), 1, 30 * Gst.SECOND
@@ -254,7 +276,6 @@ class LLMStreamFilter(VideoTransform):
 
             captions = []
             if num_sources == 1:
-                # Single-frame case
                 frame = frames
                 if (
                     self.downsampled_width > 0
@@ -271,10 +292,9 @@ class LLMStreamFilter(VideoTransform):
                         f"Resized to {self.downsampled_width}x{self.downsampled_height}"
                     )
 
-                result = self.caption_engine.forward(frame)
+                result = self.engine.forward(frame)
                 captions.append(result if result else "")
             else:
-                # Batch case
                 if (
                     self.downsampled_width > 0
                     and self.downsampled_width < self.width
@@ -296,7 +316,7 @@ class LLMStreamFilter(VideoTransform):
                         f"Resized batch to {self.downsampled_width}x{self.downsampled_height}"
                     )
 
-                results = self.caption_engine.forward(frames)
+                results = self.engine.forward(frames)
                 results_list = (
                     results if isinstance(results, list) else [results] * num_sources
                 )
