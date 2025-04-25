@@ -18,10 +18,10 @@
 
 from global_logger import GlobalLogger
 
-from analytics_utils import ANALYTICS_UTILS_AVAILABLE
+from utils.analytics_utils import ANALYTICS_UTILS_AVAILABLE
 
 if ANALYTICS_UTILS_AVAILABLE:
-    from analytics_utils import AnalyticsUtils
+    from utils.analytics_utils import AnalyticsUtils
 
 CAN_REGISTER_ELEMENT = True
 try:

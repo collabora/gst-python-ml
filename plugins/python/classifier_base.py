@@ -17,7 +17,7 @@
 # Boston, MA 02110-1301, USA.
 
 
-from utils import runtime_check_gstreamer_version
+from utils.runtime_utils import runtime_check_gstreamer_version
 import gi
 import numpy as np
 from video_transform import VideoTransform
