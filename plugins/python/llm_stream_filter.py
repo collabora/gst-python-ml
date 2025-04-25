@@ -16,6 +16,7 @@
 # Free Software Foundation, Inc., 51 Franklin Street, Fifth Floor,
 # Boston, MA 02110-1301, USA.
 
+
 from global_logger import GlobalLogger
 
 CAN_REGISTER_ELEMENT = True
@@ -35,6 +36,9 @@ try:
     from video_transform import VideoTransform
     from model_engine_helper import ModelEngineHelper
     from engine.engine_factory import EngineFactory
+    from utils.caption_utils import load_captions
+    import torch
+    from transformers import BitsAndBytesConfig
 except ImportError as e:
     CAN_REGISTER_ELEMENT = False
     GlobalLogger().warning(
@@ -44,9 +48,9 @@ except ImportError as e:
 
 class LLMStreamFilter(VideoTransform):
     """
-    GStreamer element that captions video frames, processes captions with an LLM to select
-    the N most interesting ones, and outputs only those streams. Supports dynamic updates
-    to the prompt and number of streams during runtime.
+    GStreamer element that captions video frames (or loads captions from disk), processes
+    captions with an LLM to select the N most interesting ones, and outputs only those streams.
+    Supports dynamic updates to the prompt and number of streams during runtime.
     """
 
     __gstmetadata__ = (
@@ -93,6 +97,14 @@ class LLMStreamFilter(VideoTransform):
         flags=GObject.ParamFlags.READWRITE,
     )
 
+    caption_file = GObject.Property(
+        type=str,
+        default="",
+        nick="Caption File",
+        blurb="Path to JSON file containing pre-generated captions (for test/demo mode)",
+        flags=GObject.ParamFlags.READWRITE,
+    )
+
     def __init__(self):
         super().__init__()
         self.model_name = (
@@ -101,11 +113,13 @@ class LLMStreamFilter(VideoTransform):
         self.llm_engine_helper = ModelEngineHelper(GlobalLogger())
         self.llm_engine = None
         self.selected_streams = []
+        self.captions = {}  # Loaded captions from file
+        self.frame_index = 0  # Track frame index for caption lookup
         self.logger = GlobalLogger()
 
     def do_set_property(self, prop, value):
         """
-        Handle property changes, including runtime updates to prompt, num_streams, and llm_model_name.
+        Handle property changes, including runtime updates to prompt, num_streams, llm_model_name, and caption_file.
         """
         if prop.name == "num-streams":
             self.num_streams = value
@@ -121,6 +135,10 @@ class LLMStreamFilter(VideoTransform):
                 self.llm_engine_helper.load_model(self.llm_model_name)
                 self.llm_engine = self.llm_engine_helper.engine
             self.logger.info(f"Updated llm_model_name to: {value}")
+        elif prop.name == "caption-file":
+            self.caption_file = value
+            self.captions = load_captions(self.caption_file, self.logger)
+            self.logger.info(f"Updated caption_file to: {value}")
         else:
             super().do_set_property(prop, value)
 
@@ -134,6 +152,8 @@ class LLMStreamFilter(VideoTransform):
             return self.prompt
         elif prop.name == "llm-model-name":
             return self.llm_model_name
+        elif prop.name == "caption-file":
+            return self.caption_file
         else:
             return super().do_get_property(prop)
 
@@ -150,32 +170,44 @@ class LLMStreamFilter(VideoTransform):
             self.logger.error("Failed to initialize engines or load models")
             return False
 
+        # Load captions if caption_file is set
+        if self.caption_file:
+            self.captions = load_captions(self.caption_file, self.logger)
+
         self.link_to_downstream_text_sink()
         return True
 
     def do_load_model(self):
         """
-        Load caption model (via inherited engine) and LLM model (via separate engine).
+        Load caption model (if not using caption_file) and LLM model.
         """
         try:
-            # Initialize caption engine (inherited from TransformBase)
-            self._initialize_engine_if_needed()
-            if not self.engine:
-                self.initialize_engine()
+            # Initialize caption engine (only if not using caption_file)
+            if not self.caption_file:
+                self._initialize_engine_if_needed()
                 if not self.engine:
-                    self.logger.error("Failed to initialize caption engine")
+                    self.initialize_engine()
+                    if not self.engine:
+                        self.logger.error("Failed to initialize caption engine")
+                        return False
+                self.engine.load_model(self.model_name)
+                if not self.engine.get_model():
+                    self.logger.error("Failed to load caption model")
                     return False
-            self.engine.load_model(self.model_name)
-            if not self.engine.get_model():
-                self.logger.error("Failed to load caption model")
-                return False
 
-            # Initialize LLM engine
+            # Initialize LLM engine with enhanced quantization
             if not self.llm_engine:
                 self.llm_engine_helper.set_device(
                     self.device if hasattr(self, "device") else "cuda:0"
                 )
                 self.llm_engine_helper.initialize_engine(EngineFactory.PYTORCH_ENGINE)
+                self.llm_engine_helper.kwargs = {
+                    "quantization_config": BitsAndBytesConfig(
+                        load_in_4bit=True,
+                        bnb_4bit_use_double_quant=True,
+                        bnb_4bit_compute_dtype=torch.bfloat16,
+                    )
+                }
                 self.llm_engine_helper.load_model(self.llm_model_name)
                 self.llm_engine = self.llm_engine_helper.engine
                 if not self.llm_engine:
@@ -246,10 +278,13 @@ class LLMStreamFilter(VideoTransform):
 
     def do_transform_ip(self, buf):
         """
-        In-place transformation: captions frames, selects N streams, and outputs results.
+        In-place transformation: loads or generates captions, selects N streams, and outputs results.
         """
         try:
-            if not self.engine or not self.llm_engine:
+            if not self.caption_file and (not self.engine or not self.llm_engine):
+                if not self.do_load_model():
+                    return Gst.FlowReturn.ERROR
+            elif self.caption_file and not self.llm_engine:
                 if not self.do_load_model():
                     return Gst.FlowReturn.ERROR
 
@@ -275,57 +310,70 @@ class LLMStreamFilter(VideoTransform):
                 buf.duration = Gst.SECOND // 30
 
             captions = []
-            if num_sources == 1:
-                frame = frames
-                if (
-                    self.downsampled_width > 0
-                    and self.downsampled_width < self.width
-                    and self.downsampled_height > 0
-                    and self.downsampled_height < self.height
-                ):
-                    frame = cv2.resize(
-                        frame,
-                        (self.downsampled_width, self.downsampled_height),
-                        interpolation=cv2.INTER_AREA,
-                    )
+            if self.caption_file:
+                # Load captions from file for each stream
+                for idx in range(num_sources):
+                    caption = self.captions.get(self.frame_index + idx, "")
+                    captions.append(caption)
                     self.logger.info(
-                        f"Resized to {self.downsampled_width}x{self.downsampled_height}"
+                        f"Loaded caption for frame {self.frame_index + idx}: {caption}"
                     )
-
-                result = self.engine.forward(frame)
-                captions.append(result if result else "")
+                self.frame_index += num_sources
             else:
-                if (
-                    self.downsampled_width > 0
-                    and self.downsampled_width < self.width
-                    and self.downsampled_height > 0
-                    and self.downsampled_height < self.height
-                ):
-                    frames = np.stack(
-                        [
-                            cv2.resize(
-                                frame,
-                                (self.downsampled_width, self.downsampled_height),
-                                interpolation=cv2.INTER_AREA,
-                            )
-                            for frame in frames
-                        ],
-                        axis=0,
-                    )
-                    self.logger.info(
-                        f"Resized batch to {self.downsampled_width}x{self.downsampled_height}"
-                    )
+                # Generate captions using phi-3.5-vision
+                if num_sources == 1:
+                    frame = frames
+                    if (
+                        self.downsampled_width > 0
+                        and self.downsampled_width < self.width
+                        and self.downsampled_height > 0
+                        and self.downsampled_height < self.height
+                    ):
+                        frame = cv2.resize(
+                            frame,
+                            (self.downsampled_width, self.downsampled_height),
+                            interpolation=cv2.INTER_AREA,
+                        )
+                        self.logger.info(
+                            f"Resized to {self.downsampled_width}x{self.downsampled_height}"
+                        )
 
-                results = self.engine.forward(frames)
-                results_list = (
-                    results if isinstance(results, list) else [results] * num_sources
-                )
-                if len(results_list) != num_sources:
-                    self.logger.error(
-                        f"Expected {num_sources} results, got {len(results_list)}"
+                    result = self.engine.forward(frame)
+                    captions.append(result if result else "")
+                else:
+                    if (
+                        self.downsampled_width > 0
+                        and self.downsampled_width < self.width
+                        and self.downsampled_height > 0
+                        and self.downsampled_height < self.height
+                    ):
+                        frames = np.stack(
+                            [
+                                cv2.resize(
+                                    frame,
+                                    (self.downsampled_width, self.downsampled_height),
+                                    interpolation=cv2.INTER_AREA,
+                                )
+                                for frame in frames
+                            ],
+                            axis=0,
+                        )
+                        self.logger.info(
+                            f"Resized batch to {self.downsampled_width}x{self.downsampled_height}"
+                        )
+
+                    results = self.engine.forward(frames)
+                    results_list = (
+                        results
+                        if isinstance(results, list)
+                        else [results] * num_sources
                     )
-                    return Gst.FlowReturn.ERROR
-                captions = [r if r else "" for r in results_list]
+                    if len(results_list) != num_sources:
+                        self.logger.error(
+                            f"Expected {num_sources} results, got {len(results_list)}"
+                        )
+                        return Gst.FlowReturn.ERROR
+                    captions = [r if r else "" for r in results_list]
 
             # Select the most interesting streams
             self.selected_streams = self.select_interesting_streams(
@@ -356,6 +404,9 @@ class LLMStreamFilter(VideoTransform):
                         )
                     else:
                         self.logger.warning(f"Stream {idx}: text_src pad not linked")
+
+            # Clean up GPU memory
+            torch.cuda.empty_cache()
 
             return Gst.FlowReturn.OK
 

@@ -1,5 +1,6 @@
 #!/usr/bin/env python3
 import gi
+
 gi.require_version("Gst", "1.0")
 from gi.repository import Gst, GLib
 
@@ -21,6 +22,7 @@ pipeline = Gst.parse_launch(pipeline_desc)
 cap = pipeline.get_by_name("cap")
 tee = pipeline.get_by_name("t")
 
+
 # Function to link text_src to tee when text_src is created
 def on_pad_added(element, pad, tee):
     if pad.get_name() == "text_src":
@@ -33,6 +35,7 @@ def on_pad_added(element, pad, tee):
             print(f"Failed to link text_src to tee: {ret}")
         else:
             print("Successfully linked text_src to tee")
+
 
 # Connect pad-added signal to caption element
 cap.connect("pad-added", on_pad_added, tee)
