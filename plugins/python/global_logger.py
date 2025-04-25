@@ -28,9 +28,7 @@ class GlobalLogger(Logger):
     def __new__(cls):
         if cls._instance is None:
             cls._instance = super().__new__(cls)
-            cls._instance.logger = LoggerFactory.get_logger(
-                LoggerFactory.GST
-            )  # Use GST by default
+            cls._instance.logger = LoggerFactory.get()
         return cls._instance
 
     def error(self, message, *args):
