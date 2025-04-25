@@ -27,6 +27,8 @@ CAN_REGISTER_ELEMENT = True
 try:
     from overlay_helper.overlay_utils import (
         load_metadata,
+    )
+    from overlay_helper.overlay_utils_interface import (
         TrackingDisplay,
         GraphicsType,
         OverlayGraphicsFactory,

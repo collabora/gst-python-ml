@@ -19,14 +19,6 @@
 import os
 import json
 
-from .overlay_utils_interface import (
-    Color,
-    TrackingDisplay,
-    OverlayGraphics,
-    GraphicsType,
-    OverlayGraphicsFactory,
-)
-
 
 def load_metadata(meta_path, logger):
     """Load JSON metadata from a file and return a dictionary indexed by frame index.
