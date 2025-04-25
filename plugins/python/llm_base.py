@@ -71,7 +71,7 @@ class LlmBase(AggregatorBase):
 
             # Ensure engine is initialized
             if not self.engine_helper.engine:
-                self.logger.warning("Engine not initialized, initializing now")
+                self.logger.info("Engine not initialized, initializing now")
                 self.engine_helper.initialize_engine(self.engine_name)
                 self.engine_helper.load_model(self.model_name)
                 self.engine = self.engine_helper.engine  # Set self.engine
