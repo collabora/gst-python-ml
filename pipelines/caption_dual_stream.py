@@ -11,8 +11,8 @@ pipeline_desc = """
   filesrc location=data/soccer_single_camera.mp4 ! decodebin ! videoconvertscale ! video/x-raw,width=640,height=480,format=RGB ! pyml_streammux name=mux
   filesrc location=data/soccer_tracking.mp4 ! decodebin ! videoconvertscale ! video/x-raw,width=640,height=480,format=RGB ! mux.
   mux. ! pyml_caption name=cap device=cuda:0 downsampled_width=320 downsampled_height=240 prompt="What is the name of the game being played?" ! pyml_streamdemux name=demux
-  demux.src_0 ! queue ! videoconvert ! textoverlay name=overlay0 ! videoconvert ! glimagesink sync=false
-  demux.src_1 ! queue ! videoconvert ! textoverlay name=overlay1 ! videoconvert ! glimagesink sync=false
+  demux.src_0 ! queue ! videoconvert ! textoverlay name=overlay0 ! videoconvert ! autovideosink sync=false
+  demux.src_1 ! queue ! videoconvert ! textoverlay name=overlay1 ! videoconvert ! autovideosink sync=false
   tee name=t ! queue ! overlay0.text_sink
   t.src_1 ! queue ! overlay1.text_sink
 """
