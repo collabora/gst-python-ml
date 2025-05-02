@@ -378,9 +378,9 @@ https://huggingface.co/models?sort=trending&search=Helsinki
 
 #### caption + yolo
 
-`GST_DEBUG=4 gst-launch-1.0   filesrc location=data/soccer_tracking.mp4 ! decodebin ! videoconvert ! videoscale ! video/x-raw,width=640,height=480 ! pyml_yolo model-name=yolo11m device=cuda:0 track=True ! pyml_caption device=cuda:0 ! textoverlay !  pyml_overlay ! videoconvert !  autovideosink`
+`GST_DEBUG=4 gst-launch-1.0   filesrc location=data/soccer_tracking.mp4 ! decodebin ! videoconvertscale ! video/x-raw,width=640,height=480 ! pyml_yolo model-name=yolo11m device=cuda:0 track=True ! pyml_caption device=cuda:0 ! textoverlay !  pyml_overlay ! videoconvert !  autovideosink`
 
 
 #### caption with prompt
 
-`GST_DEBUG=4 gst-launch-1.0   filesrc location=data/soccer_tracking.mp4 ! decodebin ! videoconvert ! pyml_caption device=cuda:0 downsampled_width=320 downsampled_height=240 prompt="What is the name of the game being played?" ! textoverlay !  glimagesink`
+`GST_DEBUG=4 gst-launch-1.0   filesrc location=data/soccer_tracking.mp4 ! decodebin ! videoconvertscale !  video/x-raw,width=640,height=480 !  pyml_caption device=cuda:0 prompt="What is the name of the game being played?" downsampled_width=320 downsampled_height=240 ! textoverlay !  videoconvert !  autovideosink`
