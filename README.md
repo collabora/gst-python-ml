@@ -1,7 +1,6 @@
 # GStreamer Python ML
 
-This project provides Python base classes and GStreamer elements supporting a broad range
-of ML features. 
+This project provides a pure Python ML framework for upstream GStreamer, supporting a broad range of ML vision and language features. 
 
 Supported functionality includes:
 
