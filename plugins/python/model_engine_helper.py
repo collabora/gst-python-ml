@@ -16,10 +16,7 @@
 # Free Software Foundation, Inc., 51 Franklin Street, Fifth Floor,
 # Boston, MA 02110-1301, USA.
 
-from abc import abstractmethod
 from engine.engine_factory import EngineFactory
-from log.logger_factory import LoggerFactory
-
 
 class ModelEngineHelper:
     def __init__(self, logger, default_engine=EngineFactory.PYTORCH_ENGINE):

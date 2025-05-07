@@ -18,7 +18,6 @@
 
 from utils.runtime_utils import runtime_check_gstreamer_version
 import gi
-import numpy as np
 from video_transform import VideoTransform
 from format_converter import FormatConverter
 from muxed_buffer_processor import MuxedBufferProcessor  # Added import

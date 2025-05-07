@@ -19,7 +19,6 @@
 import gc
 import os
 import numpy as np
-from PIL import Image
 import torch
 from torchvision import models
 from transformers import (
