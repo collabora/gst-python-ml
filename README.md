@@ -92,7 +92,9 @@ and expects this repository to be located in `~/src` i.e.  `~/src/gst-python-ml`
 To use the host GPU in a docker container, you will need to install the nvidia container toolkit. If running on CPU, these steps can be skipped.
 
 
-Add nvidia repository (Ubuntu)
+##### Ubuntu
+
+Add nvidia repository
 
 ```
 curl -fsSL https://nvidia.github.io/libnvidia-container/gpgkey | sudo gpg --dearmor -o /usr/share/keyrings/nvidia-container-toolkit-keyring.gpg \
@@ -109,12 +111,25 @@ sudo apt install -y nvidia-container-toolkit
 sudo systemctl restart docker
 ```
 
+##### Fedora
+
+```
+sudo dnf install nvidia-container-toolkit
+sudo nvidia-ctk runtime configure --runtime=docker
+sudo systemctl restart docker
+```
+
+
+
+
+
 #### Build Ubuntu 24.04 Container
 `docker build -f ./Dockerfile -t ubuntu24:latest .`
 
 #### Run Docker Container
 
 a) If running on CPU, just remove `--gpus all` from command below
+
 b) This command assumes you have set up a Kafka network as described below
 
 `docker run -v ~/src/gst-python-ml/:/root/gst-python-ml -it --rm --gpus all --name ubuntu24 ubuntu24:latest /bin/bash`
@@ -142,11 +157,23 @@ docker container prune -f
 docker image prune -a -f
 ```
 
-## IMPORTANT NOTE
+## IMPORTANT NOTES
 
-To use the language elements included in this project, the `nvidia-cuda-toolkit`
-ubuntu package must be installed, and additional pip requirements must be installed from
-`requirements/language_requrements.txt`
+### Language Elements
+
+1. To use the language elements included in this project, the `nvidia-cuda-toolkit`
+Ubuntu package must be installed, and additional pip requirements must be installed from
+`requirements/language_requirements.txt`
+
+2. A specfic version of Cuda is required for these elements: LD_LIBRARY_PATH in `~/.bashrc` must be updated with the following line (adjust for your python version) :
+
+`export LD_LIBRARY_PATH=$LD_LIBRARY_PATH:$VIRTUAL_ENV/lib/python3.12/site-packages/nvidia/cublas/lib:$VIRTUAL_ENV/lib/python3.12/site-packages/nvidia/cudnn/lib`
+
+
+### Birdseye
+
+To use `pyml_birdseye`, additional pip requirements must be installed from the `plugins/python/birdseye` folder.
+
 
 ## Post Install
 

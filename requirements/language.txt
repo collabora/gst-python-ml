@@ -2,9 +2,6 @@
 # TTS and STT
 
 nvidia-cudnn-cu11==8.9.6.50
-# to use this version of cuda, you must also update LD_LIBRARY_PATH in
-# ~/.bashrc with the following line (adjust for your python version)
-#export LD_LIBRARY_PATH=$LD_LIBRARY_PATH:$VIRTUAL_ENV/lib/python3.12/site-packages/nvidia/cublas/lib:$VIRTUAL_ENV/lib/python3.12/site-packages/nvidia/cudnn/lib
 
 sentencepiece
 protobuf
