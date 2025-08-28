@@ -60,32 +60,23 @@ class Caption(VideoTransform):
         ),
     )
 
-    prompt = GObject.Property(
-        type=str,
-        default="What is shown in this image?",
-        nick="Custom Prompt",
-        blurb="Custom prompt text for image analysis",
-    )
+    @GObject.Property(type=str)
+    def prompt(self):
+        "Custom prompt text for image analysis"
+        return self.__prompt
+
+    @prompt.setter
+    def prompt(self, value):
+        self.__prompt = value
+        if self.engine:
+            self.engine.prompt = value
 
     def __init__(self):
         super().__init__()
         self.model_name = "phi-3.5-vision"
         self.caption = "   "
+        self.__prompt = "What is shown in this image?"
         self.text_src_pad = None
-
-    def do_set_property(self, property, value):
-        if property.name == "prompt":
-            self.prompt = value
-            if self.engine:
-                self.engine.prompt = value
-        else:
-            super().do_set_property(property, value)
-
-    def do_get_property(self, property):
-        if property.name == "prompt":
-            return self.prompt
-        else:
-            return super().do_get_property(property)
 
     def do_request_new_pad(self, template, name, caps):
         if self.text_src_pad:
@@ -136,7 +127,7 @@ class Caption(VideoTransform):
             if self.get_model() is None:
                 self.do_load_model()
 
-            self.engine.prompt = self.prompt
+            self.engine.prompt = self.__prompt
 
             # Initialize MuxedBufferProcessor with default framerate
             muxed_processor = MuxedBufferProcessor(
