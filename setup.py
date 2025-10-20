@@ -1,10 +1,12 @@
 import os
 from setuptools import setup, find_packages
 
+
 def parse_requirements(filename):
     """Load requirements from a pip requirements file"""
     with open(filename, "r", encoding="utf-8") as file:
         return [line.strip() for line in file if line and not line.startswith("#")]
+
 
 def parse_extra_requirements(directory):
     """Load extra requirements from multiple files"""
@@ -12,9 +14,12 @@ def parse_extra_requirements(directory):
     if os.path.exists(directory):
         for req_file in os.listdir(directory):
             if req_file.endswith(".txt"):  # Only process .txt files
-                name = os.path.splitext(req_file)[0]  # e.g., 'language' from 'language.txt'
+                name = os.path.splitext(req_file)[
+                    0
+                ]  # e.g., 'language' from 'language.txt'
                 extras[name] = parse_requirements(os.path.join(directory, req_file))
     return extras
+
 
 setup(
     name="gst-python-ml",
