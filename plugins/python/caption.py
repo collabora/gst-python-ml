@@ -41,6 +41,7 @@ except ImportError as e:
 
 TEXT_CAPS = Gst.Caps.from_string("text/x-raw, format=utf8")
 
+
 class Caption(VideoTransform):
     """
     GStreamer element for captioning video frames.
@@ -55,10 +56,7 @@ class Caption(VideoTransform):
 
     __gsttemplates__ = (
         Gst.PadTemplate.new(
-            "text_src",
-            Gst.PadDirection.SRC,
-            Gst.PadPresence.REQUEST,
-            TEXT_CAPS
+            "text_src", Gst.PadDirection.SRC, Gst.PadPresence.REQUEST, TEXT_CAPS
         ),
     )
 
@@ -300,7 +298,11 @@ class Caption(VideoTransform):
 
     def do_sink_event(self, event):
         if self.text_src_pad:
-            text_event = Gst.Event.new_caps(TEXT_CAPS) if event.type == Gst.EventType.CAPS else event
+            text_event = (
+                Gst.Event.new_caps(TEXT_CAPS)
+                if event.type == Gst.EventType.CAPS
+                else event
+            )
             self.text_src_pad.push_event(text_event)
         return GstBase.BaseTransform.do_sink_event(self, event)
 

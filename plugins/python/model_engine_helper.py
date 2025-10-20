@@ -18,6 +18,7 @@
 
 from engine.engine_factory import EngineFactory
 
+
 class ModelEngineHelper:
     def __init__(self, logger, default_engine=EngineFactory.PYTORCH_ENGINE):
         self.logger = logger
