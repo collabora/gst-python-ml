@@ -210,6 +210,8 @@ class AggregatorBase(GstBase.Aggregator):
             self.segment_pushed = True
 
     def do_aggregate(self, timeout):
+        if all(pad.is_eos() for pad in self.sinkpads):
+            return Gst.FlowReturn.EOS
         self.push_segment_if_needed()
         self.process_all_sink_pads()
         self.selected_samples(Gst.CLOCK_TIME_NONE, 0, 0, None)
