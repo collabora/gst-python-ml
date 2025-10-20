@@ -29,7 +29,7 @@ try:
     gi.require_version("GLib", "2.0")
     gi.require_version("GstAnalytics", "1.0")
 
-    from gi.repository import Gst, GObject, GstAnalytics, GLib  # noqa: E402
+    from gi.repository import Gst, GObject, GstAnalytics, GLib, GstBase  # noqa: E402
     import numpy as np
     import cv2
     from video_transform import VideoTransform
@@ -39,6 +39,7 @@ except ImportError as e:
         f"The 'pyml_caption' element will not be available. Error {e}"
     )
 
+TEXT_CAPS = Gst.Caps.from_string("text/x-raw, format=utf8")
 
 class Caption(VideoTransform):
     """
@@ -57,7 +58,7 @@ class Caption(VideoTransform):
             "text_src",
             Gst.PadDirection.SRC,
             Gst.PadPresence.REQUEST,
-            Gst.Caps.from_string("text/x-raw, format=utf8"),
+            TEXT_CAPS
         ),
     )
 
@@ -72,6 +73,7 @@ class Caption(VideoTransform):
         super().__init__()
         self.model_name = "phi-3.5-vision"
         self.caption = "   "
+        self.text_src_pad = None
 
     def do_set_property(self, property, value):
         if property.name == "prompt":
@@ -87,35 +89,24 @@ class Caption(VideoTransform):
         else:
             return super().do_get_property(property)
 
-    def do_start(self):
-        # Create the `text_src` pad on start to link to downstream element if it exists
-        self.text_src_pad = Gst.Pad.new_from_template(
-            self.get_pad_template("text_src"), "text_src"
-        )
+    def do_request_new_pad(self, template, name, caps):
+        if self.text_src_pad:
+            self.logger.error("Element already has a text_src")
+            return None
+        if name != template.name_template:
+            self.logger.error("Invalid pad name")
+            return None
+
+        self.text_src_pad = Gst.Pad.new_from_template(template, name)
         self.add_pad(self.text_src_pad)
+        self.text_src_pad.set_active(True)
 
-        # Attempt to link text_src to downstream text_sink if available
-        self.link_to_downstream_text_sink()
-        return True
+        return self.text_src_pad
 
-    def link_to_downstream_text_sink(self):
-        """
-        Attempts to find and link the `text_src` pad to a downstream `text_sink` pad.
-        """
-        self.logger.info("Attempting to link text_src pad to downstream text_sink pad")
-        src_peer = self.get_static_pad("src").get_peer()
-        if src_peer:
-            downstream_element = src_peer.get_parent()
-            text_sink_pad = downstream_element.get_static_pad("text_sink")
-            if text_sink_pad:
-                self.text_src_pad.link(text_sink_pad)
-                self.logger.info("Successfully linked text_src to downstream text_sink")
-            else:
-                self.logger.warning(
-                    "No text_sink pad found downstream to link with text_src"
-                )
-        else:
-            self.logger.warning("No downstream peer found to link text_src")
+    def do_release_pad(self, pad):
+        self.remove_pad(pad)
+        pad.set_active(False)
+        self.text_src_pad = None
 
     def push_text_buffer(self, text, buf_pts, buf_duration):
         """
@@ -137,7 +128,7 @@ class Caption(VideoTransform):
         # Push the buffer
         ret = self.text_src_pad.push(text_buffer)
         if ret != Gst.FlowReturn.OK:
-            self.logger.error(f"Failed to push text buffer: {ret}")
+            self.logger.warning(f"Failed to push text buffer: {ret}")
 
     def do_transform_ip(self, buf):
         """
@@ -214,7 +205,7 @@ class Caption(VideoTransform):
                             )
 
                         # Push text buffer if text_src pad is linked
-                        if self.text_src_pad and self.text_src_pad.is_linked():
+                        if self.text_src_pad:
                             self.push_text_buffer(self.caption, buf.pts, buf.duration)
                         else:
                             self.logger.warning(
@@ -286,7 +277,7 @@ class Caption(VideoTransform):
                                 )
 
                             # Push text buffer for each frame
-                            if self.text_src_pad and self.text_src_pad.is_linked():
+                            if self.text_src_pad:
                                 # Adjust PTS for each frame in the batch
                                 frame_pts = buf.pts + (
                                     idx * (buf.duration // num_sources)
@@ -307,9 +298,15 @@ class Caption(VideoTransform):
             self.logger.error(f"Error during transformation: {e}")
             return Gst.FlowReturn.ERROR
 
+    def do_sink_event(self, event):
+        if self.text_src_pad:
+            text_event = Gst.Event.new_caps(TEXT_CAPS) if event.type == Gst.EventType.CAPS else event
+            self.text_src_pad.push_event(text_event)
+        return GstBase.BaseTransform.do_sink_event(self, event)
+
 
 if CAN_REGISTER_ELEMENT:
-    GObject.type_register(Caption)
+    GObject.type_register(Caption, "pyml_caption")
     __gstelementfactory__ = ("pyml_caption", Gst.Rank.NONE, Caption)
 else:
     GlobalLogger().warning(
