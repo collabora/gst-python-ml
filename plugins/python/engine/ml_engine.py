@@ -22,6 +22,9 @@ from log.logger_factory import LoggerFactory
 
 
 class MLEngine(ABC):
+    """Abstract base class for machine learning engines that load models, run inference on image frames,
+    and generate text with language models."""
+
     def __init__(self, device="cpu"):
         self.logger = LoggerFactory.get(LoggerFactory.LOGGER_TYPE_GST)
         self.device = device
@@ -38,10 +41,30 @@ class MLEngine(ABC):
         self.track = False
         self.prompt = "What is shown in this image?"  # Default prompt
 
+    # Interface #
+
     @abstractmethod
     def load_model(self, model_name, **kwargs):
         """Load a model by name or path, with additional options."""
         pass
+
+    @abstractmethod
+    def set_device(self, device):
+        """Set the device (e.g., cpu, cuda)."""
+        pass
+
+    @abstractmethod
+    def forward(self, frames):
+        """Execute inference on a single frame or batch of frames.
+        Input can be a single NumPy array (H, W, C) or a batch (B, H, W, C)."""
+        pass
+
+    @abstractmethod
+    def generate(self, input_text, max_length=100):
+        """Generate LLM text."""
+        pass
+
+    # Implementation #
 
     def set_prompt(self, prompt):
         """Set the custom prompt for generating responses."""
@@ -55,26 +78,10 @@ class MLEngine(ABC):
         """Return the device the model is running on."""
         return self.device
 
-    @abstractmethod
-    def set_device(self, device):
-        """Set the device (e.g., cpu, cuda)."""
-        pass
-
-    def get_model(self):
-        """Return the loaded model for use in inference."""
-        return self.model
-
     def set_model(self, model):
         """Set the model directly (useful for loading pre-built models)."""
         self.model = model
 
-    @abstractmethod
-    def forward(self, frames):
-        """Execute inference (usually object detection) on a single frame or batch of frames.
-        Input can be a single NumPy array (H, W, C) or a batch (B, H, W, C)."""
-        pass
-
-    @abstractmethod
-    def generate(self, input_text, max_length=100):
-        """Generate LLM text."""
-        pass
+    def get_model(self):
+        """Return the loaded model for use in inference."""
+        return self.model
