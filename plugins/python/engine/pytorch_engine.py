@@ -385,13 +385,6 @@ class PyTorchEngine(MLEngine):
         else:
             raise ValueError("Unsupported model type or missing processor/tokenizer.")
 
-    def generate(self, input_text, max_length=100):
-        inputs = self.tokenizer(input_text, return_tensors="pt").to(self.device)
-        outputs = self.model.generate(**inputs, max_length=max_length)
-        generated_text = self.tokenizer.decode(outputs[0], skip_special_tokens=True)
-        self.logger.info(f"Generated text: {generated_text}")
-        return generated_text
-
     def execute_with_stream(self, func, *args, **kwargs):
         if self.device_queue_id is not None and "cuda" in self.device:
             s = torch.cuda.Stream(

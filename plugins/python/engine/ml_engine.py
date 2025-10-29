@@ -59,11 +59,6 @@ class MLEngine(ABC):
         Input can be a single NumPy array (H, W, C) or a batch (B, H, W, C)."""
         pass
 
-    @abstractmethod
-    def generate(self, input_text, max_length=100):
-        """Generate LLM text."""
-        pass
-
     # Implementation #
 
     def set_prompt(self, prompt):
