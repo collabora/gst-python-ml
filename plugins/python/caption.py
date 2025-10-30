@@ -243,8 +243,7 @@ class Caption(VideoTransform):
         # Set the text buffer timestamps
         text_buffer.pts = buf_pts
         text_buffer.dts = buf_pts  # DTS is usually the same as PTS for text buffers
-        # disable duration for now, as it freezes the pipeline
-        # text_buffer.duration = buf_duration
+        text_buffer.duration = buf_duration
 
         # Push the buffer
         ret = self.text_src_pad.push(text_buffer)
