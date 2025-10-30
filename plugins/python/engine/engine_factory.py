@@ -30,7 +30,6 @@ def _try_register(name: str, cls: Type) -> None:
 
 class EngineFactory:
     PYTORCH_ENGINE = "pytorch"
-    PYTORCH_YOLO_ENGINE = "pytorch-yolo"
     TFLITE_ENGINE = "tflite"
     TENSORFLOW_ENGINE = "tensorflow"
     ONNX_ENGINE = "onnx"
@@ -42,13 +41,6 @@ class EngineFactory:
             from .pytorch_engine import PyTorchEngine
 
             _try_register(cls.PYTORCH_ENGINE, PyTorchEngine)
-        except ImportError:
-            pass
-
-        try:
-            from .pytorch_yolo_engine import PyTorchYoloEngine
-
-            _try_register(cls.PYTORCH_YOLO_ENGINE, PyTorchYoloEngine)
         except ImportError:
             pass
 
