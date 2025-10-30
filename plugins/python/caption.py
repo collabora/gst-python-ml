@@ -204,8 +204,8 @@ class Caption(VideoTransform):
     def __init__(self):
         super().__init__()
         self.model_name = "phi-3.5-vision"
-        EngineFactory.register_engine("caption-engine", CaptionEngine)
         self.engine_name = "caption-engine"
+        EngineFactory.register(self.engine_name, CaptionEngine)
         self.caption = "   "
         self.__prompt = "What is shown in this image?"
         self.text_src_pad = None

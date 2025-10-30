@@ -29,7 +29,7 @@ class ModelEngineHelper:
 
     def initialize_engine(self, engine_name):
         if engine_name:
-            self.engine = EngineFactory.create_engine(engine_name, self.device)
+            self.engine = EngineFactory.create(engine_name, self.device)
         else:
             self.logger.error(f"Unsupported ML engine: {engine_name}")
 

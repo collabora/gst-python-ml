@@ -73,13 +73,12 @@ class EngineFactory:
             pass
 
     @staticmethod
-    def register_engine(engine_type: str, engine_class: Type) -> None:
+    def register(engine_type: str, engine_class: Type) -> None:
         _engine_registry[engine_type] = engine_class
 
     @staticmethod
-    def create_engine(engine_type: str, device: str = "cpu"):
-        # Correct call: use classmethod properly
-        EngineFactory._register_builtins()  # ← This now works
+    def create(engine_type: str, device: str = "cpu"):
+        EngineFactory._register_builtins()
 
         try:
             cls = _engine_registry[engine_type]

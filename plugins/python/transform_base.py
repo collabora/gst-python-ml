@@ -156,7 +156,7 @@ class TransformBase(GstBase.BaseTransform):
     def initialize_engine(self):
         """Initialize the machine learning engine based on the engine_name property."""
         if self.engine_name is not None:
-            self.engine = EngineFactory.create_engine(self.engine_name, self.device)
+            self.engine = EngineFactory.create(self.engine_name, self.device)
             self.engine.batch_size = self.batch_size
             self.engine.frame_stride = self.frame_stride
             if self.device_queue_id:

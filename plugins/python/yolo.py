@@ -205,8 +205,8 @@ class YOLOTransform(ObjectDetectorBase):
 
     def __init__(self):
         super().__init__()
-        EngineFactory.register_engine("yolo-engine", YoloEngine)
         self.engine_name = "yolo-engine"
+        EngineFactory.register(self.engine_name, YoloEngine)
 
     def do_decode(self, buf, result, stream_idx=0):
         self.logger.debug(
