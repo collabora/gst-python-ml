@@ -74,6 +74,7 @@ class Caption(VideoTransform):
     def __init__(self):
         super().__init__()
         self.model_name = "phi-3.5-vision"
+        self.engine_name = "pytorch-phi35"
         self.caption = "   "
         self.__prompt = "What is shown in this image?"
         self.text_src_pad = None

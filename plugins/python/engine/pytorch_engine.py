@@ -40,26 +40,7 @@ class PyTorchEngine(MLEngine):
         tokenizer_name = kwargs.get("tokenizer_name")
 
         try:
-            # Special case for Phi-3-vision model from Hugging Face
-            if model_name == "phi-3.5-vision":
-                quantization_config = BitsAndBytesConfig(load_in_4bit=True)
-                self.model = AutoModelForCausalLM.from_pretrained(
-                    "microsoft/Phi-3.5-vision-instruct",
-                    quantization_config=quantization_config,
-                    device_map="auto",
-                    torch_dtype=torch.float16,
-                    trust_remote_code=True,
-                    _attn_implementation="flash_attention_2",
-                )
-                self.processor = AutoProcessor.from_pretrained(
-                    "microsoft/Phi-3.5-vision-instruct", trust_remote_code=True
-                )
-                self.logger.info(
-                    "Phi-3.5-vision model and processor loaded successfully."
-                )
-                self.vision_language_model = True
-                self.model.eval()
-            elif os.path.isfile(model_name):
+            if os.path.isfile(model_name):
                 self.model = torch.load(model_name)
                 self.logger.info(f"Model loaded from local path: {model_name}")
             else:
@@ -393,3 +374,43 @@ class PyTorchEngine(MLEngine):
             with torch.cuda.stream(s):
                 return func(*args, **kwargs)
         return func(*args, **kwargs)
+
+
+class PyTorchPhi35Engine(PyTorchEngine):
+    def load_model(self, model_name, **kwargs):
+        """Load a Phi-3-vision model from Hugging Face."""
+        processor_name = kwargs.get("processor_name")
+        tokenizer_name = kwargs.get("tokenizer_name")
+
+        try:
+            quantization_config = BitsAndBytesConfig(load_in_4bit=True)
+            self.model = AutoModelForCausalLM.from_pretrained(
+                "microsoft/Phi-3.5-vision-instruct",
+                quantization_config=quantization_config,
+                device_map="auto",
+                torch_dtype=torch.float16,
+                trust_remote_code=True,
+                _attn_implementation="flash_attention_2",
+            )
+            self.processor = AutoProcessor.from_pretrained(
+                "microsoft/Phi-3.5-vision-instruct", trust_remote_code=True
+            )
+            self.logger.info("Phi-3.5-vision model and processor loaded successfully.")
+            self.vision_language_model = True
+            self.model.eval()
+
+            # FIXED: Skip .to() for 4-bit models
+            if not (
+                hasattr(self.model, "is_loaded_in_4bit")
+                and self.model.is_loaded_in_4bit
+            ):
+                self.execute_with_stream(lambda: self.model.to(self.device))
+                self.logger.info(f"Model moved to {self.device}")
+
+            return True
+
+        except Exception as e:
+            self.logger.error(f"Error loading model '{model_name}': {e}")
+            self.tokenizer = None
+            self.model = None
+            return False

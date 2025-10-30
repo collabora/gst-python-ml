@@ -24,6 +24,14 @@ except ImportError:
     _pytorch_engine_available = False
 
 try:
+    from .pytorch_engine import PyTorchPhi35Engine
+
+    _pytorch_phi35_engine_available = True
+except ImportError:
+    _pytorch_phi35_engine_available = False
+
+
+try:
     from .pytorch_yolo_engine import PyTorchYoloEngine
 
     _pytorch_yolo_engine_available = True
@@ -63,6 +71,7 @@ class EngineFactory:
     # Define the constant strings for each engine
     PYTORCH_ENGINE = "pytorch"
     PYTORCH_YOLO_ENGINE = "pytorch-yolo"
+    PYTORCH_PHI35_ENGINE = "pytorch-phi35"
     TFLITE_ENGINE = "tflite"
     TENSORFLOW_ENGINE = "tensorflow"
     ONNX_ENGINE = "onnx"
@@ -82,6 +91,14 @@ class EngineFactory:
             else:
                 raise ImportError(
                     f"{EngineFactory.PYTORCH_ENGINE} engine is not available."
+                )
+
+        if engine_type == EngineFactory.PYTORCH_PHI35_ENGINE:
+            if _pytorch_phi35_engine_available:
+                return PyTorchPhi35Engine(device)
+            else:
+                raise ImportError(
+                    f"{EngineFactory.PYTORCH_PHI35_ENGINE} engine is not available."
                 )
 
         if engine_type == EngineFactory.PYTORCH_YOLO_ENGINE:
