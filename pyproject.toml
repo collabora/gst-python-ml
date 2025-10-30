@@ -1,3 +1,24 @@
 [build-system]
 requires = ["setuptools", "wheel"]
 build-backend = "setuptools.build_meta"
+
+[project]
+name = "gst-python-ml"
+version = "0.3.0"
+description = "Your project description"
+readme = "README.md"
+requires-python = "==3.12.*"
+dependencies = [
+    "pygobject",
+    "torch",
+    "torchvision",
+    "torchaudio",
+    "transformers",
+    "numpy",
+    "huggingface-hub",
+    "lap",
+    "ultralytics",
+    "pycairo",
+    "bitsandbytes",
+    "pytest>=7.0"
+]

@@ -42,6 +42,16 @@ sudo apt install -y python3-pip  python3-venv \
     libcairo2 libcairo2-dev git
 ```
 
+#### uv
+
+##### install
+curl -LsSf https://astral.sh/uv/install.sh | sh
+
+##### sync
+uv python install ==3.12.*
+source .venv/bin/activate
+
+
 #### Install venv
 
 `python3 -m venv --system-site-packages ~/venv`
