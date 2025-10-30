@@ -16,59 +16,19 @@
 # Free Software Foundation, Inc., 51 Franklin Street, Fifth Floor,
 # Boston, MA 02110-1301, USA.
 
-try:
-    from .pytorch_engine import PyTorchEngine
+from typing import Type, Dict
 
-    _pytorch_engine_available = True
-except ImportError:
-    _pytorch_engine_available = False
-
-try:
-    from .pytorch_engine import PyTorchPhi35Engine
-
-    _pytorch_phi35_engine_available = True
-except ImportError:
-    _pytorch_phi35_engine_available = False
+_engine_registry: Dict[str, Type] = {}
 
 
-try:
-    from .pytorch_yolo_engine import PyTorchYoloEngine
-
-    _pytorch_yolo_engine_available = True
-except ImportError:
-    _pytorch_yolo_engine_available = False
-
-try:
-    from .litert_engine import LiteRTEngine
-
-    _tflite_engine_available = True
-except ImportError:
-    _tflite_engine_available = False
-
-try:
-    from .tensorflow_engine import TensorFlowEngine
-
-    _tensorflow_engine_available = True
-except ImportError:
-    _tensorflow_engine_available = False
-
-try:
-    from .onnx_engine import ONNXEngine
-
-    _onnx_engine_available = True
-except ImportError:
-    _onnx_engine_available = False
-
-try:
-    from .openvino_engine import OpenVinoEngine
-
-    _openvino_engine_available = True
-except ImportError:
-    _openvino_engine_available = False
+def _try_register(name: str, cls: Type) -> None:
+    try:
+        _engine_registry[name] = cls
+    except Exception:
+        pass
 
 
 class EngineFactory:
-    # Define the constant strings for each engine
     PYTORCH_ENGINE = "pytorch"
     PYTORCH_YOLO_ENGINE = "pytorch-yolo"
     PYTORCH_PHI35_ENGINE = "pytorch-phi35"
@@ -77,69 +37,68 @@ class EngineFactory:
     ONNX_ENGINE = "onnx"
     OPENVINO_ENGINE = "openvino"
 
+    @classmethod
+    def _register_builtins(cls) -> None:
+        try:
+            from .pytorch_engine import PyTorchEngine
+
+            _try_register(cls.PYTORCH_ENGINE, PyTorchEngine)
+        except ImportError:
+            pass
+
+        try:
+            from .pytorch_phi35_engine import PyTorchPhi35Engine
+
+            _try_register(cls.PYTORCH_PHI35_ENGINE, PyTorchPhi35Engine)
+        except ImportError:
+            pass
+
+        try:
+            from .pytorch_yolo_engine import PyTorchYoloEngine
+
+            _try_register(cls.PYTORCH_YOLO_ENGINE, PyTorchYoloEngine)
+        except ImportError:
+            pass
+
+        try:
+            from .litert_engine import LiteRTEngine
+
+            _try_register(cls.TFLITE_ENGINE, LiteRTEngine)
+        except ImportError:
+            pass
+
+        try:
+            from .tensorflow_engine import TensorFlowEngine
+
+            _try_register(cls.TENSORFLOW_ENGINE, TensorFlowEngine)
+        except ImportError:
+            pass
+
+        try:
+            from .onnx_engine import ONNXEngine
+
+            _try_register(cls.ONNX_ENGINE, ONNXEngine)
+        except ImportError:
+            pass
+
+        try:
+            from .openvino_engine import OpenVinoEngine
+
+            _try_register(cls.OPENVINO_ENGINE, OpenVinoEngine)
+        except ImportError:
+            pass
+
     @staticmethod
-    def create_engine(engine_type, device="cpu"):
-        """
-        Factory method to create the appropriate engine based on the engine type.
-        :param engine_type: The type of the ML engine, e.g., "pytorch" or "tflite".
-        :param device: The device to run the engine on (default is "cpu").
-        :return: An instance of the appropriate ML engine class.
-        """
-        if engine_type == EngineFactory.PYTORCH_ENGINE:
-            if _pytorch_engine_available:
-                return PyTorchEngine(device)
-            else:
-                raise ImportError(
-                    f"{EngineFactory.PYTORCH_ENGINE} engine is not available."
-                )
+    def register_engine(engine_type: str, engine_class: Type) -> None:
+        _engine_registry[engine_type] = engine_class
 
-        if engine_type == EngineFactory.PYTORCH_PHI35_ENGINE:
-            if _pytorch_phi35_engine_available:
-                return PyTorchPhi35Engine(device)
-            else:
-                raise ImportError(
-                    f"{EngineFactory.PYTORCH_PHI35_ENGINE} engine is not available."
-                )
+    @staticmethod
+    def create_engine(engine_type: str, device: str = "cpu"):
+        # Correct call: use classmethod properly
+        EngineFactory._register_builtins()  # ← This now works
 
-        if engine_type == EngineFactory.PYTORCH_YOLO_ENGINE:
-            if _pytorch_yolo_engine_available:
-                return PyTorchYoloEngine(device)
-            else:
-                raise ImportError(
-                    f"{EngineFactory.PYTORCH_YOLO_ENGINE} engine is not available."
-                )
-
-        elif engine_type == EngineFactory.TFLITE_ENGINE:
-            if _tflite_engine_available:
-                return LiteRTEngine(device)
-            else:
-                raise ImportError(
-                    f"{EngineFactory.TFLITE_ENGINE} engine is not available."
-                )
-
-        elif engine_type == EngineFactory.TENSORFLOW_ENGINE:
-            if _tensorflow_engine_available:
-                return TensorFlowEngine(device)
-            else:
-                raise ImportError(
-                    f"{EngineFactory.TENSORFLOW_ENGINE} engine is not available."
-                )
-
-        elif engine_type == EngineFactory.ONNX_ENGINE:
-            if _onnx_engine_available:
-                return ONNXEngine(device)
-            else:
-                raise ImportError(
-                    f"{EngineFactory.ONNX_ENGINE} engine is not available."
-                )
-
-        elif engine_type == EngineFactory.OPENVINO_ENGINE:
-            if _openvino_engine_available:
-                return OpenVinoEngine(device)
-            else:
-                raise ImportError(
-                    f"{EngineFactory.OPENVINO_ENGINE} engine is not available."
-                )
-
-        else:
+        try:
+            cls = _engine_registry[engine_type]
+            return cls(device)
+        except KeyError:
             raise ValueError(f"Unsupported engine type: {engine_type}")

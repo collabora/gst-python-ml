@@ -16,6 +16,7 @@
 # Free Software Foundation, Inc., 51 Franklin Street, Fifth Floor,
 # Boston, MA 02110-1301, USA.
 
+import traceback
 from utils.runtime_utils import runtime_check_gstreamer_version
 import gi
 from video_transform import VideoTransform
@@ -144,7 +145,7 @@ class ObjectDetectorBase(VideoTransform):
             return Gst.FlowReturn.OK
 
         except Exception as e:
-            self.logger.error(f"Transform error: {e}")
+            self.logger.error(f"Transform error: {e}\n{traceback.format_exc()}")
             return Gst.FlowReturn.ERROR
 
     def do_decode(self, buf, output, stream_idx=0):
