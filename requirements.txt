@@ -1,5 +1,4 @@
-# Base requirements and requirements for vision elements such as YOLO
-
+# base requirements
 pygobject
 torch
 torchvision
@@ -8,8 +7,39 @@ transformers==4.48
 numpy
 huggingface-hub
 lap
-ultralytics
 pycairo
+
+# yolo
+ultralytics
+
+# quantization
 bitsandbytes
 
+# testing
 pytest>=7.0
+
+# kafka
+confluent_kafka
+
+# captioning
+# note: flash-attn will not build on Fedora, so use latest package
+flash-attn
+
+#stable diffusion
+# requires Flash-Attention version >=2.7.1,<=2.8.2
+#flash-attn==2.8.2
+diffusers
+
+# transcription
+sentencepiece
+protobuf
+accelerate
+pysilero
+faster_whisper
+pysilero-vad
+whisperspeech
+webdataset
+
+# birds eye view
+easydict
+pyflann-py3

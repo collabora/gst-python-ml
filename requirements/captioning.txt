@@ -1,8 +1,0 @@
-# These are the requirements specific to the caption element i.e. phi3-vision model.
-# Flash attention takes a long time to build, so it is separated out into this file.
-
-# Note: building flash_attn also requires installation of nvidia-cuda-toolkit ubuntu package
-
-ninja
-flash_attn
-
