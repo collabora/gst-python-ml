@@ -14,6 +14,7 @@ dependencies = [
     "torchvision",
     "torchaudio",
     "transformers",
+    #"flash_attn",
     "numpy",
     "huggingface-hub",
     "lap",
@@ -22,3 +23,6 @@ dependencies = [
     "bitsandbytes",
     "pytest>=7.0"
 ]
+
+#[tool.uv.extra-build-dependencies]
+#flash-attn = ["torch"]

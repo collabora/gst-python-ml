@@ -42,13 +42,15 @@ sudo apt install -y python3-pip  python3-venv \
     libcairo2 libcairo2-dev git
 ```
 
-#### uv
+#### uv (experimental, does not work with flash attention)
 
 ##### install
 curl -LsSf https://astral.sh/uv/install.sh | sh
 
 ##### sync
 uv python install ==3.12.*
+uv venv --system-site-packages
+uv sync
 source .venv/bin/activate
 
 
