@@ -26,7 +26,7 @@ try:
     gi.require_version("GstBase", "1.0")
     gi.require_version("GObject", "2.0")
     from gi.repository import Gst, GObject, GstBase  # noqa: E402
-    from transcribe_base import TranscribeBase
+    from base_transcribe import BaseTranscribe
     from whisperspeech.pipeline import Pipeline
     from transformers import AutoTokenizer, AutoModelForCausalLM
     import numpy as np
@@ -53,7 +53,7 @@ OCAPS = Gst.Caps(
 )
 
 
-class WhisperLive(TranscribeBase):
+class WhisperLive(BaseTranscribe):
     __gstmetadata__ = (
         "WhisperLive",
         "Text Output",

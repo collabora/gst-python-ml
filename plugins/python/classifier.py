@@ -26,7 +26,7 @@ try:
     gi.require_version("GstBase", "1.0")
     gi.require_version("GLib", "2.0")
     from gi.repository import Gst, GObject  # noqa: E402
-    from classifier_base import ClassifierBase
+    from base_classifier import BaseClassifier
 except ImportError as e:
     CAN_REGISTER_ELEMENT = False
     GlobalLogger().warning(
@@ -34,7 +34,7 @@ except ImportError as e:
     )
 
 
-class Classifier(ClassifierBase):
+class Classifier(BaseClassifier):
     """
     GStreamer element for a general object detector where the user sets the model-name property.
     """

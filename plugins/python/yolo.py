@@ -28,7 +28,7 @@ try:
     gi.require_version("GstAnalytics", "1.0")
     gi.require_version("GLib", "2.0")
     from gi.repository import Gst, GObject, GstAnalytics, GLib  # noqa: E402
-    from objectdetector_base import ObjectDetectorBase
+    from base_objectdetector import BaseObjectDetector
 
     import numpy as np
     import time
@@ -190,7 +190,7 @@ class YoloEngine(PyTorchEngine):
             return None if not is_batch else [None] * batch_size
 
 
-class YOLOTransform(ObjectDetectorBase):
+class YOLOTransform(BaseObjectDetector):
     """
     GStreamer element for YOLO model inference on video frames
     (detection, segmentation, and tracking).

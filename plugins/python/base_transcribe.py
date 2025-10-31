@@ -1,4 +1,4 @@
-# TranscribeBase
+# BaseTranscribe
 # Copyright (C) 2024-2025 Collabora Ltd.
 #
 # This library is free software; you can redistribute it and/or
@@ -29,7 +29,7 @@ gi.require_version("GstBase", "1.0")
 gi.require_version("GObject", "2.0")
 from gi.repository import Gst, GObject, GstBase  # noqa: E402
 
-from aggregator_base import AggregatorBase  # noqa: E402
+from base_aggregator import BaseAggregator  # noqa: E402
 
 sys.stdout.reconfigure(encoding="utf-8")
 sys.stderr.reconfigure(encoding="utf-8")
@@ -53,9 +53,9 @@ ICAPS = Gst.Caps(
 OCAPS = Gst.Caps(Gst.Structure("text/x-raw", format="utf8"))
 
 
-class TranscribeBase(AggregatorBase):
+class BaseTranscribe(BaseAggregator):
     __gstmetadata__ = (
-        "TranscribeBase",
+        "BaseTranscribe",
         "Text Output",
         "Python element that transcribes audio with Whisper",
         "Aaron Boxer <aaron.boxer@collabora.com>",

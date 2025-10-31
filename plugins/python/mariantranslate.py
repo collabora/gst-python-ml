@@ -24,7 +24,7 @@ try:
 
     gi.require_version("Gst", "1.0")
     from gi.repository import Gst, GObject  # noqa: E402
-    from translate_base import TranslateBase
+    from base_translate import BaseTranslate
 except ImportError as e:
     CAN_REGISTER_ELEMENT = False
     GlobalLogger().warning(
@@ -32,7 +32,7 @@ except ImportError as e:
     )
 
 
-class MarianTranslate(TranslateBase):
+class MarianTranslate(BaseTranslate):
     __gstmetadata__ = (
         "MarianTranslate",
         "Transform",

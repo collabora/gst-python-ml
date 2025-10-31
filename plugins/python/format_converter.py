@@ -1,4 +1,4 @@
-# ObjectDetectorBase
+# BaseObjectDetector
 # Copyright (C) 2024-2025 Collabora Ltd.
 #
 # This library is free software; you can redistribute it and/or

@@ -30,7 +30,7 @@ try:
     from gi.repository import Gst, GObject, GstAnalytics, GLib  # noqa: E402
     import numpy as np
 
-    from objectdetector_base import ObjectDetectorBase
+    from base_objectdetector import BaseObjectDetector
 except ImportError as e:
     CAN_REGISTER_ELEMENT = False
     GlobalLogger().warning(
@@ -38,7 +38,7 @@ except ImportError as e:
     )
 
 
-class MaskRCNN(ObjectDetectorBase):
+class MaskRCNN(BaseObjectDetector):
     """
     GStreamer element for Mask R-CNN model inference on video frames.
     """

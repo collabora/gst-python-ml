@@ -1,4 +1,4 @@
-# TranslateBase
+# BaseTranslate
 # Copyright (C) 2024-2025 Collabora Ltd.
 #
 # This library is free software; you can redistribute it and/or
@@ -19,7 +19,7 @@
 import gi
 
 from transformers import MarianMTModel, MarianTokenizer
-from aggregator_base import AggregatorBase
+from base_aggregator import BaseAggregator
 
 gi.require_version("Gst", "1.0")
 gi.require_version("GstBase", "1.0")
@@ -30,9 +30,9 @@ ICAPS = Gst.Caps(Gst.Structure("text/x-raw", format="utf8"))
 OCAPS = Gst.Caps(Gst.Structure("text/x-raw", format="utf8"))
 
 
-class TranslateBase(AggregatorBase):
+class BaseTranslate(BaseAggregator):
     __gstmetadata__ = (
-        "TranslateBase",
+        "BaseTranslate",
         "Aggregator",
         "Text-to-Text translation element",
         "Aaron Boxer <aaron.boxer@collabora.com>",

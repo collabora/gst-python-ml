@@ -27,7 +27,7 @@ try:
     gi.require_version("GstBase", "1.0")
     gi.require_version("GObject", "2.0")
     from gi.repository import Gst, GObject, GstBase  # noqa: E402
-    from aggregator_base import AggregatorBase
+    from base_aggregator import BaseAggregator
     import numpy as np
     from diffusers import StableDiffusionPipeline
 except ImportError as e:
@@ -40,7 +40,7 @@ except ImportError as e:
 ICAPS = Gst.Caps(Gst.Structure("text/plain", format="utf8"))
 
 
-class StableDiffusion(AggregatorBase):
+class StableDiffusion(BaseAggregator):
     __gstmetadata__ = (
         "StableDiffusion",
         "Aggregator",

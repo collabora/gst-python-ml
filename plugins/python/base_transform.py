@@ -1,4 +1,4 @@
-# TransformBase
+# BaseTransform
 # Copyright (C) 2024-2025 Collabora Ltd.
 #
 # This library is free software; you can redistribute it and/or
@@ -26,7 +26,7 @@ from gi.repository import Gst, GObject, GstBase  # noqa: E402
 from log.logger_factory import LoggerFactory  # noqa: E402
 
 
-class TransformBase(GstBase.BaseTransform):
+class BaseTransform(GstBase.BaseTransform):
     """
     Base class for GStreamer transform elements that perform
     inference with a machine learning model. This class manages shared properties
@@ -34,7 +34,7 @@ class TransformBase(GstBase.BaseTransform):
     """
 
     __gstmetadata__ = (
-        "TransformBase",
+        "BaseTransform",
         "Transform",
         "Generic machine learning model transform element",
         "Aaron Boxer <aaron.boxer@collabora.com>",

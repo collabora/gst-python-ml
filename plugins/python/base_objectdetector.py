@@ -31,7 +31,7 @@ from gi.repository import Gst, GstAnalytics, GObject, GLib  # noqa: E402
 from metadata import Metadata  # noqa: E402
 
 
-class ObjectDetectorBase(VideoTransform):
+class BaseObjectDetector(VideoTransform):
     """
     GStreamer element for object detection with batch processing support.
     Handles both single-frame buffers (no metadata) and batch buffers (metadata in last chunk).
@@ -52,7 +52,7 @@ class ObjectDetectorBase(VideoTransform):
         self.framerate_denom = 1
         self.format_converter = FormatConverter()
         self.metadata = Metadata("si")
-        self.logger.info("Initialized ObjectDetectorBase - WORKING_2025_03_11_BATCH_V3")
+        self.logger.info("Initialized BaseObjectDetector - WORKING_2025_03_11_BATCH_V3")
 
     def do_set_property(self, prop, value):
         self.logger.info(f"Setting property {prop.name} to {value}")

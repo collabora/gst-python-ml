@@ -1,4 +1,4 @@
-# AggregatorBase
+# BaseAggregator
 # Copyright (C) 2024-2025 Collabora Ltd.
 #
 # This library is free software; you can redistribute it and/or
@@ -29,7 +29,7 @@ from log.logger_factory import LoggerFactory
 from model_engine_helper import ModelEngineHelper
 
 
-class AggregatorBase(GstBase.Aggregator):
+class BaseAggregator(GstBase.Aggregator):
     """
     Base class for GStreamer aggregator elements that perform inference
     with a machine learning model. This class manages shared properties
@@ -37,7 +37,7 @@ class AggregatorBase(GstBase.Aggregator):
     """
 
     __gstmetadata__ = (
-        "AggregatorBase",
+        "BaseAggregator",
         "Aggregator",
         "Generic machine learning model aggregator element",
         "Aaron Boxer <aaron.boxer@collabora.com>",
@@ -111,7 +111,7 @@ class AggregatorBase(GstBase.Aggregator):
         elif prop.name == "model-name":
             return self.model_name
         elif prop.name == "device":
-            return self.device  # Return from AggregatorBase, not from helper
+            return self.device  # Return from BaseAggregator, not from helper
         elif prop.name == "engine-name":
             return self.engine_name
         elif prop.name == "device-queue-id":

@@ -24,13 +24,13 @@ try:
 
     gi.require_version("Gst", "1.0")
     from gi.repository import Gst, GObject  # noqa: E402
-    from llm_base import LlmBase
+    from base_llm import BaseLlm
 except ImportError as e:
     CAN_REGISTER_ELEMENT = False
     GlobalLogger().warning(f"The 'pyml_llm' element will not be available. Error {e}")
 
 
-class LLM(LlmBase):
+class LLM(BaseLlm):
     __gstmetadata__ = (
         "LLM",
         "Transform",

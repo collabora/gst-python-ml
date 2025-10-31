@@ -1,4 +1,4 @@
-# ClassifierBase
+# BaseClassifier
 # Copyright (C) 2024-2025 Collabora Ltd.
 #
 # This library is free software; you can redistribute it and/or
@@ -30,7 +30,7 @@ gi.require_version("GLib", "2.0")
 from gi.repository import Gst, GstAnalytics, GObject, GLib  # noqa: E402
 
 
-class ClassifierBase(VideoTransform):
+class BaseClassifier(VideoTransform):
     """
     GStreamer element for image classification with a machine learning model.
     """
@@ -38,7 +38,7 @@ class ClassifierBase(VideoTransform):
     def __init__(self):
         super().__init__()
         runtime_check_gstreamer_version()
-        self.logger.info("ClassifierBase initialized.")
+        self.logger.info("BaseClassifier initialized.")
 
     def forward(self, frame):
         """
@@ -46,7 +46,7 @@ class ClassifierBase(VideoTransform):
         """
         if self.engine:
             return self.engine.forward(frame)
-        self.logger.error("No model loaded in ClassifierBase.")
+        self.logger.error("No model loaded in BaseClassifier.")
         return None
 
     def do_transform_ip(self, buf):

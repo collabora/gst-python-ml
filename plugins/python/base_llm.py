@@ -1,4 +1,4 @@
-# LlmBase
+# BaseLlm
 # Copyright (C) 2024-2025 Collabora Ltd.
 #
 # This library is free software; you can redistribute it and/or
@@ -25,10 +25,10 @@ gi.require_version("GLib", "2.0")
 
 from gi.repository import Gst  # noqa: E402
 
-from aggregator_base import AggregatorBase
+from base_aggregator import BaseAggregator
 
 
-class LlmBase(AggregatorBase):
+class BaseLlm(BaseAggregator):
     """
     GStreamer base element that performs language model inference
     with a PyTorch model.

@@ -108,7 +108,7 @@ class LLMStreamFilter(VideoTransform):
     def __init__(self):
         super().__init__()
         self.model_name = (
-            "phi-3.5-vision"  # Caption model, inherited from TransformBase
+            "phi-3.5-vision"  # Caption model, inherited from BaseTransform
         )
         self.llm_engine_helper = ModelEngineHelper(GlobalLogger())
         self.llm_engine = None
