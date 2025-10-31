@@ -35,6 +35,8 @@ class EngineFactory:
     ONNX_ENGINE = "onnx"
     OPENVINO_ENGINE = "openvino"
 
+    _builtins_registered: bool = False  # Class-level flag for singleton-like lazy init
+
     @classmethod
     def _register_builtins(cls) -> None:
         try:
@@ -78,7 +80,10 @@ class EngineFactory:
 
     @staticmethod
     def create(engine_type: str, device: str = "cpu"):
-        EngineFactory._register_builtins()
+        # Singleton-like: register builtins only once
+        if not EngineFactory._builtins_registered:
+            EngineFactory._register_builtins()
+            EngineFactory._builtins_registered = True
 
         try:
             cls = _engine_registry[engine_type]
