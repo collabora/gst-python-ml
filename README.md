@@ -42,17 +42,24 @@ sudo apt install -y python3-pip  python3-venv \
     libcairo2 libcairo2-dev git
 ```
 
-#### uv (experimental, does not work with flash attention)
+#### uv
 
 ##### install
 curl -LsSf https://astral.sh/uv/install.sh | sh
 
-##### sync
-uv python install ==3.12.*
-uv venv --system-site-packages
-uv sync
-source .venv/bin/activate
+##### set up uv venv
 
+```
+uv venv --system-site-packages
+source .venv/bin/activate
+uv sync
+```
+
+Now manually install flash-attn wheel.
+eg:  
+`uv pip install ./flash_attn-2.8.3+cu128torch2.9-cp313-cp313-linux_x86_64.whl`
+
+#### pip
 
 #### Install venv
 

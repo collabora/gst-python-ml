@@ -7,22 +7,32 @@ name = "gst-python-ml"
 version = "0.3.0"
 description = "Your project description"
 readme = "README.md"
-requires-python = "==3.12.*"
+requires-python = "==3.13.*"
 dependencies = [
     "pygobject",
     "torch",
     "torchvision",
     "torchaudio",
-    "transformers",
-    #"flash_attn",
+    "transformers==4.48",
     "numpy",
     "huggingface-hub",
     "lap",
-    "ultralytics",
     "pycairo",
+    "ultralytics",
     "bitsandbytes",
-    "pytest>=7.0"
+    "pytest>=7.0",
+    "confluent_kafka",
+    # flash-attn might need to be manually installed
+    #"flash-attn",
+    "diffusers",
+    "sentencepiece",
+    "protobuf",
+    "accelerate",
+    "pysilero",
+    "faster_whisper",
+    "pysilero-vad",
+    "whisperspeech",
+    "webdataset",
+    "easydict",
+    "pyflann-py3"
 ]
-
-#[tool.uv.extra-build-dependencies]
-#flash-attn = ["torch"]
