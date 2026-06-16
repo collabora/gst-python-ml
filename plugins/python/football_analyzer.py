@@ -56,8 +56,7 @@ def get_bbox_width(bbox):
 
 
 class Tracker:
-    """Tracker.
-    """
+    """Tracker."""
 
     def __init__(self, model_path):
         self.model = YOLO(model_path)
@@ -80,32 +79,59 @@ class Tracker:
             mask[y1:y2, x1:x2] = 0
         return mask
 
-    def get_camera_motion(self, frames, tracks, read_from_stub=False, stub_path=None,
-                          ratio=0.75, ransac_thresh=3.0, min_matches=8):
+    def get_camera_motion(
+        self,
+        frames,
+        tracks,
+        read_from_stub=False,
+        stub_path=None,
+        ratio=0.75,
+        ransac_thresh=3.0,
+        min_matches=8,
+    ):
         if read_from_stub and stub_path is not None and os.path.exists(stub_path):
-            with open(stub_path, 'rb') as f:
+            with open(stub_path, "rb") as f:
                 return pickle.load(f)
 
         cumulative = [np.eye(3, dtype=np.float64)]
         prev_gray = cv2.cvtColor(frames[0], cv2.COLOR_BGR2GRAY)
-        prev_mask = self._foreground_mask(frames[0].shape,
-                                          {k: tracks[k][0] for k in tracks})
+        prev_mask = self._foreground_mask(
+            frames[0].shape, {k: tracks[k][0] for k in tracks}
+        )
         prev_kp, prev_desc = self.sift.detectAndCompute(prev_gray, prev_mask)
 
         for i in range(1, len(frames)):
             curr_gray = cv2.cvtColor(frames[i], cv2.COLOR_BGR2GRAY)
-            curr_mask = self._foreground_mask(frames[i].shape,
-                                              {k: tracks[k][i] for k in tracks})
+            curr_mask = self._foreground_mask(
+                frames[i].shape, {k: tracks[k][i] for k in tracks}
+            )
             curr_kp, curr_desc = self.sift.detectAndCompute(curr_gray, curr_mask)
 
             H_step = np.eye(3, dtype=np.float64)
-            if prev_desc is not None and curr_desc is not None and len(prev_desc) >= 2 and len(curr_desc) >= 2:
+            if (
+                prev_desc is not None
+                and curr_desc is not None
+                and len(prev_desc) >= 2
+                and len(curr_desc) >= 2
+            ):
                 knn = self.matcher.knnMatch(prev_desc, curr_desc, k=2)
-                good = [m for pair in knn if len(pair) == 2 for m, n in [pair] if m.distance < ratio * n.distance]
+                good = [
+                    m
+                    for pair in knn
+                    if len(pair) == 2
+                    for m, n in [pair]
+                    if m.distance < ratio * n.distance
+                ]
                 if len(good) >= min_matches:
-                    pts_prev = np.float32([prev_kp[m.queryIdx].pt for m in good]).reshape(-1, 1, 2)
-                    pts_curr = np.float32([curr_kp[m.trainIdx].pt for m in good]).reshape(-1, 1, 2)
-                    H, _ = cv2.findHomography(pts_prev, pts_curr, cv2.RANSAC, ransac_thresh)
+                    pts_prev = np.float32(
+                        [prev_kp[m.queryIdx].pt for m in good]
+                    ).reshape(-1, 1, 2)
+                    pts_curr = np.float32(
+                        [curr_kp[m.trainIdx].pt for m in good]
+                    ).reshape(-1, 1, 2)
+                    H, _ = cv2.findHomography(
+                        pts_prev, pts_curr, cv2.RANSAC, ransac_thresh
+                    )
                     if H is not None:
                         H_step = H
 
@@ -113,7 +139,7 @@ class Tracker:
             prev_kp, prev_desc = curr_kp, curr_desc
 
         if stub_path is not None:
-            with open(stub_path, 'wb') as f:
+            with open(stub_path, "wb") as f:
                 pickle.dump(cumulative, f)
         return cumulative
 
@@ -121,13 +147,13 @@ class Tracker:
         batch_size = 20
         detections = []
         for i in range(0, len(frames), batch_size):
-            detections_batch = self.model.predict(frames[i: i + batch_size], conf=0.1)
+            detections_batch = self.model.predict(frames[i : i + batch_size], conf=0.1)
             detections += detections_batch
         return detections
 
     def get_object_tracks(self, frames, read_from_stub=False, stub_path=None):
         if read_from_stub and stub_path is not None and os.path.exists(stub_path):
-            with open(stub_path, 'rb') as f:
+            with open(stub_path, "rb") as f:
                 tracks = pickle.load(f)
             return tracks
 
@@ -161,7 +187,9 @@ class Tracker:
             for tid, v in class_votes.items()
         }
 
-        for frame_num, (tracked, raw_detections, cls_names, cls_names_inv) in enumerate(per_frame):
+        for frame_num, (tracked, raw_detections, cls_names, cls_names_inv) in enumerate(
+            per_frame
+        ):
             tracks["players"].append({})
             tracks["referees"].append({})
             tracks["ball"].append({})
@@ -176,11 +204,11 @@ class Tracker:
                     tracks["referees"][frame_num][track_id] = {"bbox": bbox}
 
             for fd in raw_detections:
-                if fd[3] == cls_names_inv['ball']:
+                if fd[3] == cls_names_inv["ball"]:
                     tracks["ball"][frame_num][1] = {"bbox": fd[0].tolist()}
 
         if stub_path is not None:
-            with open(stub_path, 'wb') as f:
+            with open(stub_path, "wb") as f:
                 pickle.dump(tracks, f)
 
         return tracks
@@ -210,24 +238,37 @@ class Tracker:
         y2_rect = (y2 + rectangle_height // 2) + 15
 
         if track_id is not None:
-            cv2.rectangle(frame, (int(x1_rect), int(y1_rect)),
-                          (int(x2_rect), int(y2_rect)), color, cv2.FILLED)
+            cv2.rectangle(
+                frame,
+                (int(x1_rect), int(y1_rect)),
+                (int(x2_rect), int(y2_rect)),
+                color,
+                cv2.FILLED,
+            )
             x1_text = x1_rect + 12
             if track_id > 99:
                 x1_text -= 10
-            cv2.putText(frame, f"{track_id}",
-                        (int(x1_text), int(y1_rect + 15)),
-                        cv2.FONT_HERSHEY_SIMPLEX, 0.6, (0, 0, 0), 2)
+            cv2.putText(
+                frame,
+                f"{track_id}",
+                (int(x1_text), int(y1_rect + 15)),
+                cv2.FONT_HERSHEY_SIMPLEX,
+                0.6,
+                (0, 0, 0),
+                2,
+            )
         return frame
 
     def draw_traingle(self, frame, bbox, color):
         y = int(bbox[1])
         x, _ = get_center_of_bbox(bbox)
-        triangle_points = np.array([
-            [x, y],
-            [x - 10, y - 20],
-            [x + 10, y - 20],
-        ])
+        triangle_points = np.array(
+            [
+                [x, y],
+                [x - 10, y - 20],
+                [x + 10, y - 20],
+            ]
+        )
         cv2.drawContours(frame, [triangle_points], 0, color, cv2.FILLED)
         cv2.drawContours(frame, [triangle_points], 0, (0, 0, 0), 2)
         return frame
@@ -260,16 +301,20 @@ class Tracker:
     def _ref_bottom_center(self, bbox, H_inv):
         xc, _ = get_center_of_bbox(bbox)
         yb = int(bbox[3])
-        pt = cv2.perspectiveTransform(
-            np.array([[[xc, yb]]], dtype=np.float32), H_inv
-        )[0][0]
+        pt = cv2.perspectiveTransform(np.array([[[xc, yb]]], dtype=np.float32), H_inv)[
+            0
+        ][0]
         return float(pt[0]), float(pt[1])
 
     def _minimap_extent(self, tracks, camera_motion):
         xs, ys = [], []
         n = len(tracks["players"])
         for i in range(n):
-            H_inv = np.linalg.inv(camera_motion[i]) if camera_motion is not None else np.eye(3)
+            H_inv = (
+                np.linalg.inv(camera_motion[i])
+                if camera_motion is not None
+                else np.eye(3)
+            )
             for key in ("players", "referees"):
                 for p in tracks[key][i].values():
                     x, y = self._ref_bottom_center(p["bbox"], H_inv)
@@ -316,7 +361,9 @@ class Tracker:
         if len(points) < 2:
             return frame
         pts = np.array(points, dtype=np.int32).reshape(-1, 1, 2)
-        cv2.polylines(frame, [pts], isClosed=False, color=color, thickness=2, lineType=cv2.LINE_AA)
+        cv2.polylines(
+            frame, [pts], isClosed=False, color=color, thickness=2, lineType=cv2.LINE_AA
+        )
         return frame
 
     def _point_to_bbox_distance(self, px, py, bbox):
@@ -343,7 +390,9 @@ class Tracker:
     def _count_total_contacts(self, tracks, contact_gap_frames, contact_pad_ratio):
         totals = {}
         last_contact_frame = {}
-        for frame_num, (player_dict, ball_dict) in enumerate(zip(tracks["players"], tracks["ball"])):
+        for frame_num, (player_dict, ball_dict) in enumerate(
+            zip(tracks["players"], tracks["ball"])
+        ):
             ball = ball_dict.get(1)
             if ball is None or not player_dict:
                 continue
@@ -356,7 +405,9 @@ class Tracker:
             last_contact_frame[tid] = frame_num
         return totals
 
-    def draw_player_hud(self, frame, player_id, contacts, distance_m, color, headshot=None):
+    def draw_player_hud(
+        self, frame, player_id, contacts, distance_m, color, headshot=None
+    ):
         x, y = 10, 10
         bg_color = (131, 41, 92)
         text_color = (47, 186, 64)
@@ -371,23 +422,62 @@ class Tracker:
         cv2.rectangle(frame, (x, y), (x + w, y + h), color, 2)
         if headshot is not None:
             hy, hx = y + 10, x + 10
-            frame[hy:hy + headshot.shape[0], hx:hx + headshot.shape[1]] = headshot
-            cv2.rectangle(frame, (hx, hy),
-                          (hx + headshot.shape[1], hy + headshot.shape[0]), color, 2)
-        cv2.putText(frame, "Player #8", (text_x, y + 28),
-                    cv2.FONT_HERSHEY_SIMPLEX, 0.7, text_color, 2)
-        cv2.putText(frame, f"Ball contacts: {contacts}", (text_x, y + 58),
-                    cv2.FONT_HERSHEY_SIMPLEX, 0.6, text_color, 1)
-        cv2.putText(frame, f"Distance: {distance_m:.1f} m", (text_x, y + 85),
-                    cv2.FONT_HERSHEY_SIMPLEX, 0.6, text_color, 1)
+            frame[hy : hy + headshot.shape[0], hx : hx + headshot.shape[1]] = headshot
+            cv2.rectangle(
+                frame,
+                (hx, hy),
+                (hx + headshot.shape[1], hy + headshot.shape[0]),
+                color,
+                2,
+            )
+        cv2.putText(
+            frame,
+            "Player #8",
+            (text_x, y + 28),
+            cv2.FONT_HERSHEY_SIMPLEX,
+            0.7,
+            text_color,
+            2,
+        )
+        cv2.putText(
+            frame,
+            f"Ball contacts: {contacts}",
+            (text_x, y + 58),
+            cv2.FONT_HERSHEY_SIMPLEX,
+            0.6,
+            text_color,
+            1,
+        )
+        cv2.putText(
+            frame,
+            f"Distance: {distance_m:.1f} m",
+            (text_x, y + 85),
+            cv2.FONT_HERSHEY_SIMPLEX,
+            0.6,
+            text_color,
+            1,
+        )
         return frame
 
-    def draw_annotations(self, video_frames, tracks, camera_motion=None, trail_length=30,
-                         contact_gap_frames=5, contact_pad_ratio=0.25,
-                         player_height_m=1.8, headshot_path=None, headshot_size=90,
-                         logo_path=None, logo_height=80, logo_margin=15,
-                         trail_smooth_window=11,
-                         show_minimap=True, minimap_size=(320, 200), minimap_margin=15):
+    def draw_annotations(
+        self,
+        video_frames,
+        tracks,
+        camera_motion=None,
+        trail_length=30,
+        contact_gap_frames=5,
+        contact_pad_ratio=0.25,
+        player_height_m=1.8,
+        headshot_path=None,
+        headshot_size=90,
+        logo_path=None,
+        logo_height=80,
+        logo_margin=15,
+        trail_smooth_window=11,
+        show_minimap=True,
+        minimap_size=(320, 200),
+        minimap_margin=15,
+    ):
         output_video_frames = []
         player_trails = {}
         team_votes = {}
@@ -398,19 +488,25 @@ class Tracker:
         for frame_players in tracks["players"]:
             for tid in frame_players:
                 frames_count[tid] = frames_count.get(tid, 0) + 1
-        total_contacts = self._count_total_contacts(tracks, contact_gap_frames, contact_pad_ratio)
+        total_contacts = self._count_total_contacts(
+            tracks, contact_gap_frames, contact_pad_ratio
+        )
 
-        heights = [p["bbox"][3] - p["bbox"][1]
-                   for frame_players in tracks["players"]
-                   for p in frame_players.values()
-                   if p["bbox"][3] > p["bbox"][1]]
+        heights = [
+            p["bbox"][3] - p["bbox"][1]
+            for frame_players in tracks["players"]
+            for p in frame_players.values()
+            if p["bbox"][3] > p["bbox"][1]
+        ]
         px_per_meter = float(np.median(heights)) / player_height_m if heights else 1.0
 
         headshot = None
         if headshot_path is not None and os.path.exists(headshot_path):
             img = cv2.imread(headshot_path)
             if img is not None:
-                headshot = cv2.resize(img, (headshot_size, headshot_size), interpolation=cv2.INTER_AREA)
+                headshot = cv2.resize(
+                    img, (headshot_size, headshot_size), interpolation=cv2.INTER_AREA
+                )
 
         logo_bgr, logo_alpha = None, None
         if logo_path is not None and os.path.exists(logo_path):
@@ -418,12 +514,16 @@ class Tracker:
             if img is not None:
                 scale = logo_height / img.shape[0]
                 new_w = max(1, int(round(img.shape[1] * scale)))
-                img = cv2.resize(img, (new_w, logo_height), interpolation=cv2.INTER_LANCZOS4)
+                img = cv2.resize(
+                    img, (new_w, logo_height), interpolation=cv2.INTER_LANCZOS4
+                )
                 if img.ndim == 3 and img.shape[2] == 4:
                     logo_bgr = img[..., :3]
                     logo_alpha = (img[..., 3:4].astype(np.float32)) / 255.0
                 else:
-                    logo_bgr = img if img.ndim == 3 else cv2.cvtColor(img, cv2.COLOR_GRAY2BGR)
+                    logo_bgr = (
+                        img if img.ndim == 3 else cv2.cvtColor(img, cv2.COLOR_GRAY2BGR)
+                    )
 
         minimap_bg, minimap_extent = None, None
         if show_minimap:
@@ -432,8 +532,10 @@ class Tracker:
                 minimap_bg = self._make_minimap_bg(minimap_size[0], minimap_size[1])
 
         if total_contacts:
-            focal_tid = max(total_contacts,
-                            key=lambda t: (total_contacts[t], frames_count.get(t, 0)))
+            focal_tid = max(
+                total_contacts,
+                key=lambda t: (total_contacts[t], frames_count.get(t, 0)),
+            )
         elif frames_count:
             focal_tid = max(frames_count, key=frames_count.get)
         else:
@@ -468,7 +570,9 @@ class Tracker:
                 if track_id in last_ref_pt:
                     dx = ref_tuple[0] - last_ref_pt[track_id][0]
                     dy = ref_tuple[1] - last_ref_pt[track_id][1]
-                    player_distance[track_id] = player_distance.get(track_id, 0.0) + float(np.hypot(dx, dy))
+                    player_distance[track_id] = player_distance.get(
+                        track_id, 0.0
+                    ) + float(np.hypot(dx, dy))
                 last_ref_pt[track_id] = ref_tuple
 
                 vote = self.classify_jersey(frame, player["bbox"])
@@ -497,7 +601,11 @@ class Tracker:
                 counts = team_votes.get(track_id)
                 if not counts or (counts["red"] == 0 and counts["blue"] == 0):
                     return default_color
-                return team_bgr["red"] if counts["red"] >= counts["blue"] else team_bgr["blue"]
+                return (
+                    team_bgr["red"]
+                    if counts["red"] >= counts["blue"]
+                    else team_bgr["blue"]
+                )
 
             for track_id, ref_points in player_trails.items():
                 smoothed_ref = self._smooth_points(ref_points, trail_smooth_window)
@@ -533,7 +641,10 @@ class Tracker:
                 x1, y1 = x0 + lw, y0 + lh
                 if logo_alpha is not None:
                     roi = frame[y0:y1, x0:x1].astype(np.float32)
-                    blended = roi * (1.0 - logo_alpha) + logo_bgr.astype(np.float32) * logo_alpha
+                    blended = (
+                        roi * (1.0 - logo_alpha)
+                        + logo_bgr.astype(np.float32) * logo_alpha
+                    )
                     frame[y0:y1, x0:x1] = blended.astype(np.uint8)
                 else:
                     frame[y0:y1, x0:x1] = logo_bgr
@@ -543,14 +654,18 @@ class Tracker:
                 mm_w, mm_h = minimap_size
                 for tid, player in player_dict.items():
                     rx, ry = self._ref_bottom_center(player["bbox"], H_inv)
-                    mx, my = self._project_to_minimap(minimap_extent, mm_w, mm_h, rx, ry)
+                    mx, my = self._project_to_minimap(
+                        minimap_extent, mm_w, mm_h, rx, ry
+                    )
                     dot_color = color_for(tid)
                     radius = 6 if tid == focal_tid else 4
                     cv2.circle(mm, (mx, my), radius, dot_color, cv2.FILLED)
                     cv2.circle(mm, (mx, my), radius, (0, 0, 0), 1)
                 for referee in referee_dict.values():
                     rx, ry = self._ref_bottom_center(referee["bbox"], H_inv)
-                    mx, my = self._project_to_minimap(minimap_extent, mm_w, mm_h, rx, ry)
+                    mx, my = self._project_to_minimap(
+                        minimap_extent, mm_w, mm_h, rx, ry
+                    )
                     cv2.circle(mm, (mx, my), 3, (0, 255, 255), cv2.FILLED)
                     cv2.circle(mm, (mx, my), 3, (0, 0, 0), 1)
                 ball = ball_dict.get(1)
@@ -559,14 +674,15 @@ class Tracker:
                     bref = cv2.perspectiveTransform(
                         np.array([[[bx, by]]], dtype=np.float32), H_inv
                     )[0][0]
-                    mx, my = self._project_to_minimap(minimap_extent, mm_w, mm_h,
-                                                      float(bref[0]), float(bref[1]))
+                    mx, my = self._project_to_minimap(
+                        minimap_extent, mm_w, mm_h, float(bref[0]), float(bref[1])
+                    )
                     cv2.circle(mm, (mx, my), 4, (0, 255, 0), cv2.FILLED)
                     cv2.circle(mm, (mx, my), 4, (0, 0, 0), 1)
                 fh, fw = frame.shape[:2]
                 x0 = max(0, fw - mm_w - minimap_margin)
                 y0 = max(0, fh - mm_h - minimap_margin)
-                frame[y0:y0 + mm_h, x0:x0 + mm_w] = mm
+                frame[y0 : y0 + mm_h, x0 : x0 + mm_w] = mm
 
             output_video_frames.append(frame)
 
@@ -684,9 +800,11 @@ class FootballAnalyzer(GstBase.BaseTransform):
                 self.logger.error("Failed to map incoming buffer for read")
                 return Gst.FlowReturn.ERROR
             try:
-                frame = np.frombuffer(mapinfo.data, dtype=np.uint8).reshape(
-                    self._height, self._width, 3
-                ).copy()
+                frame = (
+                    np.frombuffer(mapinfo.data, dtype=np.uint8)
+                    .reshape(self._height, self._width, 3)
+                    .copy()
+                )
             finally:
                 buf.unmap(mapinfo)
 

@@ -30,7 +30,14 @@ try:
     gi.require_version("GstVideo", "1.0")
     gi.require_version("GstAnalytics", "1.0")
     gi.require_version("GLib", "2.0")
-    from gi.repository import Gst, GstBase, GstVideo, GstAnalytics, GObject, GLib  # noqa: E402
+    from gi.repository import (
+        Gst,
+        GstBase,
+        GstVideo,
+        GstAnalytics,
+        GObject,
+        GLib,
+    )  # noqa: E402
 
     from log.logger_factory import LoggerFactory  # noqa: E402
 
@@ -109,58 +116,109 @@ class FootballOverlay(GstBase.BaseTransform):
     __gsttemplates__ = (src_template, sink_template)
 
     show_labels = GObject.Property(
-        type=bool, default=True, nick="Show Labels",
+        type=bool,
+        default=True,
+        nick="Show Labels",
         blurb="Draw the class name above each object",
-        flags=GObject.ParamFlags.READWRITE)
+        flags=GObject.ParamFlags.READWRITE,
+    )
     show_ids = GObject.Property(
-        type=bool, default=True, nick="Show Track IDs",
+        type=bool,
+        default=True,
+        nick="Show Track IDs",
         blurb="Draw the track-id badge under each tracked object",
-        flags=GObject.ParamFlags.READWRITE)
+        flags=GObject.ParamFlags.READWRITE,
+    )
     trails = GObject.Property(
-        type=bool, default=True, nick="Show Trails",
+        type=bool,
+        default=True,
+        nick="Show Trails",
         blurb="Draw a fading motion trail behind each tracked object",
-        flags=GObject.ParamFlags.READWRITE)
+        flags=GObject.ParamFlags.READWRITE,
+    )
     trail_length = GObject.Property(
-        type=int, default=30, minimum=2, maximum=300, nick="Trail Length",
+        type=int,
+        default=30,
+        minimum=2,
+        maximum=300,
+        nick="Trail Length",
         blurb="Number of recent positions kept in each motion trail",
-        flags=GObject.ParamFlags.READWRITE)
+        flags=GObject.ParamFlags.READWRITE,
+    )
     show_hud = GObject.Property(
-        type=bool, default=True, nick="Show HUD",
+        type=bool,
+        default=True,
+        nick="Show HUD",
         blurb="Draw the focal-player HUD (headshot, label, contacts, distance)",
-        flags=GObject.ParamFlags.READWRITE)
+        flags=GObject.ParamFlags.READWRITE,
+    )
     headshot_path = GObject.Property(
-        type=str, default="data/Chinedu-Obasi_2684938.jpg", nick="Headshot Path",
+        type=str,
+        default="data/Chinedu-Obasi_2684938.jpg",
+        nick="Headshot Path",
         blurb="Image shown in the HUD (empty to disable)",
-        flags=GObject.ParamFlags.READWRITE)
+        flags=GObject.ParamFlags.READWRITE,
+    )
     headshot_size = GObject.Property(
-        type=int, default=90, minimum=16, maximum=512, nick="Headshot Size",
+        type=int,
+        default=90,
+        minimum=16,
+        maximum=512,
+        nick="Headshot Size",
         blurb="Headshot square size in pixels",
-        flags=GObject.ParamFlags.READWRITE)
+        flags=GObject.ParamFlags.READWRITE,
+    )
     player_label = GObject.Property(
-        type=str, default="Player #8", nick="Player Label",
+        type=str,
+        default="Player #8",
+        nick="Player Label",
         blurb="Static label drawn in the HUD",
-        flags=GObject.ParamFlags.READWRITE)
+        flags=GObject.ParamFlags.READWRITE,
+    )
     contact_pad_ratio = GObject.Property(
-        type=float, default=0.25, minimum=0.0, maximum=5.0, nick="Contact Pad Ratio",
+        type=float,
+        default=0.25,
+        minimum=0.0,
+        maximum=5.0,
+        nick="Contact Pad Ratio",
         blurb="Ball counts as a contact within this fraction of the player box size",
-        flags=GObject.ParamFlags.READWRITE)
+        flags=GObject.ParamFlags.READWRITE,
+    )
     contact_gap_frames = GObject.Property(
-        type=int, default=5, minimum=0, maximum=1000, nick="Contact Gap Frames",
+        type=int,
+        default=5,
+        minimum=0,
+        maximum=1000,
+        nick="Contact Gap Frames",
         blurb="Min frames between counted contacts for the same player",
-        flags=GObject.ParamFlags.READWRITE)
+        flags=GObject.ParamFlags.READWRITE,
+    )
     player_height = GObject.Property(
-        type=float, default=1.8, minimum=0.1, maximum=10.0, nick="Player Height (m)",
+        type=float,
+        default=1.8,
+        minimum=0.1,
+        maximum=10.0,
+        nick="Player Height (m)",
         blurb="Assumed real-world height used to convert pixels to metres",
-        flags=GObject.ParamFlags.READWRITE)
+        flags=GObject.ParamFlags.READWRITE,
+    )
     min_confidence = GObject.Property(
-        type=float, default=0.0, minimum=0.0, maximum=1.0, nick="Min Confidence",
+        type=float,
+        default=0.0,
+        minimum=0.0,
+        maximum=1.0,
+        nick="Min Confidence",
         blurb="Skip detections whose confidence is below this threshold",
-        flags=GObject.ParamFlags.READWRITE)
+        flags=GObject.ParamFlags.READWRITE,
+    )
     class_names = GObject.Property(
-        type=str, default="", nick="Class Names",
+        type=str,
+        default="",
+        nick="Class Names",
         blurb="Comma-separated names to map numeric labels (label_N) from the "
-              "onnx/objectdetector path, e.g. 'ball,goalkeeper,player,referee'",
-        flags=GObject.ParamFlags.READWRITE)
+        "onnx/objectdetector path, e.g. 'ball,goalkeeper,player,referee'",
+        flags=GObject.ParamFlags.READWRITE,
+    )
 
     def __init__(self):
         super().__init__()
@@ -229,10 +287,14 @@ class FootballOverlay(GstBase.BaseTransform):
             if not presence:
                 continue
             label, track_id = self._parse_label(full_label)
-            entries.append({
-                "label": label.lower(), "track_id": track_id,
-                "confidence": score, "box": (x, y, x + w, y + h),
-            })
+            entries.append(
+                {
+                    "label": label.lower(),
+                    "track_id": track_id,
+                    "confidence": score,
+                    "box": (x, y, x + w, y + h),
+                }
+            )
         return entries
 
     @staticmethod
@@ -283,9 +345,10 @@ class FootballOverlay(GstBase.BaseTransform):
                     self._heights = self._heights[-600:]
             prev = self._last_pt.get(tid)
             if prev is not None:
-                self._distance_px[tid] = self._distance_px.get(tid, 0.0) + (
-                    (foot[0] - prev[0]) ** 2 + (foot[1] - prev[1]) ** 2
-                ) ** 0.5
+                self._distance_px[tid] = (
+                    self._distance_px.get(tid, 0.0)
+                    + ((foot[0] - prev[0]) ** 2 + (foot[1] - prev[1]) ** 2) ** 0.5
+                )
             self._last_pt[tid] = foot
             trail = self._trail.setdefault(tid, [])
             trail.append(foot)
@@ -311,6 +374,7 @@ class FootballOverlay(GstBase.BaseTransform):
         if not self._heights:
             return None
         import numpy as np
+
         return float(np.median(self._heights)) / max(0.1, self.player_height)
 
     def _focal_track(self):
@@ -318,8 +382,10 @@ class FootballOverlay(GstBase.BaseTransform):
         if not keys:
             return None
         if any(self._contacts.values()):
-            return max(keys, key=lambda t: (self._contacts.get(t, 0),
-                                            self._frames_seen.get(t, 0)))
+            return max(
+                keys,
+                key=lambda t: (self._contacts.get(t, 0), self._frames_seen.get(t, 0)),
+            )
         return max(keys, key=lambda t: self._frames_seen.get(t, 0))
 
     def _c(self, rgba):
@@ -366,9 +432,17 @@ class FootballOverlay(GstBase.BaseTransform):
         x_center = int((x1 + x2) / 2)
         width = max(1, int(x2 - x1))
         color = self._c(rgba)
-        cv2.ellipse(frame, (x_center, y_bottom),
-                    (width, max(1, int(0.35 * width))), 0.0, -45, 235,
-                    color, 2, cv2.LINE_AA)
+        cv2.ellipse(
+            frame,
+            (x_center, y_bottom),
+            (width, max(1, int(0.35 * width))),
+            0.0,
+            -45,
+            235,
+            color,
+            2,
+            cv2.LINE_AA,
+        )
         if self.show_ids and track_id is not None:
             rect_w, rect_h = 40, 18
             x1r = x_center - rect_w // 2
@@ -377,9 +451,16 @@ class FootballOverlay(GstBase.BaseTransform):
             y2r = y_bottom + rect_h // 2 + 15
             cv2.rectangle(frame, (x1r, y1r), (x2r, y2r), color, cv2.FILLED)
             tx = x1r + 12 - (10 if track_id > 99 else 0)
-            cv2.putText(frame, str(track_id), (tx, y1r + 14),
-                        cv2.FONT_HERSHEY_SIMPLEX, 0.5, self._c(_BLACK_RGBA), 2,
-                        cv2.LINE_AA)
+            cv2.putText(
+                frame,
+                str(track_id),
+                (tx, y1r + 14),
+                cv2.FONT_HERSHEY_SIMPLEX,
+                0.5,
+                self._c(_BLACK_RGBA),
+                2,
+                cv2.LINE_AA,
+            )
 
     def _draw_triangle(self, cv2, np, frame, box, rgba):
         x1, y1, x2, y2 = box
@@ -391,8 +472,16 @@ class FootballOverlay(GstBase.BaseTransform):
 
     def _draw_label(self, cv2, frame, box, label, rgba):
         x1, y1, _, _ = box
-        cv2.putText(frame, label, (int(x1), max(12, int(y1) - 6)),
-                    cv2.FONT_HERSHEY_SIMPLEX, 0.5, self._c(rgba), 1, cv2.LINE_AA)
+        cv2.putText(
+            frame,
+            label,
+            (int(x1), max(12, int(y1) - 6)),
+            cv2.FONT_HERSHEY_SIMPLEX,
+            0.5,
+            self._c(rgba),
+            1,
+            cv2.LINE_AA,
+        )
 
     def _draw_hud(self, cv2, frame, contacts, distance_m, rgba, headshot):
         font = cv2.FONT_HERSHEY_SIMPLEX
@@ -412,12 +501,32 @@ class FootballOverlay(GstBase.BaseTransform):
             hh = min(hh, fh - hy)
             hw = min(hw, fw - hx)
             if hh > 0 and hw > 0:
-                frame[hy:hy + hh, hx:hx + hw] = headshot[:hh, :hw]
+                frame[hy : hy + hh, hx : hx + hw] = headshot[:hh, :hw]
                 cv2.rectangle(frame, (hx, hy), (hx + hw, hy + hh), self._c(rgba), 2)
         tc = self._c(_HUD_TEXT_RGBA)
-        cv2.putText(frame, self.player_label, (text_x, y + 28), font, 0.7, tc, 2, cv2.LINE_AA)
-        cv2.putText(frame, f"Ball contacts: {contacts}", (text_x, y + 58), font, 0.6, tc, 1, cv2.LINE_AA)
-        cv2.putText(frame, f"Distance: {distance_m:.1f} m", (text_x, y + 85), font, 0.6, tc, 1, cv2.LINE_AA)
+        cv2.putText(
+            frame, self.player_label, (text_x, y + 28), font, 0.7, tc, 2, cv2.LINE_AA
+        )
+        cv2.putText(
+            frame,
+            f"Ball contacts: {contacts}",
+            (text_x, y + 58),
+            font,
+            0.6,
+            tc,
+            1,
+            cv2.LINE_AA,
+        )
+        cv2.putText(
+            frame,
+            f"Distance: {distance_m:.1f} m",
+            (text_x, y + 85),
+            font,
+            0.6,
+            tc,
+            1,
+            cv2.LINE_AA,
+        )
 
     def do_transform_ip(self, buf):
         try:
@@ -447,8 +556,12 @@ class FootballOverlay(GstBase.BaseTransform):
                 if self.trails:
                     for tid in active:
                         self._draw_trail(
-                            cv2, np, frame, self._trail.get(tid, []),
-                            self._color_for(self._track_label.get(tid, ""), tid))
+                            cv2,
+                            np,
+                            frame,
+                            self._trail.get(tid, []),
+                            self._color_for(self._track_label.get(tid, ""), tid),
+                        )
 
                 for e in entries:
                     label = e["label"]
@@ -465,9 +578,14 @@ class FootballOverlay(GstBase.BaseTransform):
                     focal = self._focal_track()
                     if focal is not None:
                         ppm = self._px_per_meter()
-                        dist_m = (self._distance_px.get(focal, 0.0) / ppm) if ppm else 0.0
+                        dist_m = (
+                            (self._distance_px.get(focal, 0.0) / ppm) if ppm else 0.0
+                        )
                         self._draw_hud(
-                            cv2, frame, self._contacts.get(focal, 0), dist_m,
+                            cv2,
+                            frame,
+                            self._contacts.get(focal, 0),
+                            dist_m,
                             self._color_for(self._track_label.get(focal, ""), focal),
                             self._load_headshot(cv2, np),
                         )
