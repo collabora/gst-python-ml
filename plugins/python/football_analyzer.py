@@ -273,7 +273,8 @@ class Tracker:
             for key in ("players", "referees"):
                 for p in tracks[key][i].values():
                     x, y = self._ref_bottom_center(p["bbox"], H_inv)
-                    xs.append(x); ys.append(y)
+                    xs.append(x)
+                    ys.append(y)
         if not xs:
             return None
         min_x, max_x = min(xs), max(xs)
