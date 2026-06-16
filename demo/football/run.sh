@@ -1,0 +1,59 @@
+#!/usr/bin/env bash
+# Football broadcast-overlay demo.
+#
+# Ppipeline:
+#   detector  ->  pyml_tracker (ByteTrack)  ->  pyml_football_overlay
+#
+# Usage:
+#   demo/football/run.sh [INPUT.mp4] [OUTPUT.mp4] [WxH]      # file -> annotated mp4
+#   demo/football/run.sh camera [/dev/videoN] [WxH]          # live -> on-screen
+set -euo pipefail
+
+REPO="$(cd "$(dirname "$0")/../.." && pwd)"
+cd "$REPO"
+source .venv/bin/activate
+export GST_PLUGIN_PATH="$REPO/plugins:${GST_PLUGIN_PATH:-}"
+
+BACKEND="${BACKEND:-pt}"
+CLASSES="ball,goalkeeper,player,referee"
+TRACK="pyml_tracker tracker-type=bytetrack"
+OVERLAY="pyml_football_overlay class-names=$CLASSES show-ids=false show-labels=false"
+
+if [[ "$BACKEND" == "fp16" ]]; then
+  export LD_LIBRARY_PATH="$(python -c "import os,nvidia,glob;b=os.path.dirname(nvidia.__file__);print(':'.join(sorted(set(glob.glob(b+'/*/lib')))))"):${LD_LIBRARY_PATH:-}"
+  DETECT="pyml_objectdetector engine-name=onnx model-name=models/football/football_fp16.onnx device=cuda:0 input-format=nchw post-process=anchor_free"
+  IN_FMT="RGB"; FORCE_SQUARE=1
+else
+  DETECT="pyml_yolo model-name=models/football/football device=cuda:0"
+  IN_FMT="RGBA"; FORCE_SQUARE=0
+fi
+
+POST_DETECT="$TRACK"
+[[ "$IN_FMT" == "RGB" ]] && POST_DETECT="$TRACK ! videoconvert ! video/x-raw,format=RGBA"
+
+MODE="${1:-file}"
+if [[ "$MODE" == "camera" ]]; then
+  DEV="${2:-/dev/video0}"; SIZE="${3:-1280x720}"
+  [[ "$FORCE_SQUARE" == "1" ]] && SIZE="640x640"
+  W="${SIZE%x*}"; H="${SIZE#*x}"
+  echo "[$BACKEND] live camera $DEV @ ${W}x${H} -> autovideosink (needs a display)"
+  exec gst-launch-1.0 -e \
+    v4l2src device="$DEV" ! videoconvert ! videoscale \
+    ! "video/x-raw,width=${W},height=${H},format=${IN_FMT}" \
+    ! $DETECT ! $POST_DETECT ! $OVERLAY \
+    ! videoconvert ! autovideosink sync=false
+else
+  IN="${1:-data/soccer_tracking.mp4}"
+  OUT="${2:-demo/football/out.mp4}"
+  SIZE="${3:-1280x720}"
+  [[ "$FORCE_SQUARE" == "1" ]] && SIZE="640x640"
+  W="${SIZE%x*}"; H="${SIZE#*x}"
+  [[ -f "$IN" ]] || { echo "input not found: $IN" >&2; exit 1; }
+  echo "[$BACKEND] '$IN' @ ${W}x${H} -> '$OUT'"
+  gst-launch-1.0 -e \
+    filesrc location="$IN" ! decodebin ! videoconvert ! videoscale \
+    ! "video/x-raw,width=${W},height=${H},format=${IN_FMT}" \
+    ! $DETECT ! $POST_DETECT ! $OVERLAY \
+    ! videoconvert ! openh264enc ! h264parse ! mp4mux ! filesink location="$OUT"
+  echo "Done: $OUT"
+fi

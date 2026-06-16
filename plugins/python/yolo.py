@@ -250,7 +250,9 @@ class YOLOTransform(BaseObjectDetector):
             score = boxes.conf[i]
             label = boxes.cls[i]
             label_num = label.item()
-            class_name = COCO_CLASSES.get(label_num, f"unknown_{label_num}")
+            # Prefer the model's own class names; fall back to COCO for plain yolo.
+            names = getattr(result, "names", None) or COCO_CLASSES
+            class_name = names.get(label_num, f"unknown_{label_num}")
 
             # Use class name for detection, track_id for tracking
             if self.engine.track and hasattr(boxes, "id") and boxes.id is not None:

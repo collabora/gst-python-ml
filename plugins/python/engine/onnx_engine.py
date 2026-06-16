@@ -370,8 +370,12 @@ class ONNXEngine(MLEngine):
             if fmt == "auto" and self._input_is_nchw():
                 self.input_format = "nchw"
             img = self._apply_input_format(frames.astype(np.float32) / 255.0, is_batch)
+            if "float16" in self.session.get_inputs()[0].type:
+                img = img.astype(np.float16)
             outputs = self.session.run(self.output_names, {self.input_names[0]: img})
             raw = outputs if len(outputs) > 1 else outputs[0]
+            if isinstance(raw, np.ndarray) and raw.dtype != np.float32:
+                raw = raw.astype(np.float32)
             return self._apply_post_process(raw, is_batch)
 
         else:
