@@ -75,6 +75,8 @@ _PALETTE = [
 _REFEREE_RGBA = (255, 215, 0, 255)
 _BALL_RGBA = (0, 230, 0, 255)
 _PLAYER_RGBA = (0, 200, 255, 255)
+_RED_TEAM_RGBA = (255, 40, 40, 255)
+_BLUE_TEAM_RGBA = (40, 90, 255, 255)
 _DEFAULT_RGBA = (235, 235, 235, 255)
 _BLACK_RGBA = (0, 0, 0, 255)
 _HUD_BG_RGBA = (92, 41, 131, 255)
@@ -143,6 +145,14 @@ class FootballOverlay(GstBase.BaseTransform):
         maximum=300,
         nick="Trail Length",
         blurb="Number of recent positions kept in each motion trail",
+        flags=GObject.ParamFlags.READWRITE,
+    )
+    show_ball = GObject.Property(
+        type=bool,
+        default=False,
+        nick="Show Ball",
+        blurb="Draw the marker on the ball (the ball is still tracked for "
+        "contact counting either way)",
         flags=GObject.ParamFlags.READWRITE,
     )
     show_hud = GObject.Property(
@@ -219,6 +229,14 @@ class FootballOverlay(GstBase.BaseTransform):
         "onnx/objectdetector path, e.g. 'ball,goalkeeper,player,referee'",
         flags=GObject.ParamFlags.READWRITE,
     )
+    team_colors = GObject.Property(
+        type=bool,
+        default=True,
+        nick="Team Colors",
+        blurb="Colour players by jersey team (red/blue, per-track majority vote); "
+        "off draws all players one colour",
+        flags=GObject.ParamFlags.READWRITE,
+    )
 
     def __init__(self):
         super().__init__()
@@ -232,13 +250,18 @@ class FootballOverlay(GstBase.BaseTransform):
         self._last_pt = {}
         self._distance_px = {}
         self._heights = []
+        self._widths = []
+        self._ell_w = {}  # track_id -> smoothed ellipse half-width (px)
         self._contacts = {}
         self._last_contact_frame = {}
         self._frames_seen = {}
         self._track_label = {}
+        self._class_votes = {}  # track_id -> {label: count}, for stable class
+        self._team_votes = {}  # track_id -> {"red": n, "blue": n}, jersey team
         self._frame = 0
         self._headshot = None
         self._headshot_loaded = False
+        self._inv_order = [0, 1, 2, 3]  # buffer-channel -> logical RGBA index
 
     def do_set_caps(self, incaps, outcaps):
         info = GstVideo.VideoInfo.new_from_caps(incaps)
@@ -246,6 +269,9 @@ class FootballOverlay(GstBase.BaseTransform):
         self.height = info.height
         fmt = info.finfo.name if info.finfo else "RGBA"
         self._order = _FORMAT_ORDER.get(fmt, _FORMAT_ORDER["RGBA"])
+        # buffer channel j holds logical[self._order[j]]; invert so we can pull
+        # logical R,G,B out of the buffer for jersey colour classification.
+        self._inv_order = [self._order.index(c) for c in range(4)]
         self._headshot_loaded = False  # re-load in the new channel order
         self.logger.info(f"FootballOverlay caps: {fmt} {self.width}x{self.height}")
         return True
@@ -326,16 +352,25 @@ class FootballOverlay(GstBase.BaseTransform):
         active = set()
         players = {}
         ball_box = None
+        # Accumulate per-track class votes first so the stable label below
+        # already reflects this frame.
         for e in entries:
             tid = e["track_id"]
             if tid is None:
                 continue
-            if _is_ball(e["label"]):
+            v = self._class_votes.setdefault(tid, {})
+            v[e["label"]] = v.get(e["label"], 0) + 1
+        for e in entries:
+            tid = e["track_id"]
+            if tid is None:
+                continue
+            label = self._stable_label(tid, e["label"])
+            if _is_ball(label):
                 ball_box = e["box"]
                 continue
             active.add(tid)
             players[tid] = e["box"]
-            self._track_label[tid] = e["label"]
+            self._track_label[tid] = label
             self._frames_seen[tid] = self._frames_seen.get(tid, 0) + 1
             x1, y1, x2, y2 = e["box"]
             foot = (int((x1 + x2) / 2), int(y2))
@@ -343,6 +378,7 @@ class FootballOverlay(GstBase.BaseTransform):
                 self._heights.append(y2 - y1)
                 if len(self._heights) > 600:
                     self._heights = self._heights[-600:]
+            self._update_ellipse_width(tid, x2 - x1)
             prev = self._last_pt.get(tid)
             if prev is not None:
                 self._distance_px[tid] = (
@@ -368,7 +404,29 @@ class FootballOverlay(GstBase.BaseTransform):
             if tid not in active:
                 del self._trail[tid]
                 self._last_pt.pop(tid, None)
+                self._ell_w.pop(tid, None)
         return active
+
+    def _update_ellipse_width(self, track_id, raw_w):
+        # Smooth (and outlier-reject) the per-track ellipse width so a single
+        # oversized box -- two players merged, or a drifting keep-alive
+        # prediction -- can't balloon the circle for one frame.
+        if raw_w <= 0:
+            return
+        if self._widths:
+            self._widths.append(raw_w)
+            if len(self._widths) > 600:
+                self._widths = self._widths[-600:]
+            srt = sorted(self._widths)
+            med = srt[len(srt) // 2]
+            clamped = min(max(raw_w, 0.5 * med), 1.8 * med)
+        else:
+            self._widths.append(raw_w)
+            clamped = raw_w
+        prev = self._ell_w.get(track_id)
+        # EMA: fast enough to follow real perspective changes, slow enough to
+        # damp single-frame spikes.
+        self._ell_w[track_id] = clamped if prev is None else 0.4 * clamped + 0.6 * prev
 
     def _px_per_meter(self):
         if not self._heights:
@@ -388,6 +446,15 @@ class FootballOverlay(GstBase.BaseTransform):
             )
         return max(keys, key=lambda t: self._frames_seen.get(t, 0))
 
+    def _stable_label(self, track_id, fallback=""):
+        # Majority-voted class over the track's history — smooths frame-to-frame
+        # misclassifications (e.g. a player briefly tagged 'referee'), so the
+        # gold referee marking doesn't flicker.
+        votes = self._class_votes.get(track_id)
+        if not votes:
+            return fallback
+        return max(votes, key=votes.get)
+
     def _c(self, rgba):
         return tuple(rgba[i] for i in self._order)
 
@@ -396,7 +463,40 @@ class FootballOverlay(GstBase.BaseTransform):
             return _REFEREE_RGBA
         if _is_ball(label):
             return _BALL_RGBA
+        if self.team_colors and track_id is not None:
+            c = self._team_votes.get(track_id)
+            if c and (c.get("red", 0) or c.get("blue", 0)):
+                return _RED_TEAM_RGBA if c["red"] >= c["blue"] else _BLUE_TEAM_RGBA
+            # Team not decided yet (or unclassifiable kit, e.g. goalkeeper):
+            # draw nothing rather than flashing the default cyan.
+            return None
         return _PLAYER_RGBA
+
+    def _classify_jersey(self, cv2, np, frame, box):
+        # Dominant jersey hue in the torso patch -> "red"/"blue"/None (HSV),
+        # ported from football_analyzer.classify_jersey.
+        x1, y1, x2, y2 = (int(v) for v in box)
+        h_box, w_box = y2 - y1, x2 - x1
+        if h_box <= 0 or w_box <= 0:
+            return None
+        jy1, jy2 = y1 + int(0.15 * h_box), y1 + int(0.55 * h_box)
+        jx1, jx2 = x1 + int(0.25 * w_box), x1 + int(0.75 * w_box)
+        H, W = frame.shape[:2]
+        jy1, jy2 = max(0, jy1), min(H, jy2)
+        jx1, jx2 = max(0, jx1), min(W, jx2)
+        if jy2 - jy1 < 3 or jx2 - jx1 < 3:
+            return None
+        # logical RGB from the buffer's channel order, then HSV
+        rgb = np.ascontiguousarray(frame[jy1:jy2, jx1:jx2][:, :, self._inv_order[:3]])
+        hsv = cv2.cvtColor(rgb, cv2.COLOR_RGB2HSV)
+        s_v = (hsv[..., 1] > 80) & (hsv[..., 2] > 50)
+        h = hsv[..., 0]
+        red = (((h <= 10) | (h >= 170)) & s_v).sum()
+        blue = ((h >= 100) & (h <= 130) & s_v).sum()
+        min_pixels = max(20, int(0.02 * rgb.shape[0] * rgb.shape[1]))
+        if red < min_pixels and blue < min_pixels:
+            return None
+        return "red" if red >= blue else "blue"
 
     def _load_headshot(self, cv2, np):
         if self._headshot_loaded:
@@ -430,7 +530,10 @@ class FootballOverlay(GstBase.BaseTransform):
         x1, y1, x2, y2 = box
         y_bottom = int(y2)
         x_center = int((x1 + x2) / 2)
-        width = max(1, int(x2 - x1))
+        # Prefer the per-track smoothed width so the ellipse stays stable even
+        # when a single detection box is momentarily oversized.
+        smoothed = self._ell_w.get(track_id)
+        width = max(1, int(smoothed if smoothed is not None else x2 - x1))
         color = self._c(rgba)
         cv2.ellipse(
             frame,
@@ -553,23 +656,39 @@ class FootballOverlay(GstBase.BaseTransform):
                     mapinfo.data, dtype=np.uint8, count=self.height * self.width * 4
                 ).reshape(self.height, self.width, 4)
 
+                # Jersey team voting first, so trails/ellipses use this frame's vote.
+                if self.team_colors:
+                    for e in entries:
+                        tid = e["track_id"]
+                        if tid is None:
+                            continue
+                        lab = self._stable_label(tid, e["label"])
+                        if _is_ball(lab) or _is_referee(lab):
+                            continue
+                        vote = self._classify_jersey(cv2, np, frame, e["box"])
+                        if vote:
+                            tv = self._team_votes.setdefault(tid, {"red": 0, "blue": 0})
+                            tv[vote] += 1
+
                 if self.trails:
                     for tid in active:
-                        self._draw_trail(
-                            cv2,
-                            np,
-                            frame,
-                            self._trail.get(tid, []),
-                            self._color_for(self._track_label.get(tid, ""), tid),
-                        )
+                        rgba = self._color_for(self._track_label.get(tid, ""), tid)
+                        if rgba is None:
+                            continue
+                        self._draw_trail(cv2, np, frame, self._trail.get(tid, []), rgba)
 
                 for e in entries:
-                    label = e["label"]
                     box = e["box"]
+                    # Style by the majority-voted class (stable), not this
+                    # frame's possibly-flickering label.
+                    label = self._stable_label(e["track_id"], e["label"])
                     if _is_ball(label):
-                        self._draw_triangle(cv2, np, frame, box, _BALL_RGBA)
+                        if self.show_ball:
+                            self._draw_triangle(cv2, np, frame, box, _BALL_RGBA)
                         continue
                     rgba = self._color_for(label, e["track_id"])
+                    if rgba is None:
+                        continue
                     self._draw_ellipse(cv2, frame, box, rgba, e["track_id"])
                     if self.show_labels:
                         self._draw_label(cv2, frame, box, label, rgba)
@@ -581,12 +700,16 @@ class FootballOverlay(GstBase.BaseTransform):
                         dist_m = (
                             (self._distance_px.get(focal, 0.0) / ppm) if ppm else 0.0
                         )
+                        hud_rgba = (
+                            self._color_for(self._track_label.get(focal, ""), focal)
+                            or _DEFAULT_RGBA
+                        )
                         self._draw_hud(
                             cv2,
                             frame,
                             self._contacts.get(focal, 0),
                             dist_m,
-                            self._color_for(self._track_label.get(focal, ""), focal),
+                            hud_rgba,
                             self._load_headshot(cv2, np),
                         )
             finally:

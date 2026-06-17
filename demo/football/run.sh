@@ -15,16 +15,17 @@ source .venv/bin/activate
 export GST_PLUGIN_PATH="$REPO/plugins:${GST_PLUGIN_PATH:-}"
 
 BACKEND="${BACKEND:-pt}"
+INTERVAL="${INTERVAL:-3}"   # run detection every Nth frame; tracker/overlay stay per-frame
 CLASSES="ball,goalkeeper,player,referee"
 TRACK="pyml_tracker tracker-type=bytetrack"
-OVERLAY="pyml_football_overlay class-names=$CLASSES show-ids=false show-labels=false"
+OVERLAY="pyml_football_overlay class-names=$CLASSES team-colors=true trails=false show-ids=false show-labels=false"
 
 if [[ "$BACKEND" == "fp16" ]]; then
   export LD_LIBRARY_PATH="$(python -c "import os,nvidia,glob;b=os.path.dirname(nvidia.__file__);print(':'.join(sorted(set(glob.glob(b+'/*/lib')))))"):${LD_LIBRARY_PATH:-}"
-  DETECT="pyml_objectdetector engine-name=onnx model-name=models/football/football_fp16.onnx device=cuda:0 input-format=nchw post-process=anchor_free"
+  DETECT="pyml_objectdetector engine-name=onnx model-name=models/football/football_fp16.onnx device=cuda:0 input-format=nchw post-process=anchor_free interval=$INTERVAL"
   IN_FMT="RGB"; FORCE_SQUARE=1
 else
-  DETECT="pyml_yolo model-name=models/football/football device=cuda:0"
+  DETECT="pyml_yolo model-name=models/football/football device=cuda:0 interval=$INTERVAL"
   IN_FMT="RGBA"; FORCE_SQUARE=0
 fi
 

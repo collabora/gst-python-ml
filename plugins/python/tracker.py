@@ -130,10 +130,14 @@ def iou_batch(bb_det, bb_trk):
 class SortTracker:
     """SORT/ByteTrack multi-object tracker using IoU + Kalman filtering."""
 
-    def __init__(self, max_age=30, min_hits=3, iou_threshold=0.3):
+    def __init__(self, max_age=30, min_hits=3, iou_threshold=0.3, keep_alive=2):
         self.max_age = max_age
         self.min_hits = min_hits
         self.iou_threshold = iou_threshold
+        # Keep emitting a confirmed track (with its Kalman-predicted box) for up
+        # to keep_alive frames after a missed detection — bridges flicker so the
+        # overlay doesn't blink when the detector drops a box for a frame or two.
+        self.keep_alive = keep_alive
         self.trackers = []
 
     def update(self, detections):
@@ -191,10 +195,11 @@ class SortTracker:
             t for t in self.trackers if t.time_since_update <= self.max_age
         ]
 
-        # Return confirmed tracks
+        # Return confirmed tracks, including ones that missed a detection this
+        # frame (predicted box) for up to keep_alive frames — prevents flicker.
         results = []
         for trk in self.trackers:
-            if trk.hits >= self.min_hits and trk.time_since_update == 0:
+            if trk.hits >= self.min_hits and trk.time_since_update <= self.keep_alive:
                 results.append((trk.id, trk.get_bbox(), trk.label_quark))
         return results
 
@@ -268,6 +273,17 @@ class TrackerTransform(GstBase.BaseTransform):
         flags=GObject.ParamFlags.READWRITE,
     )
 
+    keep_alive = GObject.Property(
+        type=int,
+        default=2,
+        minimum=0,
+        maximum=1000,
+        nick="Keep Alive",
+        blurb="Frames to keep emitting a confirmed track (Kalman-predicted box) "
+        "after a missed detection; bridges flicker (0 = only matched frames)",
+        flags=GObject.ParamFlags.READWRITE,
+    )
+
     def __init__(self):
         super().__init__()
         self.logger = LoggerFactory.get(LoggerFactory.LOGGER_TYPE_GST)
@@ -281,6 +297,7 @@ class TrackerTransform(GstBase.BaseTransform):
                 max_age=self.max_age,
                 min_hits=self.min_hits,
                 iou_threshold=self.iou_threshold,
+                keep_alive=self.keep_alive,
             )
         return self._tracker
 
@@ -351,6 +368,8 @@ class TrackerTransform(GstBase.BaseTransform):
             return self.min_hits
         elif prop.name == "iou-threshold":
             return self.iou_threshold
+        elif prop.name == "keep-alive":
+            return self.keep_alive
         else:
             raise AttributeError(f"Unknown property {prop.name}")
 
@@ -366,6 +385,9 @@ class TrackerTransform(GstBase.BaseTransform):
             self._tracker = None
         elif prop.name == "iou-threshold":
             self.iou_threshold = value
+            self._tracker = None
+        elif prop.name == "keep-alive":
+            self.keep_alive = value
             self._tracker = None
         else:
             raise AttributeError(f"Unknown property {prop.name}")

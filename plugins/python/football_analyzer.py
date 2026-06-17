@@ -30,14 +30,17 @@ try:
     gi.require_version("GstVideo", "1.0")
     from gi.repository import Gst, GstBase, GstVideo, GObject  # noqa: E402
 
+    # Define caps before the optional heavy imports so the element's pad
+    # templates still resolve when an optional dep (e.g. supervision) is missing;
+    # only registration is then skipped (CAN_REGISTER_ELEMENT=False).
+    VIDEO_CAPS = Gst.Caps.from_string("video/x-raw, format=BGR")
+
     import cv2
     import numpy as np
     import supervision as sv
     from ultralytics import YOLO
 
     from log.logger_factory import LoggerFactory  # noqa: E402
-
-    VIDEO_CAPS = Gst.Caps.from_string("video/x-raw, format=BGR")
 
 except ImportError as e:
     CAN_REGISTER_ELEMENT = False
