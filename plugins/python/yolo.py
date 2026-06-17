@@ -160,6 +160,9 @@ class YoloEngine(PyTorchEngine):
             )
             end_pre = time.time()
 
+            conf = getattr(self, "conf", 0.25)
+            iou = getattr(self, "iou", 0.5)
+            agnostic = getattr(self, "agnostic_nms", True)
             if self.track:
                 # Ensure tracker persists across batches
                 results = self.execute_with_stream(
@@ -167,14 +170,23 @@ class YoloEngine(PyTorchEngine):
                         source=img_list,
                         persist=True,
                         imgsz=640,
-                        conf=0.1,
+                        conf=conf,
+                        iou=iou,
+                        agnostic_nms=agnostic,
                         verbose=True,
                         tracker="botsort.yaml",
                     )
                 )
             else:
                 results = self.execute_with_stream(
-                    lambda: model(img_list, imgsz=640, conf=0.1, verbose=True)
+                    lambda: model(
+                        img_list,
+                        imgsz=640,
+                        conf=conf,
+                        iou=iou,
+                        agnostic_nms=agnostic,
+                        verbose=True,
+                    )
                 )
             end_inf = time.time()
 
@@ -205,6 +217,36 @@ class YOLOTransform(BaseObjectDetector):
         "Aaron Boxer <aaron.boxer@collabora.com>",
     )
 
+    confidence = GObject.Property(
+        type=float,
+        default=0.1,
+        minimum=0.0,
+        maximum=1.0,
+        nick="Confidence Threshold",
+        blurb="Minimum detection confidence (matches football_analyzer); kept "
+        "low on purpose so the tracker can use weak boxes to continue tracks "
+        "-- the tracker's new-track-confidence gates phantom tracks",
+        flags=GObject.ParamFlags.READWRITE,
+    )
+    nms_iou = GObject.Property(
+        type=float,
+        default=0.7,
+        minimum=0.0,
+        maximum=1.0,
+        nick="NMS IoU",
+        blurb="NMS IoU threshold (matches football_analyzer's default); lower "
+        "suppresses more overlap but can also drop genuinely close players",
+        flags=GObject.ParamFlags.READWRITE,
+    )
+    agnostic_nms = GObject.Property(
+        type=bool,
+        default=False,
+        nick="Class-Agnostic NMS",
+        blurb="Suppress overlapping boxes across classes too; off by default "
+        "(like football_analyzer) so two close players aren't merged",
+        flags=GObject.ParamFlags.READWRITE,
+    )
+
     def __init__(self):
         super().__init__()
         self.mgr.engine_name = "pyml_yolo_engine"
@@ -221,6 +263,14 @@ class YOLOTransform(BaseObjectDetector):
         raise ValueError(
             "The 'engine_name' property cannot be set in this derived class."
         )
+
+    def do_forward(self, frames):
+        # Push NMS/confidence knobs to the engine before it runs the model.
+        if self.engine:
+            self.engine.conf = self.confidence
+            self.engine.iou = self.nms_iou
+            self.engine.agnostic_nms = self.agnostic_nms
+        return super().do_forward(frames)
 
     def do_decode(self, buf, result, stream_idx=0):
         self.logger.debug(
@@ -250,7 +300,9 @@ class YOLOTransform(BaseObjectDetector):
             score = boxes.conf[i]
             label = boxes.cls[i]
             label_num = label.item()
-            class_name = COCO_CLASSES.get(label_num, f"unknown_{label_num}")
+            # Prefer the model's own class names; fall back to COCO for plain yolo.
+            names = getattr(result, "names", None) or COCO_CLASSES
+            class_name = names.get(label_num, f"unknown_{label_num}")
 
             # Use class name for detection, track_id for tracking
             if self.engine.track and hasattr(boxes, "id") and boxes.id is not None:

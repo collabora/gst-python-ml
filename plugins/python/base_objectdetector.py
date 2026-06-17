@@ -46,6 +46,11 @@ class BaseObjectDetector(VideoTransform):
         self.metadata = Metadata("si")
         self.logger.info("Initialized BaseObjectDetector")
         self.__track = False
+        self.__interval = 1
+        self._det_counter = 0
+        self._cached_results = None
+        self._cached_num_sources = 1
+        self._cached_id = None
 
     @GObject.Property(type=bool, default=False)
     def track(self):
@@ -59,6 +64,17 @@ class BaseObjectDetector(VideoTransform):
         self.__track = value
         if self.engine:
             self.engine.track = value
+
+    @GObject.Property(type=int, default=1, minimum=1, maximum=10000)
+    def interval(self):
+        "Run detection every Nth frame and re-attach the previous detections on "
+        "the frames in between (N=1 runs detection every frame). Lets downstream "
+        "tracking/overlay stay per-frame while detection runs at a lower rate."
+        return self.__interval
+
+    @interval.setter
+    def interval(self, value):
+        self.__interval = max(1, int(value))
 
     def do_forward(self, frames):
         self.logger.info(
@@ -77,47 +93,39 @@ class BaseObjectDetector(VideoTransform):
         """
         self.logger.info(f"Transforming buffer: {hex(id(buf))}")
         try:
-            # Use MuxedBufferProcessor to extract frames and metadata
-            muxed_processor = MuxedBufferProcessor(
-                self.logger,
-                self.width,
-                self.height,
-                self.framerate_num,
-                self.framerate_denom,
-            )
-            frames, id_str, num_sources, format = muxed_processor.extract_frames(
-                buf, self.sinkpad
-            )
-            if frames is None:
-                self.logger.error("Failed to extract frames")
-                return Gst.FlowReturn.ERROR
+            run_detect = (self._det_counter % self.__interval) == 0
+            self._det_counter += 1
 
-            # Process frames (single or batch)
-            results = self.do_forward(frames)
-            if results is None:
-                self.logger.error("Inference returned None")
-                return Gst.FlowReturn.ERROR
-
-            # Handle single-frame case
-            if num_sources == 1:
-                self.do_decode(buf, results, stream_idx=0)
-            # Handle batch case
-            else:
-                self.logger.info(
-                    f"Processing batch with ID={id_str}, num_sources={num_sources}"
+            if run_detect:
+                # Use MuxedBufferProcessor to extract frames and metadata
+                muxed_processor = MuxedBufferProcessor(
+                    self.logger,
+                    self.width,
+                    self.height,
+                    self.framerate_num,
+                    self.framerate_denom,
                 )
-                results_list = results if isinstance(results, list) else [results]
-                if len(results_list) != num_sources:
-                    self.logger.error(
-                        f"Expected {num_sources} results, got {len(results_list)}"
-                    )
+                frames, id_str, num_sources, format = muxed_processor.extract_frames(
+                    buf, self.sinkpad
+                )
+                if frames is None:
+                    self.logger.error("Failed to extract frames")
                     return Gst.FlowReturn.ERROR
 
-                for idx, result in enumerate(results_list):
-                    if result is None:
-                        self.logger.warning(f"Frame {idx} result is None")
-                        continue
-                    self.do_decode(buf, result, stream_idx=idx)
+                results = self.do_forward(frames)
+                if results is None:
+                    self.logger.error("Inference returned None")
+                    return Gst.FlowReturn.ERROR
+
+                self._cached_results = results
+                self._cached_num_sources = num_sources
+                self._decode_results(buf, results, num_sources)
+            elif self._cached_results is not None:
+                # Skip inference on this frame and re-attach the previous
+                # detections so downstream tracking/overlay stay per-frame.
+                self._decode_results(
+                    buf, self._cached_results, self._cached_num_sources
+                )
 
             attached_meta = GstAnalytics.buffer_get_analytics_relation_meta(buf)
             if attached_meta:
@@ -131,6 +139,22 @@ class BaseObjectDetector(VideoTransform):
         except Exception as e:
             self.logger.error(f"Transform error: {e}\n{traceback.format_exc()}")
             return Gst.FlowReturn.ERROR
+
+    def _decode_results(self, buf, results, num_sources):
+        if num_sources == 1:
+            self.do_decode(buf, results, stream_idx=0)
+        else:
+            results_list = results if isinstance(results, list) else [results]
+            if len(results_list) != num_sources:
+                self.logger.error(
+                    f"Expected {num_sources} results, got {len(results_list)}"
+                )
+                return
+            for idx, result in enumerate(results_list):
+                if result is None:
+                    self.logger.warning(f"Frame {idx} result is None")
+                    continue
+                self.do_decode(buf, result, stream_idx=idx)
 
     def do_decode(self, buf, output, stream_idx=0):
         self.logger.info(

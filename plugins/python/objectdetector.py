@@ -46,11 +46,39 @@ class ObjectDetector(BaseObjectDetector):
         "Aaron Boxer <aaron.boxer@collabora.com>",
     )
 
+    confidence = GObject.Property(
+        type=float,
+        default=0.25,
+        minimum=0.0,
+        maximum=1.0,
+        nick="Confidence Threshold",
+        blurb="Minimum detection confidence for the decoder post-process "
+        "(anchor_free); lower = more (and weaker) detections",
+        flags=GObject.ParamFlags.READWRITE,
+    )
+    nms_iou = GObject.Property(
+        type=float,
+        default=0.45,
+        minimum=0.0,
+        maximum=1.0,
+        nick="NMS IoU",
+        blurb="NMS IoU threshold for the decoder post-process; higher keeps "
+        "more overlapping boxes",
+        flags=GObject.ParamFlags.READWRITE,
+    )
+
     def __init__(self):
         super().__init__()
         self.logger.info(
             "ObjectDetector created without a model. Please set the 'model-name' property."
         )
+
+    def do_forward(self, frames):
+        # Push decoder thresholds to the engine before it post-processes.
+        if self.engine:
+            self.engine.conf = self.confidence
+            self.engine.iou = self.nms_iou
+        return super().do_forward(frames)
 
 
 if CAN_REGISTER_ELEMENT:
