@@ -130,15 +130,136 @@ def iou_batch(bb_det, bb_trk):
 class SortTracker:
     """SORT/ByteTrack multi-object tracker using IoU + Kalman filtering."""
 
-    def __init__(self, max_age=30, min_hits=3, iou_threshold=0.3, keep_alive=2):
+    def __init__(
+        self,
+        max_age=30,
+        min_hits=3,
+        iou_threshold=0.3,
+        keep_alive=2,
+        new_track_conf=0.25,
+        camera_motion=True,
+        dup_iou=0.8,
+    ):
         self.max_age = max_age
         self.min_hits = min_hits
         self.iou_threshold = iou_threshold
+        # ByteTrack-style activation gate: a brand-new track is only started
+        # from a confident detection. Weak/ghost boxes can still *continue* an
+        # existing track (matched above) but won't spawn phantom circles.
+        self.new_track_conf = new_track_conf
         # Keep emitting a confirmed track (with its Kalman-predicted box) for up
         # to keep_alive frames after a missed detection — bridges flicker so the
         # overlay doesn't blink when the detector drops a box for a frame or two.
         self.keep_alive = keep_alive
+        # Camera-motion compensation: estimate the global image shift from the
+        # tracks that matched, then re-try matching the leftovers with their
+        # predictions shifted by it. Re-attaches players during a pan instead of
+        # leaving the old track behind and spawning a duplicate.
+        self.camera_motion = camera_motion
+        # Two confirmed tracks overlapping more than this IoU are duplicates;
+        # the weaker one is dropped (ByteTrack's remove_duplicate_stracks).
+        self.dup_iou = dup_iou
         self.trackers = []
+
+    @staticmethod
+    def _center(bbox):
+        return (bbox[0] + bbox[2] / 2.0, bbox[1] + bbox[3] / 2.0)
+
+    def _estimate_motion(self, matches, predicted, det_bboxes):
+        """Fit a global 2D similarity transform (translation + uniform scale +
+        rotation) mapping each matched track's predicted centre to its observed
+        centre. Returns a callable box->warped-box, or None if it can't be
+        estimated. Uses RANSAC (via OpenCV) so players moving against the camera
+        consensus are rejected as outliers; falls back to a robust median
+        translation if OpenCV is unavailable or the fit is degenerate."""
+        import numpy as np
+
+        if len(matches) < 3:
+            return None
+        src = np.array(
+            [self._center(predicted[ti]) for _, ti in matches], dtype=np.float32
+        )
+        dst = np.array(
+            [self._center(det_bboxes[di]) for di, _ in matches], dtype=np.float32
+        )
+
+        M = None
+        try:
+            import cv2
+
+            M, _ = cv2.estimateAffinePartial2D(
+                src, dst, method=cv2.RANSAC, ransacReprojThreshold=5.0
+            )
+        except Exception:
+            M = None
+
+        if M is not None:
+            scale = float(np.hypot(M[0, 0], M[0, 1]))
+            # Reject implausible fits (e.g. from too few/noisy correspondences).
+            if 0.5 <= scale <= 2.0:
+
+                def warp(box):
+                    cx, cy = self._center(box)
+                    ncx = M[0, 0] * cx + M[0, 1] * cy + M[0, 2]
+                    ncy = M[1, 0] * cx + M[1, 1] * cy + M[1, 2]
+                    nw, nh = box[2] * scale, box[3] * scale
+                    return np.array([ncx - nw / 2.0, ncy - nh / 2.0, nw, nh])
+
+                return warp
+
+        # Fallback: robust median translation (pan/tilt only).
+        delta = dst - src
+        tx, ty = float(np.median(delta[:, 0])), float(np.median(delta[:, 1]))
+        if abs(tx) < 1.0 and abs(ty) < 1.0:
+            return None
+        return lambda box: np.array([box[0] + tx, box[1] + ty, box[2], box[3]])
+
+    def _associate(self, det_bboxes, det_idxs, trk_idxs, trk_boxes, detections):
+        """Hungarian-match a subset of detections to a subset of trackers,
+        applying updates to matched trackers. Returns list of (det_i, trk_i)."""
+        from scipy.optimize import linear_sum_assignment
+
+        if not det_idxs or not trk_idxs:
+            return []
+        dets = [det_bboxes[d] for d in det_idxs]
+        trks = [trk_boxes[t] for t in trk_idxs]
+        iou_matrix = iou_batch(dets, trks)
+        if iou_matrix.size == 0:
+            return []
+        cost = 1.0 - iou_matrix
+        row_ind, col_ind = linear_sum_assignment(cost)
+        matches = []
+        for r, c in zip(row_ind, col_ind):
+            if iou_matrix[r, c] >= self.iou_threshold:
+                di, ti = det_idxs[r], trk_idxs[c]
+                self.trackers[ti].update(detections[di][:4])
+                self.trackers[ti].label_quark = detections[di][5]
+                matches.append((di, ti))
+        return matches
+
+    def _suppress_duplicates(self):
+        """Drop the weaker of any two confirmed tracks sitting on the same box."""
+        n = len(self.trackers)
+        if n < 2:
+            return
+        boxes = [t.get_bbox() for t in self.trackers]
+        iou_matrix = iou_batch(boxes, boxes)
+        remove = set()
+        for i in range(n):
+            if i in remove:
+                continue
+            for j in range(i + 1, n):
+                if j in remove:
+                    continue
+                if iou_matrix[i, j] > self.dup_iou:
+                    ti, tj = self.trackers[i], self.trackers[j]
+                    # Keep the better track: matched more recently, then more
+                    # hits; drop the other (usually the freshly-spawned dup).
+                    ki = (ti.time_since_update, -ti.hits)
+                    kj = (tj.time_since_update, -tj.hits)
+                    remove.add(j if ki <= kj else i)
+        if remove:
+            self.trackers = [t for k, t in enumerate(self.trackers) if k not in remove]
 
     def update(self, detections):
         """
@@ -151,49 +272,60 @@ class SortTracker:
             list of (track_id, bbox, label_quark) for confirmed tracks
         """
         import numpy as np
-        from scipy.optimize import linear_sum_assignment
 
         # Predict new locations for existing tracks
-        predicted = []
         to_remove = []
         for i, trk in enumerate(self.trackers):
-            pred = trk.predict()
-            if np.any(np.isnan(pred)):
+            if np.any(np.isnan(trk.predict())):
                 to_remove.append(i)
-            else:
-                predicted.append(pred)
         for i in reversed(to_remove):
             self.trackers.pop(i)
 
-        # Build cost matrix using IoU
         det_bboxes = [d[:4] for d in detections] if len(detections) > 0 else []
-        iou_matrix = iou_batch(det_bboxes, predicted)
-        cost_matrix = 1.0 - iou_matrix
+        n_det = len(det_bboxes)
+        n_trk = len(self.trackers)
+        # Predicted box per tracker, captured before any update this frame.
+        predicted = [self.trackers[i].get_bbox() for i in range(n_trk)]
 
-        # Hungarian assignment
-        matched_det = set()
-        matched_trk = set()
-        if cost_matrix.size > 0:
-            row_ind, col_ind = linear_sum_assignment(cost_matrix)
-            for r, c in zip(row_ind, col_ind):
-                if iou_matrix[r, c] >= self.iou_threshold:
-                    matched_det.add(r)
-                    matched_trk.add(c)
-                    self.trackers[c].update(detections[r][:4])
-                    # Store latest label quark on tracker
-                    self.trackers[c].label_quark = detections[r][5]
+        # 1) First association on the raw predictions.
+        matches = self._associate(
+            det_bboxes, list(range(n_det)), list(range(n_trk)), predicted, detections
+        )
+        matched_det = {di for di, _ in matches}
+        matched_trk = {ti for _, ti in matches}
 
-        # Create new tracks for unmatched detections
-        for d_idx in range(len(detections)):
+        # 2) Camera-motion compensation: fit a global image transform (pan, zoom
+        # and rotation) from the tracks that matched, apply it to the leftover
+        # predictions, and re-match. This recovers tracks during camera moves
+        # instead of leaving them behind and spawning duplicates.
+        if self.camera_motion:
+            warp = self._estimate_motion(matches, predicted, det_bboxes)
+            if warp is not None:
+                rem_trk = [i for i in range(n_trk) if i not in matched_trk]
+                rem_det = [d for d in range(n_det) if d not in matched_det]
+                if rem_trk and rem_det:
+                    shifted = {i: warp(predicted[i]) for i in rem_trk}
+                    m2 = self._associate(
+                        det_bboxes, rem_det, rem_trk, shifted, detections
+                    )
+                    matched_det.update(di for di, _ in m2)
+
+        # Create new tracks for unmatched detections, but only from confident
+        # ones (ByteTrack activation gate) so weak/ghost boxes don't start a
+        # phantom track that gets drawn as a stray circle.
+        for d_idx in range(n_det):
             if d_idx not in matched_det:
+                if detections[d_idx][4] < self.new_track_conf:
+                    continue
                 trk = KalmanBoxTracker(detections[d_idx][:4])
                 trk.label_quark = detections[d_idx][5]
                 self.trackers.append(trk)
 
-        # Remove dead tracks
+        # Remove dead tracks, then drop duplicate tracks sitting on one object.
         self.trackers = [
             t for t in self.trackers if t.time_since_update <= self.max_age
         ]
+        self._suppress_duplicates()
 
         # Return confirmed tracks, including ones that missed a detection this
         # frame (predicted box) for up to keep_alive frames — prevents flicker.
@@ -284,6 +416,39 @@ class TrackerTransform(GstBase.BaseTransform):
         flags=GObject.ParamFlags.READWRITE,
     )
 
+    new_track_confidence = GObject.Property(
+        type=float,
+        default=0.25,
+        minimum=0.0,
+        maximum=1.0,
+        nick="New Track Confidence",
+        blurb="Minimum detection confidence to START a new track (ByteTrack "
+        "activation gate); weak boxes still continue existing tracks but "
+        "won't spawn phantom/duplicate circles",
+        flags=GObject.ParamFlags.READWRITE,
+    )
+
+    camera_motion = GObject.Property(
+        type=bool,
+        default=True,
+        nick="Camera Motion Compensation",
+        blurb="Estimate the global image shift from matched tracks and re-match "
+        "leftovers shifted by it, so a panning camera re-attaches players "
+        "instead of leaving the old track behind and spawning a duplicate",
+        flags=GObject.ParamFlags.READWRITE,
+    )
+
+    duplicate_iou = GObject.Property(
+        type=float,
+        default=0.8,
+        minimum=0.0,
+        maximum=1.0,
+        nick="Duplicate IoU",
+        blurb="Two confirmed tracks overlapping more than this are treated as "
+        "duplicates and the weaker one is dropped",
+        flags=GObject.ParamFlags.READWRITE,
+    )
+
     def __init__(self):
         super().__init__()
         self.logger = LoggerFactory.get(LoggerFactory.LOGGER_TYPE_GST)
@@ -298,6 +463,9 @@ class TrackerTransform(GstBase.BaseTransform):
                 min_hits=self.min_hits,
                 iou_threshold=self.iou_threshold,
                 keep_alive=self.keep_alive,
+                new_track_conf=self.new_track_confidence,
+                camera_motion=self.camera_motion,
+                dup_iou=self.duplicate_iou,
             )
         return self._tracker
 
@@ -370,6 +538,12 @@ class TrackerTransform(GstBase.BaseTransform):
             return self.iou_threshold
         elif prop.name == "keep-alive":
             return self.keep_alive
+        elif prop.name == "new-track-confidence":
+            return self.new_track_confidence
+        elif prop.name == "camera-motion":
+            return self.camera_motion
+        elif prop.name == "duplicate-iou":
+            return self.duplicate_iou
         else:
             raise AttributeError(f"Unknown property {prop.name}")
 
@@ -388,6 +562,15 @@ class TrackerTransform(GstBase.BaseTransform):
             self._tracker = None
         elif prop.name == "keep-alive":
             self.keep_alive = value
+            self._tracker = None
+        elif prop.name == "new-track-confidence":
+            self.new_track_confidence = value
+            self._tracker = None
+        elif prop.name == "camera-motion":
+            self.camera_motion = value
+            self._tracker = None
+        elif prop.name == "duplicate-iou":
+            self.duplicate_iou = value
             self._tracker = None
         else:
             raise AttributeError(f"Unknown property {prop.name}")

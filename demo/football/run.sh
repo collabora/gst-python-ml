@@ -17,16 +17,26 @@ export GST_PLUGIN_PATH="$REPO/plugins:${GST_PLUGIN_PATH:-}"
 
 BACKEND="${BACKEND:-pt}"
 INTERVAL="${INTERVAL:-3}"   # run detection every Nth frame; tracker/overlay stay per-frame
+CONF="${CONF:-0.1}"        # detector confidence threshold (low = more detections)
+IOU="${IOU:-0.7}"          # NMS IoU (ultralytics/football_analyzer default)
+NEWTRACK="${NEWTRACK:-0.25}" # min confidence to START a new track (ByteTrack gate; kills ghosts)
+DRAWCONF="${DRAWCONF:-0}"  # min confidence to DRAW a detection (0 = draw all; raise to trim weak boxes)
+MERGE="${MERGE:-0.5}"      # collapse overlapping boxes (lower=merge more; 0 disables) so one player=one circle
+SMOOTH="${SMOOTH:-0.6}"    # temporal EMA on circle positions (0=off, higher=smoother but more lag)
 CLASSES="ball,goalkeeper,player,referee"
-TRACK="pyml_tracker tracker-type=bytetrack"
-OVERLAY="pyml_football_overlay class-names=$CLASSES team-colors=true trails=false show-ids=false show-labels=false"
+TRACK="pyml_tracker tracker-type=bytetrack new-track-confidence=$NEWTRACK"
+# Detection-based overlay: circles sit on the raw per-frame detections (no
+# tracking drift/phantoms/doubles); merge collapses overlaps and
+# position-smoothing low-passes the positions. DRAWCONF defaults 0 so no
+# detection is hidden; the tracker still runs so the HUD keeps its stats.
+OVERLAY="pyml_football_overlay class-names=$CLASSES team-colors=true trails=false show-ids=false show-labels=false draw-from-detections=true min-confidence=$DRAWCONF merge-iou=$MERGE position-smoothing=$SMOOTH highlight-focal=false"
 
 if [[ "$BACKEND" == "fp16" ]]; then
   export LD_LIBRARY_PATH="$(python -c "import os,nvidia,glob;b=os.path.dirname(nvidia.__file__);print(':'.join(sorted(set(glob.glob(b+'/*/lib')))))"):${LD_LIBRARY_PATH:-}"
   DETECT="pyml_objectdetector engine-name=onnx model-name=models/football/football_fp16.onnx device=cuda:0 input-format=nchw post-process=anchor_free interval=$INTERVAL"
   IN_FMT="RGB"; FORCE_SQUARE=1
 else
-  DETECT="pyml_yolo model-name=models/football/football device=cuda:0 interval=$INTERVAL"
+  DETECT="pyml_yolo model-name=models/football/football device=cuda:0 interval=$INTERVAL confidence=$CONF nms-iou=$IOU"
   IN_FMT="RGBA"; FORCE_SQUARE=0
 fi
 
