@@ -483,9 +483,11 @@ class FootballOverlay(GstBase.BaseTransform):
             self._widths.append(raw_w)
             clamped = raw_w
         prev = self._ell_w.get(track_id)
-        # EMA: fast enough to follow real perspective changes, slow enough to
-        # damp single-frame spikes.
-        self._ell_w[track_id] = clamped if prev is None else 0.4 * clamped + 0.6 * prev
+        # EMA: slow enough to keep the circle size steady frame-to-frame, fast
+        # enough to still follow real perspective changes as players move.
+        self._ell_w[track_id] = (
+            clamped if prev is None else 0.25 * clamped + 0.75 * prev
+        )
 
     def _px_per_meter(self):
         if not self._heights:
@@ -506,19 +508,28 @@ class FootballOverlay(GstBase.BaseTransform):
         if not keys:
             return None
 
+        # Only consider *sustained* tracks. Otherwise a track that flickered for
+        # a few frames -- common when detection/tracking churns -- can win on a
+        # single ball contact and then show ~0 distance (it was barely tracked).
+        # The floor scales with elapsed frames, with a small absolute minimum.
+        floor = max(10, int(0.2 * self._frame))
+        candidates = [t for t in keys if self._frames_seen.get(t, 0) >= floor] or list(
+            keys
+        )
+
         # Rank by ball contacts (the player most involved with the ball), with
         # frames-seen as a tiebreak / pre-contact fallback (before anyone has
         # touched the ball, the most-tracked player is shown).
         def score(t):
             return (self._contacts.get(t, 0), self._frames_seen.get(t, 0))
 
-        best = max(keys, key=score)
+        best = max(candidates, key=score)
         # Stability: keep the current focal unless a challenger has *strictly
         # more* contacts, so the highlight/HUD don't flip on ties or noise.
         cur = self._focal
         if (
             cur is not None
-            and cur in keys
+            and cur in candidates
             and self._contacts.get(best, 0) <= self._contacts.get(cur, 0)
         ):
             best = cur
@@ -537,19 +548,47 @@ class FootballOverlay(GstBase.BaseTransform):
     def _c(self, rgba):
         return tuple(rgba[i] for i in self._order)
 
+    def _team_color(self, track_id):
+        # Confident kit colour from a track's accumulated jersey votes, else
+        # None. Red/blue -> team; "ref" (distinctive non-team kit) -> gold.
+        # Requires a minimum number of votes AND a clear majority, so a few
+        # noisy frames can't decide the colour.
+        if track_id is None:
+            return None
+        c = self._team_votes.get(track_id)
+        if not c:
+            return None
+        red, blue, ref = c.get("red", 0), c.get("blue", 0), c.get("ref", 0)
+        total = red + blue + ref
+        if total < 4:
+            return None
+        colors = {_RED_TEAM_RGBA: red, _BLUE_TEAM_RGBA: blue, _REFEREE_RGBA: ref}
+        color, n = max(colors.items(), key=lambda kv: kv[1])
+        return color if n >= 0.6 * total else None
+
+    def _is_referee_track(self, track_id, fallback_label):
+        # A track is a referee only if referee *clearly dominates* its class
+        # votes. Referees are rare, so a mostly-player track with a few stray
+        # 'referee' mislabels stays a player (won't get the gold circle).
+        votes = self._class_votes.get(track_id) if track_id is not None else None
+        if not votes:
+            return _is_referee(fallback_label)
+        total = sum(votes.values())
+        ref = sum(c for lbl, c in votes.items() if _is_referee(lbl))
+        return total > 0 and ref >= 3 and ref >= 0.6 * total
+
     def _color_for(self, label, track_id):
-        if _is_referee(label):
-            return _REFEREE_RGBA
+        # Colour by the track's *accumulated* jersey team (robust to per-frame
+        # noise). Referee/player only decides the fallback when the team is
+        # undecided: a referee keeps gold (stays visible), a player isn't drawn.
         if _is_ball(label):
             return _BALL_RGBA
-        if self.team_colors and track_id is not None:
-            c = self._team_votes.get(track_id)
-            if c and (c.get("red", 0) or c.get("blue", 0)):
-                return _RED_TEAM_RGBA if c["red"] >= c["blue"] else _BLUE_TEAM_RGBA
-            # Team not decided yet (or unclassifiable kit, e.g. goalkeeper):
-            # draw nothing rather than flashing the default cyan.
-            return None
-        return _PLAYER_RGBA
+        if self.team_colors:
+            team = self._team_color(track_id)
+            if team is not None:
+                return team
+            return _REFEREE_RGBA if self._is_referee_track(track_id, label) else None
+        return _REFEREE_RGBA if _is_referee(label) else _PLAYER_RGBA
 
     @staticmethod
     def _overlap(a, b):
@@ -570,11 +609,23 @@ class FootballOverlay(GstBase.BaseTransform):
         contain = inter / smaller if smaller > 0.0 else 0.0
         return max(iou, contain)
 
+    @staticmethod
+    def _feet_close(a, b):
+        # True when two boxes' foot points (bottom-centre, where the ellipse is
+        # drawn) are within ~0.4 of the smaller box width. The ellipse is ~2x the
+        # box width, so near-coincident feet = one player circled twice even when
+        # the boxes' IoU is low. Genuinely adjacent players are ~a full width
+        # apart at the feet, so they're not merged.
+        fax, fay = (a[0] + a[2]) / 2.0, a[3]
+        fbx, fby = (b[0] + b[2]) / 2.0, b[3]
+        ref = max(1.0, min(a[2] - a[0], b[2] - b[0]))
+        return ((fax - fbx) ** 2 + (fay - fby) ** 2) ** 0.5 < 0.4 * ref
+
     def _merge_overlaps(self, entries):
         # Class-agnostic greedy suppression: keep the most confident box, drop
-        # any later box that overlaps it past merge_iou. Collapses a player
-        # circled twice (e.g. player+goalkeeper on one person) into one. The
-        # ball is never merged against players.
+        # any later box that overlaps it past merge_iou OR sits at the same feet.
+        # Collapses a player circled twice (e.g. player+goalkeeper on one person,
+        # or two offset boxes) into one. The ball is never merged against players.
         if self.merge_iou <= 0.0 or len(entries) < 2:
             return entries
         ordered = sorted(entries, key=lambda e: e["confidence"], reverse=True)
@@ -585,12 +636,43 @@ class FootballOverlay(GstBase.BaseTransform):
                 continue
             if any(
                 not _is_ball(k["label"])
-                and self._overlap(e["box"], k["box"]) >= self.merge_iou
+                and (
+                    self._overlap(e["box"], k["box"]) >= self.merge_iou
+                    or self._feet_close(e["box"], k["box"])
+                )
                 for k in kept
             ):
                 continue
             kept.append(e)
         return kept
+
+    def _assign_track_ids(self, draw_entries, track_entries):
+        # Give each drawn box a stable track id: track-mode boxes already carry
+        # one; detection-mode boxes borrow the id of the best-overlapping track
+        # (greedy, each track used once) so detection circles can use the
+        # tracker's persistent id for the badge and the accumulated colour.
+        ids = [e["track_id"] for e in draw_entries]
+        if not track_entries:
+            return ids
+        pairs = []
+        for di, e in enumerate(draw_entries):
+            if e["track_id"] is not None or _is_ball(e["label"]):
+                continue
+            for t in track_entries:
+                if _is_ball(t["label"]):
+                    continue
+                ov = self._overlap(e["box"], t["box"])
+                if ov >= 0.3:
+                    pairs.append((ov, di, t["track_id"]))
+        pairs.sort(key=lambda p: p[0], reverse=True)
+        used_draw, used_track = set(), set()
+        for _ov, di, tid in pairs:
+            if di in used_draw or tid in used_track:
+                continue
+            ids[di] = tid
+            used_draw.add(di)
+            used_track.add(tid)
+        return ids
 
     def _smooth_boxes(self, np, entries):
         # Temporal EMA on the boxes we're about to draw. Each box is matched to
@@ -644,22 +726,27 @@ class FootballOverlay(GstBase.BaseTransform):
         return out
 
     def _detection_color(self, cv2, np, frame, label, box):
-        # Colour a raw detection box (no track id): referee gold, otherwise the
-        # jersey team classified from this frame. Returns None for an
-        # undecided kit (e.g. goalkeeper) so it isn't drawn, matching the
-        # track-mode behaviour.
-        if _is_referee(label):
-            return _REFEREE_RGBA
+        # Colour a raw detection box (no track id) by its jersey team, classified
+        # from this frame -- referees included. When the jersey isn't clearly a
+        # team colour, a referee falls back to gold (so real refs stay visible)
+        # and a player isn't drawn (matching the track-mode behaviour).
+        ref = _is_referee(label)
         if not self.team_colors:
-            return _PLAYER_RGBA
+            return _REFEREE_RGBA if ref else _PLAYER_RGBA
         vote = self._classify_jersey(cv2, np, frame, box)
-        if vote is None:
-            return None
-        return _RED_TEAM_RGBA if vote == "red" else _BLUE_TEAM_RGBA
+        if vote == "red":
+            return _RED_TEAM_RGBA
+        if vote == "blue":
+            return _BLUE_TEAM_RGBA
+        if vote == "ref":
+            return _REFEREE_RGBA
+        return _REFEREE_RGBA if ref else None
 
     def _classify_jersey(self, cv2, np, frame, box):
-        # Dominant jersey hue in the torso patch -> "red"/"blue"/None (HSV),
-        # ported from football_analyzer.classify_jersey.
+        # Dominant jersey colour in the torso patch -> "red"/"blue"/"ref"/None
+        # (HSV). "ref" is a distinctive non-team kit colour (yellow/orange or
+        # pink/magenta) -- chosen to avoid grass-green and the red/blue teams --
+        # so the referee is identified by its kit colour, not the class label.
         x1, y1, x2, y2 = (int(v) for v in box)
         h_box, w_box = y2 - y1, x2 - x1
         if h_box <= 0 or w_box <= 0:
@@ -676,12 +763,17 @@ class FootballOverlay(GstBase.BaseTransform):
         hsv = cv2.cvtColor(rgb, cv2.COLOR_RGB2HSV)
         s_v = (hsv[..., 1] > 80) & (hsv[..., 2] > 50)
         h = hsv[..., 0]
-        red = (((h <= 10) | (h >= 170)) & s_v).sum()
-        blue = ((h >= 100) & (h <= 130) & s_v).sum()
+        red = int((((h <= 10) | (h >= 170)) & s_v).sum())
+        blue = int(((h >= 100) & (h <= 130) & s_v).sum())
+        # Referee kit: yellow/orange (~18-34) or pink/magenta (~145-165). These
+        # bands skip grass-green (~40-90) and the red/blue team bands.
+        ref = int(((((h >= 18) & (h <= 34)) | ((h >= 145) & (h <= 165))) & s_v).sum())
         min_pixels = max(20, int(0.02 * rgb.shape[0] * rgb.shape[1]))
-        if red < min_pixels and blue < min_pixels:
+        counts = {"red": red, "blue": blue, "ref": ref}
+        best = max(counts, key=counts.get)
+        if counts[best] < min_pixels:
             return None
-        return "red" if red >= blue else "blue"
+        return best
 
     def _load_headshot(self, cv2, np):
         if self._headshot_loaded:
@@ -874,7 +966,27 @@ class FootballOverlay(GstBase.BaseTransform):
             )
 
             if self.draw_from_detections:
-                draw_entries = det_entries
+                draw_entries = list(det_entries)
+                # Bridge missed detections: the detector occasionally drops a
+                # player for a frame, which would flicker the circle. The tracker
+                # is still coasting that player (Kalman keep-alive), so draw any
+                # confirmed track that has no detection this frame -- detections
+                # still drive everything they cover; tracks only fill the gaps.
+                if track_entries:
+                    covered = set()
+                    for d in det_entries:
+                        if _is_ball(d["label"]):
+                            continue
+                        for t in track_entries:
+                            if t["track_id"] in covered or _is_ball(t["label"]):
+                                continue
+                            if self._overlap(d["box"], t["box"]) >= 0.3:
+                                covered.add(t["track_id"])
+                    draw_entries += [
+                        t
+                        for t in track_entries
+                        if not _is_ball(t["label"]) and t["track_id"] not in covered
+                    ]
             else:
                 draw_entries = track_entries if track_entries else det_entries
             # min-confidence gates only what we *draw* (tracks carry conf 1.0, so
@@ -903,16 +1015,20 @@ class FootballOverlay(GstBase.BaseTransform):
 
                 # Jersey team voting first, so trails/ellipses use this frame's
                 # vote (track mode; detection mode classifies per box at draw).
+                # Referees are voted on too -- their colour comes from the jersey
+                # (gold only as the fallback), not the class label.
                 if self.team_colors:
                     for e in track_entries:
                         tid = e["track_id"]
                         lab = self._stable_label(tid, e["label"])
-                        if _is_ball(lab) or _is_referee(lab):
+                        if _is_ball(lab):
                             continue
                         vote = self._classify_jersey(cv2, np, frame, e["box"])
                         if vote:
-                            tv = self._team_votes.setdefault(tid, {"red": 0, "blue": 0})
-                            tv[vote] += 1
+                            tv = self._team_votes.setdefault(
+                                tid, {"red": 0, "blue": 0, "ref": 0}
+                            )
+                            tv[vote] = tv.get(vote, 0) + 1
 
                 if self.trails:
                     for tid in active:
@@ -942,27 +1058,35 @@ class FootballOverlay(GstBase.BaseTransform):
                             if ov > best:
                                 best, focal_idx = ov, i
 
+                # Stable track id per drawn box (detection boxes borrow the id of
+                # the track they overlap) -- used for the id badge and to look up
+                # the track's accumulated colour.
+                draw_ids = self._assign_track_ids(draw_entries, track_entries)
+
                 for i, e in enumerate(draw_entries):
                     box = e["box"]
-                    tid = e["track_id"]
-                    if tid is not None:
-                        # Track mode: style by the majority-voted class (stable),
-                        # not this frame's possibly-flickering label.
-                        label = self._stable_label(tid, e["label"])
+                    badge_id = draw_ids[i]
+                    # Use the track's stable identity (class + accumulated team
+                    # votes) for colour whenever the box maps to a track -- in
+                    # detection mode that's the box's matched track id. This
+                    # makes colour robust to per-frame label/jersey noise. Only
+                    # an unmatched detection falls back to this frame's guess.
+                    color_tid = e["track_id"] if e["track_id"] is not None else badge_id
+                    if color_tid is not None:
+                        label = self._stable_label(color_tid, e["label"])
                     else:
-                        # Detection mode: the raw per-frame class.
                         label = e["label"]
                     if _is_ball(label):
                         if self.show_ball:
                             self._draw_triangle(cv2, np, frame, box, _BALL_RGBA)
                         continue
-                    if tid is not None:
-                        rgba = self._color_for(label, tid)
+                    if color_tid is not None:
+                        rgba = self._color_for(label, color_tid)
                     else:
                         rgba = self._detection_color(cv2, np, frame, label, box)
                     if rgba is None:
                         continue
-                    self._draw_ellipse(cv2, frame, box, rgba, tid)
+                    self._draw_ellipse(cv2, frame, box, rgba, badge_id)
                     if i == focal_idx:
                         self._draw_focal_marker(cv2, np, frame, box)
                     if self.show_labels:

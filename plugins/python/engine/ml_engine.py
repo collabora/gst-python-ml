@@ -96,7 +96,12 @@ class MLEngine(ABC):
         if pp != "none" and not isinstance(raw, list):
             from utils.detection_decoder import decode
 
-            results = decode(raw, pp)
+            results = decode(
+                raw,
+                pp,
+                conf_threshold=getattr(self, "conf", 0.25),
+                iou_threshold=getattr(self, "iou", 0.45),
+            )
             return results[0] if not is_batch else results
         return raw
 
