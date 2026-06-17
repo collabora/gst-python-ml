@@ -6,7 +6,8 @@
 #
 # Usage:
 #   demo/football/run.sh [INPUT.mp4] [OUTPUT.mp4] [WxH]      # file -> annotated mp4
-#   demo/football/run.sh camera [/dev/videoN] [WxH]          # live -> on-screen
+#   demo/football/run.sh display [INPUT.mp4] [WxH]           # file -> live on-screen
+#   demo/football/run.sh camera [/dev/videoN] [WxH]          # live camera -> on-screen
 set -euo pipefail
 
 REPO="$(cd "$(dirname "$0")/../.." && pwd)"
@@ -32,6 +33,20 @@ fi
 POST_DETECT="$TRACK"
 [[ "$IN_FMT" == "RGB" ]] && POST_DETECT="$TRACK ! videoconvert ! video/x-raw,format=RGBA"
 
+# A queue at each stage boundary turns the serial chain into a threaded
+# pipeline: while inference runs on frame N, the sink renders N-1 and the
+# decoder reads N+1. Nothing is dropped (leaky=no, the default).
+Q="queue max-size-buffers=8 max-size-time=0 max-size-bytes=0"
+# Pre-roll buffer before the display sink: build a head start of processed
+# frames so real-time playback (sync=true) rides out per-frame inference
+# jitter without stuttering. Smooths jitter, not a sustained throughput
+# deficit -- if inference can't keep up on average, playback just lags
+# (still no drops). Lower INTERVAL/raise the head start if it falls behind.
+PREROLL="queue max-size-buffers=600 max-size-time=0 max-size-bytes=0 min-threshold-buffers=30"
+
+# detector -> tracker -> overlay, with a thread boundary at each hop.
+CHAIN="$Q ! $DETECT ! $Q ! $POST_DETECT ! $Q ! $OVERLAY"
+
 MODE="${1:-file}"
 if [[ "$MODE" == "camera" ]]; then
   DEV="${2:-/dev/video0}"; SIZE="${3:-1280x720}"
@@ -41,8 +56,20 @@ if [[ "$MODE" == "camera" ]]; then
   exec gst-launch-1.0 -e \
     v4l2src device="$DEV" ! videoconvert ! videoscale \
     ! "video/x-raw,width=${W},height=${H},format=${IN_FMT}" \
-    ! $DETECT ! $POST_DETECT ! $OVERLAY \
-    ! videoconvert ! autovideosink sync=false
+    ! $CHAIN \
+    ! $Q ! videoconvert ! autovideosink sync=false
+elif [[ "$MODE" == "display" ]]; then
+  IN="${2:-data/soccer_tracking.mp4}"
+  SIZE="${3:-1280x720}"
+  [[ "$FORCE_SQUARE" == "1" ]] && SIZE="640x640"
+  W="${SIZE%x*}"; H="${SIZE#*x}"
+  [[ -f "$IN" ]] || { echo "input not found: $IN" >&2; exit 1; }
+  echo "[$BACKEND] '$IN' @ ${W}x${H} -> live display (real-time, sync=true)"
+  exec gst-launch-1.0 -e \
+    filesrc location="$IN" ! decodebin ! videoconvert ! videoscale \
+    ! "video/x-raw,width=${W},height=${H},format=${IN_FMT}" \
+    ! $CHAIN \
+    ! $PREROLL ! videoconvert ! autovideosink sync=true
 else
   IN="${1:-data/soccer_tracking.mp4}"
   OUT="${2:-demo/football/out.mp4}"
@@ -54,7 +81,7 @@ else
   gst-launch-1.0 -e \
     filesrc location="$IN" ! decodebin ! videoconvert ! videoscale \
     ! "video/x-raw,width=${W},height=${H},format=${IN_FMT}" \
-    ! $DETECT ! $POST_DETECT ! $OVERLAY \
-    ! videoconvert ! openh264enc ! h264parse ! mp4mux ! filesink location="$OUT"
+    ! $CHAIN \
+    ! $Q ! videoconvert ! openh264enc ! h264parse ! mp4mux ! filesink location="$OUT"
   echo "Done: $OUT"
 fi
