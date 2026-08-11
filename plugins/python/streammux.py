@@ -16,6 +16,7 @@
 # Free Software Foundation, Inc., 51 Franklin Street, Fifth Floor,
 # Boston, MA 02110-1301, USA.
 
+import backend
 import gi
 
 gi.require_version("Gst", "1.0")
@@ -210,5 +211,5 @@ class StreamMux(GstBase.Aggregator):
             raise AttributeError(f"Unknown property: {prop.name}")
 
 
-GObject.type_register(StreamMux)
-__gstelementfactory__ = ("pyml_streammux", Gst.Rank.NONE, StreamMux)
+if backend.BACKEND == "gst":
+    __gstelementfactory__ = backend.register_gst_element("pyml_streammux", StreamMux)

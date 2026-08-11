@@ -17,6 +17,7 @@
 # Boston, MA 02110-1301, USA.
 
 from log.global_logger import GlobalLogger
+import backend
 
 CAN_REGISTER_ELEMENT = True
 try:
@@ -24,7 +25,7 @@ try:
 
     gi.require_version("Gst", "1.0")
     gi.require_version("GstBase", "1.0")
-    from gi.repository import Gst, GObject, GstBase  # noqa: E402
+    from gi.repository import Gst, GstBase  # noqa: E402
     from base_tts import BaseTts
 except ImportError as e:
     CAN_REGISTER_ELEMENT = False
@@ -103,10 +104,11 @@ class WhisperSpeechTTS(BaseTts):
         return TTS_SAMPLE_RATE
 
 
-if CAN_REGISTER_ELEMENT:
-    GObject.type_register(WhisperSpeechTTS)
-    __gstelementfactory__ = ("pyml_whisperspeechtts", Gst.Rank.NONE, WhisperSpeechTTS)
-else:
+if CAN_REGISTER_ELEMENT and backend.BACKEND == "gst":
+    __gstelementfactory__ = backend.register_gst_element(
+        "pyml_whisperspeechtts", WhisperSpeechTTS
+    )
+elif not CAN_REGISTER_ELEMENT:
     GlobalLogger().warning(
         "The 'pyml_whisperspeechtts' element will not be registered because required modules were missing."
     )

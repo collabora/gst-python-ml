@@ -17,6 +17,7 @@
 # Boston, MA 02110-1301, USA.
 
 from log.global_logger import GlobalLogger
+import backend
 
 CAN_REGISTER_ELEMENT = True
 try:
@@ -30,10 +31,10 @@ try:
     gi.require_version("Gst", "1.0")
     gi.require_version("GstBase", "1.0")
     gi.require_version("GstVideo", "1.0")
-    from gi.repository import Gst, GstBase, GObject  # noqa: E402
+    from gi.repository import Gst, GstBase  # noqa: E402
 
     from log.logger_factory import LoggerFactory  # noqa: E402
-    from backend import analytics  # noqa: E402
+    from backend import analytics, GObject  # noqa: E402
 
     # Header prefix for alert buffer metadata
     ALERT_META_HEADER = b"GST-ALERT:"
@@ -371,10 +372,9 @@ class AlertTransform(GstBase.BaseTransform):
         return True
 
 
-if CAN_REGISTER_ELEMENT:
-    GObject.type_register(AlertTransform)
-    __gstelementfactory__ = ("pyml_alert", Gst.Rank.NONE, AlertTransform)
-else:
+if CAN_REGISTER_ELEMENT and backend.BACKEND == "gst":
+    __gstelementfactory__ = backend.register_gst_element("pyml_alert", AlertTransform)
+elif not CAN_REGISTER_ELEMENT:
     GlobalLogger().warning(
         "The 'pyml_alert' element will not be registered because required modules are missing."
     )

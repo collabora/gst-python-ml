@@ -17,6 +17,8 @@
 # Boston, MA 02110-1301, USA.
 
 
+import backend
+
 CAN_REGISTER_ELEMENT = True
 try:
 
@@ -120,6 +122,7 @@ class CoalesceHistory(Gst.Element):
         return ret
 
 
-if CAN_REGISTER_ELEMENT:
-    GObject.type_register(CoalesceHistory)
-    __gstelementfactory__ = ("coalescehistory", Gst.Rank.NONE, CoalesceHistory)
+if CAN_REGISTER_ELEMENT and backend.BACKEND == "gst":
+    __gstelementfactory__ = backend.register_gst_element(
+        "coalescehistory", CoalesceHistory
+    )

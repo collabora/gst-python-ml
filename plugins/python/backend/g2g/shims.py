@@ -20,7 +20,15 @@ is accepted and ignored. `FlowReturn` is a plain enum whose `OK`/`ERROR` the hos
 treats as success/failure of a frame.
 """
 
-from enum import IntEnum
+from enum import IntEnum, IntFlag
+
+
+class ParamFlags(IntFlag):
+    """The `GObject.ParamFlags` leaves pass to `Property`, accepted and ignored."""
+
+    READABLE = 1
+    WRITABLE = 2
+    READWRITE = READABLE | WRITABLE
 
 
 class FlowReturn(IntEnum):
@@ -92,10 +100,13 @@ class _GObjectShim:
     """The ``GObject`` namespace leaves import from the backend."""
 
     Property = Property
+    ParamFlags = ParamFlags
 
     # Some leaves type-hint setters as `prop: GObject.GParamSpec`.
     class GParamSpec:  # noqa: N801
         pass
+
+    ParamSpec = GParamSpec
 
 
 GObject = _GObjectShim()

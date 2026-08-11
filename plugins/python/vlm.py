@@ -17,14 +17,10 @@
 # Boston, MA 02110-1301, USA.
 
 from log.global_logger import GlobalLogger
+import backend
 
 CAN_REGISTER_ELEMENT = True
 try:
-    import gi
-
-    gi.require_version("Gst", "1.0")
-    from gi.repository import Gst  # noqa: E402  (registration only)
-
     from video_transform import VideoTransform
     from engine.vlm_engine import VlmEngine
     from engine.engine_factory import EngineFactory
@@ -152,10 +148,9 @@ class VlmTransform(VideoTransform, VlmTask):
             return FlowReturn.ERROR
 
 
-if CAN_REGISTER_ELEMENT:
-    GObject.type_register(VlmTransform)
-    __gstelementfactory__ = ("pyml_vlm", Gst.Rank.NONE, VlmTransform)
-else:
+if CAN_REGISTER_ELEMENT and backend.BACKEND == "gst":
+    __gstelementfactory__ = backend.register_gst_element("pyml_vlm", VlmTransform)
+elif not CAN_REGISTER_ELEMENT:
     GlobalLogger().warning(
         "The 'pyml_vlm' element will not be registered because required modules are missing."
     )

@@ -17,6 +17,7 @@
 # Boston, MA 02110-1301, USA.
 
 from log.global_logger import GlobalLogger
+import backend
 
 CAN_REGISTER_ELEMENT = True
 try:
@@ -27,7 +28,8 @@ try:
 
     gi.require_version("Gst", "1.0")
     gi.require_version("GstBase", "1.0")
-    from gi.repository import Gst, GObject, GstBase
+    from gi.repository import Gst, GstBase
+    from backend import GObject
 
     from log.logger_factory import LoggerFactory
 
@@ -187,10 +189,11 @@ class VoiceActivityDetector(GstBase.BaseTransform):
         return Gst.FlowReturn.OK
 
 
-if CAN_REGISTER_ELEMENT:
-    GObject.type_register(VoiceActivityDetector)
-    __gstelementfactory__ = ("pyml_vad", Gst.Rank.NONE, VoiceActivityDetector)
-else:
+if CAN_REGISTER_ELEMENT and backend.BACKEND == "gst":
+    __gstelementfactory__ = backend.register_gst_element(
+        "pyml_vad", VoiceActivityDetector
+    )
+elif not CAN_REGISTER_ELEMENT:
     GlobalLogger().warning(
         "The 'pyml_vad' element will not be registered because required modules are missing."
     )

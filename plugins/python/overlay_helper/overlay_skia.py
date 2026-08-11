@@ -17,6 +17,7 @@
 # Boston, MA 02110-1301, USA.
 
 from log.global_logger import GlobalLogger
+import backend
 
 CAN_REGISTER_ELEMENT = True
 try:
@@ -38,8 +39,8 @@ try:
         GstVideo,
         GstAnalytics,
         GLib,
-        GObject,
     )  # noqa: E402
+    from backend import GObject
     from log.logger_factory import LoggerFactory
 except ImportError as e:
     CAN_REGISTER_ELEMENT = False
@@ -347,10 +348,11 @@ class OverlaySkia(GstBase.BaseTransform):
         cr.stroke()
 
 
-if CAN_REGISTER_ELEMENT:
-    GObject.type_register(OverlaySkia)
-    __gstelementfactory__ = ("pyml_overlay_skia", Gst.Rank.NONE, OverlaySkia)
-else:
+if CAN_REGISTER_ELEMENT and backend.BACKEND == "gst":
+    __gstelementfactory__ = backend.register_gst_element(
+        "pyml_overlay_skia", OverlaySkia
+    )
+elif not CAN_REGISTER_ELEMENT:
     GlobalLogger().warning(
         "The 'pyml_overlay_skia' element will not be registered because a required module is missing."
     )

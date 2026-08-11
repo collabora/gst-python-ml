@@ -17,14 +17,10 @@
 # Boston, MA 02110-1301, USA.
 
 from log.global_logger import GlobalLogger
+import backend
 
 CAN_REGISTER_ELEMENT = True
 try:
-    import gi
-
-    gi.require_version("Gst", "1.0")
-    from gi.repository import Gst  # noqa: E402  (registration only)
-
     from video_transform import VideoTransform
     from utils.format_converter import FormatConverter
     from engine.optical_flow_engine import OpticalFlowEngine
@@ -131,10 +127,11 @@ class OpticalFlowTransform(VideoTransform, OpticalFlowTask):
             return FlowReturn.ERROR
 
 
-if CAN_REGISTER_ELEMENT:
-    GObject.type_register(OpticalFlowTransform)
-    __gstelementfactory__ = ("pyml_optical_flow", Gst.Rank.NONE, OpticalFlowTransform)
-else:
+if CAN_REGISTER_ELEMENT and backend.BACKEND == "gst":
+    __gstelementfactory__ = backend.register_gst_element(
+        "pyml_optical_flow", OpticalFlowTransform
+    )
+elif not CAN_REGISTER_ELEMENT:
     GlobalLogger().warning(
         "The 'pyml_optical_flow' element will not be registered because required modules are missing."
     )

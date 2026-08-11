@@ -17,11 +17,10 @@
 # Boston, MA 02110-1301, USA.
 
 from log.global_logger import GlobalLogger
+import backend
 
 CAN_REGISTER_ELEMENT = True
 try:
-    from gi.repository import Gst, GObject
-
     from overlay import Overlay
     from overlay_helper.overlay_utils_interface import Color
 except ImportError as e:
@@ -68,8 +67,9 @@ class OverlayCounter(Overlay):
         self.overlay_graphics.draw_text(text, 0, 50, Color(1, 0, 0, 1), 20)
 
 
-if CAN_REGISTER_ELEMENT:
-    GObject.type_register(OverlayCounter)
-    __gstelementfactory__ = ("pyml_overlay_counter", Gst.Rank.NONE, OverlayCounter)
-else:
+if CAN_REGISTER_ELEMENT and backend.BACKEND == "gst":
+    __gstelementfactory__ = backend.register_gst_element(
+        "pyml_overlay_counter", OverlayCounter
+    )
+elif not CAN_REGISTER_ELEMENT:
     GlobalLogger().warning("Failed to register the 'pyml_overlay_counter' element.")

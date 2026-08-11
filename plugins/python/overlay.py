@@ -17,6 +17,7 @@
 # Boston, MA 02110-1301, USA.
 
 from log.global_logger import GlobalLogger
+import backend
 
 from utils.analytics_utils import ANALYTICS_UTILS_AVAILABLE
 
@@ -46,8 +47,8 @@ try:
         GstVideo,
         GstGL,
         GstVulkan,
-        GObject,
     )  # noqa: E402
+    from backend import GObject
     from log.logger_factory import LoggerFactory
 except ImportError as e:
     CAN_REGISTER_ELEMENT = False
@@ -445,10 +446,9 @@ class Overlay(GstBase.BaseTransform):
             self.tracking_display.fade_history()
 
 
-if CAN_REGISTER_ELEMENT:
-    GObject.type_register(Overlay)
-    __gstelementfactory__ = ("pyml_overlay", Gst.Rank.NONE, Overlay)
-else:
+if CAN_REGISTER_ELEMENT and backend.BACKEND == "gst":
+    __gstelementfactory__ = backend.register_gst_element("pyml_overlay", Overlay)
+elif not CAN_REGISTER_ELEMENT:
     GlobalLogger().warning(
         "The 'pyml_overlay' element will not be registered because a module is missing."
     )

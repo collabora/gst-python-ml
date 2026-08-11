@@ -17,14 +17,10 @@
 # Boston, MA 02110-1301, USA.
 
 from log.global_logger import GlobalLogger
+import backend
 
 CAN_REGISTER_ELEMENT = True
 try:
-    import gi
-
-    gi.require_version("Gst", "1.0")
-    from gi.repository import Gst  # noqa: E402  (registration only)
-
     from video_transform import VideoTransform
     from engine.embedding_engine import EmbeddingEngine
     from engine.engine_factory import EngineFactory
@@ -165,10 +161,11 @@ class EmbeddingTransform(VideoTransform, EmbeddingTask):
             return FlowReturn.ERROR
 
 
-if CAN_REGISTER_ELEMENT:
-    GObject.type_register(EmbeddingTransform)
-    __gstelementfactory__ = ("pyml_embedding", Gst.Rank.NONE, EmbeddingTransform)
-else:
+if CAN_REGISTER_ELEMENT and backend.BACKEND == "gst":
+    __gstelementfactory__ = backend.register_gst_element(
+        "pyml_embedding", EmbeddingTransform
+    )
+elif not CAN_REGISTER_ELEMENT:
     GlobalLogger().warning(
         "The 'pyml_embedding' element will not be registered because required modules are missing."
     )

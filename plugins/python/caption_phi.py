@@ -17,15 +17,10 @@
 # Boston, MA 02110-1301, USA.
 
 from log.global_logger import GlobalLogger
+import backend
 
 CAN_REGISTER_ELEMENT = True
 try:
-    import gi
-
-    gi.require_version("Gst", "1.0")
-
-    from gi.repository import Gst, GObject  # noqa: E402
-
     from engine.caption_phi_engine import CaptionPhiEngine
     from engine.engine_factory import EngineFactory
     from base_caption import BaseCaption
@@ -56,10 +51,11 @@ class CaptionPhi(BaseCaption):
         EngineFactory.register(self.engine_name, CaptionPhiEngine)
 
 
-if CAN_REGISTER_ELEMENT:
-    GObject.type_register(CaptionPhi, "pyml_caption_phi")
-    __gstelementfactory__ = ("pyml_caption_phi", Gst.Rank.NONE, CaptionPhi)
-else:
+if CAN_REGISTER_ELEMENT and backend.BACKEND == "gst":
+    __gstelementfactory__ = backend.register_gst_element(
+        "pyml_caption_phi", CaptionPhi, "pyml_caption_phi"
+    )
+elif not CAN_REGISTER_ELEMENT:
     GlobalLogger().warning(
         "The 'pyml_caption_phi' element will not be registered because required modules are missing."
     )

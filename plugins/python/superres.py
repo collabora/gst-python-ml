@@ -17,14 +17,10 @@
 # Boston, MA 02110-1301, USA.
 
 from log.global_logger import GlobalLogger
+import backend
 
 CAN_REGISTER_ELEMENT = True
 try:
-    import gi
-
-    gi.require_version("Gst", "1.0")
-    from gi.repository import Gst  # noqa: E402  (registration only)
-
     from video_transform import VideoTransform
     from utils.format_converter import FormatConverter
     from engine.super_res_engine import SuperResEngine
@@ -104,10 +100,11 @@ class SuperResTransform(VideoTransform, SuperResTask):
             return FlowReturn.ERROR
 
 
-if CAN_REGISTER_ELEMENT:
-    GObject.type_register(SuperResTransform)
-    __gstelementfactory__ = ("pyml_superres", Gst.Rank.NONE, SuperResTransform)
-else:
+if CAN_REGISTER_ELEMENT and backend.BACKEND == "gst":
+    __gstelementfactory__ = backend.register_gst_element(
+        "pyml_superres", SuperResTransform
+    )
+elif not CAN_REGISTER_ELEMENT:
     GlobalLogger().warning(
         "The 'pyml_superres' element will not be registered because required modules are missing."
     )

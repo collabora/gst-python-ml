@@ -17,6 +17,7 @@
 # Boston, MA 02110-1301, USA.
 
 from log.global_logger import GlobalLogger
+import backend
 
 CAN_REGISTER_ELEMENT = True
 try:
@@ -28,9 +29,9 @@ try:
     gi.require_version("Gst", "1.0")
     gi.require_version("GstBase", "1.0")
     gi.require_version("GstVideo", "1.0")
-    from gi.repository import Gst, GObject
+    from gi.repository import Gst
 
-    from backend import analytics
+    from backend import analytics, GObject
     from base_objectdetector import BaseObjectDetector
     from utils.format_converter import FormatConverter
     from engine.yolo_pose_engine import YoloPoseEngine
@@ -250,10 +251,11 @@ class YOLOPoseTransform(BaseObjectDetector):
             return cv2.cvtColor(bgr, cv2.COLOR_BGR2RGB)
 
 
-if CAN_REGISTER_ELEMENT:
-    GObject.type_register(YOLOPoseTransform)
-    __gstelementfactory__ = ("pyml_yolo_pose", Gst.Rank.NONE, YOLOPoseTransform)
-else:
+if CAN_REGISTER_ELEMENT and backend.BACKEND == "gst":
+    __gstelementfactory__ = backend.register_gst_element(
+        "pyml_yolo_pose", YOLOPoseTransform
+    )
+elif not CAN_REGISTER_ELEMENT:
     GlobalLogger().warning(
         "The 'pyml_yolo_pose' element will not be registered because required modules are missing."
     )

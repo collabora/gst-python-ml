@@ -17,15 +17,10 @@
 # Boston, MA 02110-1301, USA.
 
 from log.global_logger import GlobalLogger
+import backend
 
 CAN_REGISTER_ELEMENT = True
 try:
-    import gi
-
-    gi.require_version("Gst", "1.0")
-
-    from gi.repository import Gst, GObject  # noqa: E402
-
     from engine.caption_qwen_engine import CaptionQwenEngine
     from engine.engine_factory import EngineFactory
     from base_caption import BaseCaption
@@ -56,10 +51,11 @@ class CaptionQwen(BaseCaption):
         EngineFactory.register(self.engine_name, CaptionQwenEngine)
 
 
-if CAN_REGISTER_ELEMENT:
-    GObject.type_register(CaptionQwen, "pyml_caption_qwen")
-    __gstelementfactory__ = ("pyml_caption_qwen", Gst.Rank.NONE, CaptionQwen)
-else:
+if CAN_REGISTER_ELEMENT and backend.BACKEND == "gst":
+    __gstelementfactory__ = backend.register_gst_element(
+        "pyml_caption_qwen", CaptionQwen, "pyml_caption_qwen"
+    )
+elif not CAN_REGISTER_ELEMENT:
     GlobalLogger().warning(
         "The 'pyml_caption_qwen' element will not be registered because required modules are missing."
     )

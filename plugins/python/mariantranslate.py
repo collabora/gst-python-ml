@@ -17,13 +17,10 @@
 # Boston, MA 02110-1301, USA.
 
 from log.global_logger import GlobalLogger
+import backend
 
 CAN_REGISTER_ELEMENT = True
 try:
-    import gi
-
-    gi.require_version("Gst", "1.0")
-    from gi.repository import Gst, GObject  # noqa: E402
     from base_translate import BaseTranslate
 except ImportError as e:
     CAN_REGISTER_ELEMENT = False
@@ -74,10 +71,11 @@ class MarianTranslate(BaseTranslate):
             return ""
 
 
-if CAN_REGISTER_ELEMENT:
-    GObject.type_register(MarianTranslate)
-    __gstelementfactory__ = ("pyml_mariantranslate", Gst.Rank.NONE, MarianTranslate)
-else:
+if CAN_REGISTER_ELEMENT and backend.BACKEND == "gst":
+    __gstelementfactory__ = backend.register_gst_element(
+        "pyml_mariantranslate", MarianTranslate
+    )
+elif not CAN_REGISTER_ELEMENT:
     GlobalLogger().warning(
         "The 'pyml_mariantranslate' element will not be registered because required modules are missing."
     )

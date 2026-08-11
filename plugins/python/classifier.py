@@ -17,15 +17,10 @@
 # Boston, MA 02110-1301, USA.
 
 from log.global_logger import GlobalLogger
+import backend
 
 CAN_REGISTER_ELEMENT = True
 try:
-    import gi
-
-    gi.require_version("Gst", "1.0")
-    gi.require_version("GstBase", "1.0")
-    gi.require_version("GLib", "2.0")
-    from gi.repository import Gst, GObject  # noqa: E402
     from base_classifier import BaseClassifier
 except ImportError as e:
     CAN_REGISTER_ELEMENT = False
@@ -50,10 +45,9 @@ class Classifier(BaseClassifier):
         super().__init__()
 
 
-if CAN_REGISTER_ELEMENT:
-    GObject.type_register(Classifier)
-    __gstelementfactory__ = ("pyml_classifier", Gst.Rank.NONE, Classifier)
-else:
+if CAN_REGISTER_ELEMENT and backend.BACKEND == "gst":
+    __gstelementfactory__ = backend.register_gst_element("pyml_classifier", Classifier)
+elif not CAN_REGISTER_ELEMENT:
     GlobalLogger().warning(
         "The 'pyml_classifier' element will not be registered because a module is missing."
     )

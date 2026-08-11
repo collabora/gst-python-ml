@@ -16,6 +16,7 @@
 # Free Software Foundation, Inc., 51 Franklin Street, Fifth Floor,
 # Boston, MA 02110-1301, USA.
 
+import backend
 import gi
 
 gi.require_version("Gst", "1.0")
@@ -230,5 +231,7 @@ class StreamDemux(Gst.Element):
         return Gst.PadProbeReturn.OK
 
 
-GObject.type_register(StreamDemux)
-__gstelementfactory__ = ("pyml_streamdemux", Gst.Rank.NONE, StreamDemux)
+if backend.BACKEND == "gst":
+    __gstelementfactory__ = backend.register_gst_element(
+        "pyml_streamdemux", StreamDemux
+    )

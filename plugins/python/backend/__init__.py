@@ -53,8 +53,22 @@ else:
         f"Unknown GSTML_BACKEND={BACKEND!r}; supported backends: 'gst', 'g2g'"
     )
 
+
+def register_gst_element(name, cls, type_name=None):
+    """Register `cls` with the GObject type system and return its factory tuple.
+
+    Leaf elements call this behind a `BACKEND == "gst"` guard: under g2g the
+    element base classes are plain Python objects, so type_register would fail.
+    """
+    from backend.gst import Gst, GObject
+
+    GObject.type_register(cls, type_name)
+    return (name, Gst.Rank.NONE, cls)
+
+
 __all__ = [
     "BACKEND",
+    "register_gst_element",
     "BaseTransform",
     "BaseAggregator",
     "VideoTransform",

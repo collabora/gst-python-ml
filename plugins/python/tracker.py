@@ -17,6 +17,7 @@
 # Boston, MA 02110-1301, USA.
 
 from log.global_logger import GlobalLogger
+import backend
 
 CAN_REGISTER_ELEMENT = True
 try:
@@ -25,10 +26,10 @@ try:
     gi.require_version("Gst", "1.0")
     gi.require_version("GstBase", "1.0")
     gi.require_version("GstVideo", "1.0")
-    from gi.repository import Gst, GstBase, GObject  # noqa: E402
+    from gi.repository import Gst, GstBase  # noqa: E402
 
     from log.logger_factory import LoggerFactory  # noqa: E402
-    from backend import analytics  # noqa: E402
+    from backend import analytics, GObject  # noqa: E402
 
     VIDEO_SRC_CAPS = Gst.Caps.from_string("video/x-raw")
     VIDEO_SINK_CAPS = Gst.Caps.from_string("video/x-raw")
@@ -365,10 +366,11 @@ class TrackerTransform(GstBase.BaseTransform):
             raise AttributeError(f"Unknown property {prop.name}")
 
 
-if CAN_REGISTER_ELEMENT:
-    GObject.type_register(TrackerTransform)
-    __gstelementfactory__ = ("pyml_tracker", Gst.Rank.NONE, TrackerTransform)
-else:
+if CAN_REGISTER_ELEMENT and backend.BACKEND == "gst":
+    __gstelementfactory__ = backend.register_gst_element(
+        "pyml_tracker", TrackerTransform
+    )
+elif not CAN_REGISTER_ELEMENT:
     GlobalLogger().warning(
         "The 'pyml_tracker' element will not be registered because required modules are missing."
     )

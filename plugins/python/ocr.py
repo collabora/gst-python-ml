@@ -17,14 +17,10 @@
 # Boston, MA 02110-1301, USA.
 
 from log.global_logger import GlobalLogger
+import backend
 
 CAN_REGISTER_ELEMENT = True
 try:
-    import gi
-
-    gi.require_version("Gst", "1.0")
-    from gi.repository import Gst  # noqa: E402  (registration only)
-
     from video_transform import VideoTransform
     from utils.format_converter import FormatConverter
     from engine.ocr_engine import OcrEngine
@@ -123,10 +119,9 @@ class OCRTransform(VideoTransform, OcrTask):
             return FlowReturn.ERROR
 
 
-if CAN_REGISTER_ELEMENT:
-    GObject.type_register(OCRTransform)
-    __gstelementfactory__ = ("pyml_ocr", Gst.Rank.NONE, OCRTransform)
-else:
+if CAN_REGISTER_ELEMENT and backend.BACKEND == "gst":
+    __gstelementfactory__ = backend.register_gst_element("pyml_ocr", OCRTransform)
+elif not CAN_REGISTER_ELEMENT:
     GlobalLogger().warning(
         "The 'pyml_ocr' element will not be registered because required modules are missing."
     )

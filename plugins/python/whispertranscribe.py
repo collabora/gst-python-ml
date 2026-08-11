@@ -17,15 +17,11 @@
 # Boston, MA 02110-1301, USA.
 
 from log.global_logger import GlobalLogger
+import backend
 
 CAN_REGISTER_ELEMENT = True
 try:
-    import gi
-
-    gi.require_version("Gst", "1.0")
-    gi.require_version("GstBase", "1.0")
-    gi.require_version("GObject", "2.0")
-    from gi.repository import Gst, GObject  # noqa: E402
+    from backend import GObject
     from base_transcribe import BaseTranscribe
     from engine.whisper_engine import WhisperEngine
     from engine.engine_factory import EngineFactory
@@ -74,10 +70,11 @@ class WhisperTranscribe(BaseTranscribe):
         return result
 
 
-if CAN_REGISTER_ELEMENT:
-    GObject.type_register(WhisperTranscribe)
-    __gstelementfactory__ = ("pyml_whispertranscribe", Gst.Rank.NONE, WhisperTranscribe)
-else:
+if CAN_REGISTER_ELEMENT and backend.BACKEND == "gst":
+    __gstelementfactory__ = backend.register_gst_element(
+        "pyml_whispertranscribe", WhisperTranscribe
+    )
+elif not CAN_REGISTER_ELEMENT:
     GlobalLogger().warning(
         "The 'pyml_whispertranscribe' element will not be registered because base_transcribe module is missing."
     )

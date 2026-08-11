@@ -16,7 +16,6 @@
 # Free Software Foundation, Inc., 51 Franklin Street, Fifth Floor,
 # Boston, MA 02110-1301, USA.
 
-from log.global_logger import GlobalLogger
 from base_objectdetector import BaseObjectDetector
 import backend
 
@@ -44,17 +43,6 @@ class ObjectDetector(BaseObjectDetector):
 # instantiates ObjectDetector directly, so no GObject registration applies.
 # GStreamer factory registration runs only under the gst backend.
 if backend.BACKEND == "gst":
-    try:
-        import gi
-
-        gi.require_version("Gst", "1.0")
-        gi.require_version("GstBase", "1.0")
-        gi.require_version("GLib", "2.0")
-        from gi.repository import Gst, GObject  # noqa: E402
-
-        GObject.type_register(ObjectDetector)
-        __gstelementfactory__ = ("pyml_objectdetector", Gst.Rank.NONE, ObjectDetector)
-    except ImportError as e:
-        GlobalLogger().warning(
-            f"The 'pyml_objectdetector' element will not be available. Error: {e}"
-        )
+    __gstelementfactory__ = backend.register_gst_element(
+        "pyml_objectdetector", ObjectDetector
+    )

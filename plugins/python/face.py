@@ -17,6 +17,7 @@
 # Boston, MA 02110-1301, USA.
 
 from log.global_logger import GlobalLogger
+import backend
 
 CAN_REGISTER_ELEMENT = True
 try:
@@ -27,9 +28,9 @@ try:
     gi.require_version("Gst", "1.0")
     gi.require_version("GstBase", "1.0")
     gi.require_version("GstVideo", "1.0")
-    from gi.repository import Gst, GObject
+    from gi.repository import Gst
 
-    from backend import analytics
+    from backend import analytics, GObject
     from base_objectdetector import BaseObjectDetector
     from engine.face_engine import FaceEngine
     from engine.engine_factory import EngineFactory
@@ -152,10 +153,9 @@ class FaceTransform(BaseObjectDetector):
             )
 
 
-if CAN_REGISTER_ELEMENT:
-    GObject.type_register(FaceTransform)
-    __gstelementfactory__ = ("pyml_face", Gst.Rank.NONE, FaceTransform)
-else:
+if CAN_REGISTER_ELEMENT and backend.BACKEND == "gst":
+    __gstelementfactory__ = backend.register_gst_element("pyml_face", FaceTransform)
+elif not CAN_REGISTER_ELEMENT:
     GlobalLogger().warning(
         "The 'pyml_face' element will not be registered because required modules are missing."
     )
