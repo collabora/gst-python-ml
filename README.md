@@ -560,6 +560,44 @@ gst-inspect-1.0 my_detector
 
 ## Using GStreamer Python ML Elements
 
+## Running a pipeline on either backend
+
+The ML elements run under GStreamer or under [glass2glass](https://gitlab.collabora.com/glass2glass/glass2glass),
+selected by `GSTML_BACKEND`. `pyml-launch` takes one pipeline in `gst-launch`
+spelling and runs it on whichever is selected:
+
+```bash
+python pyml-launch.py filesrc location=data/people.mp4 ! decodebin ! videoconvert ! videoscale \
+  ! video/x-raw,width=640,height=480 \
+  ! pyml_yolo model-name=yolo11m device=cuda:0 track=True \
+  ! pyml_overlay ! videoconvert ! autovideosink
+
+GSTML_BACKEND=g2g python pyml-launch.py <the same pipeline>
+```
+
+Run it from the checkout with any Python: it re-runs itself under `.venv` if it
+finds one, so the elements see torch and the rest. Installing the package also
+puts a `pyml-launch` on `PATH`.
+
+Under `gst` it calls `gst-launch-1.0` with `GST_PLUGIN_PATH` pointing at this
+checkout. Under `g2g` it calls `g2g-launch-py`, and first rewrites the three
+things g2g spells differently: a `pyml_*` element becomes `pyelement` plus the
+module and class to host, `pyml_overlay` becomes g2g's native
+`analyticsoverlay`, and a raw-video caps filter with no format gains
+`format=RGBA`. An element it cannot map is an error, not a silent pass-through.
+
+`analyticsoverlay` has its own properties (`show-label`, `show-track`,
+`show-score`, `show-trail`, `trail-length`, `thickness`, `mask-alpha`), so
+`pyml_overlay`'s do not carry over; pass none and set them on the g2g side.
+
+Build `g2g-launch-py` from a glass2glass checkout and put it on `PATH`, or point
+`G2G_LAUNCH` at it:
+
+```bash
+PYO3_PYTHON=$(which python) cargo build --release -p g2g-python --features ml \
+  --bin g2g-launch-py
+```
+
 ## Pipelines
 
 Below are some sample pipelines for the various elements in this project.

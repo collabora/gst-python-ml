@@ -118,8 +118,13 @@ markers = [
     "serial: run this test on its own, it needs the GPU or a capture device to itself",
 ]
 
+[project.scripts]
+pyml-launch = "pyml_launch:main"
+
 [tool.setuptools]
 include-package-data = true
+py-modules = ["pyml_launch"]
+package-dir = {"" = "plugins/python"}
 
 [tool.setuptools.packages.find]
 where = ["plugins/python"]
