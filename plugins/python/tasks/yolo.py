@@ -193,7 +193,7 @@ class YoloTask(ObjectDetectorTask):
                     )
                 else:
                     self.logger.debug(
-                        f"Stream {stream_idx} - Linked od_mtd {od_mtd.id} to tracking_mtd {tracking_mtd.id}"
+                        f"Stream {stream_idx} - Linked od_mtd {od_mtd} to tracking_mtd {tracking_mtd}"
                     )
 
             if masks is not None:

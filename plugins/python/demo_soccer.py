@@ -770,7 +770,7 @@ class DemoSoccer(BaseObjectDetector):
                 )
             else:
                 self.logger.debug(
-                    f"Stream {stream_idx} - Linked person od_mtd {od_mtd.id} to tracking_mtd {tracking_mtd.id}"
+                    f"Stream {stream_idx} - Linked person od_mtd {od_mtd} to tracking_mtd {tracking_mtd}"
                 )
 
         # Ball tracks (unchanged)
@@ -813,7 +813,7 @@ class DemoSoccer(BaseObjectDetector):
                 )
             else:
                 self.logger.debug(
-                    f"Stream {stream_idx} - Linked ball od_mtd {od_mtd.id} to tracking_mtd {tracking_mtd.id}"
+                    f"Stream {stream_idx} - Linked ball od_mtd {od_mtd} to tracking_mtd {tracking_mtd}"
                 )
 
         # Ball trail - attach as custom GstStructure meta (fixed API, uncommented)
