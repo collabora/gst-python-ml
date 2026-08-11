@@ -128,6 +128,9 @@ def test_video_transform_g2g_process_end_to_end():
     sink = StubMetaSink()
 
     elem = InvertAndDetect()
+    # EngineManager defaults to the pytorch engine, so the first frame would try
+    # to load a model. This test covers the frame plumbing, not inference.
+    elem.engine_name = None
     ret = elem.g2g_process(buf, width, height, "RGB", sink)
 
     assert ret is None
