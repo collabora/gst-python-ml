@@ -1224,38 +1224,33 @@ https://huggingface.co/models?sort=trending&search=Helsinki
 
 `GST_DEBUG=4 gst-launch-1.0 filesrc location=data/prompt_for_llm.txt !  pyml_llm device=cuda model-name="microsoft/phi-2" ! fakesink`
 
-#### Remote LLM (Ollama)
+#### Remote LLM
 
-`pyml_llm_remote` sends text to a remote LLM endpoint via HTTP. Works with Ollama,
-OpenAI-compatible APIs, or any server that speaks the same protocol.
+`pyml_llm_remote` sends text to a remote LLM endpoint via HTTP. The examples use
+the OpenAI-compatible `/v1/chat/completions` path, which Ollama, llama.cpp and
+vLLM all serve, so the same line works against any of them. The element picks the
+request format from the URL: drop `url=` to fall back to its default, Ollama's
+native `/api/generate`.
 
-##### Ollama (default endpoint)
-
-```
-GST_DEBUG=4 gst-launch-1.0 filesrc location=data/prompt_for_llm.txt \
-  ! "text/x-raw,format=utf8" \
-  ! pyml_llm_remote model-name=llama3 \
-  ! fakesink
-```
-
-##### Ollama with system prompt and custom model
-
-```
-GST_DEBUG=4 gst-launch-1.0 filesrc location=data/prompt_for_llm.txt \
-  ! "text/x-raw,format=utf8" \
-  ! pyml_llm_remote model-name=qwen3:8b \
-    system-prompt="You are a helpful assistant. Answer concisely." \
-    temperature=0.5 \
-  ! fakesink
-```
-
-##### OpenAI-compatible endpoint (e.g. Ollama with /v1 API)
+##### Basic call
 
 ```
 GST_DEBUG=4 gst-launch-1.0 filesrc location=data/prompt_for_llm.txt \
   ! "text/x-raw,format=utf8" \
   ! pyml_llm_remote url=http://localhost:11434/v1/chat/completions \
     model-name=llama3 \
+  ! fakesink
+```
+
+##### With a system prompt and a custom model
+
+```
+GST_DEBUG=4 gst-launch-1.0 filesrc location=data/prompt_for_llm.txt \
+  ! "text/x-raw,format=utf8" \
+  ! pyml_llm_remote url=http://localhost:11434/v1/chat/completions \
+    model-name=qwen3:8b \
+    system-prompt="You are a helpful assistant. Answer concisely." \
+    temperature=0.5 \
   ! fakesink
 ```
 
