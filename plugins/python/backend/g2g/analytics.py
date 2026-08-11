@@ -44,12 +44,15 @@ class G2gAnalyticsBackend(AnalyticsBackend):
         self._meta = None
         self._labels = {}  # str -> u32 id
         self._next_id = 0
+        self._published_names = -1
 
     def bind(self, sink):
         """Bind this frame's sink (called per frame by the g2g element bases).
         A fresh relation-meta is created lazily on first `add_relation_meta`."""
         self._sink = sink
         self._meta = None
+        # Each frame gets its own sink, so the names have to be sent again.
+        self._published_names = -1
 
     def quark(self, label):
         """Intern a string label into the `u32` id space the sink expects; ints
@@ -62,6 +65,17 @@ class G2gAnalyticsBackend(AnalyticsBackend):
             self._labels[label] = qid
             self._next_id += 1
         return qid
+
+    def _publish_class_names(self):
+        """Send the interned label names to the sink, so a consumer can show a
+        name instead of an id. Re-sent when a new label is interned mid-frame."""
+        if self._sink is None or self._next_id == self._published_names:
+            return
+        names = [""] * self._next_id
+        for name, qid in self._labels.items():
+            names[qid] = name
+        self._sink.set_class_names(names)
+        self._published_names = self._next_id
 
     def add_relation_meta(self, buf):
         if self._sink is None:
@@ -85,8 +99,10 @@ class G2gAnalyticsBackend(AnalyticsBackend):
         if meta is None:
             return None
         meta.count += 1
+        qid = self.quark(label)
+        self._publish_class_names()
         return meta.sink.add_object(
-            self.quark(label), float(x), float(y), float(w), float(h), float(score)
+            qid, float(x), float(y), float(w), float(h), float(score)
         )
 
     def add_classification(self, meta, index, label):
@@ -95,7 +111,9 @@ class G2gAnalyticsBackend(AnalyticsBackend):
         # The flat sink's add_classification is (label, score); the gst `index`
         # (stream id) has no place in it and is dropped.
         meta.count += 1
-        return meta.sink.add_classification(self.quark(label), 1.0)
+        qid = self.quark(label)
+        self._publish_class_names()
+        return meta.sink.add_classification(qid, 1.0)
 
     def add_tracking(self, meta, track_id, timestamp=None):
         # The host stamps its own arrival time, so the gst `timestamp` is dropped.

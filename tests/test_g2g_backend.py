@@ -39,6 +39,10 @@ class StubMetaSink:
     def __init__(self):
         self.staged = []
         self.relations = []
+        self.class_names = None
+
+    def set_class_names(self, names):
+        self.class_names = list(names)
 
     def _stage(self, record):
         self.staged.append(record)
@@ -133,6 +137,41 @@ def test_analytics_maps_onto_flat_sink():
     assert labels[0] == labels[1], "same string -> same id"
     assert labels[2] != labels[0], "different string -> different id"
     assert sink.objects[0][5] == 0.9
+
+
+def test_class_names_are_published_so_a_consumer_can_name_a_label():
+    sink = StubMetaSink()
+    analytics.bind(sink)
+    meta = analytics.add_relation_meta(buf=None)
+
+    person = analytics.add_object(meta, "person", 1, 2, 3, 4, 0.9)
+    handbag = analytics.add_object(meta, "handbag", 0, 0, 1, 1, 0.5)
+
+    # The table is indexed by the label id staged on the detection, so a
+    # consumer holding only the id can look the name up.
+    names = sink.class_names
+    assert names is not None, "the sink was never sent a name table"
+    assert names[sink.staged[person][1]] == "person"
+    assert names[sink.staged[handbag][1]] == "handbag"
+
+
+def test_class_names_are_resent_for_each_frames_sink():
+    """Each frame gets a fresh sink, so a name interned on an earlier frame has
+    to be published again rather than assumed already known."""
+    first = StubMetaSink()
+    analytics.bind(first)
+    staged = analytics.add_object(
+        analytics.add_relation_meta(None), "person", 1, 2, 3, 4, 0.9
+    )
+    assert first.class_names[first.staged[staged][1]] == "person"
+
+    second = StubMetaSink()
+    analytics.bind(second)
+    staged = analytics.add_object(
+        analytics.add_relation_meta(None), "person", 5, 6, 7, 8, 0.8
+    )
+    assert second.class_names is not None, "the second sink was sent no table"
+    assert second.class_names[second.staged[staged][1]] == "person"
 
 
 def test_tracking_relates_to_its_detection():
