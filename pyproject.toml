@@ -113,6 +113,11 @@ dev = [
     # Add linting, etc., e.g., "ruff"
 ]
 
+[tool.pytest.ini_options]
+markers = [
+    "serial: run this test on its own, it needs the GPU or a capture device to itself",
+]
+
 [tool.setuptools]
 include-package-data = true
 

@@ -12,6 +12,10 @@ import time
 BASE_DIR = Path(__file__).resolve().parent.parent
 LOG_DIR = BASE_DIR / "tests" / "logs"
 
+# Seconds to let a pipeline run. Overridable because a local LLM generating a
+# few hundred tokens takes minutes, not seconds.
+PIPELINE_TIMEOUT = int(os.environ.get("PIPELINE_TIMEOUT", "30"))
+
 # Only these mean the pipeline broke. Warnings are not fatal: plugins unrelated
 # to the pipeline warn during setup and would fail a run that went fine.
 FATAL_LOG_PATTERNS = (
@@ -163,7 +167,7 @@ def test_pipeline(pipeline, tmp_path):
                 cwd=tmp_path,
                 env=env,
             )
-            process.wait(timeout=30)
+            process.wait(timeout=PIPELINE_TIMEOUT)
             return_code = process.returncode
     except subprocess.TimeoutExpired:
         process.terminate()
@@ -172,7 +176,7 @@ def test_pipeline(pipeline, tmp_path):
         except subprocess.TimeoutExpired:
             process.kill()
         pytest.fail(
-            f"Pipeline timed out after 30s. Full pipeline: {pipeline}. See {log_file}"
+            f"Pipeline timed out after {PIPELINE_TIMEOUT}s. Full pipeline: {pipeline}. See {log_file}"
         )
     except Exception as e:
         pytest.fail(
