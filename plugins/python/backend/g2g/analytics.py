@@ -18,8 +18,10 @@ materializes those into the frame's `AnalyticsMeta`. This backend maps the rich
   * the "relation meta" handle is a thin wrapper over the bound sink that counts
     how many records were staged (so `relation_length` works);
   * string labels are interned to the `u32` ids the sink expects (`quark`);
-  * tracking relations and read-back are not represented by the flat sink, so
-    `add_tracking` / `relate` / `read_objects` are no-ops for now.
+  * `add_*` return the sink's own staging handle, which `relate` passes back to
+    pair a detection with its tracking id;
+  * the sink stages straight into the host frame with no read path, so
+    `read_objects` cannot see its own records back.
 """
 
 from backend.analytics import AnalyticsBackend
@@ -82,30 +84,31 @@ class G2gAnalyticsBackend(AnalyticsBackend):
     def add_object(self, meta, label, x, y, w, h, score):
         if meta is None:
             return None
-        meta.sink.add_object(
+        meta.count += 1
+        return meta.sink.add_object(
             self.quark(label), float(x), float(y), float(w), float(h), float(score)
         )
-        meta.count += 1
-        # Opaque handle: the record's index (used only as a relate() endpoint,
-        # which the flat sink does not support).
-        return meta.count - 1
 
     def add_classification(self, meta, index, label):
         if meta is None:
             return None
         # The flat sink's add_classification is (label, score); the gst `index`
         # (stream id) has no place in it and is dropped.
-        meta.sink.add_classification(self.quark(label), 1.0)
         meta.count += 1
-        return meta.count - 1
+        return meta.sink.add_classification(self.quark(label), 1.0)
 
     def add_tracking(self, meta, track_id, timestamp=None):
-        # The flat g2g sink stages no tracking records yet.
-        return None
+        # The host stamps its own arrival time, so the gst `timestamp` is dropped.
+        if meta is None:
+            return None
+        meta.count += 1
+        return meta.sink.add_tracking(int(track_id))
 
     def relate(self, meta, src, dst):
-        # No relation graph in the flat sink.
-        return False
+        if meta is None or src is None or dst is None:
+            return False
+        meta.sink.relate(int(src), int(dst))
+        return True
 
     def read_objects(self, meta):
         # The sink is write-only (staged straight into the host frame); the

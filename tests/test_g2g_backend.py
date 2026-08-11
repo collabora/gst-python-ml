@@ -30,21 +30,45 @@ from backend import (
 
 
 class StubMetaSink:
-    """Stand-in for the host's write-only `g2g.MetaSink`."""
+    """Stand-in for the host's write-only `g2g.MetaSink`.
+
+    Like the real sink, every `add_*` stages one record into a single list and
+    returns its index, which is the handle `relate` takes.
+    """
 
     def __init__(self):
-        self.objects = []
-        self.classifications = []
-        self.blobs = []
+        self.staged = []
+        self.relations = []
+
+    def _stage(self, record):
+        self.staged.append(record)
+        return len(self.staged) - 1
 
     def add_object(self, label, x, y, w, h, score):
-        self.objects.append((label, x, y, w, h, score))
+        return self._stage(("object", label, x, y, w, h, score))
 
     def add_classification(self, label, score):
-        self.classifications.append((label, score))
+        return self._stage(("classification", label, score))
 
     def add_blob(self, header, payload):
-        self.blobs.append((header, payload))
+        return self._stage(("blob", header, payload))
+
+    def add_tracking(self, object_id):
+        return self._stage(("tracking", object_id))
+
+    def relate(self, src, dst):
+        self.relations.append((src, dst))
+
+    def _of_kind(self, kind):
+        return [record[1:] for record in self.staged if record[0] == kind]
+
+    @property
+    def objects(self):
+        return self._of_kind("object")
+
+    @property
+    def blobs(self):
+        return self._of_kind("blob")
 
 
 def test_backend_selected_is_g2g():
@@ -109,6 +133,22 @@ def test_analytics_maps_onto_flat_sink():
     assert labels[0] == labels[1], "same string -> same id"
     assert labels[2] != labels[0], "different string -> different id"
     assert sink.objects[0][5] == 0.9
+
+
+def test_tracking_relates_to_its_detection():
+    sink = StubMetaSink()
+    analytics.bind(sink)
+    meta = analytics.add_relation_meta(buf=None)
+
+    od = analytics.add_object(meta, "person", 1, 2, 3, 4, 0.9)
+    track = analytics.add_tracking(meta, 77)
+    assert analytics.relate(meta, od, track) is True
+
+    # Handles are the sink's own staging indices, so the relation names the
+    # detection and the tracking record that were actually staged.
+    assert sink.staged[od][0] == "object"
+    assert sink.staged[track] == ("tracking", 77)
+    assert sink.relations == [(od, track)]
 
 
 def test_video_transform_g2g_process_end_to_end():
