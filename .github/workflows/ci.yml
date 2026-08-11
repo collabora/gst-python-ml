@@ -26,6 +26,13 @@ jobs:
       - name: Run black check
         run: black --check plugins/ tests/ utils/
 
+      # Scoped to this file on purpose: test_pipelines.py raises on import when
+      # gst-launch-1.0 is missing, which would fail collection for the whole dir.
+      - name: Run g2g backend tests
+        run: |
+          pip install pytest numpy
+          pytest tests/test_g2g_backend.py -q
+
   build:
     needs: lint
     strategy:
