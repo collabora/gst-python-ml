@@ -12,6 +12,14 @@ import time
 BASE_DIR = Path(__file__).resolve().parent.parent
 LOG_DIR = BASE_DIR / "tests" / "logs"
 
+# Only these mean the pipeline broke. Warnings are not fatal: plugins unrelated
+# to the pipeline warn during setup and would fail a run that went fine.
+FATAL_LOG_PATTERNS = (
+    re.compile(r"^ERROR:.*", re.MULTILINE),
+    re.compile(r"^WARNING: erroneous pipeline.*", re.MULTILINE),
+    re.compile(r"^\S+ +\S+ +\S+ +ERROR +python .*", re.MULTILINE),
+)
+
 # Check if gst-launch-1.0 is available
 if not shutil.which("gst-launch-1.0"):
     raise RuntimeError("gst-launch-1.0 not found in PATH. Please install GStreamer.")
@@ -75,6 +83,22 @@ def get_pipelines_from_readme():
 PIPELINES = get_pipelines_from_readme()
 
 
+def absolutize_project_inputs(pipeline):
+    """Point a pipeline's relative input paths at the project directory.
+
+    Lets the pipeline run from the test's tmp dir so its output lands there.
+    Only values that already name a file are rewritten, so output paths and
+    caps strings are left alone.
+    """
+
+    def rewrite(match):
+        key, value = match.group(1), match.group(2)
+        candidate = BASE_DIR / value.strip('"')
+        return f"{key}={candidate}" if candidate.is_file() else match.group(0)
+
+    return re.sub(r"([\w-]+)=([^\s!]+)", rewrite, pipeline)
+
+
 @pytest.mark.serial
 @pytest.mark.parametrize("pipeline", PIPELINES, ids=lambda p: p)
 def test_pipeline(pipeline, tmp_path):
@@ -83,6 +107,7 @@ def test_pipeline(pipeline, tmp_path):
     """
     LOG_DIR.mkdir(parents=True, exist_ok=True)
     os.sync()
+    pipeline = absolutize_project_inputs(pipeline)
     unique_id = uuid.uuid4().hex[:8]
     log_file = LOG_DIR / f"test_{unique_id}.log"
 
@@ -124,6 +149,8 @@ def test_pipeline(pipeline, tmp_path):
     # Set up environment with latency tracer
     env = os.environ.copy()
     env["GST_TRACERS"] = "latency"
+    # Colour escapes land in the log file and break matching on the level field.
+    env["GST_DEBUG_NO_COLOR"] = "1"
 
     # Run the pipeline
     try:
@@ -133,7 +160,7 @@ def test_pipeline(pipeline, tmp_path):
                 shell=True,
                 stdout=log,
                 stderr=subprocess.STDOUT,
-                cwd=BASE_DIR,
+                cwd=tmp_path,
                 env=env,
             )
             process.wait(timeout=30)
@@ -157,15 +184,18 @@ def test_pipeline(pipeline, tmp_path):
         pytest.fail(f"Log file {log_file} was not created. Full pipeline: {pipeline}")
     with open(log_file, "r") as log:
         log_content = log.read()
-        error_lines = [
-            line
-            for line in log_content.splitlines()
-            if "ERROR" in line or "WARN" in line
-        ]
-        if error_lines:
-            pytest.fail(
-                f"Errors/Warnings found in pipeline:\n{''.join(error_lines)}\nFull pipeline: {pipeline}\nSee {log_file}"
-            )
+    failures = [m.group(0) for p in FATAL_LOG_PATTERNS for m in p.finditer(log_content)]
+    if failures:
+        reported = "\n".join(failures)
+        pytest.fail(
+            f"Errors found in pipeline:\n{reported}\nFull pipeline: {pipeline}\nSee {log_file}"
+        )
+
+    # Without this a pipeline that never left PAUSED passes on an empty log.
+    if "Setting pipeline to PLAYING" not in log_content:
+        pytest.fail(
+            f"Pipeline never reached PLAYING. Full pipeline: {pipeline}. See {log_file}"
+        )
 
     # Check exit code
     if return_code != 0:
