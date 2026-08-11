@@ -161,9 +161,12 @@ If using uv, ensure uv uses the **system** Python (not a downloaded one):
 curl -LsSf https://astral.sh/uv/install.sh | sh
 uv venv --python /usr/bin/python3 --system-site-packages
 source .venv/bin/activate
-uv pip install torch torchvision torchaudio --index-url https://download.pytorch.org/whl/cu128
 uv sync
 ```
+
+Do not pre-install torch from the PyTorch CUDA index here. `uv sync` resolves torch
+from `uv.lock` (PyPI), which on Linux already pulls the CUDA wheels, and it will
+replace anything installed beforehand.
 
 #### ONNX Runtime
 
