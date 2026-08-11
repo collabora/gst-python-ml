@@ -38,8 +38,20 @@ if BACKEND == "gst":
         FlowReturn,
         GObject,
     )
+elif BACKEND == "g2g":
+    from backend.g2g import (
+        BaseTransform,
+        BaseAggregator,
+        VideoTransform,
+        analytics,
+        frameio,
+        FlowReturn,
+        GObject,
+    )
 else:
-    raise ImportError(f"Unknown GSTML_BACKEND={BACKEND!r}; supported backends: 'gst'")
+    raise ImportError(
+        f"Unknown GSTML_BACKEND={BACKEND!r}; supported backends: 'gst', 'g2g'"
+    )
 
 __all__ = [
     "BACKEND",
