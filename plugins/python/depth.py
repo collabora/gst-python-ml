@@ -99,7 +99,6 @@ class DepthTransform(VideoTransform, DepthTask):
         raise ValueError("'engine_name' is read-only for pyml_depth")
 
 
-
 if CAN_REGISTER_ELEMENT and backend.BACKEND == "gst":
     __gstelementfactory__ = backend.register_gst_element("pyml_depth", DepthTransform)
 elif not CAN_REGISTER_ELEMENT:

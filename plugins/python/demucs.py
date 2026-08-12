@@ -90,7 +90,9 @@ class Demucs(BaseSeparate):
                 10.0 if not self.streaming else 1.0
             ),  # Smaller segments for streaming
             overlap=0.1,
-        )[0]  # Remove batch dim: (num_sources, 2, length)
+        )[
+            0
+        ]  # Remove batch dim: (num_sources, 2, length)
 
         # Select the desired stem
         idx = engine.sources.index(self.stem)
