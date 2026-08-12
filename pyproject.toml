@@ -105,7 +105,7 @@ all = [
 # Optional
 [dependency-groups]
 test = [
-    "pytest>=7.0",
+    "pytest>=9.0.3",
     # Add other test tools
 ]
 dev = [
