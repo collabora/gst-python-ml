@@ -19,11 +19,12 @@
 from log.global_logger import GlobalLogger
 import backend
 
+from base_caption import BaseCaption
+
 CAN_REGISTER_ELEMENT = True
 try:
     from engine.caption_phi_engine import CaptionPhiEngine
     from engine.engine_factory import EngineFactory
-    from base_caption import BaseCaption
 
 except ImportError as e:
     CAN_REGISTER_ELEMENT = False

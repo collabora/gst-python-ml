@@ -90,6 +90,9 @@ class StubMetaSink:
         return self._of_kind("blob")
 
 
+#: What the shadowed `gi` raises, so a warning naming it means something wanted it.
+NO_PYGOBJECT = "no pygobject"
+
 #: The families that run hosted on g2g, so none of them may need GStreamer.
 HOSTED_ELEMENT_MODULES = [
     "base_translate",
@@ -122,7 +125,7 @@ def test_hosted_elements_import_under_g2g_with_no_pygobject(tmp_path):
     """
     shadow = tmp_path / "gi"
     shadow.mkdir()
-    (shadow / "__init__.py").write_text('raise ImportError("no pygobject")\n')
+    (shadow / "__init__.py").write_text(f'raise ImportError("{NO_PYGOBJECT}")\n')
 
     result = subprocess.run(
         [sys.executable, "-c", "import " + ", ".join(HOSTED_ELEMENT_MODULES)],
@@ -136,7 +139,10 @@ def test_hosted_elements_import_under_g2g_with_no_pygobject(tmp_path):
     )
 
     assert result.returncode == 0, result.stderr
-    assert result.stderr == "", "an element reached for GStreamer at import time"
+    # The shadow raises with this text, so it appears only if something imported gi.
+    assert (
+        NO_PYGOBJECT not in result.stderr
+    ), "an element reached for GStreamer at import time"
 
 
 def test_every_element_module_imports_under_g2g_without_gst_init():
@@ -215,6 +221,8 @@ def test_a_property_set_from_a_pipeline_line_arrives_as_its_declared_type():
 def test_an_element_lists_the_properties_it_declares():
     """The host checks a pipeline against this, so a knob the element has must be
     in it and a name it does not have must not."""
+    pytest.importorskip("gi", reason="the video transform needs it on the gst backend")
+    pytest.importorskip("torch", reason="the depth engine imports it")
     from depth import DepthTransform
 
     declared = DepthTransform().g2g_properties()
