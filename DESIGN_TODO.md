@@ -6,17 +6,18 @@ Python-element host are tracked in that repo's `DESIGN_TODO.md`, under
 
 ## g2g backend coverage
 
-- **Which README pipelines run under `PYML_BACKEND=g2g` is not established
-  yet.** `PYML_BACKEND=g2g uv run pytest tests/test_pipelines.py -q
-  -p no:randomly` gives 11 passing and 67 failing: `pyml_classifier` (6
-  variants), `pyml_inference` (executorch, candle), `pyml_llm` (llamacpp),
-  `pyml_vlm`, `pyml_embedding` (clip, dinov2). Every one of the 67 failures is
-  `PIPELINE_TIMEOUT` firing at 30 s while the model loads, so the split
-  measures the card rather than g2g support. Getting the real answer needs the
-  same suite run under `gst` at the same timeout and diffed: a pipeline that
-  passes on gst and fails on g2g is a genuine gap, one that fails on both is the
-  environment. The full suite takes 10-18 minutes and wants the GPU, so do not
-  run the two backends at once on a 6 GB card.
+- **32 README pipelines run on gst and fail under `PYML_BACKEND=g2g`.**
+  `tests/test_pipelines.py` at a 30 s timeout passes 48 of 79 on gst and 16 on
+  g2g. 31 fail on both, which is the environment rather than g2g, and nothing
+  passes on g2g that fails on gst. Most of the 32 report `pipeline error:
+  Hardware(Other)`, which is how g2g reports a hosted element raising, so each
+  one needs its log in `tests/logs` read to name the cause. `pyml_overlay` is in
+  16 of them, the largest cluster. Two causes known: `pyml_kafkasink` calls
+  `Gst.Pad` APIs directly and dies on `Gst.init`, and `demo_soccer`'s engine
+  raises `TypeError: MLEngine.__init__() got an unexpected keyword argument
+  'device'`. The suite takes about 17 minutes per backend and wants the GPU, so
+  run one backend at a time on a 6 GB card, and keep the machine otherwise idle
+  or the 30 s timeout starts measuring load instead.
 
 - **Eleven elements have no per-frame seam, so they cannot run on g2g at all.**
   `alert`, `tracker`, `vad`, `clap`, `overlay_counter`, `kafkasink`,
@@ -43,3 +44,9 @@ Python-element host are tracked in that repo's `DESIGN_TODO.md`, under
 - **`AnomalyEngine._transform` is assigned only in `do_load_model`**, so
   `_get_transform` raises `AttributeError` on an engine whose model never
   loaded. Pre-existing on both backends.
+
+- **An engine that fails to load its model keeps running with `model=None`**,
+  so the first frame raises somewhere further on instead of naming what went
+  wrong. The README caption line wants `gptqmodel` for its AWQ model; without it
+  `CaptionQwen` logs the load failure, then dies on `captioning returned None`.
+  Failing at load time would name the missing package.
