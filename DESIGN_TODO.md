@@ -6,18 +6,19 @@ Python-element host are tracked in that repo's `DESIGN_TODO.md`, under
 
 ## g2g backend coverage
 
-- **32 README pipelines run on gst and fail under `PYML_BACKEND=g2g`.**
-  `tests/test_pipelines.py` at a 30 s timeout passes 48 of 79 on gst and 16 on
-  g2g. 31 fail on both, which is the environment rather than g2g, and nothing
-  passes on g2g that fails on gst. Most of the 32 report `pipeline error:
-  Hardware(Other)`, which is how g2g reports a hosted element raising, so each
-  one needs its log in `tests/logs` read to name the cause. `pyml_overlay` is in
-  16 of them, the largest cluster. Two causes known: `pyml_kafkasink` calls
-  `Gst.Pad` APIs directly and dies on `Gst.init`, and `demo_soccer`'s engine
-  raises `TypeError: MLEngine.__init__() got an unexpected keyword argument
-  'device'`. The suite takes about 17 minutes per backend and wants the GPU, so
-  run one backend at a time on a 6 GB card, and keep the machine otherwise idle
-  or the 30 s timeout starts measuring load instead.
+- **How many README pipelines run under `PYML_BACKEND=g2g` needs measuring.**
+  Run `tests/test_pipelines.py` under each backend and compare: one that passes
+  on gst and fails on g2g is a gap, one that fails on both is the environment.
+  Only the error categories count as gaps. `pipeline error: Hardware(Other)` is
+  how g2g reports a hosted element raising, so each needs its log in
+  `tests/logs` read to name the cause. Known so far: `pyml_kafkasink` calls
+  `Gst.Pad` APIs directly and dies on `Gst.init`, `demo_soccer`'s engine raises
+  `TypeError: MLEngine.__init__() got an unexpected keyword argument 'device'`,
+  and `pyml_streammux` is refused with `pyelement: more than one input links
+  here, but it is not a registered muxer`. The suite wants the GPU for about 20
+  minutes per backend, so run one backend at a time on a 6 GB card and leave the
+  machine otherwise idle, including between backends: a model still resident
+  from the previous run fails the next one at preroll.
 
 - **Eleven elements have no per-frame seam, so they cannot run on g2g at all.**
   `alert`, `tracker`, `vad`, `clap`, `overlay_counter`, `kafkasink`,
