@@ -24,6 +24,8 @@ materializes those into the frame's `AnalyticsMeta`. This backend maps the rich
     `read_objects` cannot see its own records back.
 """
 
+import threading
+
 from backend.analytics import AnalyticsBackend
 
 
@@ -36,60 +38,82 @@ class _RelationMeta:
         self.count = 0
 
 
+class _Bound:
+    """What one element has staged: the frame's sink, and its label id space."""
+
+    def __init__(self):
+        self.sink = None
+        self.meta = None
+        self.labels = {}  # str -> u32 id
+        self.next_id = 0
+        self.published_names = -1
+
+
 class G2gAnalyticsBackend(AnalyticsBackend):
     """`AnalyticsBackend` mapping detections/classifications onto a `MetaSink`."""
 
     def __init__(self):
-        self._sink = None
-        self._meta = None
-        self._labels = {}  # str -> u32 id
-        self._next_id = 0
-        self._published_names = -1
+        # Per-thread because the host runs one thread per element: one shared
+        # binding would stage an element's detections on another's frame.
+        self._threads = threading.local()
+
+    @property
+    def _bound(self):
+        bound = getattr(self._threads, "bound", None)
+        if bound is None:
+            bound = _Bound()
+            self._threads.bound = bound
+        return bound
 
     def bind(self, sink):
         """Bind this frame's sink (called per frame by the g2g element bases).
         A fresh relation-meta is created lazily on first `add_relation_meta`."""
-        self._sink = sink
-        self._meta = None
+        bound = self._bound
+        bound.sink = sink
+        bound.meta = None
         # Each frame gets its own sink, so the names have to be sent again.
-        self._published_names = -1
+        bound.published_names = -1
 
     def quark(self, label):
         """Intern a string label into the `u32` id space the sink expects; ints
         pass through unchanged (matches the GStreamer GQuark contract)."""
         if isinstance(label, int):
             return label
-        qid = self._labels.get(label)
+        bound = self._bound
+        qid = bound.labels.get(label)
         if qid is None:
-            qid = self._next_id
-            self._labels[label] = qid
-            self._next_id += 1
+            qid = bound.next_id
+            bound.labels[label] = qid
+            bound.next_id += 1
         return qid
 
     def _publish_class_names(self):
         """Send the interned label names to the sink, so a consumer can show a
         name instead of an id. Re-sent when a new label is interned mid-frame."""
-        if self._sink is None or self._next_id == self._published_names:
+        bound = self._bound
+        if bound.sink is None or bound.next_id == bound.published_names:
             return
-        names = [""] * self._next_id
-        for name, qid in self._labels.items():
+        names = [""] * bound.next_id
+        for name, qid in bound.labels.items():
             names[qid] = name
-        self._sink.set_class_names(names)
-        self._published_names = self._next_id
+        bound.sink.set_class_names(names)
+        bound.published_names = bound.next_id
 
     def add_relation_meta(self, buf):
-        if self._sink is None:
+        bound = self._bound
+        if bound.sink is None:
             return None
-        if self._meta is None:
-            self._meta = _RelationMeta(self._sink)
-        return self._meta
+        if bound.meta is None:
+            bound.meta = _RelationMeta(bound.sink)
+        return bound.meta
 
     def get_relation_meta(self, buf):
-        return self._meta
+        return self._bound.meta
 
     def remove_relation_meta(self, buf):
-        had = self._meta is not None
-        self._meta = None
+        bound = self._bound
+        had = bound.meta is not None
+        bound.meta = None
         return had
 
     def relation_length(self, meta):
@@ -134,7 +158,5 @@ class G2gAnalyticsBackend(AnalyticsBackend):
         return []
 
 
-#: The analytics implementation for this backend (shared singleton; the element
-#: bases bind the per-frame sink on it). Defined here, like `frameio`, to avoid a
-#: circular import through `backend`.
+#: Defined here, like `frameio`, to avoid a circular import through `backend`.
 analytics = G2gAnalyticsBackend()

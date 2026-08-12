@@ -18,39 +18,64 @@ delivers one source per `FrameBuffer` (batching is the aggregator's job, via
 `g2g_process_batch`), so `read_frames` always reports a single source.
 """
 
+import threading
+
 import numpy as np
 
 from backend.frameio import FrameIO
 
-# Channel count per pixel-format string (the formats VideoTransform negotiates).
-_CHANNELS = {
-    "RGB": 3,
-    "BGR": 3,
-    "RGBA": 4,
-    "ARGB": 4,
-    "BGRA": 4,
-    "ABGR": 4,
-    "GRAY8": 1,
+#: For each pixel format the host carries: how many channels a pixel takes, and
+#: which of them are R, G and B. `None` for a format with no colour to pick out.
+_FORMATS = {
+    "RGB": (3, (0, 1, 2)),
+    "BGR": (3, (2, 1, 0)),
+    "RGBA": (4, (0, 1, 2)),
+    "ARGB": (4, (1, 2, 3)),
+    "BGRA": (4, (2, 1, 0)),
+    "ABGR": (4, (3, 2, 1)),
+    "GRAY8": (1, None),
 }
+
+
+def as_rgb(frames, fmt):
+    """The RGB view of `frames` the ML elements infer over.
+
+    Nothing converts pixels ahead of a hosted element the way `videoconvert`
+    does in a gst pipeline, so a host format that is not already RGB is reduced
+    here. Read-only: the write-back target is still the original buffer.
+    """
+    channels, rgb = _FORMATS.get((fmt or "RGB").upper(), _FORMATS["RGB"])
+    already_rgb = channels == 3 and rgb == (0, 1, 2)
+    if rgb is None or already_rgb:
+        return frames
+    return frames[..., list(rgb)]
 
 
 class G2gFrameIO(FrameIO):
     """`FrameIO` over the g2g `FrameBuffer` (pixels) and `MetaSink` (blobs)."""
 
     def __init__(self):
-        # The per-frame MetaSink, bound by the element at the top of each
-        # g2g_process call so append_blob has somewhere to put side-data.
-        self._sink = None
-        self._fmt = "RGB"
+        # Per-thread because the host runs one thread per element: one shared
+        # binding would send an element's blobs to whichever element bound last.
+        self._bound = threading.local()
 
     def bind(self, sink, fmt="RGB"):
         """Bind the current frame's sink and pixel format (called per frame by
         the g2g element bases before any read/write)."""
-        self._sink = sink
-        self._fmt = (fmt or "RGB").upper()
+        self._bound.sink = sink
+        self._bound.fmt = (fmt or "RGB").upper()
+
+    @property
+    def _sink(self):
+        return getattr(self._bound, "sink", None)
+
+    @property
+    def _fmt(self):
+        return getattr(self._bound, "fmt", "RGB")
 
     def _channels(self, fmt=None):
-        return _CHANNELS.get((fmt or self._fmt).upper(), 3)
+        channels, _ = _FORMATS.get((fmt or self._fmt).upper(), _FORMATS["RGB"])
+        return channels
 
     def read_frame(self, target, source, width, height):
         c = self._channels()
@@ -83,8 +108,6 @@ class G2gFrameIO(FrameIO):
         return True
 
 
-#: The frame I/O implementation for this backend (shared singleton; the element
-#: bases bind the per-frame sink on it, and leaves use it via `from backend import
-#: frameio`). Defined here (not in the package __init__) so the element bases can
+#: Defined here rather than in the package __init__ so the element bases can
 #: import it without a circular import through `backend`.
 frameio = G2gFrameIO()

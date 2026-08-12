@@ -17,7 +17,7 @@ gst backend drives from `do_transform_ip`).
 """
 
 from backend.g2g.analytics import analytics
-from backend.g2g.frameio import frameio
+from backend.g2g.frameio import as_rgb, frameio
 from backend.core import FrameProcessingMixin
 from backend.g2g.transform import BaseTransform
 
@@ -42,16 +42,6 @@ class VideoTransform(BaseTransform, FrameProcessingMixin):
         frames, num_sources, fmt = frameio.read_frames(buf, None, width, height)
         if frames is None:
             return None
-        # The ML elements are RGB-native (in gst this is guaranteed upstream by
-        # videoconvert + RGB sink caps). The g2g host carries 4-channel packed
-        # formats (RGBA / BGRA); with no convert element in the chain, reduce them
-        # to 3-channel RGB here for inference. Detection is read-only, so the
-        # original buffer (write-back target) is untouched.
-        if frames.ndim == 3 and frames.shape[2] == 4:
-            if fmt.upper() in ("BGRA", "ABGR"):
-                frames = frames[:, :, 2::-1]  # B,G,R(,A) -> R,G,B
-            else:
-                frames = frames[:, :, :3]  # R,G,B,A -> R,G,B
-        self.process_frames(frames, num_sources, fmt, buf)
+        self.process_frames(as_rgb(frames, fmt), num_sources, fmt, buf)
         # Blobs/detections are staged on the sink; no return payload needed.
         return None

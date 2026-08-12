@@ -20,10 +20,10 @@
 format, e.g. object detection).
 
 This file is the GStreamer half of the backend split: the element base
-(`GstBase.BaseTransform`), the GObject property declarations, and the framework
-virtuals (`do_start`, `do_set_caps`). All engine/model logic lives in the
-portable `MLEngineMixin`; the property bodies just read/write its `self._*`
-fields.
+(`GstBase.BaseTransform`) and the framework virtuals (`do_start`). All
+engine/model logic lives in the portable `MLEngineMixin`, and the shared
+tunables come from `ml_property_namespace`, so both backends declare the same
+set from one place.
 """
 
 import gi
@@ -32,7 +32,7 @@ gi.require_version("Gst", "1.0")
 gi.require_version("GstBase", "1.0")
 from gi.repository import GObject, GstBase  # noqa: E402
 
-from backend.core import MLEngineMixin  # noqa: E402
+from backend.core import MLEngineMixin, ml_property_namespace  # noqa: E402
 
 
 class BaseTransform(GstBase.BaseTransform, MLEngineMixin):
@@ -49,109 +49,13 @@ class BaseTransform(GstBase.BaseTransform, MLEngineMixin):
         "Aaron Boxer <aaron.boxer@collabora.com>",
     )
 
+    # unpacked here rather than inherited: pygobject installs a property only
+    # when it sits in the class's own dict
+    locals().update(ml_property_namespace(GObject))
+
     def __init__(self):
         super().__init__()
         self._ml_init()
-
-    @GObject.Property(type=str)
-    def device(self):
-        "Device to run the inference on (cpu, cuda, cuda:0, cuda:1, etc.)"
-        return self.mgr.device
-
-    @device.setter
-    def device(self, value):
-        self.mgr.set_device(value)
-        # todo why is this needed, for example for yolo ?
-        if self.engine_name:
-            self.initialize_engine()
-
-    @GObject.Property(type=int, default=1)
-    def batch_size(self):
-        "Number of items to process in a batch"
-        return self._batch_size
-
-    @batch_size.setter
-    def batch_size(self, value):
-        self._batch_size = value
-        if self.engine:
-            self.engine.batch_size = value
-
-    @GObject.Property(type=int, default=1)
-    def frame_stride(self):
-        "How often to process a frame"
-        return self._frame_stride
-
-    @frame_stride.setter
-    def frame_stride(self, value):
-        self._frame_stride = value
-        if self.engine:
-            self.engine.frame_stride = value
-
-    @GObject.Property(type=str)
-    def model_name(self):
-        "Name of the pre-trained model or local model path"
-        return self._model_name
-
-    @model_name.setter
-    def model_name(self, value):
-        self._model_name = value
-
-    @GObject.Property(type=str)
-    def engine_name(self):
-        "Machine Learning Engine to use : pytorch, tflite, tensorflow, onnx, openvino, tvm, tinygrad, mlx, executorch, llamacpp, candle, jax, or custom engine name"
-        return self.mgr.engine_name
-
-    @engine_name.setter
-    def engine_name(self, value):
-        self.mgr.engine_name = value
-
-    @GObject.Property(type=str, default="auto")
-    def input_format(self):
-        "Input tensor layout: auto, nhwc, or nchw"
-        if self.engine:
-            return self.engine.input_format
-        return "auto"
-
-    @input_format.setter
-    def input_format(self, value):
-        if self.engine:
-            self.engine.input_format = value
-
-    @GObject.Property(type=str, default="auto")
-    def post_process(self):
-        "Post-processing format for raw engine output (auto, none, or a key from detection_decoder)"
-        if self.engine:
-            return self.engine.post_process
-        return "none"
-
-    @post_process.setter
-    def post_process(self, value):
-        if self.engine:
-            self.engine.post_process = value
-
-    @GObject.Property(type=int, default=1)
-    def device_queue_id(self):
-        "ID of the DeviceQueue from the pool to use"
-        return self._device_queue_id
-
-    @device_queue_id.setter
-    def device_queue_id(self, value):
-        self._device_queue_id = value
-        if self.engine:
-            self.engine.device_queue_id = value
-
-    @GObject.Property(type=bool, default=False, nick="compile")
-    def compile(self):
-        "Enable torch.compile optimization for the model"
-        return self._compile
-
-    @compile.setter
-    def compile(self, value):
-        self._compile = value
-        if value:
-            self.kwargs["compile"] = True
-        else:
-            self.kwargs.pop("compile", None)
 
     # GStreamer framework virtual: load the model when the element starts, then
     # run whatever the element itself needs starting (the backend-neutral hook).

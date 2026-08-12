@@ -19,10 +19,10 @@
 """GStreamer backend for the `aggregator` element family (input format differs
 from output format, e.g. audio in / text out).
 
-GStreamer half of the backend split: the element base (`GstBase.Aggregator`),
-the GObject property declarations, and the framework virtuals
-(`do_change_state`, `do_aggregate`, segment handling). Engine/model logic lives
-in the portable `MLEngineMixin`.
+GStreamer half of the backend split: the element base (`GstBase.Aggregator`)
+and the framework virtuals (`do_change_state`, `do_aggregate`, segment
+handling). Engine/model logic lives in the portable `MLEngineMixin`, and the
+shared tunables come from `ml_property_namespace`.
 """
 
 import gi
@@ -32,7 +32,11 @@ gi.require_version("GstBase", "1.0")
 gi.require_version("GLib", "2.0")
 from gi.repository import Gst, GObject, GstBase  # noqa: E402
 
-from backend.core import MLEngineMixin, PayloadProcessingMixin  # noqa: E402
+from backend.core import (  # noqa: E402
+    MLEngineMixin,
+    PayloadProcessingMixin,
+    ml_property_namespace,
+)
 
 
 class PayloadDriver:
@@ -43,10 +47,14 @@ class PayloadDriver:
     work apart from the element that hosts it.
     """
 
+    #: Send output straight out of the element's own src pad instead of through
+    #: the aggregator. Two families have always done that.
+    PUSH_FROM_SRC_PAD = False
+
     def do_process(self, buf):
         """Read the input payload, run the element's `process_payload`, and send
-        each payload it returns as its own buffer, timed like the input.
-        Elements supply `process_payload`, not this."""
+        each payload it returns as its own buffer. Elements supply
+        `process_payload`, not this."""
         try:
             success, map_info = buf.map(Gst.MapFlags.READ)
             if not success:
@@ -59,9 +67,7 @@ class PayloadDriver:
             for output in self.process_payload(payload):
                 outbuf = Gst.Buffer.new_allocate(None, len(output), None)
                 outbuf.fill(0, output)
-                outbuf.pts = buf.pts
-                outbuf.dts = buf.dts
-                outbuf.duration = buf.duration
+                self.stamp_payload(outbuf, buf)
                 self.push_payload(outbuf)
 
             return Gst.FlowReturn.OK
@@ -70,13 +76,32 @@ class PayloadDriver:
             self.logger.error(f"Error processing buffer: {e}")
             return Gst.FlowReturn.ERROR
 
-    def push_payload(self, outbuf):
-        """Send one output buffer downstream.
+    def stamp_payload(self, outbuf, inbuf):
+        """Time one output buffer, the gst spelling of what `meta.emit` takes.
 
-        Through the aggregator by default. An element that has always pushed
-        straight out of the src pad overrides this to keep doing that.
+        An element that generates media of its own length says so through
+        `payload_duration_ns`; that audio runs for as long as it runs and plays
+        wherever the pipeline reaches it, so the input's times say nothing about
+        it. Everything else covers the same stretch of stream as its input.
         """
-        self.finish_buffer(outbuf)
+        duration_ns = self.payload_duration_ns(outbuf.get_size())
+        if duration_ns is None:
+            outbuf.pts = inbuf.pts
+            outbuf.dts = inbuf.dts
+            outbuf.duration = inbuf.duration
+            return
+        outbuf.pts = Gst.CLOCK_TIME_NONE
+        outbuf.dts = Gst.CLOCK_TIME_NONE
+        outbuf.duration = duration_ns
+
+    def push_payload(self, outbuf):
+        """Send one output buffer downstream."""
+        if not self.PUSH_FROM_SRC_PAD:
+            self.finish_buffer(outbuf)
+            return
+        ret = self.srcpad.push(outbuf)
+        if ret != Gst.FlowReturn.OK:
+            raise RuntimeError(f"Error pushing payload to pipeline: {ret}")
 
 
 class BaseAggregator(
@@ -95,86 +120,14 @@ class BaseAggregator(
         "Aaron Boxer <aaron.boxer@collabora.com>",
     )
 
+    # unpacked here rather than inherited: pygobject installs a property only
+    # when it sits in the class's own dict
+    locals().update(ml_property_namespace(GObject))
+
     def __init__(self):
         super().__init__()
         self._ml_init()
         self.segment_pushed = False
-
-    @GObject.Property(type=str)
-    def device(self):
-        "Device to run the inference on (cpu, cuda, cuda:0, cuda:1, etc.)"
-        return self.mgr.device
-
-    @device.setter
-    def device(self, value):
-        self.mgr.set_device(value)
-        # todo why is this needed ?
-        if self.engine_name:
-            self.initialize_engine()
-
-    @GObject.Property(type=int, default=1)
-    def batch_size(self):
-        "Number of items to process in a batch"
-        return self._batch_size
-
-    @batch_size.setter
-    def batch_size(self, value):
-        self._batch_size = value
-        if self.engine:
-            self.engine.batch_size = value
-
-    @GObject.Property(type=int, default=1)
-    def frame_stride(self):
-        "How often to process a frame"
-        return self._frame_stride
-
-    @frame_stride.setter
-    def frame_stride(self, value):
-        self._frame_stride = value
-        if self.engine:
-            self.engine.frame_stride = value
-
-    @GObject.Property(type=str)
-    def model_name(self):
-        "Name of the pre-trained model or local model path"
-        return self._model_name
-
-    @model_name.setter
-    def model_name(self, value):
-        self._model_name = value
-
-    @GObject.Property(type=str)
-    def engine_name(self):
-        "Machine Learning Engine to use : pytorch, tflite, tensorflow, onnx or openvino, or custom engine name"
-        return self.mgr.engine_name
-
-    @engine_name.setter
-    def engine_name(self, value):
-        self.mgr.engine_name = value
-
-    @GObject.Property(type=int, default=1)
-    def device_queue_id(self):
-        "ID of the DeviceQueue from the pool to use"
-        return self._device_queue_id
-
-    @device_queue_id.setter
-    def device_queue_id(self, value):
-        self._device_queue_id = value
-        if self.engine:
-            self.engine.device_queue_id = value
-
-    @GObject.Property(type=bool, default=False, nick="compile")
-    def compile(self):
-        "Enable torch.compile optimization for the model"
-        return self._compile
-
-    @compile.setter
-    def compile(self, value):
-        self._compile = value
-        if value:
-            self.kwargs["compile"] = True
-        else:
-            self.kwargs.pop("compile", None)
 
     # GStreamer framework virtual: load the model on NULL -> READY.
     def do_change_state(self, transition):

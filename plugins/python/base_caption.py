@@ -17,25 +17,29 @@
 # Boston, MA 02110-1301, USA.
 
 
-import gi
-
-gi.require_version("Gst", "1.0")
-gi.require_version("GstBase", "1.0")
-gi.require_version("GstVideo", "1.0")
-
-from gi.repository import Gst, GObject, GstBase  # noqa: E402
-import backend  # noqa: E402
-from backend import analytics, frameio  # noqa: E402
+import backend
+from backend import GObject, analytics
 from video_transform import VideoTransform
 
-# Building a Gst object needs Gst.init, which only the gst backend calls.
+# The text pad is a GStreamer request pad: a hosted element on g2g has one
+# source pad and stages its caption as metadata instead.
 if backend.BACKEND == "gst":
+    import gi
+
+    gi.require_version("Gst", "1.0")
+    gi.require_version("GstBase", "1.0")
+    from gi.repository import Gst, GstBase  # noqa: E402
+
     TEXT_CAPS = Gst.Caps.from_string("text/x-raw, format=utf8")
+
+#: How long a caption stays on screen. Long enough that the subtitle is still up
+#: when the next frame's caption arrives.
+CAPTION_DURATION_SECONDS = 60
 
 
 class BaseCaption(VideoTransform):
     """
-    Base GStreamer element for captioning video frames.
+    Base element for captioning video frames.
     """
 
     __gstmetadata__ = (
@@ -87,6 +91,75 @@ class BaseCaption(VideoTransform):
             "The 'engine_name' property cannot be set in this derived class."
         )
 
+    def forward(self, frames):
+        return self.engine.do_forward(frames) if self.engine else None
+
+    def process_frames(self, frames, num_sources, fmt, target):
+        """Caption each source, staging one classification per caption.
+
+        Captions carry no pixels and no blob, so this replaces the shared
+        infer-decode-write body rather than filling in `decode`.
+        """
+        result = self.forward(frames)
+        if result is None:
+            raise RuntimeError(f"{type(self).__name__}: captioning returned None")
+
+        captions = result if isinstance(result, list) else [result] * num_sources
+        if len(captions) != num_sources:
+            raise RuntimeError(f"expected {num_sources} captions, got {len(captions)}")
+
+        meta = analytics.add_relation_meta(target)
+        if meta is None:
+            self.logger.error("Failed to add analytics metadata to buffer")
+            return
+
+        for index, caption in enumerate(captions):
+            if not caption:
+                self.logger.warning(f"stream {index}: no caption generated")
+                continue
+            label = caption if num_sources == 1 else f"stream_{index}_{caption}"
+            if analytics.add_classification(meta, index, label) is None:
+                self.logger.error(f"stream {index}: failed to add the caption")
+            else:
+                self.logger.info(f"stream {index}: added caption {caption}")
+
+        self.push_captions(captions, target)
+
+    def push_captions(self, captions, buf):
+        """Send each caption out the text pad, one buffer per source.
+
+        The caption is staged as metadata either way, so the pad is an extra:
+        nothing to do unless something asked for it, which is also what makes
+        this a no-op on a backend that has no request pads.
+        """
+        if self.text_src_pad is None:
+            return
+
+        if buf.pts == Gst.CLOCK_TIME_NONE:
+            buf.pts = Gst.util_uint64_scale(
+                Gst.util_get_timestamp(),
+                1,  # framerate_denom
+                30 * Gst.SECOND,  # framerate_num
+            )
+        if buf.duration == Gst.CLOCK_TIME_NONE:
+            buf.duration = Gst.SECOND // 30  # framerate_num
+
+        share = buf.duration // len(captions)
+        for index, caption in enumerate(captions):
+            if caption:
+                self.push_text_buffer(caption, buf.pts + index * share, buf.dts)
+
+    def push_text_buffer(self, text, pts, dts):
+        """Push one caption to the `text_src` pad, timed with its video frame."""
+        text_buffer = Gst.Buffer.new_wrapped(text.encode("utf-8"))
+        text_buffer.pts = pts
+        text_buffer.dts = dts
+        text_buffer.duration = CAPTION_DURATION_SECONDS * Gst.SECOND
+
+        ret = self.text_src_pad.push(text_buffer)
+        if ret != Gst.FlowReturn.OK:
+            self.logger.warning(f"Failed to push text buffer: {ret}")
+
     def do_request_new_pad(self, template, name, caps):
         if self.text_src_pad:
             self.logger.error("Element already has a text_src")
@@ -105,147 +178,6 @@ class BaseCaption(VideoTransform):
         self.remove_pad(pad)
         pad.set_active(False)
         self.text_src_pad = None
-
-    def push_text_buffer(self, text, buf_pts, buf_dts, buf_duration):
-        """
-        Pushes a text buffer to the `text_src` pad with proper timestamps.
-
-        Args:
-            text (str): The text to push as a buffer.
-            buf_pts (int): The PTS of the associated video buffer.
-            buf_duration (int): The duration of the associated video buffer.
-        """
-        text_buffer = Gst.Buffer.new_wrapped(text.encode("utf-8"))
-
-        # Set the text buffer timestamps
-        text_buffer.pts = buf_pts
-        text_buffer.dts = buf_dts
-        # Put a long duration so the subtitles are visible
-        text_buffer.duration = 60 * Gst.SECOND
-
-        # Push the buffer
-        ret = self.text_src_pad.push(text_buffer)
-        if ret != Gst.FlowReturn.OK:
-            self.logger.warning(f"Failed to push text buffer: {ret}")
-
-    def do_transform_ip(self, buf):
-        """
-        In-place transformation for captioning inference, extracting frame(s)
-        through the backend frame I/O.
-        """
-        try:
-            # Extract frame(s) through the backend's frame I/O.
-            frames, num_sources, _ = frameio.read_frames(
-                buf, self.sinkpad, self.width, self.height
-            )
-            if frames is None:
-                self.logger.error("Failed to extract frames")
-                return Gst.FlowReturn.ERROR
-
-            # Set timestamps if none are set
-            if buf.pts == Gst.CLOCK_TIME_NONE:
-                buf.pts = Gst.util_uint64_scale(
-                    Gst.util_get_timestamp(),
-                    1,  # framerate_denom
-                    30 * Gst.SECOND,  # framerate_num
-                )
-            if buf.duration == Gst.CLOCK_TIME_NONE:
-                buf.duration = Gst.SECOND // 30  # framerate_num
-
-            # Process frames (single or batch)
-            if num_sources == 1:
-                # Single-frame case
-                frame = frames
-                if self.engine:
-                    result = self.engine.do_forward(frame)
-                    if result:
-                        self.caption = result
-                        meta = analytics.add_relation_meta(buf)
-                        if meta:
-                            mtd = analytics.add_classification(meta, 0, f"{result}")
-                            if mtd is not None:
-                                self.logger.info(f"Successfully added caption {result}")
-                            else:
-                                self.logger.error(
-                                    "Failed to add classification metadata"
-                                )
-                        else:
-                            self.logger.error(
-                                "Failed to add GstAnalytics metadata to buffer"
-                            )
-
-                        # Push text buffer if text_src pad is linked
-                        if self.text_src_pad:
-                            self.push_text_buffer(
-                                self.caption, buf.pts, buf.dts, buf.duration
-                            )
-                        else:
-                            self.logger.warning(
-                                "TextExtract: text_src pad is not linked, cannot push text buffer."
-                            )
-            else:
-                # Batch case
-                self.logger.info(f"Processing batch with num_sources={num_sources}")
-                if self.engine:
-                    results = self.engine.do_forward(frames)
-                    if results is None:
-                        self.logger.error("Inference returned None")
-                        return Gst.FlowReturn.ERROR
-
-                    # Ensure results is a list for batch processing
-                    results_list = (
-                        results
-                        if isinstance(results, list)
-                        else [results] * num_sources
-                    )
-                    if len(results_list) != num_sources:
-                        self.logger.error(
-                            f"Expected {num_sources} results, got {len(results_list)}"
-                        )
-                        return Gst.FlowReturn.ERROR
-
-                    for idx, result in enumerate(results_list):
-                        if result:
-                            caption = result
-                            meta = analytics.add_relation_meta(buf)
-                            if meta:
-                                mtd = analytics.add_classification(
-                                    meta, idx, f"stream_{idx}_{result}"
-                                )
-                                if mtd is not None:
-                                    self.logger.info(
-                                        f"Stream {idx}: Successfully added caption {result}"
-                                    )
-                                else:
-                                    self.logger.error(
-                                        f"Stream {idx}: Failed to add classification metadata"
-                                    )
-                            else:
-                                self.logger.error(
-                                    f"Stream {idx}: Failed to add GstAnalytics metadata"
-                                )
-
-                            # Push text buffer for each frame
-                            if self.text_src_pad:
-                                # Adjust PTS for each frame in the batch
-                                frame_pts = buf.pts + (
-                                    idx * (buf.duration // num_sources)
-                                )
-                                self.push_text_buffer(
-                                    caption, frame_pts, buf.duration // num_sources
-                                )
-                            else:
-                                self.logger.warning(
-                                    f"Stream {idx}: TextExtract: text_src pad is not linked, cannot push text buffer."
-                                )
-                        else:
-                            self.logger.warning(f"Stream {idx}: No caption generated")
-
-            return Gst.FlowReturn.OK
-
-        except Exception as e:
-            self.logger.error(f"Error during transformation: {e}")
-            return Gst.FlowReturn.ERROR
 
     def do_sink_event(self, event):
         if self.text_src_pad:

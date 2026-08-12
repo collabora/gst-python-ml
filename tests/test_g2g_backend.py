@@ -90,12 +90,14 @@ class StubMetaSink:
         return self._of_kind("blob")
 
 
-PAYLOAD_ELEMENT_MODULES = [
+#: The families that run hosted on g2g, so none of them may need GStreamer.
+HOSTED_ELEMENT_MODULES = [
     "base_translate",
     "base_transcribe",
     "base_llm",
     "base_separate",
     "base_tts",
+    "base_caption",
     "mariantranslate",
     "whispertranscribe",
     "whisperlive",
@@ -104,31 +106,37 @@ PAYLOAD_ELEMENT_MODULES = [
     "sepformer",
     "coquitts",
     "whisperspeechtts",
+    "caption_phi",
+    "caption_qwen",
 ]
 
 
-def test_payload_elements_import_under_g2g_without_gst_init():
-    """A fresh interpreter, because this check cannot be honest in-process.
+def test_hosted_elements_import_under_g2g_with_no_pygobject(tmp_path):
+    """A fresh interpreter, with `gi` shadowed by one that refuses to import.
 
-    The g2g host never calls `Gst.init`, and building a `Gst.Caps` or a pad
-    template without it raises, or for `Gst.PadTemplate.new` takes the process
-    down. Once any test here has initialised Gst, every one of these imports
-    succeeds whether or not the element guards its Gst construction, so the
-    check only means anything in a process that never did.
+    In-process the check cannot be honest: once any test here has initialised
+    Gst, these imports succeed whether or not the element guards its Gst
+    construction. Shadowing `gi` rather than just checking stderr also makes an
+    element that reaches for GStreamer fail here, instead of quietly depending
+    on a pygobject that happens to be installed.
     """
-    # every element module imports gi at module scope, so without it the import
-    # fails for a reason this is not looking for
-    pytest.importorskip("gi", reason="the element modules import it at module scope")
+    shadow = tmp_path / "gi"
+    shadow.mkdir()
+    (shadow / "__init__.py").write_text('raise ImportError("no pygobject")\n')
 
     result = subprocess.run(
-        [sys.executable, "-c", "import " + ", ".join(PAYLOAD_ELEMENT_MODULES)],
-        env={**os.environ, "PYML_BACKEND": "g2g", "PYTHONPATH": str(PLUGIN_DIR)},
+        [sys.executable, "-c", "import " + ", ".join(HOSTED_ELEMENT_MODULES)],
+        env={
+            **os.environ,
+            "PYML_BACKEND": "g2g",
+            "PYTHONPATH": os.pathsep.join([str(tmp_path), str(PLUGIN_DIR)]),
+        },
         capture_output=True,
         text=True,
     )
 
     assert result.returncode == 0, result.stderr
-    assert result.stderr == "", "something built a Gst object at import time"
+    assert result.stderr == "", "an element reached for GStreamer at import time"
 
 
 def test_every_element_module_imports_under_g2g_without_gst_init():
@@ -179,6 +187,42 @@ def test_gobject_property_shim_decorator_and_attribute_forms():
     assert w.size == 7  # attribute-form default
     w.size = 42
     assert w.size == 42
+
+
+def test_a_property_set_from_a_pipeline_line_arrives_as_its_declared_type():
+    """The host cannot know a hosted class's property types, so it forwards the
+    text a pipeline line carries and the declaration here converts it."""
+
+    class Widget:
+        count = GObject.Property(type=int, default=1)
+        enabled = GObject.Property(type=bool, default=False)
+        ratio = GObject.Property(type=float, default=0.0)
+        name = GObject.Property(type=str, default="")
+
+    w = Widget()
+    w.count, w.enabled, w.ratio, w.name = "4", "TRUE", "0.5", "3"
+    assert (w.count, w.enabled, w.ratio, w.name) == (4, True, 0.5, "3")
+
+    w.enabled = "no"
+    assert w.enabled is False
+    w.count = 9  # already typed, set from Python
+    assert w.count == 9
+
+    with pytest.raises(ValueError, match="enabled"):
+        w.enabled = "maybe"
+
+
+def test_an_element_lists_the_properties_it_declares():
+    """The host checks a pipeline against this, so a knob the element has must be
+    in it and a name it does not have must not."""
+    from depth import DepthTransform
+
+    declared = DepthTransform().g2g_properties()
+
+    assert "colormap" in declared, "the element's own knob"
+    assert "batch_size" in declared, "one it inherits from the shared tunables"
+    assert "speaker" not in declared, "a detector has no speaker"
+    assert len(declared) == len(set(declared)), "an overridden property listed twice"
 
 
 def test_frameio_read_write_round_trip():
@@ -296,6 +340,102 @@ def test_video_transform_g2g_process_end_to_end():
     assert len(sink.objects) == 1
     assert sink.objects[0][5] == 0.99
     assert elem.width == width and elem.height == height
+
+
+def test_aggregator_drives_the_same_hook_a_transform_fills_in():
+    """The N-source case spells the same on both backends: one `process_frames`
+    taking (H, W, C) for a single source and (N, H, W, C) for several."""
+    seen = []
+
+    class Batching(BaseAggregator):
+        def process_frames(self, frames, num_sources, fmt, target):
+            seen.append((frames.shape, num_sources, fmt))
+
+    width, height = 4, 3
+    elem = Batching()
+    elem.engine_name = None
+
+    buffers = [bytearray([n] * (width * height * 3)) for n in (1, 2)]
+    elem.g2g_process_batch(buffers, width, height, "RGB", StubMetaSink())
+    elem.g2g_process_batch(buffers[:1], width, height, "RGB", StubMetaSink())
+
+    assert seen == [
+        ((2, height, width, 3), 2, "RGB"),
+        ((height, width, 3), 1, "RGB"),
+    ]
+
+
+def test_g2g_caption_stages_the_caption_on_the_frame():
+    """The caption family runs on the shared per-frame seam, so it works with no
+    text pad and no GStreamer: the caption is staged as a classification."""
+    from base_caption import BaseCaption
+
+    class FakeCaption(BaseCaption):
+        def forward(self, frames):
+            return "a cat on a mat"
+
+    leaf = FakeCaption()
+    leaf.mgr.engine_name = None  # the fake above is the model
+    sink = StubMetaSink()
+    width, height = 4, 3
+
+    leaf.g2g_process(bytearray(width * height * 4), width, height, "RGBA", sink)
+
+    captions = [record for record in sink.staged if record[0] == "classification"]
+    assert len(captions) == 1, "the caption was not staged"
+    assert sink.class_names[captions[0][1]] == "a cat on a mat"
+
+
+def test_a_packed_frame_is_reduced_to_rgb_in_channel_order():
+    from backend.g2g.frameio import as_rgb
+
+    pixel = np.array([[[10, 20, 30, 40]]], dtype=np.uint8)
+
+    assert as_rgb(pixel, "RGBA").tolist() == [[[10, 20, 30]]]
+    assert as_rgb(pixel, "BGRA").tolist() == [[[30, 20, 10]]]
+    assert as_rgb(pixel, "ARGB").tolist() == [[[20, 30, 40]]]
+    assert as_rgb(pixel, "ABGR").tolist() == [[[40, 30, 20]]]
+
+    rgb = np.array([[[10, 20, 30]]], dtype=np.uint8)
+    assert as_rgb(rgb, "RGB") is rgb, "an RGB frame is handed over untouched"
+    assert as_rgb(rgb, "BGR").tolist() == [[[30, 20, 10]]]
+
+
+def test_two_elements_on_their_own_threads_keep_their_own_sinks():
+    """The host runs one thread per element, so a binding made on one thread must
+    not redirect what another thread stages."""
+    import threading
+
+    sinks = {}
+    staged = {}
+    start = threading.Barrier(2)
+    bound = threading.Barrier(2)
+
+    def stage(name, label):
+        sinks[name] = StubMetaSink()
+        start.wait()
+        analytics.bind(sinks[name])
+        frameio.bind(sinks[name], "RGB")
+        # Both threads have bound before either stages anything, so a shared
+        # binding would send both records to whichever bound last.
+        bound.wait()
+        analytics.add_object(analytics.add_relation_meta(None), label, 0, 0, 1, 1, 1.0)
+        frameio.append_blob(bytearray(4), "tag", label.encode())
+        staged[name] = sinks[name].staged
+
+    threads = [
+        threading.Thread(target=stage, args=(name, label))
+        for name, label in (("first", "person"), ("second", "handbag"))
+    ]
+    for thread in threads:
+        thread.start()
+    for thread in threads:
+        thread.join()
+
+    assert len(staged["first"]) == 2, "the first element lost a record to the second"
+    assert len(staged["second"]) == 2
+    assert sinks["first"].blobs == [("tag", b"person")]
+    assert sinks["second"].blobs == [("tag", b"handbag")]
 
 
 class RecordingLogger:

@@ -22,6 +22,16 @@ treats as success/failure of a frame.
 
 from enum import IntEnum, IntFlag
 
+#: How a pipeline line spells a bool, matching what the g2g host accepts.
+BOOL_SPELLINGS = {
+    "true": True,
+    "1": True,
+    "yes": True,
+    "false": False,
+    "0": False,
+    "no": False,
+}
+
 
 class ParamFlags(IntFlag):
     """The `GObject.ParamFlags` leaves pass to `Property`, accepted and ignored."""
@@ -54,15 +64,17 @@ class Property:
 
         broker = GObject.Property(type=str, default=None, nick="...", blurb="...")
 
-    Values back a per-instance ``_g2gprop_<name>`` attribute. The ``type`` /
-    ``default`` / ``nick`` / ``blurb`` / ``minimum`` / ``maximum`` keywords are
-    accepted for source compatibility and otherwise ignored (no GObject type
-    system here).
+    Values back a per-instance ``_g2gprop_<name>`` attribute. The ``nick`` /
+    ``blurb`` / ``minimum`` / ``maximum`` keywords are accepted for source
+    compatibility and otherwise ignored (no GObject type system here), but
+    ``type`` is kept: the host cannot know it, so a value off a pipeline line
+    arrives as text and is converted here.
     """
 
     def __init__(self, fget=None, *, type=None, default=None, **_gst_meta):
         self._fget = fget
         self._fset = None
+        self._type = type
         self._default = default
         self._name = None
 
@@ -90,10 +102,27 @@ class Property:
         return getattr(obj, self._slot(), self._default)
 
     def __set__(self, obj, value):
+        value = self._converted(value)
         if self._fset is not None:
             self._fset(obj, value)
         else:
             setattr(obj, self._slot(), value)
+
+    def _converted(self, value):
+        """The value as the declared type, for one that arrived as text.
+
+        The host forwards a pipeline line's `key=value` verbatim, since only this
+        class knows what type the property is. Anything already of the right type
+        (a value set from Python) is left alone.
+        """
+        if self._type in (None, str) or not isinstance(value, str):
+            return value
+        if self._type is bool:
+            spelled = BOOL_SPELLINGS.get(value.strip().lower())
+            if spelled is None:
+                raise ValueError(f"{self._name}: {value!r} is not true or false")
+            return spelled
+        return self._type(value)
 
 
 class _GObjectShim:

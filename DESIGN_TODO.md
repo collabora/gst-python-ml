@@ -27,10 +27,11 @@ Python-element host are tracked in that repo's `DESIGN_TODO.md`, under
   `overlay_counter` inherits `overlay`, which the launcher rewrites to g2g's
   native `analyticsoverlay`, so the plain overlay line works regardless.
 
-- **`wavparse` will not negotiate an audio payload pipeline.**
-  `filesrc ! wavparse ! pyelement ...` fails `NoConsistentFixation` whatever the
-  caps string says. Not investigated, and it blocks every audio-in README
-  pipeline on g2g.
+- **A hosted element's properties are only checked once its class loads.** The
+  g2g host takes any name it does not read itself and hands it to the Python
+  class, which is the only thing that knows the real set, so a typo fails at
+  pipeline start rather than at parse. `gst-inspect` on `pyelement` lists the
+  host's own properties and says the rest come from the class.
 
 ## Elements
 

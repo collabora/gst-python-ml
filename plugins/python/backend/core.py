@@ -36,6 +36,118 @@ non-GStreamer backend.
 from engine.engine_manager import EngineManager
 from log.logger_factory import LoggerFactory
 
+#: A tunable the element stores and mirrors onto the engine under the same name:
+#: ``(name, type, default, blurb)``.
+ENGINE_TUNABLES = (
+    ("batch_size", int, 1, "Number of items to process in a batch"),
+    ("frame_stride", int, 1, "How often to process a frame"),
+    ("device_queue_id", int, 1, "ID of the DeviceQueue from the pool to use"),
+)
+
+
+def _engine_tunable(gobject, name, value_type, default, blurb):
+    field = f"_{name}"
+
+    def get(self):
+        return getattr(self, field)
+
+    def set(self, value):
+        setattr(self, field, value)
+        if self.engine:
+            setattr(self.engine, name, value)
+
+    # pygobject takes the property's name off the getter
+    get.__name__ = name
+    return gobject.Property(get, type=value_type, default=default, blurb=blurb).setter(
+        set
+    )
+
+
+def ml_property_namespace(gobject):
+    """The tunables every ML element takes, declared with `gobject`'s `Property`.
+
+    Returned as a namespace for an element base to unpack into its class body,
+    not as a mixin to inherit: pygobject installs a property only when it sits
+    in the class's own dict, so an inherited one leaves a gst element with none
+    of these. Both backends build their bases from this call, so a knob cannot
+    exist on one and not the other.
+    """
+
+    @gobject.Property(type=str)
+    def device(self):
+        "Device to run the inference on (cpu, cuda, cuda:0, cuda:1, etc.)"
+        return self.mgr.device
+
+    @device.setter
+    def device(self, value):
+        self.mgr.set_device(value)
+        # TODO: why is this needed, for example for yolo?
+        if self.mgr.engine_name:
+            self.initialize_engine()
+
+    @gobject.Property(type=str)
+    def model_name(self):
+        "Name of the pre-trained model or local model path"
+        return self._model_name
+
+    @model_name.setter
+    def model_name(self, value):
+        self._model_name = value
+
+    @gobject.Property(type=str)
+    def engine_name(self):
+        "Machine Learning Engine to use : pytorch, tflite, tensorflow, onnx, openvino, tvm, tinygrad, mlx, executorch, llamacpp, candle, jax, or custom engine name"
+        return self.mgr.engine_name
+
+    @engine_name.setter
+    def engine_name(self, value):
+        self.mgr.engine_name = value
+
+    @gobject.Property(type=str, default="auto")
+    def input_format(self):
+        "Input tensor layout: auto, nhwc, or nchw"
+        return self.engine.input_format if self.engine else "auto"
+
+    @input_format.setter
+    def input_format(self, value):
+        if self.engine:
+            self.engine.input_format = value
+
+    @gobject.Property(type=str, default="auto")
+    def post_process(self):
+        "Post-processing format for raw engine output (auto, none, or a key from detection_decoder)"
+        return self.engine.post_process if self.engine else "auto"
+
+    @post_process.setter
+    def post_process(self, value):
+        if self.engine:
+            self.engine.post_process = value
+
+    @gobject.Property(type=bool, default=False)
+    def compile(self):
+        "Enable torch.compile optimization for the model"
+        return self._compile
+
+    @compile.setter
+    def compile(self, value):
+        self._compile = value
+        if value:
+            self.kwargs["compile"] = True
+        else:
+            self.kwargs.pop("compile", None)
+
+    namespace = {
+        "device": device,
+        "model_name": model_name,
+        "engine_name": engine_name,
+        "input_format": input_format,
+        "post_process": post_process,
+        "compile": compile,
+    }
+    for name, value_type, default, blurb in ENGINE_TUNABLES:
+        namespace[name] = _engine_tunable(gobject, name, value_type, default, blurb)
+    return namespace
+
 
 class FrameProcessingMixin:
     """The per-frame work a video element does, shared by every backend.

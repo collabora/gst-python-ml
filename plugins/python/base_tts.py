@@ -19,19 +19,21 @@
 from abc import abstractmethod
 import io
 import asyncio
-import gi
 
+import backend
+from backend import GObject
 from base_aggregator import BaseAggregator
 
-gi.require_version("Gst", "1.0")
-gi.require_version("GstBase", "1.0")
-gi.require_version("GstAudio", "1.0")
-from gi.repository import Gst, GstBase, GstAudio  # noqa: E402
+if backend.BACKEND == "gst":
+    import gi
 
-import backend  # noqa: E402
-from backend import GObject  # noqa: E402
+    gi.require_version("Gst", "1.0")
+    gi.require_version("GstBase", "1.0")
+    gi.require_version("GstAudio", "1.0")
+    from gi.repository import Gst, GstBase, GstAudio  # noqa: E402
 
 BYTES_PER_SAMPLE = 2  # S16LE, the format every subclass produces
+NANOSECONDS_PER_SECOND = 1_000_000_000
 
 
 class BaseTts(BaseAggregator):
@@ -41,6 +43,8 @@ class BaseTts(BaseAggregator):
         "Parent TTS class",
         "Aaron Boxer <aaron.boxer@collabora.com>",
     )
+
+    PUSH_FROM_SRC_PAD = True
 
     # the sink pad caps, stated once for both backends; each subclass declares
     # the audio it produces
@@ -125,25 +129,7 @@ class BaseTts(BaseAggregator):
 
     def payload_duration_ns(self, payload_size):
         samples = payload_size // BYTES_PER_SAMPLE
-        return int(samples / self.do_get_sample_rate() * Gst.SECOND)
-
-    def push_payload(self, outbuf):
-        """Generated speech runs for its own length and is played whenever the
-        pipeline reaches it. The text buffer it came from says neither, so the
-        timing the driver copied over is replaced here."""
-        try:
-            outbuf.pts = Gst.CLOCK_TIME_NONE
-            outbuf.dts = Gst.CLOCK_TIME_NONE
-            outbuf.duration = self.payload_duration_ns(outbuf.get_size())
-
-            ret = self.srcpad.push(outbuf)
-            if ret != Gst.FlowReturn.OK:
-                raise RuntimeError(f"Error pushing audio to pipeline: {ret}")
-
-            self.logger.info("TTS: audio generated and pushed downstream successfully.")
-
-        except Exception as e:
-            self.logger.error(f"Error pushing audio to pipeline: {e}")
+        return int(samples / self.do_get_sample_rate() * NANOSECONDS_PER_SECOND)
 
     async def process_transcript(self, transcript):
         import soundfile as sf

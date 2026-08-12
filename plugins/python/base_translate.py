@@ -17,14 +17,17 @@
 # Boston, MA 02110-1301, USA.
 
 from abc import abstractmethod
-import gi
 
 import backend
+from backend import GObject
 from base_aggregator import BaseAggregator
 
-gi.require_version("Gst", "1.0")
-gi.require_version("GstBase", "1.0")
-from gi.repository import Gst, GObject, GstBase  # noqa: E402
+if backend.BACKEND == "gst":
+    import gi
+
+    gi.require_version("Gst", "1.0")
+    gi.require_version("GstBase", "1.0")
+    from gi.repository import Gst, GstBase  # noqa: E402
 
 
 class BaseTranslate(BaseAggregator):

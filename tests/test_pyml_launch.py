@@ -5,6 +5,7 @@ plugin that stops declaring `register_gst_element` fails a test rather than
 silently dropping out of the map.
 """
 
+import subprocess
 import sys
 from pathlib import Path
 
@@ -137,6 +138,17 @@ def test_a_sink_drops_the_clock_properties_g2g_has_no_counterpart_for(shells):
 def test_a_sink_asked_to_wait_on_the_clock_is_refused(shells):
     with pytest.raises(SystemExit, match="clocksync"):
         pyml_launch.rewrite_segment("autovideosink sync=true", shells)
+
+
+def test_a_hosted_element_named_like_a_sink_keeps_its_own_properties(shells):
+    # `sync` on a g2g sink names a clock wait that does not exist there, but on
+    # `pyml_kafkasink` it is the Kafka producer's own knob.
+    assert pyml_launch.rewrite_segment("pyml_kafkasink sync=true", shells) == [
+        "pyelement",
+        "module=kafkasink",
+        "class=KafkaSink",
+        "sync=true",
+    ]
 
 
 def test_textoverlay_drops_the_wait_it_never_does(shells):
@@ -297,6 +309,49 @@ def test_the_caps_survive_the_rewrite_of_a_whole_pipeline(shells):
             "audiotestsrc ! stt. audiotestsrc ! stt. stt. ! fakesink"
         ).split()
     )
+
+
+def g2g_pipeline(*segments):
+    """Run a pipeline on the g2g launcher, returning what it printed.
+
+    Skips where there is no build to check against, so the drift check runs for
+    whoever has both repos and never blocks whoever has one.
+    """
+    binary = pyml_launch.g2g_binary()
+    if not binary:
+        pytest.skip("needs a g2g-launch-py build to check the names against")
+    return subprocess.run(
+        [binary, *segments],
+        capture_output=True,
+        text=True,
+        timeout=120,
+    )
+
+
+#: Enough of a pipeline to negotiate raw video into the element under test.
+G2G_VIDEO_SOURCE = (
+    "videotestsrc",
+    "num-buffers=1",
+    "!",
+    "videoconvert",
+    "!",
+    f"video/x-raw,format={pyml_launch.G2G_RAW_VIDEO_FORMAT}",
+    "!",
+)
+
+
+def test_the_native_element_and_the_names_it_renames_to_still_exist():
+    """`NATIVE_EQUIVALENTS` and `NATIVE_PROPERTIES` copy names out of glass2glass,
+    and `G2G_RAW_VIDEO_FORMAT` states what that element negotiates. Nothing here
+    notices when any of the three changes there, so run one and see."""
+    for element, native in pyml_launch.NATIVE_EQUIVALENTS.items():
+        renames = pyml_launch.NATIVE_PROPERTIES.get(element, {})
+        properties = [f"{name}=true" for name in renames.values()]
+        result = g2g_pipeline(*G2G_VIDEO_SOURCE, native, *properties, "!", "fakesink")
+        assert result.returncode == 0, (
+            f"{element} rewrites to `{native} {' '.join(properties)}`, which g2g "
+            f"no longer runs:\n{result.stdout}{result.stderr}"
+        )
 
 
 def test_an_element_read_from_twice_is_not_a_muxer(shells):

@@ -17,22 +17,23 @@
 # Boston, MA 02110-1301, USA.
 
 
-import gi
-
-gi.require_version("Gst", "1.0")
-gi.require_version("GLib", "2.0")
-from gi.repository import Gst  # noqa: E402
-
 import backend
 from backend import GObject
 from base_aggregator import BaseAggregator
 
+if backend.BACKEND == "gst":
+    import gi
+
+    gi.require_version("Gst", "1.0")
+    from gi.repository import Gst  # noqa: E402
+
 
 class BaseLlm(BaseAggregator):
     """
-    GStreamer base element that performs language model inference
-    with a PyTorch model.
+    Base element that performs language model inference with a PyTorch model.
     """
+
+    PUSH_FROM_SRC_PAD = True
 
     @GObject.Property(type=str)
     def system_prompt(self):
@@ -109,9 +110,3 @@ class BaseLlm(BaseAggregator):
         self.logger.info(f"Generated text: {generated_text}")
 
         return [generated_text.encode("utf-8")]
-
-    def push_payload(self, outbuf):
-        """Straight out of the src pad, which is how this element has always
-        sent its output."""
-        self.logger.info("Pushed generated text downstream")
-        return self.srcpad.push(outbuf)

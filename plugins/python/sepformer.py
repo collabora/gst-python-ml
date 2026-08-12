@@ -21,12 +21,6 @@ import backend
 
 CAN_REGISTER_ELEMENT = True
 try:
-    import gi
-
-    gi.require_version("Gst", "1.0")
-    gi.require_version("GstBase", "1.0")
-    gi.require_version("GObject", "2.0")
-    from gi.repository import Gst, GstBase  # noqa: E402
     from backend import GObject
     from base_separate import BaseSeparate
 
@@ -38,6 +32,13 @@ except ImportError as e:
     GlobalLogger().warning(
         f"The 'pyml_sepformer' element will not be available. Error: {e}"
     )
+
+if backend.BACKEND == "gst":
+    import gi
+
+    gi.require_version("Gst", "1.0")
+    gi.require_version("GstBase", "1.0")
+    from gi.repository import Gst, GstBase  # noqa: E402
 
 
 class Sepformer(BaseSeparate):

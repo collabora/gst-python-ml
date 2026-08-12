@@ -21,17 +21,19 @@ import backend
 
 CAN_REGISTER_ELEMENT = True
 try:
-    import gi
-
-    gi.require_version("Gst", "1.0")
-    gi.require_version("GstBase", "1.0")
-    from gi.repository import Gst, GstBase  # noqa: E402
     from base_tts import BaseTts
 except ImportError as e:
     CAN_REGISTER_ELEMENT = False
     GlobalLogger().warning(
         f"The 'pyml_whisperspeechtts' element will not be available. Error: {e}"
     )
+
+if backend.BACKEND == "gst":
+    import gi
+
+    gi.require_version("Gst", "1.0")
+    gi.require_version("GstBase", "1.0")
+    from gi.repository import Gst, GstBase  # noqa: E402
 
 TTS_SAMPLE_RATE = 24000
 

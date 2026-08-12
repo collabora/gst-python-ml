@@ -355,10 +355,12 @@ def rewrite_segment(segment, shells, raw_format=None, host=None):
     if native:
         return [native, *[quoted(p) for p in renamed_properties(head, properties)]]
 
-    properties = [quoted(p) for p in drop_defaulted_properties(head, properties)]
-
     shell = shells.get(head)
     if shell:
+        # Every property of a hosted element goes to the Python class, so the
+        # defaulted-property table must not touch one whose name happens to end
+        # like a g2g element's (`pyml_kafkasink` and its `sync`).
+        properties = [quoted(p) for p in properties]
         hosted = [host or PY_ELEMENT, f"module={shell.module}", f"class={shell.cls}"]
         # `pyelement` takes RGBA unless told otherwise, so an upstream caps
         # filter naming another format has to reach the hosted element too.
@@ -373,7 +375,7 @@ def rewrite_segment(segment, shells, raw_format=None, host=None):
     if head.startswith("pyml_"):
         raise SystemExit(f"pyml-launch: no gst-python-ml element named {head!r}")
 
-    return [head, *properties]
+    return [head, *[quoted(p) for p in drop_defaulted_properties(head, properties)]]
 
 
 def renamed_properties(head, properties):

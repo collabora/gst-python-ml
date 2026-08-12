@@ -9,18 +9,21 @@
 """g2g backend for the `aggregator` element family (N inputs -> 1 output).
 
 The host calls `g2g_process_batch([buf, ...], w, h, fmt, sink)` with one
-`FrameBuffer` per input. This base reads each into a frame and hands the stacked
-batch to `process_batch`, the framework-agnostic hook the leaf supplies.
+`FrameBuffer` per input. This base reads each into a frame and hands them to
+`process_frames`, the same per-frame hook a video transform fills in: on gst the
+N-source case arrives muxed into one buffer instead, but what the element is
+given is the same, so it spells the same.
 """
 
 import numpy as np
 
+from backend.core import FrameProcessingMixin
 from backend.g2g.analytics import analytics
-from backend.g2g.frameio import frameio
+from backend.g2g.frameio import as_rgb, frameio
 from backend.g2g.transform import BaseTransform
 
 
-class BaseAggregator(BaseTransform):
+class BaseAggregator(BaseTransform, FrameProcessingMixin):
     """Base for g2g ML aggregator elements (input format may differ from output)."""
 
     def __init__(self):
@@ -28,17 +31,13 @@ class BaseAggregator(BaseTransform):
         self.width = 0
         self.height = 0
 
-    def process_batch(self, frames, num_sources, fmt, target):
-        """Run inference over the batched inputs. The concrete element supplies
-        this (the same hook the gst aggregator drives)."""
-        raise NotImplementedError("leaf element must implement process_batch")
-
     def g2g_process_batch(self, buffers, width, height, fmt, sink):
         self.width = width
         self.height = height
         frameio.bind(sink, fmt)
         analytics.bind(sink)
         self._ensure_model()
+        self._ensure_started()
         frames = []
         for buf in buffers:
             frame = frameio.read_frame(buf, None, width, height)
@@ -46,6 +45,8 @@ class BaseAggregator(BaseTransform):
                 frames.append(frame)
         if not frames:
             return None
-        batch = np.stack(frames, axis=0)
-        self.process_batch(batch, len(frames), fmt, buffers[0] if buffers else None)
+        # (H, W, C) for one source and (N, H, W, C) for several, which is what
+        # `read_frames` hands a video transform.
+        batch = frames[0] if len(frames) == 1 else np.stack(frames, axis=0)
+        self.process_frames(as_rgb(batch, fmt), len(frames), fmt, buffers[0])
         return None

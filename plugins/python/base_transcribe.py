@@ -20,16 +20,16 @@ import collections
 import sys
 from abc import abstractmethod
 
-import gi
+import backend
+from backend import GObject
+from base_aggregator import BaseAggregator
 
-gi.require_version("Gst", "1.0")
-gi.require_version("GstBase", "1.0")
-gi.require_version("GObject", "2.0")
-from gi.repository import Gst, GstBase  # noqa: E402
+if backend.BACKEND == "gst":
+    import gi
 
-import backend  # noqa: E402
-from backend import GObject  # noqa: E402
-from base_aggregator import BaseAggregator  # noqa: E402
+    gi.require_version("Gst", "1.0")
+    gi.require_version("GstBase", "1.0")
+    from gi.repository import Gst, GstBase  # noqa: E402
 
 sys.stdout.reconfigure(encoding="utf-8")
 sys.stderr.reconfigure(encoding="utf-8")
