@@ -116,6 +116,10 @@ def test_payload_elements_import_under_g2g_without_gst_init():
     succeeds whether or not the element guards its Gst construction, so the
     check only means anything in a process that never did.
     """
+    # every element module imports gi at module scope, so without it the import
+    # fails for a reason this is not looking for
+    pytest.importorskip("gi", reason="the element modules import it at module scope")
+
     result = subprocess.run(
         [sys.executable, "-c", "import " + ", ".join(PAYLOAD_ELEMENT_MODULES)],
         env={**os.environ, "PYML_BACKEND": "g2g", "PYTHONPATH": str(PLUGIN_DIR)},
@@ -136,6 +140,8 @@ def test_every_element_module_imports_under_g2g_without_gst_init():
     template built without `Gst.init` segfaults, so an element that forgets the
     backend guard takes down whatever process imports it.
     """
+    pytest.importorskip("gi", reason="the element modules import it at module scope")
+
     modules = sorted(p.stem for p in PLUGIN_DIR.glob("*.py"))
 
     result = subprocess.run(
