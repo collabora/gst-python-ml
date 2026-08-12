@@ -25,10 +25,11 @@ gi.require_version("GstBase", "1.0")
 gi.require_version("GstVideo", "1.0")
 from gi.repository import Gst  # noqa: E402
 
+from backend.core import FrameProcessingMixin  # noqa: E402
 from backend.gst.transform import BaseTransform  # noqa: E402
 
 
-class VideoTransform(BaseTransform):
+class VideoTransform(BaseTransform, FrameProcessingMixin):
     """
     GStreamer element for video transformation using a PyTorch model.
     """
@@ -53,14 +54,6 @@ class VideoTransform(BaseTransform):
         self.height = struct.get_int("height").value
 
         return True
-
-    def process_frames(self, frames, num_sources, fmt, target):
-        """Per-frame inference + metadata; the concrete element implements this.
-
-        The framework-agnostic seam shared with the g2g backend: both drivers
-        extract the frame and call this. Default raises so a misconfigured
-        element fails loud rather than silently passing buffers through."""
-        raise NotImplementedError("element must implement process_frames")
 
     def do_transform_ip(self, buf):
         """GStreamer per-frame driver: extract the frame(s) through the backend

@@ -24,7 +24,7 @@ try:
     from video_transform import VideoTransform
     from engine.embedding_engine import EmbeddingEngine
     from engine.engine_factory import EngineFactory
-    from backend import frameio, FlowReturn, GObject
+    from backend import frameio, GObject
     from tasks.embedding import EmbeddingTask
 
 except ImportError as e:
@@ -125,40 +125,32 @@ class EmbeddingTransform(VideoTransform, EmbeddingTask):
             self._text_embedding = None
             self._cached_text = None
 
-    def do_transform_ip(self, buf):
-        try:
-            self._frame_count += 1
-            if self.frame_stride > 1 and (self._frame_count % self.frame_stride) != 1:
-                return FlowReturn.OK
+    def process_frames(self, frames, num_sources, fmt, target):
+        """Embed the frame and append the payload, skipping strided-out frames."""
+        self._frame_count += 1
+        if self.frame_stride > 1 and (self._frame_count % self.frame_stride) != 1:
+            return
 
-            if self.engine is None:
-                return FlowReturn.OK
+        if self.engine is None:
+            return
 
-            frame = frameio.read_frame(buf, self.sinkpad, self.width, self.height)
-            if frame is None:
-                return FlowReturn.ERROR
+        frame = frames[0] if num_sources > 1 else frames
 
-            emb = self.forward(frame)
-            if emb is None:
-                return FlowReturn.OK
+        emb = self.forward(frame)
+        if emb is None:
+            return
 
-            # Update text embedding if needed
-            self._update_text_embedding()
+        # Update text embedding if needed
+        self._update_text_embedding()
 
-            # Portable task: serialize the length-prefixed embedding payload.
-            _, payload = self.decode(emb)
+        # Portable task: serialize the length-prefixed embedding payload.
+        _, payload = self.decode(emb)
 
-            # Append embedding as a custom buffer memory chunk.
-            # Format: HEADER_PREFIX + 4-byte header length + JSON header + raw float32
-            frameio.append_blob(buf, EMBEDDING_META_HEADER, payload)
+        # Append embedding as a custom buffer memory chunk.
+        # Format: HEADER_PREFIX + 4-byte header length + JSON header + raw float32
+        frameio.write_result(target, None, payload, EMBEDDING_META_HEADER)
 
-            self.logger.debug(f"Embedding extracted: dim={emb.shape[0]}")
-
-            return FlowReturn.OK
-
-        except Exception as e:
-            self.logger.error(f"Embedding transform error: {e}")
-            return FlowReturn.ERROR
+        self.logger.debug(f"Embedding extracted: dim={emb.shape[0]}")
 
 
 if CAN_REGISTER_ELEMENT and backend.BACKEND == "gst":

@@ -50,7 +50,7 @@ class LlmRemote(GstBase.Aggregator):
       timeout:       HTTP request timeout in seconds (default: 120)
 
     Example (Ollama):
-      gst-launch-1.0 filesrc location=prompt.txt ! "text/x-raw,format=utf8" \
+      python pyml-launch.py filesrc location=prompt.txt ! "text/x-raw,format=utf8" \
         ! pyml_llm_remote url=http://localhost:11434/api/generate model-name=llama3 \
         ! fakesink
     """
@@ -62,20 +62,22 @@ class LlmRemote(GstBase.Aggregator):
         "Aaron Boxer <aaron.boxer@collabora.com>",
     )
 
-    __gsttemplates__ = (
-        Gst.PadTemplate.new(
-            "src",
-            Gst.PadDirection.SRC,
-            Gst.PadPresence.ALWAYS,
-            Gst.Caps.from_string("text/x-raw,format=utf8"),
-        ),
-        Gst.PadTemplate.new(
-            "sink",
-            Gst.PadDirection.SINK,
-            Gst.PadPresence.REQUEST,
-            Gst.Caps.from_string("text/x-raw,format=utf8"),
-        ),
-    )
+    # Building a Gst object needs Gst.init, which only the gst backend calls.
+    if backend.BACKEND == "gst":
+        __gsttemplates__ = (
+            Gst.PadTemplate.new(
+                "src",
+                Gst.PadDirection.SRC,
+                Gst.PadPresence.ALWAYS,
+                Gst.Caps.from_string("text/x-raw,format=utf8"),
+            ),
+            Gst.PadTemplate.new(
+                "sink",
+                Gst.PadDirection.SINK,
+                Gst.PadPresence.REQUEST,
+                Gst.Caps.from_string("text/x-raw,format=utf8"),
+            ),
+        )
 
     def __init__(self):
         super().__init__()

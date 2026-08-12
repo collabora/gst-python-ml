@@ -26,8 +26,10 @@ import gi
 gi.require_version("Gst", "1.0")
 gi.require_version("GstBase", "1.0")
 gi.require_version("GObject", "2.0")
-from gi.repository import Gst, GObject, GstBase  # noqa: E402
+from gi.repository import Gst, GstBase  # noqa: E402
 
+import backend  # noqa: E402
+from backend import GObject  # noqa: E402
 from base_aggregator import BaseAggregator  # noqa: E402
 
 sys.stdout.reconfigure(encoding="utf-8")
@@ -44,32 +46,29 @@ class BaseSeparate(BaseAggregator):
 
     SAMPLE_RATE = 44100  # native sample rate of Demucs
 
-    CAPS = Gst.Caps(
-        Gst.Structure(
-            "audio/x-raw",
-            format="S16LE",
-            layout="interleaved",
-            rate=SAMPLE_RATE,
-            channels=1,
-        )
-    )
+    # the caps each pad negotiates, stated once for both backends. The rate has
+    # to match SAMPLE_RATE, which the chunking works from.
+    INPUT_CAPS = "audio/x-raw,format=S16LE,layout=interleaved,rate=44100,channels=1"
+    OUTPUT_CAPS = "audio/x-raw,format=S16LE,layout=interleaved,rate=44100,channels=1"
 
-    __gsttemplates__ = (
-        Gst.PadTemplate.new_with_gtype(
-            "sink",
-            Gst.PadDirection.SINK,
-            Gst.PadPresence.REQUEST,
-            CAPS,
-            GstBase.AggregatorPad.__gtype__,
-        ),
-        Gst.PadTemplate.new_with_gtype(
-            "src",
-            Gst.PadDirection.SRC,
-            Gst.PadPresence.ALWAYS,
-            CAPS,
-            GstBase.AggregatorPad.__gtype__,
-        ),
-    )
+    # Building a Gst object needs Gst.init, which only the gst backend calls.
+    if backend.BACKEND == "gst":
+        __gsttemplates__ = (
+            Gst.PadTemplate.new_with_gtype(
+                "sink",
+                Gst.PadDirection.SINK,
+                Gst.PadPresence.REQUEST,
+                Gst.Caps.from_string(INPUT_CAPS),
+                GstBase.AggregatorPad.__gtype__,
+            ),
+            Gst.PadTemplate.new_with_gtype(
+                "src",
+                Gst.PadDirection.SRC,
+                Gst.PadPresence.ALWAYS,
+                Gst.Caps.from_string(OUTPUT_CAPS),
+                GstBase.AggregatorPad.__gtype__,
+            ),
+        )
 
     def __init__(self):
         super().__init__()
@@ -102,84 +101,36 @@ class BaseSeparate(BaseAggregator):
 
     def do_process_audio(self, audio_data):
         # audio_data is np.int16 array
-        encoded_size = audio_data.nbytes
-        outbuf = Gst.Buffer.new_allocate(None, encoded_size, None)
-        outbuf.fill(0, audio_data.tobytes())
-        return outbuf
+        return audio_data.tobytes()
 
-    def do_process(self, buf):
+    def process_payload(self, payload: bytes) -> list[bytes]:
+        """Separates the requested stem, one payload per full chunk of audio.
+
+        Audio is accumulated until there is a whole chunk to separate, so a
+        buffer produces anywhere from zero to several payloads.
+        """
         import numpy as np
 
-        self.push_segment_if_needed()
-        """Process audio data from the input buffers using source separation."""
-        audio_collected = False
+        audio_data = np.frombuffer(payload, dtype=np.int16)
+        self.clip_buffer.extend(audio_data)
 
-        try:
-            # Map the buffer to access the audio data
-            success, map_info = buf.map(Gst.MapFlags.READ)
-            if not success:
-                self.logger.error("Failed to map input buffer")
-                return Gst.FlowReturn.ERROR
+        chunk_duration = 1.0 if self.streaming else 10.0
+        chunk_size = int(self.SAMPLE_RATE * chunk_duration)
 
-            # Convert buffer to numpy array (int16)
-            audio_data = np.frombuffer(map_info.data, dtype=np.int16)
-            audio_collected = True
+        payloads = []
+        while len(self.clip_buffer) >= chunk_size:
+            chunk = np.fromiter(
+                (self.clip_buffer.popleft() for _ in range(chunk_size)),
+                dtype=np.int16,
+            )
+            separated = self._separate_audio(chunk)
+            if separated is None:
+                self.logger.warning("Empty separated audio")
+                return payloads
 
-            self.clip_buffer.extend(audio_data)
+            payloads.append(self.do_process_audio(separated))
 
-            chunk_duration = 1.0 if self.streaming else 10.0
-            chunk_size = int(self.SAMPLE_RATE * chunk_duration)
-
-            while len(self.clip_buffer) >= chunk_size:
-                chunk = np.fromiter(
-                    (self.clip_buffer.popleft() for _ in range(chunk_size)),
-                    dtype=np.int16,
-                )
-                separated = self._separate_audio(chunk)
-                if separated is None:
-                    self.logger.warning("Empty separated audio")
-                    buf.unmap(map_info)
-                    return Gst.FlowReturn.ERROR
-
-                self._process_and_send(separated, buf)
-
-            # Handle remaining buffer on EOS
-            if buf.flags & Gst.BufferFlags.LAST:
-                if len(self.clip_buffer) > 0:
-                    chunk = np.fromiter(self.clip_buffer, dtype=np.int16)
-                    separated = self._separate_audio(chunk)
-                    if separated is None:
-                        self.logger.warning("Empty separated audio")
-                        buf.unmap(map_info)
-                        return Gst.FlowReturn.ERROR
-
-                    self._process_and_send(separated, buf)
-                    self.clip_buffer.clear()
-
-            buf.unmap(map_info)
-        except Exception as e:
-            self.logger.error(f"Error during buffer processing: {e}")
-            if audio_collected:
-                buf.unmap(map_info)
-            return Gst.FlowReturn.ERROR
-
-        if not audio_collected:
-            self.logger.warning("No audio data collected from sink pads.")
-            return Gst.FlowReturn.ERROR
-
-        return Gst.FlowReturn.OK
-
-    def _process_and_send(self, separated, inbuf):
-        outbuf = self.do_process_audio(separated)
-        if outbuf is None:
-            return
-
-        # Set PTS and duration from the input buffer
-        outbuf.pts = inbuf.pts
-        outbuf.duration = inbuf.duration
-
-        # Push the separated audio downstream
-        self.finish_buffer(outbuf)
+        return payloads
 
     def _separate_audio(self, chunk):
         """

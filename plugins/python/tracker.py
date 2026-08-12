@@ -31,8 +31,10 @@ try:
     from log.logger_factory import LoggerFactory  # noqa: E402
     from backend import analytics, GObject  # noqa: E402
 
-    VIDEO_SRC_CAPS = Gst.Caps.from_string("video/x-raw")
-    VIDEO_SINK_CAPS = Gst.Caps.from_string("video/x-raw")
+    # Building a Gst object needs Gst.init, which only the gst backend calls.
+    if backend.BACKEND == "gst":
+        VIDEO_SRC_CAPS = Gst.Caps.from_string("video/x-raw")
+        VIDEO_SINK_CAPS = Gst.Caps.from_string("video/x-raw")
 
 except ImportError as e:
     CAN_REGISTER_ELEMENT = False
@@ -215,20 +217,21 @@ class TrackerTransform(GstBase.BaseTransform):
         "Aaron Boxer <aaron.boxer@collabora.com>",
     )
 
-    src_template = Gst.PadTemplate.new(
-        "src",
-        Gst.PadDirection.SRC,
-        Gst.PadPresence.ALWAYS,
-        VIDEO_SRC_CAPS.copy(),
-    )
+    if backend.BACKEND == "gst":
+        src_template = Gst.PadTemplate.new(
+            "src",
+            Gst.PadDirection.SRC,
+            Gst.PadPresence.ALWAYS,
+            VIDEO_SRC_CAPS.copy(),
+        )
 
-    sink_template = Gst.PadTemplate.new(
-        "sink",
-        Gst.PadDirection.SINK,
-        Gst.PadPresence.ALWAYS,
-        VIDEO_SINK_CAPS.copy(),
-    )
-    __gsttemplates__ = (src_template, sink_template)
+        sink_template = Gst.PadTemplate.new(
+            "sink",
+            Gst.PadDirection.SINK,
+            Gst.PadPresence.ALWAYS,
+            VIDEO_SINK_CAPS.copy(),
+        )
+        __gsttemplates__ = (src_template, sink_template)
 
     tracker_type = GObject.Property(
         type=str,

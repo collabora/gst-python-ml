@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Run a pipeline on whichever backend `GSTML_BACKEND` selects, from the checkout.
+"""Run a pipeline on whichever backend `PYML_BACKEND` selects, from the checkout.
 
 See `plugins/python/pyml_launch.py` for what the two backends spell differently.
 Re-runs itself under the repo's venv when started from another interpreter: the

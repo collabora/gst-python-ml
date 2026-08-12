@@ -25,7 +25,6 @@ the GObject property declarations, and the framework virtuals
 in the portable `MLEngineMixin`.
 """
 
-from abc import abstractmethod
 import gi
 
 gi.require_version("Gst", "1.0")
@@ -33,10 +32,56 @@ gi.require_version("GstBase", "1.0")
 gi.require_version("GLib", "2.0")
 from gi.repository import Gst, GObject, GstBase  # noqa: E402
 
-from backend.core import MLEngineMixin  # noqa: E402
+from backend.core import MLEngineMixin, PayloadProcessingMixin  # noqa: E402
 
 
-class BaseAggregator(GstBase.Aggregator, MLEngineMixin):
+class PayloadDriver:
+    """The GStreamer half of the payload seam.
+
+    Kept apart from the element base so it can be driven without standing up a
+    `GstBase.Aggregator`, the same way `FrameProcessingMixin` keeps the video
+    work apart from the element that hosts it.
+    """
+
+    def do_process(self, buf):
+        """Read the input payload, run the element's `process_payload`, and send
+        each payload it returns as its own buffer, timed like the input.
+        Elements supply `process_payload`, not this."""
+        try:
+            success, map_info = buf.map(Gst.MapFlags.READ)
+            if not success:
+                self.logger.error("Failed to map input buffer")
+                return Gst.FlowReturn.ERROR
+
+            payload = bytes(map_info.data)
+            buf.unmap(map_info)
+
+            for output in self.process_payload(payload):
+                outbuf = Gst.Buffer.new_allocate(None, len(output), None)
+                outbuf.fill(0, output)
+                outbuf.pts = buf.pts
+                outbuf.dts = buf.dts
+                outbuf.duration = buf.duration
+                self.push_payload(outbuf)
+
+            return Gst.FlowReturn.OK
+
+        except Exception as e:
+            self.logger.error(f"Error processing buffer: {e}")
+            return Gst.FlowReturn.ERROR
+
+    def push_payload(self, outbuf):
+        """Send one output buffer downstream.
+
+        Through the aggregator by default. An element that has always pushed
+        straight out of the src pad overrides this to keep doing that.
+        """
+        self.finish_buffer(outbuf)
+
+
+class BaseAggregator(
+    GstBase.Aggregator, MLEngineMixin, PayloadProcessingMixin, PayloadDriver
+):
     """
     Base class for GStreamer aggregator elements that perform inference
     with a machine learning model. This class manages shared properties
@@ -163,7 +208,3 @@ class BaseAggregator(GstBase.Aggregator, MLEngineMixin):
         buf = self.sinkpads[0].pop_buffer()
         if buf:
             self.do_process(buf)
-
-    @abstractmethod
-    def do_process(self, buf):
-        pass

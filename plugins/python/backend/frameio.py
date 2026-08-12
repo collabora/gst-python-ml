@@ -58,3 +58,15 @@ class FrameIO(ABC):
     def append_blob(self, target, header, payload):
         """Append an opaque metadata blob (``header`` bytes followed by
         ``payload`` bytes) to ``target``. Returns True on success."""
+
+    def write_result(self, target, output=None, blob=None, header=None):
+        """Write back what an element produced: a frame, a blob, or both.
+
+        The tail nearly every video element shares. Either half may be absent:
+        an element that only annotates returns no frame, one that only redraws
+        returns no blob.
+        """
+        if output is not None:
+            self.write_frame(target, output)
+        if blob is not None:
+            self.append_blob(target, header, blob)

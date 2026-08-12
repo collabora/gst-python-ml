@@ -14,7 +14,7 @@ that DO depend on the framework are isolated behind this package:
   * the element base classes `BaseTransform` / `BaseAggregator` / `VideoTransform`
   * the `analytics` metadata interface (add/get/remove detections)
 
-Select the active backend with the `GSTML_BACKEND` environment variable
+Select the active backend with the `PYML_BACKEND` environment variable
 (default ``"gst"``). To add another backend, create a sibling package exposing
 the same names (reusing `backend.core.MLEngineMixin` and implementing
 `backend.analytics.AnalyticsBackend`) and add a branch below.
@@ -26,7 +26,7 @@ from backend.analytics import AnalyticsBackend  # noqa: F401  (re-exported)
 from backend.frameio import FrameIO  # noqa: F401  (re-exported)
 from backend.core import MLEngineMixin  # noqa: F401  (re-exported)
 
-BACKEND = os.environ.get("GSTML_BACKEND", "gst").lower()
+BACKEND = os.environ.get("PYML_BACKEND", "gst").lower()
 
 if BACKEND == "gst":
     from backend.gst import (
@@ -50,7 +50,7 @@ elif BACKEND == "g2g":
     )
 else:
     raise ImportError(
-        f"Unknown GSTML_BACKEND={BACKEND!r}; supported backends: 'gst', 'g2g'"
+        f"Unknown PYML_BACKEND={BACKEND!r}; supported backends: 'gst', 'g2g'"
     )
 
 

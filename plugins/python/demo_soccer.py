@@ -755,7 +755,7 @@ class DemoSoccer(BaseObjectDetector):
                 )
                 continue
             self.logger.debug(
-                f"Stream {stream_idx} - Added person od_mtd: id={track_id}, x1={x1}, y1={y1}, w={x2-x1}, h={y2-y1}, score={score}"
+                f"Stream {stream_idx} - Added person od_mtd: id={track_id}, x1={x1}, y1={y1}, w={x2 - x1}, h={y2 - y1}, score={score}"
             )
 
             tracking_mtd = analytics.add_tracking(meta, track_id)
@@ -798,7 +798,7 @@ class DemoSoccer(BaseObjectDetector):
                 )
                 continue
             self.logger.debug(
-                f"Stream {stream_idx} - Added ball od_mtd: id={track_id}, x1={x1}, y1={y1}, w={x2-x1}, h={y2-y1}, score={score}"
+                f"Stream {stream_idx} - Added ball od_mtd: id={track_id}, x1={x1}, y1={y1}, w={x2 - x1}, h={y2 - y1}, score={score}"
             )
 
             tracking_mtd = analytics.add_tracking(meta, track_id)

@@ -17,6 +17,7 @@
 # Boston, MA 02110-1301, USA.
 
 from log.global_logger import GlobalLogger
+import backend
 
 CAN_REGISTER_ELEMENT = True
 try:
@@ -28,14 +29,16 @@ try:
     gi.require_version("GObject", "2.0")
     from gi.repository import Gst, GstBase  # noqa: E402
     from base_aggregator import BaseAggregator
+    from diffusers import StableDiffusionPipeline  # noqa: F401
 except ImportError as e:
     CAN_REGISTER_ELEMENT = False
     GlobalLogger().warning(
         f"The 'pyml_stablediffusion' element will not be available. Error: {e}"
     )
 
-# Set output caps to image format (e.g., PNG)
-ICAPS = Gst.Caps(Gst.Structure("text/plain", format="utf8"))
+# Building a Gst object needs Gst.init, which only the gst backend calls.
+if backend.BACKEND == "gst":
+    ICAPS = Gst.Caps(Gst.Structure("text/plain", format="utf8"))
 
 
 class StableDiffusion(BaseAggregator):
@@ -46,23 +49,24 @@ class StableDiffusion(BaseAggregator):
         "Aaron Boxer <aaron.boxer@collabora.com>",
     )
 
-    __gsttemplates__ = (
-        Gst.PadTemplate.new_with_gtype(
-            "sink",
-            Gst.PadDirection.SINK,
-            Gst.PadPresence.REQUEST,
-            ICAPS,
-            GstBase.AggregatorPad.__gtype__,
-        ),
-        Gst.PadTemplate.new(
-            "src",
-            Gst.PadDirection.SRC,
-            Gst.PadPresence.ALWAYS,
-            Gst.Caps.from_string(
-                "video/x-raw, width=512, height=512, format=RGBA, framerate=0/1"
+    if backend.BACKEND == "gst":
+        __gsttemplates__ = (
+            Gst.PadTemplate.new_with_gtype(
+                "sink",
+                Gst.PadDirection.SINK,
+                Gst.PadPresence.REQUEST,
+                ICAPS,
+                GstBase.AggregatorPad.__gtype__,
             ),
-        ),
-    )
+            Gst.PadTemplate.new(
+                "src",
+                Gst.PadDirection.SRC,
+                Gst.PadPresence.ALWAYS,
+                Gst.Caps.from_string(
+                    "video/x-raw, width=512, height=512, format=RGBA, framerate=0/1"
+                ),
+            ),
+        )
 
     def do_load_model(self):
         """
@@ -153,14 +157,11 @@ class StableDiffusion(BaseAggregator):
             self.logger.error(f"Error pushing image to pipeline: {e}")
 
 
-# if CAN_REGISTER_ELEMENT:
-#     GObject.type_register(StableDiffusion)
-#     __gstelementfactory__ = (
-#         "pyml_stablediffusion",
-#         Gst.Rank.NONE,
-#         StableDiffusion,
-#     )
-# else:
-#     GlobalLogger().warning(
-#         "The 'pyml_stablediffusion' element will not be registered because required modules are missing."
-#     )
+if CAN_REGISTER_ELEMENT and backend.BACKEND == "gst":
+    __gstelementfactory__ = backend.register_gst_element(
+        "pyml_stablediffusion", StableDiffusion
+    )
+elif not CAN_REGISTER_ELEMENT:
+    GlobalLogger().warning(
+        "The 'pyml_stablediffusion' element will not be registered because required modules are missing."
+    )

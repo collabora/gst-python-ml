@@ -25,7 +25,7 @@ try:
     from utils.format_converter import FormatConverter
     from engine.ocr_engine import OcrEngine
     from engine.engine_factory import EngineFactory
-    from backend import frameio, FlowReturn, GObject
+    from backend import GObject
     from tasks.ocr import OcrTask
 
 except ImportError as e:
@@ -47,6 +47,8 @@ class OCRTransform(VideoTransform, OcrTask):
     video frame. OCR results are always appended as a GST-OCR: memory chunk
     (JSON with recognized text and regions).
     """
+
+    META_HEADER = OCR_META_HEADER
 
     __gstmetadata__ = (
         "OCR",
@@ -85,38 +87,6 @@ class OCRTransform(VideoTransform, OcrTask):
     @engine_name.setter
     def engine_name(self, value):
         raise ValueError("'engine_name' is read-only for pyml_ocr")
-
-    def do_transform_ip(self, buf):
-        try:
-            frames, num_sources, fmt = frameio.read_frames(
-                buf, self.sinkpad, self.width, self.height
-            )
-            if frames is None:
-                return FlowReturn.ERROR
-
-            result = self.forward(frames)
-            if result is None:
-                return FlowReturn.ERROR
-
-            if num_sources == 1:
-                output, blob = self.decode(frames, result, fmt)
-            else:
-                if isinstance(result, list) and len(result) > 0:
-                    output, blob = self.decode(
-                        frames[0] if frames.ndim == 4 else frames, result[0], fmt
-                    )
-                else:
-                    output, blob = None, None
-
-            if output is not None:
-                frameio.write_frame(buf, output)
-            if blob is not None:
-                frameio.append_blob(buf, OCR_META_HEADER, blob)
-            return FlowReturn.OK
-
-        except Exception as e:
-            self.logger.error(f"OCR transform error: {e}")
-            return FlowReturn.ERROR
 
 
 if CAN_REGISTER_ELEMENT and backend.BACKEND == "gst":

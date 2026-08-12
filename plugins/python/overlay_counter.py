@@ -31,7 +31,6 @@ except ImportError as e:
 
 
 class OverlayCounter(Overlay):
-
     __gstmetadata__ = (
         "OverlayCounter",
         "Filter/Effect/Video",

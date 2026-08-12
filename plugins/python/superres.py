@@ -25,7 +25,7 @@ try:
     from utils.format_converter import FormatConverter
     from engine.super_res_engine import SuperResEngine
     from engine.engine_factory import EngineFactory
-    from backend import frameio, FlowReturn, GObject
+    from backend import frameio, GObject
     from tasks.superres import SuperResTask
 
 except ImportError as e:
@@ -76,28 +76,15 @@ class SuperResTransform(VideoTransform, SuperResTask):
     def engine_name(self, value):
         raise ValueError("'engine_name' is read-only for pyml_superres")
 
-    def do_transform_ip(self, buf):
-        try:
-            frames, _num_sources, fmt = frameio.read_frames(
-                buf, self.sinkpad, self.width, self.height
-            )
-            if frames is None:
-                return FlowReturn.ERROR
+    def process_frames(self, frames, num_sources, fmt, target):
+        """Upscale the primary frame and write it back at the original size."""
+        frame = frames[0] if frames.ndim == 4 else frames
+        upscaled = self.forward(frame)
+        if upscaled is None:
+            return
 
-            frame = frames[0] if frames.ndim == 4 else frames
-            upscaled = self.forward(frame)
-            if upscaled is None:
-                return FlowReturn.OK
-
-            # Portable task: resize the upscaled frame back to original dims.
-            output, _blob = self.decode(upscaled, fmt)
-            if output is not None:
-                frameio.write_frame(buf, output)
-            return FlowReturn.OK
-
-        except Exception as e:
-            self.logger.error(f"Super-resolution transform error: {e}")
-            return FlowReturn.ERROR
+        output, _blob = self.decode(upscaled, fmt)
+        frameio.write_result(target, output)
 
 
 if CAN_REGISTER_ELEMENT and backend.BACKEND == "gst":

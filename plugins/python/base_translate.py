@@ -19,15 +19,12 @@
 from abc import abstractmethod
 import gi
 
+import backend
 from base_aggregator import BaseAggregator
 
 gi.require_version("Gst", "1.0")
 gi.require_version("GstBase", "1.0")
 from gi.repository import Gst, GObject, GstBase  # noqa: E402
-
-# Define input and output caps for text/x-raw format
-ICAPS = Gst.Caps(Gst.Structure("text/x-raw", format="utf8"))
-OCAPS = Gst.Caps(Gst.Structure("text/x-raw", format="utf8"))
 
 
 class BaseTranslate(BaseAggregator):
@@ -38,22 +35,28 @@ class BaseTranslate(BaseAggregator):
         "Aaron Boxer <aaron.boxer@collabora.com>",
     )
 
-    __gsttemplates__ = (
-        Gst.PadTemplate.new_with_gtype(
-            "sink",
-            Gst.PadDirection.SINK,
-            Gst.PadPresence.REQUEST,
-            ICAPS,
-            GstBase.AggregatorPad.__gtype__,
-        ),
-        Gst.PadTemplate.new_with_gtype(
-            "src",
-            Gst.PadDirection.SRC,
-            Gst.PadPresence.ALWAYS,
-            OCAPS,
-            GstBase.AggregatorPad.__gtype__,
-        ),
-    )
+    # the caps each pad negotiates, stated once for both backends
+    INPUT_CAPS = "text/x-raw,format=utf8"
+    OUTPUT_CAPS = "text/x-raw,format=utf8"
+
+    # Building a Gst object needs Gst.init, which only the gst backend calls.
+    if backend.BACKEND == "gst":
+        __gsttemplates__ = (
+            Gst.PadTemplate.new_with_gtype(
+                "sink",
+                Gst.PadDirection.SINK,
+                Gst.PadPresence.REQUEST,
+                Gst.Caps.from_string(INPUT_CAPS),
+                GstBase.AggregatorPad.__gtype__,
+            ),
+            Gst.PadTemplate.new_with_gtype(
+                "src",
+                Gst.PadDirection.SRC,
+                Gst.PadPresence.ALWAYS,
+                Gst.Caps.from_string(OUTPUT_CAPS),
+                GstBase.AggregatorPad.__gtype__,
+            ),
+        )
 
     def __init__(self):
         super().__init__()
@@ -82,64 +85,17 @@ class BaseTranslate(BaseAggregator):
     def do_translate_text(self, text):
         pass
 
-    def do_process(self, buf):
-        """
-        Processes text data from the input buffers,
-        translates it, and pushes it downstream.
-        """
-        try:
-            success, map_info = buf.map(Gst.MapFlags.READ)
-            if not success:
-                self.logger.error("Failed to map input buffer")
-                return Gst.FlowReturn.ERROR
+    def process_payload(self, payload: bytes) -> list[bytes]:
+        """Decodes the input text, translates it, and returns the result."""
+        if not payload:
+            return []
 
-            byte_data = bytes(map_info.data)
-            buf.unmap(map_info)
+        text_data = payload.decode("utf-8", errors="replace")
+        self.logger.info(f"Translating text: {text_data}")
 
-            if not byte_data:
-                return Gst.FlowReturn.OK
+        translated_text = self.do_translate_text(text_data)
+        if not translated_text:
+            return []
 
-            try:
-                text_data = byte_data.decode("utf-8", errors="replace")
-            except Exception as e:
-                self.logger.error(f"Error decoding text data: {e}")
-                return Gst.FlowReturn.ERROR
-
-            self.logger.info(f"Translating text: {text_data}")
-
-            # Translate the text using the MarianMT model
-            translated_text = self.do_translate_text(text_data)
-
-            if translated_text:
-                self.logger.info(f"Translated text: {translated_text}")
-                # Convert the translated text to a GstBuffer and push it downstream
-                outbuf = self.convert_text_to_buf(translated_text, buf)
-                self.finish_buffer(outbuf)
-
-            return Gst.FlowReturn.OK
-
-        except Exception as e:
-            self.logger.error(f"Error processing text buffer: {e}")
-            return Gst.FlowReturn.ERROR
-
-    def convert_text_to_buf(self, translated_text, inbuf):
-        """
-        Converts translated text to a GstBuffer.
-        """
-        try:
-            # Encode the translated text as UTF-8
-            text_bytes = translated_text.encode("utf-8")
-            encoded_size = len(text_bytes)
-
-            # Create a new buffer for output and write the translated text
-            outbuf = Gst.Buffer.new_allocate(None, encoded_size, None)
-            outbuf.fill(0, text_bytes)
-
-            # Set PTS and duration from the input buffer
-            outbuf.pts = inbuf.pts
-            outbuf.duration = inbuf.duration
-
-            return outbuf
-        except Exception as e:
-            self.logger.error(f"Error converting text to buffer: {e}")
-            return None
+        self.logger.info(f"Translated text: {translated_text}")
+        return [translated_text.encode("utf-8")]

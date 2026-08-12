@@ -12,7 +12,7 @@ The counterpart of `backend.gst`, targeting the glass2glass (`g2g`) host instead
 of GStreamer. Elements are plain Python objects the host drives via
 `g2g_process` / `g2g_process_batch`; there is no GObject type system or GstBase
 element, so `GObject` / `FlowReturn` are lightweight shims (see `shims.py`) that
-let leaf element code load unchanged. Selected by `GSTML_BACKEND=g2g`.
+let leaf element code load unchanged. Selected by `PYML_BACKEND=g2g`.
 
 Unlike the gst backend, no `gi` is imported anywhere here, so a leaf element can
 be hosted with no GStreamer present at all.

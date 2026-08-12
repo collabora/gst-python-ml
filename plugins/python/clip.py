@@ -26,7 +26,7 @@ try:
     from video_transform import VideoTransform
     from engine.clip_engine import ClipEngine
     from engine.engine_factory import EngineFactory
-    from backend import frameio, FlowReturn, GObject
+    from backend import GObject
     from tasks.clip import ClipTask
 
 except ImportError as e:
@@ -49,7 +49,7 @@ class CLIPTransform(VideoTransform, ClipTask):
       google/siglip-large-patch16-384    (SigLIP large)
 
     Example pipeline:
-      gst-launch-1.0 filesrc location=data/people.mp4 ! decodebin \\
+      python pyml-launch.py filesrc location=data/people.mp4 ! decodebin \\
         ! videoconvert ! videoscale ! video/x-raw,width=640,height=480 \\
         ! pyml_clip model-name=openai/clip-vit-base-patch32 device=cuda \\
                     labels="person, bicycle, car, dog, cat" top-k=3 \\
@@ -127,8 +127,7 @@ class CLIPTransform(VideoTransform, ClipTask):
     def engine_name(self, value):
         raise ValueError("'engine_name' is read-only for pyml_clip")
 
-    def do_start(self):
-        result = super().do_start()
+    def on_start(self):
         # Push labels into the engine after it has been initialised
         if self.engine and self._labels_list:
             self.engine.clip_labels = self._labels_list
@@ -138,7 +137,6 @@ class CLIPTransform(VideoTransform, ClipTask):
             target=self._inference_worker, daemon=True
         )
         self._infer_thread.start()
-        return result
 
     def do_stop(self):
         self._running = False
@@ -163,37 +161,26 @@ class CLIPTransform(VideoTransform, ClipTask):
                 with self._infer_lock:
                     self._last_results = results
 
-    def do_transform_ip(self, buf):
-        try:
-            frames, num_sources, _ = frameio.read_frames(
-                buf, self.sinkpad, self.width, self.height
-            )
-            if frames is None:
-                return FlowReturn.ERROR
+    def process_frames(self, frames, num_sources, fmt, target):
+        """Hand the frame to the inference thread and decode the latest result."""
+        # Use first frame for classification (batch not typical for CLIP)
+        frame = frames[0] if num_sources > 1 else frames
 
-            # Use first frame for classification (batch not typical for CLIP)
-            frame = frames[0] if num_sources > 1 else frames
+        if self.engine:
+            self.engine.clip_labels = self._labels_list
 
-            if self.engine:
-                self.engine.clip_labels = self._labels_list
+        # Post frame to background thread; never block the streaming thread
+        with self._infer_lock:
+            self._pending_frame = frame.copy()
+        self._infer_event.set()
 
-            # Post frame to background thread; never block the streaming thread
-            with self._infer_lock:
-                self._pending_frame = frame.copy()
-            self._infer_event.set()
+        with self._infer_lock:
+            results = self._last_results
 
-            with self._infer_lock:
-                results = self._last_results
+        if results is None:
+            return
 
-            if results is None:
-                return FlowReturn.OK
-
-            self.decode(buf, results)
-            return FlowReturn.OK
-
-        except Exception as e:
-            self.logger.error(f"CLIP transform error: {e}")
-            return FlowReturn.ERROR
+        self.decode(target, results)
 
 
 if CAN_REGISTER_ELEMENT and backend.BACKEND == "gst":

@@ -24,10 +24,13 @@ gi.require_version("GstBase", "1.0")
 gi.require_version("GstVideo", "1.0")
 
 from gi.repository import Gst, GObject, GstBase  # noqa: E402
+import backend  # noqa: E402
 from backend import analytics, frameio  # noqa: E402
 from video_transform import VideoTransform
 
-TEXT_CAPS = Gst.Caps.from_string("text/x-raw, format=utf8")
+# Building a Gst object needs Gst.init, which only the gst backend calls.
+if backend.BACKEND == "gst":
+    TEXT_CAPS = Gst.Caps.from_string("text/x-raw, format=utf8")
 
 
 class BaseCaption(VideoTransform):
@@ -42,34 +45,35 @@ class BaseCaption(VideoTransform):
         "Aaron Boxer <aaron.boxer@collabora.com>",
     )
 
-    __gsttemplates__ = (
-        Gst.PadTemplate.new(
-            "text_src", Gst.PadDirection.SRC, Gst.PadPresence.REQUEST, TEXT_CAPS
-        ),
-    )
+    if backend.BACKEND == "gst":
+        __gsttemplates__ = (
+            Gst.PadTemplate.new(
+                "text_src", Gst.PadDirection.SRC, Gst.PadPresence.REQUEST, TEXT_CAPS
+            ),
+        )
 
     def __init__(self):
         super().__init__()
-        self.__prompt = "What is shown in this image?"
+        self._prompt = "What is shown in this image?"
         self.text_src_pad = None
 
     @GObject.Property(type=str)
     def system_prompt(self):
         "Custom system prompt text"
-        return self.__system_prompt
+        return self._system_prompt
 
     @system_prompt.setter
     def system_prompt(self, value):
-        self.__system_prompt = value
+        self._system_prompt = value
 
     @GObject.Property(type=str)
     def prompt(self):
         "Custom prompt text"
-        return self.__prompt
+        return self._prompt
 
     @prompt.setter
     def prompt(self, value):
-        self.__prompt = value
+        self._prompt = value
 
     # make read only
     @GObject.Property(type=str)

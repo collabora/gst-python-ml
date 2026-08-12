@@ -24,7 +24,7 @@ try:
     from video_transform import VideoTransform
     from engine.vlm_engine import VlmEngine
     from engine.engine_factory import EngineFactory
-    from backend import frameio, FlowReturn, GObject
+    from backend import frameio, GObject
     from tasks.vlm import VlmTask
 
 except ImportError as e:
@@ -112,40 +112,32 @@ class VlmTransform(VideoTransform, VlmTask):
     def engine_name(self, value):
         raise ValueError("'engine_name' is read-only for pyml_vlm")
 
-    def do_transform_ip(self, buf):
-        try:
-            self._frame_count += 1
-            if self.frame_stride > 1 and (self._frame_count % self.frame_stride) != 1:
-                return FlowReturn.OK
+    def process_frames(self, frames, num_sources, fmt, target):
+        """Caption the frame and append the payload, skipping strided-out frames."""
+        self._frame_count += 1
+        if self.frame_stride > 1 and (self._frame_count % self.frame_stride) != 1:
+            return
 
-            if self.engine is None:
-                return FlowReturn.OK
+        if self.engine is None:
+            return
 
-            frame = frameio.read_frame(buf, self.sinkpad, self.width, self.height)
-            if frame is None:
-                return FlowReturn.ERROR
+        frame = frames[0] if num_sources > 1 else frames
 
-            text = self.forward(frame)
+        text = self.forward(frame)
 
-            if text is None:
-                return FlowReturn.OK
+        if text is None:
+            return
 
-            # Portable task: serialize the VLM response payload.
-            _, payload = self.decode(text)
-            # Append VLM response as a JSON memory chunk.
-            frameio.append_blob(buf, VLM_META_HEADER, payload)
+        # Portable task: serialize the VLM response payload.
+        _, payload = self.decode(text)
+        # Append VLM response as a JSON memory chunk.
+        frameio.write_result(target, None, payload, VLM_META_HEADER)
 
-            self.logger.debug(
-                f"VLM response ({len(text)} chars): {text[:80]}..."
-                if len(text) > 80
-                else f"VLM response: {text}"
-            )
-
-            return FlowReturn.OK
-
-        except Exception as e:
-            self.logger.error(f"VLM transform error: {e}")
-            return FlowReturn.ERROR
+        self.logger.debug(
+            f"VLM response ({len(text)} chars): {text[:80]}..."
+            if len(text) > 80
+            else f"VLM response: {text}"
+        )
 
 
 if CAN_REGISTER_ELEMENT and backend.BACKEND == "gst":

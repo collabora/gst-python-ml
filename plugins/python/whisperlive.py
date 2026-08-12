@@ -35,19 +35,7 @@ except ImportError as e:
         f"The 'pyml_whisperlive' element will not be available. Error: {e}"
     )
 
-TTS_SAMPLE_RATE = 24000
 model_ref = "collabora/whisperspeech:s2a-q4-base-en+pl.model"
-
-
-OCAPS = Gst.Caps(
-    Gst.Structure(
-        "audio/x-raw",
-        format="S16LE",
-        layout="interleaved",
-        rate=TTS_SAMPLE_RATE,
-        channels=1,
-    )
-)
 
 
 class WhisperLive(BaseTranscribe):
@@ -58,13 +46,17 @@ class WhisperLive(BaseTranscribe):
         "Aaron Boxer <aaron.boxer@collabora.com>",
     )
 
-    __gsttemplates__ = Gst.PadTemplate.new_with_gtype(
-        "src",
-        Gst.PadDirection.SRC,
-        Gst.PadPresence.ALWAYS,
-        OCAPS,
-        GstBase.AggregatorPad.__gtype__,
-    )
+    OUTPUT_CAPS = "audio/x-raw,format=S16LE,layout=interleaved,rate=24000,channels=1"
+
+    # Building a Gst object needs Gst.init, which only the gst backend calls.
+    if backend.BACKEND == "gst":
+        __gsttemplates__ = Gst.PadTemplate.new_with_gtype(
+            "src",
+            Gst.PadDirection.SRC,
+            Gst.PadPresence.ALWAYS,
+            Gst.Caps.from_string(OUTPUT_CAPS),
+            GstBase.AggregatorPad.__gtype__,
+        )
 
     llm_model_name = GObject.Property(
         type=str,
@@ -208,13 +200,7 @@ class WhisperLive(BaseTranscribe):
         else:
             audio_np = audio_np.T  # Transpose the numpy array if it's not 1D
 
-        duration = len(audio_np) / TTS_SAMPLE_RATE * Gst.SECOND
-        buffer = Gst.Buffer.new_wrapped(audio_np.tobytes())
-
-        buffer.pts = Gst.CLOCK_TIME_NONE
-        buffer.duration = duration
-
-        return buffer
+        return audio_np.tobytes()
 
 
 if CAN_REGISTER_ELEMENT and backend.BACKEND == "gst":

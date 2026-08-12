@@ -22,7 +22,6 @@ import backend
 CAN_REGISTER_ELEMENT = True
 try:
     from video_transform import VideoTransform
-    from backend import frameio, FlowReturn
 
 except ImportError as e:
     CAN_REGISTER_ELEMENT = False
@@ -39,7 +38,7 @@ class GenericInferenceTransform(VideoTransform):
     engine-name: pytorch (default), onnx, tensorflow, tflite, openvino
 
     Example:
-      gst-launch-1.0 filesrc location=data/people.mp4 ! decodebin name=d \
+      python pyml-launch.py filesrc location=data/people.mp4 ! decodebin name=d \
         d. ! queue ! videoconvert ! videoscale \
         ! "video/x-raw,format=RGB,width=640,height=480" \
         ! pyml_inference engine-name=onnx model-name=yolo11m.onnx device=cpu \
@@ -61,28 +60,16 @@ class GenericInferenceTransform(VideoTransform):
         )
         return result
 
-    def do_transform_ip(self, buf):
-        try:
-            frames, num_sources, _ = frameio.read_frames(
-                buf, self.sinkpad, self.width, self.height
-            )
-            if frames is None:
-                return FlowReturn.ERROR
+    def process_frames(self, frames, num_sources, fmt, target):
+        """Run the engine on the frame and log the result. The frame is unchanged."""
+        frame = frames[0] if num_sources > 1 else frames
 
-            frame = frames[0] if num_sources > 1 else frames
+        if not self.engine:
+            return
 
-            if not self.engine:
-                return FlowReturn.OK
-
-            result = self.engine.do_forward(frame)
-            if result is not None:
-                self.logger.info(f"inference result: {result}")
-
-            return FlowReturn.OK
-
-        except Exception as e:
-            self.logger.error(f"inference error: {e}")
-            return FlowReturn.ERROR
+        result = self.engine.do_forward(frame)
+        if result is not None:
+            self.logger.info(f"inference result: {result}")
 
 
 if CAN_REGISTER_ELEMENT and backend.BACKEND == "gst":

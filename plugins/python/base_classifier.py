@@ -18,15 +18,9 @@
 
 
 from utils.runtime_utils import runtime_check_gstreamer_version
-import gi
 from video_transform import VideoTransform
 
-gi.require_version("Gst", "1.0")
-gi.require_version("GstBase", "1.0")
-gi.require_version("GstVideo", "1.0")
-from gi.repository import Gst  # noqa: E402
-
-from backend import analytics  # noqa: E402
+from backend import analytics
 
 
 class BaseClassifier(VideoTransform):
@@ -48,36 +42,12 @@ class BaseClassifier(VideoTransform):
         self.logger.error("No model loaded in BaseClassifier.")
         return None
 
-    def do_transform_ip(self, buf):
-        """
-        Processes an image and attaches classification metadata.
-        """
-        import numpy as np
-
-        try:
-            with buf.map(Gst.MapFlags.READ | Gst.MapFlags.WRITE) as info:
-                if info.data is None:
-                    self.logger.error("Buffer mapping returned None data.")
-                    return Gst.FlowReturn.ERROR
-
-                frame = np.array(info.data, dtype=np.uint8).reshape(
-                    self.height, self.width, 3
-                )
-
-                # Perform classification
-                results = self.do_forward(frame)
-                if not results:
-                    self.logger.warning("Classification returned no results.")
-                    return Gst.FlowReturn.ERROR
-
-                # Process results
-                self.do_decode(buf, results)
-
-            return Gst.FlowReturn.OK
-
-        except Exception as e:
-            self.logger.error(f"do_transform_ip: Unexpected error: {e}")
-            return Gst.FlowReturn.ERROR
+    def process_frames(self, frames, num_sources, fmt, target):
+        """Classify the frame and attach the label as metadata."""
+        results = self.do_forward(frames)
+        if not results:
+            raise RuntimeError("classification returned no results")
+        self.do_decode(target, results)
 
     def do_decode(self, buf, output):
         """

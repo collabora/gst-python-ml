@@ -50,32 +50,27 @@ class Sepformer(BaseSeparate):
 
     SAMPLE_RATE = 8000
 
-    CAPS = Gst.Caps(
-        Gst.Structure(
-            "audio/x-raw",
-            format="S16LE",
-            layout="interleaved",
-            rate=SAMPLE_RATE,
-            channels=1,
-        )
-    )
+    INPUT_CAPS = "audio/x-raw,format=S16LE,layout=interleaved,rate=8000,channels=1"
+    OUTPUT_CAPS = "audio/x-raw,format=S16LE,layout=interleaved,rate=8000,channels=1"
 
-    __gsttemplates__ = (
-        Gst.PadTemplate.new_with_gtype(
-            "sink",
-            Gst.PadDirection.SINK,
-            Gst.PadPresence.REQUEST,
-            CAPS,
-            GstBase.AggregatorPad.__gtype__,
-        ),
-        Gst.PadTemplate.new_with_gtype(
-            "src",
-            Gst.PadDirection.SRC,
-            Gst.PadPresence.ALWAYS,
-            CAPS,
-            GstBase.AggregatorPad.__gtype__,
-        ),
-    )
+    # Building a Gst object needs Gst.init, which only the gst backend calls.
+    if backend.BACKEND == "gst":
+        __gsttemplates__ = (
+            Gst.PadTemplate.new_with_gtype(
+                "sink",
+                Gst.PadDirection.SINK,
+                Gst.PadPresence.REQUEST,
+                Gst.Caps.from_string(INPUT_CAPS),
+                GstBase.AggregatorPad.__gtype__,
+            ),
+            Gst.PadTemplate.new_with_gtype(
+                "src",
+                Gst.PadDirection.SRC,
+                Gst.PadPresence.ALWAYS,
+                Gst.Caps.from_string(OUTPUT_CAPS),
+                GstBase.AggregatorPad.__gtype__,
+            ),
+        )
 
     def __init__(self):
         super().__init__()

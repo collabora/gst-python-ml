@@ -35,16 +35,6 @@ except ImportError as e:
 
 TTS_SAMPLE_RATE = 22050
 
-OCAPS = Gst.Caps(
-    Gst.Structure(
-        "audio/x-raw",
-        format="S16LE",
-        layout="interleaved",
-        rate=TTS_SAMPLE_RATE,
-        channels=1,
-    )
-)
-
 
 class CoquiTTS(BaseTts):
     __gstmetadata__ = (
@@ -54,15 +44,20 @@ class CoquiTTS(BaseTts):
         "Aaron Boxer <aaron.boxer@collabora.com>",
     )
 
-    __gsttemplates__ = (
-        Gst.PadTemplate.new_with_gtype(
-            "src",
-            Gst.PadDirection.SRC,
-            Gst.PadPresence.ALWAYS,
-            OCAPS,
-            GstBase.AggregatorPad.__gtype__,
-        ),
-    )
+    # the rate has to match TTS_SAMPLE_RATE, which the element reports downstream
+    OUTPUT_CAPS = "audio/x-raw,format=S16LE,layout=interleaved,rate=22050,channels=1"
+
+    # Building a Gst object needs Gst.init, which only the gst backend calls.
+    if backend.BACKEND == "gst":
+        __gsttemplates__ = (
+            Gst.PadTemplate.new_with_gtype(
+                "src",
+                Gst.PadDirection.SRC,
+                Gst.PadPresence.ALWAYS,
+                Gst.Caps.from_string(OUTPUT_CAPS),
+                GstBase.AggregatorPad.__gtype__,
+            ),
+        )
 
     def do_load_model(self):
         from TTS.api import TTS

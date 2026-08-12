@@ -16,13 +16,18 @@ properties are declared here with the `GObject` shim so leaf code that reads
 
 The model is loaded lazily on the first frame (`_ensure_model`) rather than from
 a `do_start` framework virtual, since the g2g host has no start hook.
+
+The payload driver (`g2g_process_payload`, for a stream that is not raw video)
+also sits here rather than in the aggregator, so that the aggregator, which
+subclasses this, gets it too: a single-chain text or audio element is hosted
+1-in-1-out even though its gst counterpart is a `GstBase.Aggregator`.
 """
 
-from backend.core import MLEngineMixin
+from backend.core import MLEngineMixin, PayloadProcessingMixin
 from backend.g2g.shims import GObject
 
 
-class BaseTransform(MLEngineMixin):
+class BaseTransform(MLEngineMixin, PayloadProcessingMixin):
     """Base for g2g ML transform elements (same in/out format, e.g. detection)."""
 
     def __init__(self):
@@ -132,3 +137,13 @@ class BaseTransform(MLEngineMixin):
         """
         if self.mgr.engine_name and (self.engine is None or self.engine.model is None):
             self.do_load_model()
+
+    def g2g_process_payload(self, buffers, caps, meta):
+        """Host driver for a stream that is not raw video: run the element's
+        `process_payload` over the input bytes and emit what it returns."""
+        self._ensure_model()
+        self._ensure_started()
+        # copied, not viewed: the host takes its buffer back when this returns,
+        # and an element that accumulates keeps what it was given
+        for payload in self.process_payload(bytes(memoryview(buffers[0]))):
+            meta.emit(payload, duration_ns=self.payload_duration_ns(len(payload)))

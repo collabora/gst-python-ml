@@ -26,9 +26,12 @@ from base_aggregator import BaseAggregator
 gi.require_version("Gst", "1.0")
 gi.require_version("GstBase", "1.0")
 gi.require_version("GstAudio", "1.0")
-from gi.repository import Gst, GObject, GstBase, GstAudio  # noqa: E402
+from gi.repository import Gst, GstBase, GstAudio  # noqa: E402
 
-ICAPS = Gst.Caps(Gst.Structure("text/x-raw", format="utf8"))
+import backend  # noqa: E402
+from backend import GObject  # noqa: E402
+
+BYTES_PER_SAMPLE = 2  # S16LE, the format every subclass produces
 
 
 class BaseTts(BaseAggregator):
@@ -39,27 +42,27 @@ class BaseTts(BaseAggregator):
         "Aaron Boxer <aaron.boxer@collabora.com>",
     )
 
-    __gsttemplates__ = (
-        Gst.PadTemplate.new_with_gtype(
-            "sink",
-            Gst.PadDirection.SINK,
-            Gst.PadPresence.REQUEST,
-            ICAPS,
-            GstBase.AggregatorPad.__gtype__,
-        ),
-    )
+    # the sink pad caps, stated once for both backends; each subclass declares
+    # the audio it produces
+    INPUT_CAPS = "text/x-raw,format=utf8"
+
+    # Building a Gst object needs Gst.init, which only the gst backend calls.
+    if backend.BACKEND == "gst":
+        __gsttemplates__ = (
+            Gst.PadTemplate.new_with_gtype(
+                "sink",
+                Gst.PadDirection.SINK,
+                Gst.PadPresence.REQUEST,
+                Gst.Caps.from_string(INPUT_CAPS),
+                GstBase.AggregatorPad.__gtype__,
+            ),
+        )
 
     language = GObject.Property(
         type=str,
         default="en",
         nick="Language",
         blurb="Two-character code for the language to be used by TTS model.",
-    )
-    streaming = GObject.Property(
-        type=bool,
-        default=False,
-        nick="Streaming",
-        blurb="Enable streaming mode for real-time audio generation.",
     )
     speaker = GObject.Property(
         type=str,
@@ -72,7 +75,17 @@ class BaseTts(BaseAggregator):
         super().__init__()
         self.segment_pushed = False
         self.device = "cpu"
-        self.streaming_enabled = False
+        self.__streaming = False
+
+    @GObject.Property(type=bool, default=False)
+    def streaming(self):
+        "Enable streaming mode for real-time audio generation."
+        return self.__streaming
+
+    @streaming.setter
+    def streaming(self, value):
+        self.__streaming = value
+        self.logger.info(f"Streaming mode {'enabled' if value else 'disabled'}")
 
     @abstractmethod
     def do_load_model(self):
@@ -86,27 +99,6 @@ class BaseTts(BaseAggregator):
     def do_get_sample_rate(self):
         pass
 
-    def set_property(self, property_name, value):
-        if property_name == "speaker":
-            self.speaker = value
-        elif property_name == "language":
-            self.language = value
-        elif property_name == "streaming":
-            self.streaming_enabled = value
-            self.logger.info(f"Streaming mode {'enabled' if value else 'disabled'}")
-        else:
-            super().set_property(property_name, value)
-
-    def get_property(self, property_name):
-        if property_name == "speaker":
-            return self.speaker
-        elif property_name == "language":
-            return self.language
-        elif property_name == "streaming":
-            return self.streaming_enabled
-        else:
-            return super().get_property(property_name)
-
     def do_set_caps(self, in_caps, out_caps):
         self.audio_info = GstAudio.AudioInfo()
         self.audio_info.set_format(
@@ -114,37 +106,44 @@ class BaseTts(BaseAggregator):
         )
         return True
 
-    def do_process(self, buf):
+    def process_payload(self, payload: bytes) -> list[bytes]:
+        """Speaks the input text, one payload per stretch of generated audio."""
+        if not payload:
+            return []
+
+        text = payload.decode("utf-8", errors="replace")
+        self.logger.info(f"TTS: received text: {text}")
+
+        chunks = self.split_text_into_chunks(text, 20) if self.streaming else [text]
+        payloads = []
+        for chunk in chunks:
+            audio = asyncio.run(self.process_transcript(chunk))
+            if audio is not None:
+                payloads.append(audio.tobytes())
+
+        return payloads
+
+    def payload_duration_ns(self, payload_size):
+        samples = payload_size // BYTES_PER_SAMPLE
+        return int(samples / self.do_get_sample_rate() * Gst.SECOND)
+
+    def push_payload(self, outbuf):
+        """Generated speech runs for its own length and is played whenever the
+        pipeline reaches it. The text buffer it came from says neither, so the
+        timing the driver copied over is replaced here."""
         try:
-            success, map_info = buf.map(Gst.MapFlags.READ)
-            if not success:
-                self.logger.error("Failed to map input buffer")
-                return Gst.FlowReturn.ERROR
+            outbuf.pts = Gst.CLOCK_TIME_NONE
+            outbuf.dts = Gst.CLOCK_TIME_NONE
+            outbuf.duration = self.payload_duration_ns(outbuf.get_size())
 
-            byte_data = bytes(map_info.data)
-            if not byte_data:
-                buf.unmap(map_info)
-                return Gst.FlowReturn.OK
+            ret = self.srcpad.push(outbuf)
+            if ret != Gst.FlowReturn.OK:
+                raise RuntimeError(f"Error pushing audio to pipeline: {ret}")
 
-            try:
-                byte_data = byte_data.decode("utf-8", errors="replace")
-            except Exception as e:
-                self.logger.error(f"Error decoding text data: {e}")
-                buf.unmap(map_info)
-                return Gst.FlowReturn.ERROR
-
-            self.logger.info(f"TTS: received text: {byte_data}")
-
-            if self.streaming_enabled:
-                self.convert_text_to_audio_streaming_async(byte_data)
-            else:
-                self.convert_text_to_audio_async(byte_data)
-
-            buf.unmap(map_info)
+            self.logger.info("TTS: audio generated and pushed downstream successfully.")
 
         except Exception as e:
-            self.logger.error(f"Error processing text buffer: {e}")
-            return Gst.FlowReturn.ERROR
+            self.logger.error(f"Error pushing audio to pipeline: {e}")
 
     async def process_transcript(self, transcript):
         import soundfile as sf
@@ -164,36 +163,11 @@ class BaseTts(BaseAggregator):
             if sr != self.do_get_sample_rate():
                 raise ValueError("Sample rate mismatch in audio processing")
 
-            self.push_audio_to_pipeline(audio_bytes)
+            return audio_bytes
         except Exception as e:
             self.logger.error(f"Error processing TTS: {e}")
-
-    def convert_text_to_audio_async(self, text):
-        asyncio.run(self.process_transcript(text))
-
-    def convert_text_to_audio_streaming_async(self, text):
-        """Converts the text in smaller chunks for streaming."""
-        chunks = self.split_text_into_chunks(text, 20)
-        for chunk in chunks:
-            asyncio.run(self.process_transcript(chunk))
+            return None
 
     def split_text_into_chunks(self, text, max_length=50):
         """Splits text into smaller chunks for streaming."""
         return [text[i : i + max_length] for i in range(0, len(text), max_length)]
-
-    def push_audio_to_pipeline(self, audio_data):
-        try:
-            duration = len(audio_data) / self.do_get_sample_rate() * Gst.SECOND
-            buffer = Gst.Buffer.new_wrapped(audio_data.tobytes())
-
-            buffer.pts = Gst.CLOCK_TIME_NONE
-            buffer.duration = duration
-
-            ret = self.srcpad.push(buffer)
-            if ret != Gst.FlowReturn.OK:
-                raise RuntimeError(f"Error pushing audio to pipeline: {ret}")
-
-            self.logger.info("TTS: audio generated and pushed downstream successfully.")
-
-        except Exception as e:
-            self.logger.error(f"Error pushing audio to pipeline: {e}")

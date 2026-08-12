@@ -41,7 +41,7 @@ class ActionTask:
             return self.engine.do_forward(frame_buffer)
         return None
 
-    def decode(self, result, fmt, frame):
+    def decode(self, frame, result, fmt):
         """Turn a classification result into ``(output_frame_or_None, blob_bytes)``.
 
         ``output_frame`` is the label-overlaid frame in pixel format ``fmt``

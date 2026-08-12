@@ -97,7 +97,7 @@ For pipeline testing:
 
 ```bash
 gst-inspect-1.0 python  # Verify all elements load
-gst-launch-1.0 filesrc location=data/people.mp4 num-buffers=5 \
+python pyml-launch.py filesrc location=data/people.mp4 num-buffers=5 \
   ! decodebin ! videoconvert ! videoscale \
   ! "video/x-raw,format=RGB,width=640,height=640" \
   ! pyml_objectdetector engine-name=onnx model-name=yolo11n.onnx device=cpu \

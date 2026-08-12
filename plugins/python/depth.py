@@ -25,7 +25,7 @@ try:
     from utils.format_converter import FormatConverter
     from engine.depth_anything_engine import DepthAnythingEngine
     from engine.engine_factory import EngineFactory
-    from backend import frameio, FlowReturn, GObject
+    from backend import GObject
     from tasks.depth import DepthTask
 
 except ImportError as e:
@@ -57,6 +57,8 @@ class DepthTransform(VideoTransform, DepthTask):
     Use frame-stride to skip frames and reduce compute:
       pyml_depth model-name=depth-anything/Depth-Anything-V2-Small-hf frame-stride=2
     """
+
+    META_HEADER = DEPTH_META_HEADER
 
     __gstmetadata__ = (
         "Depth",
@@ -96,35 +98,6 @@ class DepthTransform(VideoTransform, DepthTask):
     def engine_name(self, value):
         raise ValueError("'engine_name' is read-only for pyml_depth")
 
-    def do_transform_ip(self, buf):
-        try:
-            frames, num_sources, fmt = frameio.read_frames(
-                buf, self.sinkpad, self.width, self.height
-            )
-            if frames is None:
-                return FlowReturn.ERROR
-
-            if num_sources == 1:
-                depth = self.forward(frames)
-                if depth is None:
-                    return FlowReturn.ERROR
-                output, blob = self.decode(frames, depth, fmt)
-            else:
-                depths = self.forward(frames)
-                if not depths:
-                    return FlowReturn.OK
-                # For batch: apply only the first depth map (primary frame)
-                output, blob = self.decode(frames, depths[0], fmt)
-
-            if output is not None:
-                frameio.write_frame(buf, output)
-            if blob is not None:
-                frameio.append_blob(buf, DEPTH_META_HEADER, blob)
-            return FlowReturn.OK
-
-        except Exception as e:
-            self.logger.error(f"Depth transform error: {e}")
-            return FlowReturn.ERROR
 
 
 if CAN_REGISTER_ELEMENT and backend.BACKEND == "gst":

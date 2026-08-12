@@ -1,4 +1,4 @@
-"""Unit tests for the g2g element backend (`GSTML_BACKEND=g2g`).
+"""Unit tests for the g2g element backend (`PYML_BACKEND=g2g`).
 
 These exercise the backend with no GStreamer present: the backend selection, the
 `GObject` / `FlowReturn` shims, the `G2gFrameIO` buffer round-trip, the
@@ -6,18 +6,26 @@ These exercise the backend with no GStreamer present: the backend selection, the
 on a `VideoTransform` subclass. The g2g host's `FrameBuffer` (a writable
 buffer-protocol view) and `MetaSink` (write-only staging) are stubbed with a
 `bytearray` and a recording object, so no Rust host is needed.
+
+The payload tests at the end drive one text element through both backend
+drivers, so they need GStreamer for the gst half and skip without it.
 """
 
+import importlib
 import os
+import subprocess
 import sys
 from pathlib import Path
 
 import numpy as np
+import pytest
+
+PLUGIN_DIR = Path(__file__).resolve().parent.parent / "plugins" / "python"
 
 # Select the g2g backend before importing `backend`, and make the plugin package
 # importable.
-os.environ["GSTML_BACKEND"] = "g2g"
-sys.path.insert(0, str(Path(__file__).resolve().parent.parent / "plugins" / "python"))
+os.environ["PYML_BACKEND"] = "g2g"
+sys.path.insert(0, str(PLUGIN_DIR))
 
 import backend  # noqa: E402
 from backend import (
@@ -25,6 +33,7 @@ from backend import (
     FlowReturn,
     frameio,
     analytics,
+    BaseAggregator,
     VideoTransform,
 )  # noqa: E402
 
@@ -40,6 +49,12 @@ class StubMetaSink:
         self.staged = []
         self.relations = []
         self.class_names = None
+        self.emitted = []
+        self.emitted_durations = []
+
+    def emit(self, payload, duration_ns=None):
+        self.emitted.append(payload)
+        self.emitted_durations.append(duration_ns)
 
     def set_class_names(self, names):
         self.class_names = list(names)
@@ -73,6 +88,64 @@ class StubMetaSink:
     @property
     def blobs(self):
         return self._of_kind("blob")
+
+
+PAYLOAD_ELEMENT_MODULES = [
+    "base_translate",
+    "base_transcribe",
+    "base_llm",
+    "base_separate",
+    "base_tts",
+    "mariantranslate",
+    "whispertranscribe",
+    "whisperlive",
+    "llm",
+    "demucs",
+    "sepformer",
+    "coquitts",
+    "whisperspeechtts",
+]
+
+
+def test_payload_elements_import_under_g2g_without_gst_init():
+    """A fresh interpreter, because this check cannot be honest in-process.
+
+    The g2g host never calls `Gst.init`, and building a `Gst.Caps` or a pad
+    template without it raises, or for `Gst.PadTemplate.new` takes the process
+    down. Once any test here has initialised Gst, every one of these imports
+    succeeds whether or not the element guards its Gst construction, so the
+    check only means anything in a process that never did.
+    """
+    result = subprocess.run(
+        [sys.executable, "-c", "import " + ", ".join(PAYLOAD_ELEMENT_MODULES)],
+        env={**os.environ, "PYML_BACKEND": "g2g", "PYTHONPATH": str(PLUGIN_DIR)},
+        capture_output=True,
+        text=True,
+    )
+
+    assert result.returncode == 0, result.stderr
+    assert result.stderr == "", "something built a Gst object at import time"
+
+
+def test_every_element_module_imports_under_g2g_without_gst_init():
+    """The same check over the whole plugin directory, so a new element cannot
+    quietly reintroduce the crash.
+
+    Kept apart from the payload check above because a module here may warn about
+    a dependency it cannot find, which is not what this is looking for. A pad
+    template built without `Gst.init` segfaults, so an element that forgets the
+    backend guard takes down whatever process imports it.
+    """
+    modules = sorted(p.stem for p in PLUGIN_DIR.glob("*.py"))
+
+    result = subprocess.run(
+        [sys.executable, "-c", "import " + ", ".join(modules)],
+        env={**os.environ, "PYML_BACKEND": "g2g", "PYTHONPATH": str(PLUGIN_DIR)},
+        capture_output=True,
+        text=True,
+    )
+
+    assert result.returncode == 0, result.stderr
 
 
 def test_backend_selected_is_g2g():
@@ -217,3 +290,500 @@ def test_video_transform_g2g_process_end_to_end():
     assert len(sink.objects) == 1
     assert sink.objects[0][5] == 0.99
     assert elem.width == width and elem.height == height
+
+
+class RecordingLogger:
+    """Stands in for the element's logger, keeping what it was told."""
+
+    def __init__(self):
+        self.warnings = []
+
+    def warning(self, message):
+        self.warnings.append(message)
+
+    def info(self, message):
+        pass
+
+    def error(self, message):
+        pass
+
+
+def gst():
+    pytest.importorskip("gi", reason="the gst driver and the pad templates need it")
+    import gi
+
+    gi.require_version("Gst", "1.0")
+    from gi.repository import Gst
+
+    Gst.init(None)
+    return Gst
+
+
+def gst_payload_driver():
+    """The gst backend's driver half, to mix into a leaf.
+
+    This process selected the g2g backend, so a leaf's element base is the g2g
+    one. Adding the driver gives a single instance both backends' entry points,
+    which is what the seam claims: the same element runs under either.
+    """
+    gst()
+    from backend.gst.aggregator import PayloadDriver
+
+    return PayloadDriver
+
+
+CHUNKED_OUTPUTS = [b"one", b"two", b"three"]
+
+
+def chunking_leaf():
+    """A payload element that answers one input buffer with several outputs."""
+    driver = gst_payload_driver()
+
+    class ChunkingLeaf(BaseAggregator, driver):
+        def process_payload(self, payload):
+            return list(CHUNKED_OUTPUTS)
+
+    leaf = ChunkingLeaf()
+    leaf.engine_name = None
+    leaf.logger = RecordingLogger()
+    return leaf
+
+
+def translate_leaf(translate_text):
+    """A real `BaseTranslate` whose model is the given text -> text function.
+
+    Importing the element needs GStreamer even under the g2g backend, since the
+    family still declares its pad templates with Gst types.
+    """
+    driver = gst_payload_driver()
+    from base_translate import BaseTranslate
+
+    class FakeTranslate(BaseTranslate, driver):
+        def do_translate_text(self, text):
+            return translate_text(text)
+
+    leaf = FakeTranslate()
+    leaf.engine_name = None  # nothing to load: the fake above is the model
+    return leaf
+
+
+class StubSrcPad:
+    """Stands in for the element's src pad, for the family that pushes straight
+    out of it instead of through the aggregator."""
+
+    def __init__(self, pushed):
+        self._pushed = pushed
+        self.push_count = 0
+
+    def push(self, buf):
+        self._pushed.append(buf)
+        self.push_count += 1
+        return 0
+
+
+def drive_gst_payload(leaf, payload, pts=1000, duration=500):
+    """Run the gst driver over one input buffer, returning what it sent.
+
+    Both send routes are stubbed, the aggregator's `finish_buffer` and the src
+    pad, so `leaf.srcpad.push_count` says which one the element took.
+    """
+    Gst = gst()
+    from backend.gst.aggregator import BaseAggregator as GstBaseAggregator
+
+    pushed = []
+    leaf.finish_buffer = pushed.append
+    leaf.srcpad = StubSrcPad(pushed)
+
+    inbuf = Gst.Buffer.new_allocate(None, len(payload), None)
+    inbuf.fill(0, payload)
+    inbuf.pts = pts
+    inbuf.duration = duration
+
+    ret = GstBaseAggregator.do_process(leaf, inbuf)
+    return ret, pushed
+
+
+def buffer_bytes(buf):
+    Gst = gst()
+    success, map_info = buf.map(Gst.MapFlags.READ)
+    assert success
+    data = bytes(map_info.data)
+    buf.unmap(map_info)
+    return data
+
+
+def test_g2g_payload_driver_emits_the_translated_bytes():
+    leaf = translate_leaf(lambda text: "hello" if text == "hola" else "")
+    sink = StubMetaSink()
+
+    leaf.g2g_process_payload([bytearray(b"hola")], "text/x-raw,format=utf8", sink)
+
+    assert sink.emitted == [b"hello"]
+    assert sink.emitted_durations == [None], "text keeps the input buffer's timing"
+
+
+def test_g2g_payload_driver_emits_nothing_when_the_element_has_no_output():
+    leaf = translate_leaf(lambda text: "")
+    sink = StubMetaSink()
+
+    leaf.g2g_process_payload([bytearray(b"hola")], "text/x-raw,format=utf8", sink)
+
+    assert sink.emitted == [], "an empty result must not reach the host"
+
+
+def test_g2g_payload_driver_emits_every_payload():
+    leaf = chunking_leaf()
+    sink = StubMetaSink()
+
+    leaf.g2g_process_payload([bytearray(b"in")], "audio/x-raw", sink)
+
+    assert sink.emitted == CHUNKED_OUTPUTS
+    assert leaf.logger.warnings == []
+
+
+def test_gst_payload_driver_pushes_the_translated_buffer():
+    Gst = gst()
+    leaf = translate_leaf(lambda text: "hello" if text == "hola" else "")
+
+    ret, pushed = drive_gst_payload(leaf, b"hola")
+
+    assert ret == Gst.FlowReturn.OK
+    assert len(pushed) == 1
+    assert buffer_bytes(pushed[0]) == b"hello"
+    assert pushed[0].pts == 1000 and pushed[0].duration == 500
+
+
+def test_gst_payload_driver_pushes_nothing_when_the_element_has_no_output():
+    Gst = gst()
+    leaf = translate_leaf(lambda text: "")
+
+    ret, pushed = drive_gst_payload(leaf, b"hola")
+
+    assert ret == Gst.FlowReturn.OK
+    assert pushed == []
+
+
+def test_gst_payload_driver_pushes_every_payload_as_its_own_buffer():
+    leaf = chunking_leaf()
+
+    _, pushed = drive_gst_payload(leaf, b"in")
+
+    assert [buffer_bytes(buf) for buf in pushed] == CHUNKED_OUTPUTS
+    assert leaf.logger.warnings == []
+
+
+VAD_CHUNK_SAMPLES = 2400  # 150 ms at 16 kHz, so two silent chunks end a clip
+
+
+class Segment:
+    """One piece of a transcript, as the Whisper models hand it back."""
+
+    def __init__(self, text):
+        self.text = text
+
+
+def stub_vad(monkeypatch):
+    """Stand in for the optional VAD package the transcribe family builds in its
+    constructor. This one calls any non-zero sample speech, which lets a test
+    write silence and speech as buffer contents."""
+    import types
+
+    class SpeechIsNonZero:
+        def chunk_samples(self):
+            return VAD_CHUNK_SAMPLES
+
+        def process_chunk(self, chunk):
+            return 1.0 if any(chunk) else 0.0
+
+    module = types.ModuleType("pysilero_vad")
+    module.SileroVoiceActivityDetector = SpeechIsNonZero
+    monkeypatch.setitem(sys.modules, "pysilero_vad", module)
+
+
+def transcribe_leaf(monkeypatch, transcript):
+    """A real `BaseTranscribe` with a scripted VAD and transcriber."""
+    driver = gst_payload_driver()
+    stub_vad(monkeypatch)
+
+    from base_transcribe import BaseTranscribe
+
+    class FakeTranscribe(BaseTranscribe, driver):
+        def do_transcribe(self, audio_data, task):
+            return [Segment(word) for word in transcript.split()]
+
+    leaf = FakeTranscribe()
+    leaf.engine_name = None
+    return leaf
+
+
+def speech(chunks=1):
+    return np.full(VAD_CHUNK_SAMPLES * chunks, 1000, dtype=np.int16).tobytes()
+
+
+def silence(chunks=1):
+    return np.zeros(VAD_CHUNK_SAMPLES * chunks, dtype=np.int16).tobytes()
+
+
+def separate_leaf(sample_rate=4):
+    """A real `BaseSeparate` whose model returns the audio it was given."""
+    driver = gst_payload_driver()
+    from base_separate import BaseSeparate
+
+    class PassThroughSeparate(BaseSeparate, driver):
+        SAMPLE_RATE = sample_rate
+
+        def do_separate(self, audio_data):
+            return audio_data
+
+    leaf = PassThroughSeparate()
+    leaf.engine_name = None
+    leaf.streaming = True  # a one second chunk, so four samples at this rate
+    return leaf
+
+
+class FakeEngine:
+    def do_generate(self, text, system_prompt=None):
+        return "answered " + text
+
+
+def llm_leaf():
+    """A real `BaseLlm` whose engine is a canned generator."""
+    driver = gst_payload_driver()
+    from base_llm import BaseLlm
+
+    class FakeLlm(BaseLlm, driver):
+        @property
+        def engine(self):
+            return self._fake_engine
+
+        def get_tokenizer(self):
+            return "tokenizer"
+
+        def get_model(self):
+            return "model"
+
+    leaf = FakeLlm()
+    leaf._fake_engine = FakeEngine()
+    leaf.engine_name = None
+    return leaf
+
+
+PAYLOAD_FAMILY_BASES = [
+    ("base_translate", "BaseTranslate"),
+    ("base_transcribe", "BaseTranscribe"),
+    ("base_llm", "BaseLlm"),
+    ("base_separate", "BaseSeparate"),
+    ("base_tts", "BaseTts"),
+]
+
+
+def declared_properties(cls):
+    """Every property the class declares or inherits, mapped to its owner."""
+    return {
+        name: klass.__name__
+        for klass in reversed(cls.__mro__)
+        for name, value in vars(klass).items()
+        if isinstance(value, GObject.Property)
+    }
+
+
+@pytest.mark.parametrize("module_name,class_name", PAYLOAD_FAMILY_BASES)
+def test_every_declared_property_reads_before_anything_sets_it(
+    monkeypatch, module_name, class_name
+):
+    """A freshly built element has to answer every property it declares.
+
+    Nothing applies a declared default: GObject keeps it in the pspec and never
+    routes it through the setter, so the constructor is the only thing that can
+    create the backing attribute a custom getter reads.
+    """
+    gst()
+    stub_vad(monkeypatch)
+    element = getattr(importlib.import_module(module_name), class_name)()
+
+    unreadable = []
+    for name, owner in sorted(declared_properties(type(element)).items()):
+        try:
+            getattr(element, name)
+        except AttributeError as exception:
+            unreadable.append(f"{owner}.{name}: {exception}")
+
+    assert unreadable == []
+
+
+def test_g2g_transcribe_emits_only_once_the_clip_ends(monkeypatch):
+    leaf = transcribe_leaf(monkeypatch, "hello world")
+    sink = StubMetaSink()
+    caps = "audio/x-raw,format=S16LE,rate=16000,channels=1"
+
+    leaf.g2g_process_payload([bytearray(speech())], caps, sink)
+    assert sink.emitted == [], "speech is still being accumulated"
+
+    leaf.g2g_process_payload([bytearray(silence(3))], caps, sink)
+    assert sink.emitted == [b"hello world"], "the silence should end the clip"
+
+
+def test_gst_transcribe_pushes_only_once_the_clip_ends(monkeypatch):
+    leaf = transcribe_leaf(monkeypatch, "hello world")
+
+    _, pushed = drive_gst_payload(leaf, speech())
+    assert pushed == [], "speech is still being accumulated"
+
+    _, pushed = drive_gst_payload(leaf, silence(3))
+    assert [buffer_bytes(buf) for buf in pushed] == [b"hello world"]
+    assert pushed[0].pts == 1000 and pushed[0].duration == 500
+
+
+def test_gst_transcribe_pushes_nothing_for_a_buffer_below_one_vad_chunk(monkeypatch):
+    leaf = transcribe_leaf(monkeypatch, "hello world")
+
+    _, pushed = drive_gst_payload(leaf, np.zeros(8, dtype=np.int16).tobytes())
+
+    assert pushed == []
+
+
+def test_gst_separate_pushes_one_buffer_per_whole_chunk():
+    leaf = separate_leaf()
+    samples = np.arange(1, 11, dtype=np.int16)  # ten samples, so two chunks of four
+
+    _, pushed = drive_gst_payload(leaf, samples.tobytes())
+
+    assert [buffer_bytes(buf) for buf in pushed] == [
+        samples[:4].tobytes(),
+        samples[4:8].tobytes(),
+    ]
+    assert len(leaf.clip_buffer) == 2, "the remainder waits for the next buffer"
+
+
+def test_g2g_separate_emits_one_buffer_per_whole_chunk():
+    leaf = separate_leaf()
+    leaf.logger = RecordingLogger()
+    sink = StubMetaSink()
+    samples = np.arange(1, 11, dtype=np.int16)
+
+    leaf.g2g_process_payload([bytearray(samples.tobytes())], "audio/x-raw", sink)
+
+    assert sink.emitted == [samples[:4].tobytes(), samples[4:8].tobytes()]
+    assert leaf.logger.warnings == []
+
+
+def test_g2g_llm_emits_the_generated_text():
+    leaf = llm_leaf()
+    sink = StubMetaSink()
+
+    leaf.g2g_process_payload([bytearray(b"question")], "text/x-raw,format=utf8", sink)
+
+    assert sink.emitted == [b"answered question"]
+
+
+def test_gst_llm_pushes_out_of_the_src_pad_rather_than_the_aggregator():
+    Gst = gst()
+    leaf = llm_leaf()
+
+    ret, pushed = drive_gst_payload(leaf, b"question")
+
+    assert ret == Gst.FlowReturn.OK
+    assert [buffer_bytes(buf) for buf in pushed] == [b"answered question"]
+    assert leaf.srcpad.push_count == 1, "this family has never used finish_buffer"
+    assert pushed[0].pts == 1000 and pushed[0].duration == 500
+
+
+TTS_SAMPLE_RATE = 22050
+TTS_SAMPLES = 8000
+
+
+def tts_leaf():
+    """A real `BaseTts` whose voice is a ramp of the right sample count."""
+    driver = gst_payload_driver()
+    from base_tts import BaseTts
+
+    class FakeTts(BaseTts, driver):
+        def do_load_model(self):
+            pass
+
+        def do_generate_speech(self, transcript):
+            return np.linspace(-0.5, 0.5, TTS_SAMPLES, dtype=np.float32)
+
+        def do_get_sample_rate(self):
+            return TTS_SAMPLE_RATE
+
+    leaf = FakeTts()
+    leaf.engine_name = None
+    return leaf
+
+
+def expected_tts_duration_ns():
+    return int(TTS_SAMPLES / TTS_SAMPLE_RATE * 1_000_000_000)
+
+
+def test_gst_tts_stamps_its_own_duration_and_no_presentation_time():
+    Gst = gst()
+    leaf = tts_leaf()
+
+    ret, pushed = drive_gst_payload(leaf, b"speak this")
+
+    assert ret == Gst.FlowReturn.OK
+    assert len(pushed) == 1
+    assert len(buffer_bytes(pushed[0])) == TTS_SAMPLES * 2, "S16LE, one channel"
+    assert (
+        pushed[0].pts == Gst.CLOCK_TIME_NONE
+    ), "the text buffer's pts is not the audio's"
+    assert pushed[0].dts == Gst.CLOCK_TIME_NONE
+    assert pushed[0].duration == expected_tts_duration_ns()
+    assert leaf.srcpad.push_count == 1, "this family has never used finish_buffer"
+
+
+def test_g2g_tts_emits_the_duration_the_audio_actually_runs_for():
+    leaf = tts_leaf()
+    sink = StubMetaSink()
+
+    leaf.g2g_process_payload([bytearray(b"speak this")], "text/x-raw,format=utf8", sink)
+
+    assert len(sink.emitted) == 1
+    assert len(sink.emitted[0]) == TTS_SAMPLES * 2
+    assert sink.emitted_durations == [expected_tts_duration_ns()]
+
+
+def test_tts_streaming_speaks_each_chunk_of_text_separately():
+    """Streaming splits the text into 20 character chunks, one payload each."""
+    gst()
+    leaf = tts_leaf()
+    leaf.streaming = True
+
+    _, pushed = drive_gst_payload(leaf, b"x" * 45)
+
+    assert len(pushed) == 3, "45 characters is three chunks"
+    assert {buf.duration for buf in pushed} == {expected_tts_duration_ns()}
+
+
+def test_g2g_tts_streaming_emits_each_chunk_of_text_separately():
+    leaf = tts_leaf()
+    leaf.streaming = True
+    sink = StubMetaSink()
+
+    leaf.g2g_process_payload([bytearray(b"x" * 45)], "text/x-raw,format=utf8", sink)
+
+    assert len(sink.emitted) == 3, "45 characters is three chunks"
+    assert sink.emitted_durations == [expected_tts_duration_ns()] * 3
+
+
+def test_gst_driver_keeps_the_input_timing_including_dts():
+    """base_llm timestamped its output with the input's dts; the driver, which
+    now builds that buffer, has to keep doing it."""
+    Gst = gst()
+    leaf = llm_leaf()
+
+    pushed = []
+    leaf.finish_buffer = pushed.append
+    leaf.srcpad = StubSrcPad(pushed)
+    inbuf = Gst.Buffer.new_allocate(None, len(b"question"), None)
+    inbuf.fill(0, b"question")
+    inbuf.pts = 90
+    inbuf.dts = 80
+    inbuf.duration = 70
+
+    from backend.gst.aggregator import BaseAggregator as GstBaseAggregator
+
+    GstBaseAggregator.do_process(leaf, inbuf)
+
+    assert (pushed[0].pts, pushed[0].dts, pushed[0].duration) == (90, 80, 70)

@@ -58,7 +58,9 @@ except ImportError as e:
 
 # Support CPU, OpenGL, and Vulkan buffers
 VIDEO_FORMATS = "video/x-raw, format=(string){ RGBA, ARGB, BGRA, ABGR }; video/x-raw(memory:GLMemory), format=(string){ RGBA, ARGB, BGRA, ABGR }; video/x-raw(memory:VulkanMemory), format=(string){ RGBA, ARGB, BGRA, ABGR }"
-OVERLAY_CAPS = Gst.Caps.from_string(VIDEO_FORMATS)
+# Building a Gst object needs Gst.init, which only the gst backend calls.
+if backend.BACKEND == "gst":
+    OVERLAY_CAPS = Gst.Caps.from_string(VIDEO_FORMATS)
 
 
 class Overlay(GstBase.BaseTransform):
@@ -69,20 +71,21 @@ class Overlay(GstBase.BaseTransform):
         "Aaron Boxer <aaron.boxer@collabora.com>",
     )
 
-    src_template = Gst.PadTemplate.new(
-        "src",
-        Gst.PadDirection.SRC,
-        Gst.PadPresence.ALWAYS,
-        OVERLAY_CAPS.copy(),
-    )
+    if backend.BACKEND == "gst":
+        src_template = Gst.PadTemplate.new(
+            "src",
+            Gst.PadDirection.SRC,
+            Gst.PadPresence.ALWAYS,
+            OVERLAY_CAPS.copy(),
+        )
 
-    sink_template = Gst.PadTemplate.new(
-        "sink",
-        Gst.PadDirection.SINK,
-        Gst.PadPresence.ALWAYS,
-        OVERLAY_CAPS.copy(),
-    )
-    __gsttemplates__ = (src_template, sink_template)
+        sink_template = Gst.PadTemplate.new(
+            "sink",
+            Gst.PadDirection.SINK,
+            Gst.PadPresence.ALWAYS,
+            OVERLAY_CAPS.copy(),
+        )
+        __gsttemplates__ = (src_template, sink_template)
 
     meta_path = GObject.Property(
         type=str,

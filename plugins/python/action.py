@@ -27,7 +27,7 @@ try:
     from utils.format_converter import FormatConverter
     from engine.action_engine import ActionEngine
     from engine.engine_factory import EngineFactory
-    from backend import frameio, FlowReturn, GObject
+    from backend import frameio, GObject
     from tasks.action import ActionTask
 
 except ImportError as e:
@@ -49,6 +49,8 @@ class ActionTransform(VideoTransform, ActionTask):
     Set model-name to a HuggingFace model ID, e.g.:
       MCG-NJU/videomae-base-finetuned-kinetics
     """
+
+    META_HEADER = ACTION_META_HEADER
 
     __gstmetadata__ = (
         "Action Recognition",
@@ -92,43 +94,24 @@ class ActionTransform(VideoTransform, ActionTask):
     def engine_name(self, value):
         raise ValueError("'engine_name' is read-only for pyml_action")
 
-    def do_transform_ip(self, buf):
-        try:
-            frames, _num_sources, fmt = frameio.read_frames(
-                buf, self.sinkpad, self.width, self.height
-            )
-            if frames is None:
-                return FlowReturn.ERROR
+    def process_frames(self, frames, num_sources, fmt, target):
+        """Accumulate a frame window, classify when it is full, decode the
+        latest result on every frame."""
+        frame = frames[0] if frames.ndim == 4 else frames
 
-            frame = frames[0] if frames.ndim == 4 else frames
+        if self._frame_buffer.maxlen != self.num_frames:
+            self._frame_buffer = deque(self._frame_buffer, maxlen=self.num_frames)
+        self._frame_buffer.append(frame.copy())
 
-            # Temporal accumulation stays in the shell: maintain the frame window.
-            # Update deque maxlen if property changed
-            if self._frame_buffer.maxlen != self.num_frames:
-                self._frame_buffer = deque(self._frame_buffer, maxlen=self.num_frames)
+        if len(self._frame_buffer) == self.num_frames:
+            result = self.forward(list(self._frame_buffer))
+            if result is not None:
+                self._last_result = result
 
-            self._frame_buffer.append(frame.copy())
-
-            # Run classification when buffer is full
-            if len(self._frame_buffer) == self.num_frames:
-                result = self.forward(list(self._frame_buffer))
-                if result is not None:
-                    self._last_result = result
-
-            # Draw label and attach metadata using the latest result
-            if self._last_result is not None:
-                # Portable task: produce the optional overlay frame and metadata.
-                output, blob = self.decode(self._last_result, fmt, frame)
-                if output is not None:
-                    frameio.write_frame(buf, output)
-                if blob is not None:
-                    frameio.append_blob(buf, ACTION_META_HEADER, blob)
-
-            return FlowReturn.OK
-
-        except Exception as e:
-            self.logger.error(f"Action recognition transform error: {e}")
-            return FlowReturn.ERROR
+        if self._last_result is None:
+            return
+        output, blob = self.decode(frame, self._last_result, fmt)
+        frameio.write_result(target, output, blob, self.META_HEADER)
 
 
 if CAN_REGISTER_ELEMENT and backend.BACKEND == "gst":

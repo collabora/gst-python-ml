@@ -25,26 +25,16 @@ import gi
 gi.require_version("Gst", "1.0")
 gi.require_version("GstBase", "1.0")
 gi.require_version("GObject", "2.0")
-from gi.repository import Gst, GObject, GstBase  # noqa: E402
+from gi.repository import Gst, GstBase  # noqa: E402
 
+import backend  # noqa: E402
+from backend import GObject  # noqa: E402
 from base_aggregator import BaseAggregator  # noqa: E402
 
 sys.stdout.reconfigure(encoding="utf-8")
 sys.stderr.reconfigure(encoding="utf-8")
 
 STT_SAMPLE_RATE = 16000  # Target sample rate for processing
-
-ICAPS = Gst.Caps(
-    Gst.Structure(
-        "audio/x-raw",
-        format="S16LE",
-        layout="interleaved",
-        rate=STT_SAMPLE_RATE,
-        channels=1,
-    )
-)
-
-OCAPS = Gst.Caps(Gst.Structure("text/x-raw", format="utf8"))
 
 
 class BaseTranscribe(BaseAggregator):
@@ -55,22 +45,29 @@ class BaseTranscribe(BaseAggregator):
         "Aaron Boxer <aaron.boxer@collabora.com>",
     )
 
-    __gsttemplates__ = (
-        Gst.PadTemplate.new_with_gtype(
-            "sink",
-            Gst.PadDirection.SINK,
-            Gst.PadPresence.REQUEST,
-            ICAPS,
-            GstBase.AggregatorPad.__gtype__,
-        ),
-        Gst.PadTemplate.new_with_gtype(
-            "src",
-            Gst.PadDirection.SRC,
-            Gst.PadPresence.ALWAYS,
-            OCAPS,
-            GstBase.AggregatorPad.__gtype__,
-        ),
-    )
+    # the caps each pad negotiates, stated once for both backends. The rate has
+    # to match STT_SAMPLE_RATE, which the VAD chunking works from.
+    INPUT_CAPS = "audio/x-raw,format=S16LE,layout=interleaved,rate=16000,channels=1"
+    OUTPUT_CAPS = "text/x-raw,format=utf8"
+
+    # Building a Gst object needs Gst.init, which only the gst backend calls.
+    if backend.BACKEND == "gst":
+        __gsttemplates__ = (
+            Gst.PadTemplate.new_with_gtype(
+                "sink",
+                Gst.PadDirection.SINK,
+                Gst.PadPresence.REQUEST,
+                Gst.Caps.from_string(INPUT_CAPS),
+                GstBase.AggregatorPad.__gtype__,
+            ),
+            Gst.PadTemplate.new_with_gtype(
+                "src",
+                Gst.PadDirection.SRC,
+                Gst.PadPresence.ALWAYS,
+                Gst.Caps.from_string(OUTPUT_CAPS),
+                GstBase.AggregatorPad.__gtype__,
+            ),
+        )
 
     def __init__(self):
         super().__init__()
@@ -132,101 +129,62 @@ class BaseTranscribe(BaseAggregator):
         pass
 
     def do_process_text(self, transcript):
-        # Encode the transcript as UTF-8
-        text_bytes = transcript.encode("utf-8")
-        encoded_size = len(text_bytes)
+        """The payload one transcript becomes. `None` sends nothing."""
+        return transcript.encode("utf-8")
 
-        # Create a new buffer for output and write the transcription
-        outbuf = Gst.Buffer.new_allocate(None, encoded_size, None)
-        outbuf.fill(0, text_bytes)
+    def process_payload(self, payload: bytes) -> list[bytes]:
+        """Runs VAD over the audio, transcribing each clip that ends.
 
-        return outbuf
-
-    def do_process(self, buf):
+        Speech is accumulated across buffers, so most buffers produce nothing.
+        """
         import numpy as np
 
-        self.push_segment_if_needed()
-        """Process audio data from the input buffers using VAD and Whisper."""
-        audio_collected = False
+        audio_data = np.frombuffer(payload, dtype=np.int16)
 
-        try:
-            # Map the buffer to access the audio data
-            success, map_info = buf.map(Gst.MapFlags.READ)
-            if not success:
-                self.logger.error("Failed to map input buffer")
-                buf.unmap(map_info)
-                return Gst.FlowReturn.OK
+        if len(audio_data) < self._vad_chunk_size:
+            self.logger.warning("Insufficient audio data for processing")
+            return []
 
-            # Convert buffer to numpy array (int16)
-            audio_data = np.frombuffer(map_info.data, dtype=np.int16)
-            audio_collected = True
+        payloads = []
+        while len(audio_data) >= self._vad_chunk_size:
+            vad_chunk = audio_data[: self._vad_chunk_size]
+            audio_data = audio_data[self._vad_chunk_size :]
 
-            if len(audio_data) < self._vad_chunk_size:
-                self.logger.warning("Insufficient audio data for processing")
-                buf.unmap(map_info)
-                return Gst.FlowReturn.OK
-
-            # Process audio data with VAD (Voice Activity Detection)
-            while len(audio_data) >= self._vad_chunk_size:
-                vad_chunk = audio_data[: self._vad_chunk_size]
-                audio_data = audio_data[self._vad_chunk_size :]
-
-                vad_confidence = self._vad.process_chunk(vad_chunk.tobytes())
-                if vad_confidence >= 0.7:
-                    if self.streaming:
-                        transcript = self._transcribe_audio(vad_chunk)
-                        if transcript is None:
-                            self.logger.warning("Empty transcript")
-                            buf.unmap(map_info)
-                            return Gst.FlowReturn.ERROR
-
-                        self._process_and_send(transcript, buf)
-                    else:
-                        # VAD detects voice activity, add to buffer
-                        self.active_clip = True
-                        self.silence_counter = 0
-                        self.clip_buffer.extend(vad_chunk)
+            vad_confidence = self._vad.process_chunk(vad_chunk.tobytes())
+            if vad_confidence >= 0.7:
+                if self.streaming:
+                    self._collect_transcript(payloads, vad_chunk)
                 else:
-                    # Increment silence counter when no voice is detected
-                    self.silence_counter += 1
+                    # VAD detects voice activity, add to buffer
+                    self.active_clip = True
+                    self.silence_counter = 0
+                    self.clip_buffer.extend(vad_chunk)
+            else:
+                # Increment silence counter when no voice is detected
+                self.silence_counter += 1
 
-                    # If silence is detected for too long, end the current segment
-                    if (
-                        self.active_clip
-                        and self.silence_counter > self.clip_silence_trigger_counter
-                    ):
-                        self.active_clip = False
-                        if not self.streaming:
-                            # Perform transcription in batch mode
-                            transcript = self._transcribe_audio(self.clip_buffer)
-                            if transcript is None:
-                                self.logger.warning("Empty transcript")
-                                buf.unmap(map_info)
-                                return Gst.FlowReturn.ERROR
+                # If silence is detected for too long, end the current segment
+                if (
+                    self.active_clip
+                    and self.silence_counter > self.clip_silence_trigger_counter
+                ):
+                    self.active_clip = False
+                    if not self.streaming:
+                        # Perform transcription in batch mode
+                        self._collect_transcript(payloads, self.clip_buffer)
+                        self.clip_buffer.clear()  # Clear the buffer for the next speech
 
-                            self._process_and_send(transcript, buf)
-                            self.clip_buffer.clear()  # Clear the buffer for the next speech
-            buf.unmap(map_info)
-        except Exception as e:
-            self.logger.error(f"Error during buffer processing: {e}")
+        return payloads
 
-        if not audio_collected:
-            self.logger.warning("No audio data collected from sink pads.")
-            return Gst.FlowReturn.ERROR
-
-        return Gst.FlowReturn.OK
-
-    def _process_and_send(self, transcript, inbuf):
-        outbuf = self.do_process_text(transcript)
-        if outbuf is None:
+    def _collect_transcript(self, payloads, chunk):
+        transcript = self._transcribe_audio(chunk)
+        if transcript is None:
+            self.logger.warning("Empty transcript")
             return
 
-        # Set PTS and duration from the input buffer
-        outbuf.pts = inbuf.pts
-        outbuf.duration = inbuf.duration
-
-        # Push the transcription downstream
-        self.finish_buffer(outbuf)
+        payload = self.do_process_text(transcript)
+        if payload is not None:
+            payloads.append(payload)
 
     def _transcribe_audio(self, chunk):
         """

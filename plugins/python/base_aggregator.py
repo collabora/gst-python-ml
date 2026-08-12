@@ -18,7 +18,7 @@
 
 """Compatibility shim. `BaseAggregator` now lives behind the pluggable backend
 in `backend/` (see `backend/__init__.py`). Leaf plugins keep importing it from
-here; the active backend is chosen by the GSTML_BACKEND environment variable.
+here; the active backend is chosen by the PYML_BACKEND environment variable.
 """
 
 from backend import BaseAggregator

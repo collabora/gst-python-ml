@@ -25,7 +25,7 @@ try:
     from utils.format_converter import FormatConverter
     from engine.anomaly_engine import AnomalyEngine
     from engine.engine_factory import EngineFactory
-    from backend import frameio, FlowReturn, GObject
+    from backend import frameio, GObject
     from tasks.anomaly import AnomalyTask
 
 except ImportError as e:
@@ -49,6 +49,8 @@ class AnomalyTransform(VideoTransform, AnomalyTask):
 
     Anomaly scores are always attached as a GST-ANOMALY: memory chunk (JSON).
     """
+
+    META_HEADER = ANOMALY_META_HEADER
 
     __gstmetadata__ = (
         "Anomaly Detection",
@@ -99,35 +101,19 @@ class AnomalyTransform(VideoTransform, AnomalyTask):
     def engine_name(self, value):
         raise ValueError("'engine_name' is read-only for pyml_anomaly")
 
-    def do_transform_ip(self, buf):
-        try:
-            # Load reference features on first transform if path is set
-            if not self._reference_loaded and self.reference_path and self.engine:
-                self.engine.load_reference(self.reference_path)
-                self._reference_loaded = True
+    def process_frames(self, frames, num_sources, fmt, target):
+        """Score the primary frame against the reference features."""
+        if not self._reference_loaded and self.reference_path and self.engine:
+            self.engine.load_reference(self.reference_path)
+            self._reference_loaded = True
 
-            frames, _num_sources, fmt = frameio.read_frames(
-                buf, self.sinkpad, self.width, self.height
-            )
-            if frames is None:
-                return FlowReturn.ERROR
+        frame = frames[0] if frames.ndim == 4 else frames
+        result = self.forward(frame)
+        if result is None:
+            return
 
-            frame = frames[0] if frames.ndim == 4 else frames
-            result = self.forward(frame)
-            if result is None:
-                return FlowReturn.OK
-
-            # Portable task: produce the optional overlay frame and the metadata.
-            output, blob = self.decode(frame, result, fmt)
-            if output is not None:
-                frameio.write_frame(buf, output)
-            if blob is not None:
-                frameio.append_blob(buf, ANOMALY_META_HEADER, blob)
-            return FlowReturn.OK
-
-        except Exception as e:
-            self.logger.error(f"Anomaly detection transform error: {e}")
-            return FlowReturn.ERROR
+        output, blob = self.decode(frame, result, fmt)
+        frameio.write_result(target, output, blob, self.META_HEADER)
 
 
 if CAN_REGISTER_ELEMENT and backend.BACKEND == "gst":

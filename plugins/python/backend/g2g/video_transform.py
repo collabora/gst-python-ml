@@ -18,26 +18,17 @@ gst backend drives from `do_transform_ip`).
 
 from backend.g2g.analytics import analytics
 from backend.g2g.frameio import frameio
+from backend.core import FrameProcessingMixin
 from backend.g2g.transform import BaseTransform
 
 
-class VideoTransform(BaseTransform):
+class VideoTransform(BaseTransform, FrameProcessingMixin):
     """Base for g2g video transform elements."""
 
     def __init__(self):
         super().__init__()
         self.width = 0
         self.height = 0
-
-    def process_frames(self, frames, num_sources, fmt, target):
-        """Run inference + write results for one frame (or batch of `num_sources`).
-
-        `frames` is an (H, W, C) array (single source) or (N, H, W, C); `target`
-        is the buffer handle to write a frame back to and to attach metadata to
-        (via `frameio` / `analytics`). The concrete element provides this; the
-        same hook is shared with the gst backend.
-        """
-        raise NotImplementedError("leaf element must implement process_frames")
 
     def g2g_process(self, buf, width, height, fmt, sink):
         self.width = width
@@ -47,6 +38,7 @@ class VideoTransform(BaseTransform):
         frameio.bind(sink, fmt)
         analytics.bind(sink)
         self._ensure_model()
+        self._ensure_started()
         frames, num_sources, fmt = frameio.read_frames(buf, None, width, height)
         if frames is None:
             return None

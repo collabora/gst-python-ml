@@ -54,20 +54,22 @@ class LLMStreamFilter(VideoTransform):
         "Aaron Boxer <aaron.boxer@collabora.com>",
     )
 
-    __gsttemplates__ = (
-        Gst.PadTemplate.new(
-            "video_src",
-            Gst.PadDirection.SRC,
-            Gst.PadPresence.ALWAYS,
-            Gst.Caps.from_string("video/x-raw"),
-        ),
-        Gst.PadTemplate.new(
-            "text_src",
-            Gst.PadDirection.SRC,
-            Gst.PadPresence.REQUEST,
-            Gst.Caps.from_string("text/x-raw, format=utf8"),
-        ),
-    )
+    # Building a Gst object needs Gst.init, which only the gst backend calls.
+    if backend.BACKEND == "gst":
+        __gsttemplates__ = (
+            Gst.PadTemplate.new(
+                "video_src",
+                Gst.PadDirection.SRC,
+                Gst.PadPresence.ALWAYS,
+                Gst.Caps.from_string("video/x-raw"),
+            ),
+            Gst.PadTemplate.new(
+                "text_src",
+                Gst.PadDirection.SRC,
+                Gst.PadPresence.REQUEST,
+                Gst.Caps.from_string("text/x-raw, format=utf8"),
+            ),
+        )
 
     num_streams = GObject.Property(
         type=int,

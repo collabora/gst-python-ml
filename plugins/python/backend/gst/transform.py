@@ -153,7 +153,11 @@ class BaseTransform(GstBase.BaseTransform, MLEngineMixin):
         else:
             self.kwargs.pop("compile", None)
 
-    # GStreamer framework virtual: load the model when the element starts.
+    # GStreamer framework virtual: load the model when the element starts, then
+    # run whatever the element itself needs starting (the backend-neutral hook).
     def do_start(self):
         self.do_load_model()
+        on_start = getattr(self, "on_start", None)
+        if on_start:
+            on_start()
         return True

@@ -1,5 +1,6 @@
 import subprocess
 import os
+import signal
 import re
 import pytest
 from pathlib import Path
@@ -22,10 +23,18 @@ FATAL_LOG_PATTERNS = (
     re.compile(r"^ERROR:.*", re.MULTILINE),
     re.compile(r"^WARNING: erroneous pipeline.*", re.MULTILINE),
     re.compile(r"^\S+ +\S+ +\S+ +ERROR +python .*", re.MULTILINE),
+    # g2g's own failures: the launcher's parse / run errors and the rewrite's.
+    re.compile(r"^(?:parse|pipeline) error:.*", re.MULTILINE),
+    re.compile(r"^pyml-launch: (?:no|unknown) .*", re.MULTILINE),
 )
 
-# Check if gst-launch-1.0 is available
-if not shutil.which("gst-launch-1.0"):
+BACKEND = os.environ.get("PYML_BACKEND", "gst").lower()
+
+# The launcher the README examples name. Runs from a tmp dir, so it is spelled
+# absolute here.
+LAUNCHER = f"python {BASE_DIR / 'pyml-launch.py'}"
+
+if BACKEND == "gst" and not shutil.which("gst-launch-1.0"):
     raise RuntimeError("gst-launch-1.0 not found in PATH. Please install GStreamer.")
 
 
@@ -38,9 +47,9 @@ def get_pipelines_from_readme():
     with open(readme_path, "r") as f:
         content = f.read()
 
-    # Match gst-launch-1.0 commands, accounting for Markdown backticks
+    # Match pyml-launch commands, accounting for Markdown backticks
     pipeline_pattern = (
-        r"(?:`)?\s*(GST_DEBUG=\d+\s+gst-launch-1\.0\s+.*?)(?:`)?(?=\n\n|\n\s*\n|$)"
+        r"(?:`)?\s*(python pyml-launch\.py\s+.*?)(?:`)?(?=\n\n|\n\s*\n|$)"
     )
     pipelines = re.findall(pipeline_pattern, content, re.DOTALL)
 
@@ -49,9 +58,10 @@ def get_pipelines_from_readme():
         pipeline = pipeline.strip().strip("`")
         print(f"Raw pipeline after stripping: {pipeline}")
 
-        if not pipeline.startswith(("GST_DEBUG=", "gst-launch-1.0")):
+        if not pipeline.startswith("python pyml-launch.py"):
             print(f"Skipping invalid pipeline: {pipeline}")
             continue
+        pipeline = pipeline.replace("python pyml-launch.py", LAUNCHER, 1)
 
         parts = pipeline.split("!")
         modified = False
@@ -67,7 +77,10 @@ def get_pipelines_from_readme():
                 modified = True
                 break
 
-        if not modified:
+        # Only on gst: g2g's `decodebin` takes its input caps from the element
+        # ahead of it, and a `queue` declares none, so capping the run this way
+        # would stop the pipeline parsing at all.
+        if not modified and BACKEND == "gst":
             for i, part in enumerate(parts):
                 part_clean = part.strip()
                 if "filesrc" in part_clean:
@@ -85,6 +98,23 @@ def get_pipelines_from_readme():
 
 
 PIPELINES = get_pipelines_from_readme()
+
+
+def end_process_group(process):
+    """Stop the pipeline and everything it started.
+
+    `shell=True` makes the shell the direct child, so signalling the process
+    alone leaves the launcher and its window behind.
+    """
+    try:
+        group = os.getpgid(process.pid)
+    except ProcessLookupError:
+        return
+    os.killpg(group, signal.SIGTERM)
+    try:
+        process.wait(timeout=5)
+    except subprocess.TimeoutExpired:
+        os.killpg(group, signal.SIGKILL)
 
 
 def absolutize_project_inputs(pipeline):
@@ -159,6 +189,10 @@ def test_pipeline(pipeline, tmp_path):
     # Run the pipeline
     try:
         with open(log_file, "w") as log:
+            # Own process group: the shell is not the pipeline, it is the
+            # launcher's parent, so killing the group is what stops the run.
+            # Terminating the shell alone leaves the launcher holding a window
+            # and the GPU until the machine is rebooted.
             process = subprocess.Popen(
                 pipeline,
                 shell=True,
@@ -166,19 +200,17 @@ def test_pipeline(pipeline, tmp_path):
                 stderr=subprocess.STDOUT,
                 cwd=tmp_path,
                 env=env,
+                start_new_session=True,
             )
             process.wait(timeout=PIPELINE_TIMEOUT)
             return_code = process.returncode
     except subprocess.TimeoutExpired:
-        process.terminate()
-        try:
-            process.wait(timeout=2)
-        except subprocess.TimeoutExpired:
-            process.kill()
+        end_process_group(process)
         pytest.fail(
             f"Pipeline timed out after {PIPELINE_TIMEOUT}s. Full pipeline: {pipeline}. See {log_file}"
         )
     except Exception as e:
+        end_process_group(process)
         pytest.fail(
             f"Failed to execute pipeline: {e}. Full pipeline: {pipeline}. See {log_file}"
         )
@@ -217,7 +249,7 @@ def test_pipeline(pipeline, tmp_path):
 def test_pipelines_found():
     """Ensure at least one pipeline was found in README."""
     if not PIPELINES:
-        pytest.fail("No gst-launch-1.0 pipelines found in README.md")
+        pytest.fail("No pyml-launch pipelines found in README.md")
     print(f"Found {len(PIPELINES)} pipelines to test")
 
 

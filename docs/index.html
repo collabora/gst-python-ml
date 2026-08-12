@@ -918,12 +918,12 @@
         <div class="hero-demo">
             <div class="demo-header">
                 <div class="demo-dots"><span></span><span></span><span></span></div>
-                <div class="demo-title">gst-launch-1.0 &mdash; object detection pipeline</div>
+                <div class="demo-title">pyml-launch &mdash; object detection pipeline</div>
                 <div style="width: 38px;"></div>
             </div>
             <div class="demo-body">
 <span class="c"># YOLO object detection with bounding box overlay</span>
-<span class="p">$</span> <span class="w">gst-launch-1.0</span> <span class="f">filesrc</span> <span class="v">location=video.mp4</span> <span class="w">!</span> <span class="f">decodebin</span> <span class="w">!</span> \
+<span class="p">$</span> <span class="w">python pyml-launch.py</span> <span class="f">filesrc</span> <span class="v">location=video.mp4</span> <span class="w">!</span> <span class="f">decodebin</span> <span class="w">!</span> \
     <span class="f">videoconvertscale</span> <span class="w">!</span> <span class="v">video/x-raw,width=640,height=480</span> <span class="w">!</span> \
     <span class="f">pyml_yolo</span> <span class="v">model-name=yolo11m</span> <span class="v">device=cuda:0</span> <span class="v">track=True</span> <span class="w">!</span> \
     <span class="f">pyml_overlay</span> <span class="w">!</span> <span class="f">videoconvert</span> <span class="w">!</span> <span class="f">autovideosink</span>
@@ -1056,7 +1056,7 @@
     <div class="section-inner">
         <span class="section-label">Elements</span>
         <h2 class="section-title">Native GStreamer Elements</h2>
-        <p class="section-desc">Drop-in GStreamer elements for every ML task. Use them in any <code style="background: var(--bg-tertiary); padding: 2px 6px; border-radius: 4px; font-size: 0.9rem; font-family: 'JetBrains Mono', monospace; color: var(--green);">gst-launch-1.0</code> pipeline or Python app.</p>
+        <p class="section-desc">Drop-in GStreamer elements for every ML task. Use them in any <code style="background: var(--bg-tertiary); padding: 2px 6px; border-radius: 4px; font-size: 0.9rem; font-family: 'JetBrains Mono', monospace; color: var(--green);">pyml-launch</code> pipeline or Python app.</p>
 
         <div class="elements-grid fade-in">
             <!-- VISION -->
@@ -1448,14 +1448,14 @@
     <div class="section-inner">
         <span class="section-label">Example Pipelines</span>
         <h2 class="section-title">Copy, Paste, Run</h2>
-        <p class="section-desc">Real pipelines you can run right now. Every example works with <code style="background: var(--bg-tertiary); padding: 2px 6px; border-radius: 4px; font-size: 0.9rem; font-family: 'JetBrains Mono', monospace; color: var(--green);">gst-launch-1.0</code>.</p>
+        <p class="section-desc">Real pipelines you can run right now. Every example works with <code style="background: var(--bg-tertiary); padding: 2px 6px; border-radius: 4px; font-size: 0.9rem; font-family: 'JetBrains Mono', monospace; color: var(--green);">pyml-launch</code>.</p>
 
         <div class="pipeline-grid fade-in">
             <div class="pipeline-card">
                 <span class="pipe-tag">Vision</span>
                 <h3>YOLO + Tracking</h3>
                 <p>YOLO11 detection with multi-object tracking and overlay.</p>
-<pre>gst-launch-1.0 filesrc location=video.mp4 \
+<pre>python pyml-launch.py filesrc location=video.mp4 \
   ! decodebin ! videoconvertscale \
   ! video/x-raw,width=640,height=480 \
   ! pyml_yolo model-name=yolo11m \
@@ -1467,7 +1467,7 @@
                 <span class="pipe-tag">Vision</span>
                 <h3>Torch Compile</h3>
                 <p>Object detection with torch.compile for optimized steady-state throughput.</p>
-<pre>gst-launch-1.0 filesrc location=video.mp4 \
+<pre>python pyml-launch.py filesrc location=video.mp4 \
   ! decodebin ! videoconvert ! videoscale \
   ! video/x-raw,width=640,height=480 \
   ! pyml_objectdetector \
@@ -1480,7 +1480,7 @@
                 <span class="pipe-tag">Vision</span>
                 <h3>Pose Estimation</h3>
                 <p>YOLO pose with skeleton visualization on frame.</p>
-<pre>gst-launch-1.0 filesrc location=video.mp4 \
+<pre>python pyml-launch.py filesrc location=video.mp4 \
   ! decodebin ! videoconvert \
   ! videoscale ! video/x-raw,width=640,height=480 \
   ! pyml_yolo_pose model-name=yolo11n-pose \
@@ -1491,7 +1491,7 @@
                 <span class="pipe-tag">Vision</span>
                 <h3>Depth Estimation</h3>
                 <p>DepthAnything V2 monocular depth with colormap.</p>
-<pre>gst-launch-1.0 filesrc location=video.mp4 \
+<pre>python pyml-launch.py filesrc location=video.mp4 \
   ! decodebin ! videoconvert \
   ! videoscale ! video/x-raw,width=640,height=480 \
   ! pyml_depth device=cuda \
@@ -1503,7 +1503,7 @@
                 <span class="pipe-tag">Vision</span>
                 <h3>Zero-Shot CLIP</h3>
                 <p>Classify video frames with custom text labels.</p>
-<pre>gst-launch-1.0 filesrc location=video.mp4 \
+<pre>python pyml-launch.py filesrc location=video.mp4 \
   ! decodebin ! videoconvert \
   ! videoscale ! video/x-raw,width=640,height=480 \
   ! pyml_clip device=cuda \
@@ -1516,7 +1516,7 @@
                 <span class="pipe-tag">Audio</span>
                 <h3>Transcribe + Translate</h3>
                 <p>Korean audio to English text transcription.</p>
-<pre>gst-launch-1.0 filesrc location=audio.wav \
+<pre>python pyml-launch.py filesrc location=audio.wav \
   ! decodebin ! audioconvert \
   ! pyml_whispertranscribe \
     device=cuda language=ko \
@@ -1527,7 +1527,7 @@
                 <span class="pipe-tag">Audio</span>
                 <h3>VAD + Transcription</h3>
                 <p>Voice activity gating before Whisper for lower latency.</p>
-<pre>gst-launch-1.0 filesrc location=audio.wav \
+<pre>python pyml-launch.py filesrc location=audio.wav \
   ! decodebin ! audioconvert \
   ! audioresample \
   ! audio/x-raw,format=S16LE,\
@@ -1540,7 +1540,7 @@
                 <span class="pipe-tag">Language</span>
                 <h3>LLM Text Generation</h3>
                 <p>Run a HuggingFace LLM as a GStreamer element.</p>
-<pre>gst-launch-1.0 filesrc location=prompt.txt \
+<pre>python pyml-launch.py filesrc location=prompt.txt \
   ! pyml_llm device=cuda \
     model-name="microsoft/phi-2" \
   ! fakesink</pre>
@@ -1549,7 +1549,7 @@
                 <span class="pipe-tag">Language</span>
                 <h3>Stable Diffusion</h3>
                 <p>Text prompt to PNG image generation.</p>
-<pre>gst-launch-1.0 filesrc location=prompt.txt \
+<pre>python pyml-launch.py filesrc location=prompt.txt \
   ! pyml_stablediffusion device=cuda \
   ! pngenc \
   ! filesink location=output.png</pre>
@@ -1558,7 +1558,7 @@
                 <span class="pipe-tag">Multi-Stream</span>
                 <h3>Mux/Demux Pipeline</h3>
                 <p>Batch two video streams through one model.</p>
-<pre>gst-launch-1.0 \
+<pre>python pyml-launch.py \
   filesrc location=cam1.mp4 ! decodebin \
   ! videoconvertscale \
   ! video/x-raw,width=640,height=480 \
@@ -1619,7 +1619,7 @@ pip install -e .
 
 <span class="cmt"># Set plugin path and run</span>
 <span class="kw">export</span> GST_PLUGIN_PATH=<span class="str">$PWD/plugins:$GST_PLUGIN_PATH</span>
-gst-launch-1.0 filesrc location=data/people.mp4 ! decodebin \
+python pyml-launch.py filesrc location=data/people.mp4 ! decodebin \
   ! videoconvert ! videoscale ! video/x-raw,width=<span class="num">640</span>,height=<span class="num">480</span> \
   ! pyml_yolo model-name=yolo11m device=cuda ! pyml_overlay \
   ! videoconvert ! autovideosink</pre>

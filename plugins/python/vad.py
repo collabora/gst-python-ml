@@ -74,17 +74,19 @@ class VoiceActivityDetector(GstBase.BaseTransform):
         "Aaron Boxer <aaron.boxer@collabora.com>",
     )
 
-    AUDIO_CAPS = Gst.Caps.from_string(
-        "audio/x-raw,format=S16LE,layout=interleaved,rate=16000,channels=1"
-    )
+    # Building a Gst object needs Gst.init, which only the gst backend calls.
+    if backend.BACKEND == "gst":
+        AUDIO_CAPS = Gst.Caps.from_string(
+            "audio/x-raw,format=S16LE,layout=interleaved,rate=16000,channels=1"
+        )
 
-    sink_template = Gst.PadTemplate.new(
-        "sink", Gst.PadDirection.SINK, Gst.PadPresence.ALWAYS, AUDIO_CAPS
-    )
-    src_template = Gst.PadTemplate.new(
-        "src", Gst.PadDirection.SRC, Gst.PadPresence.ALWAYS, AUDIO_CAPS
-    )
-    __gsttemplates__ = (sink_template, src_template)
+        sink_template = Gst.PadTemplate.new(
+            "sink", Gst.PadDirection.SINK, Gst.PadPresence.ALWAYS, AUDIO_CAPS
+        )
+        src_template = Gst.PadTemplate.new(
+            "src", Gst.PadDirection.SRC, Gst.PadPresence.ALWAYS, AUDIO_CAPS
+        )
+        __gsttemplates__ = (sink_template, src_template)
 
     threshold = GObject.Property(
         type=float,

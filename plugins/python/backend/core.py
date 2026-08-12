@@ -37,8 +37,89 @@ from engine.engine_manager import EngineManager
 from log.logger_factory import LoggerFactory
 
 
+class FrameProcessingMixin:
+    """The per-frame work a video element does, shared by every backend.
+
+    The backend driver extracts the frame and handles the framework's error
+    signalling; what is left is the same on all of them, so it lives here once:
+    infer, turn the result into a frame and/or a metadata blob, write both back.
+    An element whose task class follows that contract supplies only its
+    `META_HEADER`; one that does not overrides `process_frames`.
+    """
+
+    #: Tag on the metadata blob this element appends, e.g. ``b"GST-DEPTH:"``.
+    #: `None` for an element that appends none.
+    META_HEADER = None
+
+    def process_frames(self, frames, num_sources, fmt, target):
+        """Infer over the extracted frame(s) and write the result to `target`.
+
+        Raises on a hard failure; the driver maps that to its own error return.
+        """
+        from backend import frameio
+
+        result = self.forward(frames)
+        if result is None:
+            raise RuntimeError(f"{type(self).__name__}: inference returned None")
+        # Inference sees the whole batch, but one buffer carries one frame back:
+        # the overlay and the blob describe the primary source.
+        frame = frames[0] if num_sources > 1 else frames
+        if num_sources > 1 and isinstance(result, list):
+            if not result:
+                return
+            result = result[0]
+        output, blob = self.decode(frame, result, fmt)
+        frameio.write_result(target, output, blob, self.META_HEADER)
+
+
+class PayloadProcessingMixin:
+    """The per-buffer work a non-video element does, shared by every backend.
+
+    These families read one media type and write another (text in / text out,
+    audio in / text out), so a buffer is opaque bytes rather than a frame. The
+    backend driver maps the input buffer and turns whatever comes back into
+    output buffers; the middle, bytes to bytes, is the same everywhere and is
+    what the element supplies.
+    """
+
+    def process_payload(self, payload: bytes) -> list[bytes]:
+        """Turn one input buffer's bytes into the payloads to send onward.
+
+        Zero or more, because these families are not all 1:1: an element that
+        accumulates across buffers returns an empty list until it has something
+        to say, and one that chunks its output returns several at once.
+        """
+        raise NotImplementedError(
+            f"{type(self).__name__} must implement process_payload"
+        )
+
+    def payload_duration_ns(self, payload_size):
+        """How long a payload of this many bytes plays for.
+
+        `None`, the usual answer, means the output covers the same stretch of
+        the stream as the input did, so it keeps the input's timing. An element
+        that generates media of its own length (speech from a text buffer) works
+        it out from the byte count instead.
+        """
+        return None
+
+
 class MLEngineMixin:
-    """Engine/model lifecycle shared by every ML element, on any backend."""
+    """Engine/model lifecycle and the start hook, shared by every ML element."""
+
+    def on_start(self):
+        """One-time setup before the first buffer, on any backend.
+
+        For an element with its own background work to start (an inference
+        thread, a warm-up). Framework lifecycle virtuals like `do_start` only
+        exist on GStreamer, so anything a hosted element also needs goes here.
+        """
+
+    def _ensure_started(self):
+        """Run `on_start` once, for a backend with no start virtual of its own."""
+        if not getattr(self, "_started", False):
+            self._started = True
+            self.on_start()
 
     def _ml_init(self):
         """Initialise shared ML state. Call this from the element's __init__."""

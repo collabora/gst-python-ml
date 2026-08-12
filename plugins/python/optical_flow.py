@@ -25,7 +25,7 @@ try:
     from utils.format_converter import FormatConverter
     from engine.optical_flow_engine import OpticalFlowEngine
     from engine.engine_factory import EngineFactory
-    from backend import frameio, FlowReturn, GObject
+    from backend import frameio, GObject
     from tasks.optical_flow import OpticalFlowTask
 
 except ImportError as e:
@@ -93,38 +93,25 @@ class OpticalFlowTransform(VideoTransform, OpticalFlowTask):
     def engine_name(self, value):
         raise ValueError("'engine_name' is read-only for pyml_optical_flow")
 
-    def do_transform_ip(self, buf):
-        try:
-            frames, _num_sources, fmt = frameio.read_frames(
-                buf, self.sinkpad, self.width, self.height
-            )
-            if frames is None:
-                return FlowReturn.ERROR
+    def process_frames(self, frames, num_sources, fmt, target):
+        """Pair this frame with the previous one and draw the flow overlay."""
+        frame = frames[0] if frames.ndim == 4 else frames
 
-            frame = frames[0] if frames.ndim == 4 else frames
-
-            # Temporal pairing stays in the shell: hold the previous frame.
-            if self._prev_frame is None:
-                self._prev_frame = frame.copy()
-                return FlowReturn.OK
-
-            flow = self.forward(self._prev_frame, frame)
+        # Temporal pairing stays in the shell: hold the previous frame.
+        if self._prev_frame is None:
             self._prev_frame = frame.copy()
+            return
 
-            if flow is None:
-                return FlowReturn.OK
+        flow = self.forward(self._prev_frame, frame)
+        self._prev_frame = frame.copy()
 
-            if self.visualize:
-                # Portable task: render the flow overlay frame.
-                output, _blob = self.decode(flow, frame, fmt)
-                if output is not None:
-                    frameio.write_frame(buf, output)
+        if flow is None:
+            return
 
-            return FlowReturn.OK
-
-        except Exception as e:
-            self.logger.error(f"Optical flow transform error: {e}")
-            return FlowReturn.ERROR
+        if self.visualize:
+            # Portable task: render the flow overlay frame.
+            output, blob = self.decode(flow, frame, fmt)
+            frameio.write_result(target, output, blob)
 
 
 if CAN_REGISTER_ELEMENT and backend.BACKEND == "gst":

@@ -21,7 +21,6 @@ import backend
 
 CAN_REGISTER_ELEMENT = True
 try:
-
     import collections
 
     import gi
@@ -44,20 +43,22 @@ class CoalesceHistory(Gst.Element):
         "Olivier Crête <olivier.crete@collabora.com>",
     )
 
-    __gsttemplates__ = (
-        Gst.PadTemplate.new(
-            "src",
-            Gst.PadDirection.SRC,
-            Gst.PadPresence.ALWAYS,
-            Gst.Caps.from_string("text/x-raw,format=utf8"),
-        ),
-        Gst.PadTemplate.new(
-            "sink",
-            Gst.PadDirection.SINK,
-            Gst.PadPresence.ALWAYS,
-            Gst.Caps.from_string("text/x-raw,format=utf8"),
-        ),
-    )
+    # Building a Gst object needs Gst.init, which only the gst backend calls.
+    if backend.BACKEND == "gst":
+        __gsttemplates__ = (
+            Gst.PadTemplate.new(
+                "src",
+                Gst.PadDirection.SRC,
+                Gst.PadPresence.ALWAYS,
+                Gst.Caps.from_string("text/x-raw,format=utf8"),
+            ),
+            Gst.PadTemplate.new(
+                "sink",
+                Gst.PadDirection.SINK,
+                Gst.PadPresence.ALWAYS,
+                Gst.Caps.from_string("text/x-raw,format=utf8"),
+            ),
+        )
 
     @GObject.Property(type=GObject.TYPE_UINT)
     def history_length(self):
