@@ -14,7 +14,7 @@ ball is tracked for contact counting but its marker is off by default.
 
 The detector weights (`football.pt`, `football.onnx`, `football_fp16.onnx`,
 `football_int8.onnx`) are hosted on the Hugging Face Hub at
-`collabora/gst-python-ml-football`, not in git. `run.sh` downloads the one its
+`boxerab/gst-python-ml-football`, not in git. `run.sh` downloads the one its
 `BACKEND` needs into `models/football/` on first use. To fetch by hand, or to
 use weights you already have, put them in that directory. Files already there
 are not downloaded again.

@@ -28,7 +28,7 @@ import sys
 
 from huggingface_hub import hf_hub_download
 
-REPO_ID = "collabora/gst-python-ml-football"
+REPO_ID = "boxerab/gst-python-ml-football"
 LOCAL_DIR = os.path.join(
     os.path.dirname(os.path.abspath(__file__)), "..", "..", "models", "football"
 )
