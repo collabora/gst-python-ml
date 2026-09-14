@@ -15,11 +15,26 @@ ball is tracked for contact counting but its marker is off by default.
 The detector weights (`football.pt`, `football.onnx`, `football_fp16.onnx`,
 `football_int8.onnx`) are hosted on the Hugging Face Hub at
 `collabora/gst-python-ml-football`, not in git. `run.sh` downloads the one its
-`BACKEND` needs into `models/football/` on first use. To fetch by hand:
+`BACKEND` needs into `models/football/` on first use. To fetch by hand, or to
+use weights you already have, put them in that directory. Files already there
+are not downloaded again.
 
 ```bash
 python demo/football/fetch_models.py          # pt + fp16
 python demo/football/fetch_models.py all
+```
+
+## Local setup
+
+`run.sh` expects the repo venv at `.venv` and the system `gst-launch-1.0` with
+the gst-python loader. It puts `plugins/` on `GST_PLUGIN_PATH` and the venv's
+site-packages on `PYTHONPATH` itself, so nothing needs exporting first. On an
+NVIDIA host `decodebin` picks `nvh264dec` and the detector runs on `cuda:0`.
+
+```bash
+cd gst-python-ml
+uv sync
+demo/football/run.sh display          # data/soccer_tracking.mp4, on screen
 ```
 
 ## Run

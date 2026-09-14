@@ -14,6 +14,9 @@ REPO="$(cd "$(dirname "$0")/../.." && pwd)"
 cd "$REPO"
 source .venv/bin/activate
 export GST_PLUGIN_PATH="$REPO/plugins:${GST_PLUGIN_PATH:-}"
+# gst-launch's python loader runs the system interpreter, so hand it the venv.
+VENV_SITE="$(python -c 'import site; print(":".join(site.getsitepackages()))')"
+export PYTHONPATH="$REPO/plugins/python:$VENV_SITE:${PYTHONPATH:-}"
 
 BACKEND="${BACKEND:-pt}"
 # The weights live on the Hugging Face Hub; this is a no-op once cached.
