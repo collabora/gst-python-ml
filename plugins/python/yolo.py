@@ -48,6 +48,36 @@ class YOLOTransform(BaseObjectDetector, YoloTask):
         "Aaron Boxer <aaron.boxer@collabora.com>",
     )
 
+    confidence = GObject.Property(
+        type=float,
+        default=0.1,
+        minimum=0.0,
+        maximum=1.0,
+        nick="Confidence Threshold",
+        blurb="Minimum detection confidence (matches football_analyzer); kept "
+        "low on purpose so the tracker can use weak boxes to continue tracks "
+        "-- the tracker's new-track-confidence gates phantom tracks",
+        flags=GObject.ParamFlags.READWRITE,
+    )
+    nms_iou = GObject.Property(
+        type=float,
+        default=0.7,
+        minimum=0.0,
+        maximum=1.0,
+        nick="NMS IoU",
+        blurb="NMS IoU threshold (matches football_analyzer's default); lower "
+        "suppresses more overlap but can also drop genuinely close players",
+        flags=GObject.ParamFlags.READWRITE,
+    )
+    agnostic_nms = GObject.Property(
+        type=bool,
+        default=False,
+        nick="Class-Agnostic NMS",
+        blurb="Suppress overlapping boxes across classes too; off by default "
+        "(like football_analyzer) so two close players aren't merged",
+        flags=GObject.ParamFlags.READWRITE,
+    )
+
     def __init__(self):
         super().__init__()
         self.mgr.engine_name = "pyml_yolo_engine"
@@ -64,6 +94,14 @@ class YOLOTransform(BaseObjectDetector, YoloTask):
         raise ValueError(
             "The 'engine_name' property cannot be set in this derived class."
         )
+
+    def do_forward(self, frames):
+        # Push NMS/confidence knobs to the engine before it runs the model.
+        if self.engine:
+            self.engine.conf = self.confidence
+            self.engine.iou = self.nms_iou
+            self.engine.agnostic_nms = self.agnostic_nms
+        return super().do_forward(frames)
 
 
 # The class is backend-agnostic: under g2g the host imports this module and
