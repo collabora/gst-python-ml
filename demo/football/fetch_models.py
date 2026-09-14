@@ -51,6 +51,10 @@ def main(argv):
                 f"unknown model variant {variant!r}; "
                 f"choose from {', '.join(VARIANTS)} or all"
             )
+        local = os.path.join(LOCAL_DIR, VARIANTS[variant])
+        if os.path.isfile(local):
+            print(local)
+            continue
         path = hf_hub_download(
             repo_id=REPO_ID, filename=VARIANTS[variant], local_dir=LOCAL_DIR
         )
