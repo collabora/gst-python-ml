@@ -42,6 +42,10 @@ class BaseObjectDetector(VideoTransform, ObjectDetectorTask):
         self.metadata = Metadata("si")
         self.logger.info("Initialized BaseObjectDetector")
         self.__track = False
+        self.__interval = 1
+        self._det_counter = 0
+        self._cached_results = None
+        self._cached_num_sources = 1
 
     @GObject.Property(type=bool, default=False)
     def track(self):
@@ -55,6 +59,17 @@ class BaseObjectDetector(VideoTransform, ObjectDetectorTask):
         self.__track = value
         if self.engine:
             self.engine.track = value
+
+    @GObject.Property(type=int, default=1, minimum=1, maximum=10000)
+    def interval(self):
+        "Run detection every Nth frame and re-attach the previous detections on"
+        "the frames in between (N=1 runs detection every frame). Lets downstream "
+        "tracking/overlay stay per-frame while detection runs at a lower rate."
+        return self.__interval
+
+    @interval.setter
+    def interval(self, value):
+        self.__interval = max(1, int(value))
 
     @GObject.Property(type=str, default="30/1")
     def framerate(self):
@@ -80,10 +95,29 @@ class BaseObjectDetector(VideoTransform, ObjectDetectorTask):
         every backend. Raises on a hard failure; the driver maps that to its own
         error return.
         """
-        results = self.do_forward(frames)
-        if results is None:
-            raise RuntimeError("inference returned None")
+        run_detect = (self._det_counter % self.__interval) == 0
+        self._det_counter += 1
 
+        if run_detect:
+            results = self.do_forward(frames)
+            if results is None:
+                raise RuntimeError("inference returned None")
+            self._cached_results = results
+            self._cached_num_sources = num_sources
+            self._decode_results(target, results, num_sources)
+        elif self._cached_results is not None:
+            # Skip inference on this frame and re-attach the previous
+            # detections so downstream tracking/overlay stay per-frame.
+            self._decode_results(target, self._cached_results, self._cached_num_sources)
+
+        attached_meta = analytics.get_relation_meta(target)
+        if attached_meta:
+            count = analytics.relation_length(attached_meta)
+            self.logger.info(f"Total metadata relations attached: {count}")
+        else:
+            self.logger.debug("No detections on this buffer")
+
+    def _decode_results(self, target, results, num_sources):
         # Single-frame case
         if num_sources == 1:
             self.do_decode(target, results, stream_idx=0)
@@ -100,10 +134,3 @@ class BaseObjectDetector(VideoTransform, ObjectDetectorTask):
                     self.logger.warning(f"Frame {idx} result is None")
                     continue
                 self.do_decode(target, result, stream_idx=idx)
-
-        attached_meta = analytics.get_relation_meta(target)
-        if attached_meta:
-            count = analytics.relation_length(attached_meta)
-            self.logger.info(f"Total metadata relations attached: {count}")
-        else:
-            self.logger.debug("No detections on this buffer")

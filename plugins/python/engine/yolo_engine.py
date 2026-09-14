@@ -59,6 +59,9 @@ class YoloEngine(PyTorchEngine):
             )
             end_pre = time.time()
 
+            conf = getattr(self, "conf", 0.25)
+            iou = getattr(self, "iou", 0.5)
+            agnostic = getattr(self, "agnostic_nms", True)
             if self.track:
                 # Ensure tracker persists across batches
                 results = self.execute_with_stream(
@@ -66,14 +69,23 @@ class YoloEngine(PyTorchEngine):
                         source=img_list,
                         persist=True,
                         imgsz=640,
-                        conf=0.1,
+                        conf=conf,
+                        iou=iou,
+                        agnostic_nms=agnostic,
                         verbose=True,
                         tracker="botsort.yaml",
                     )
                 )
             else:
                 results = self.execute_with_stream(
-                    lambda: model(img_list, imgsz=640, conf=0.1, verbose=True)
+                    lambda: model(
+                        img_list,
+                        imgsz=640,
+                        conf=conf,
+                        iou=iou,
+                        agnostic_nms=agnostic,
+                        verbose=True,
+                    )
                 )
             end_inf = time.time()
 

@@ -44,6 +44,7 @@ class EngineFactory:
     MIGRAPHX_ENGINE = "migraphx"
     IREE_ENGINE = "iree"
     NCNN_ENGINE = "ncnn"
+    DRPAI_ENGINE = "drpai"
 
     _builtins_registered: bool = False  # Class-level flag for singleton-like lazy init
 
@@ -151,6 +152,13 @@ class EngineFactory:
             from .ncnn_engine import NCNNEngine
 
             _try_register(cls.NCNN_ENGINE, NCNNEngine)
+        except ImportError:
+            pass
+
+        try:
+            from .drpai_engine import DRPAIEngine
+
+            _try_register(cls.DRPAI_ENGINE, DRPAIEngine)
         except ImportError:
             pass
 
