@@ -37,12 +37,13 @@ TRACK="pyml_tracker tracker-type=bytetrack new-track-confidence=$NEWTRACK"
 OVERLAY="pyml_football_overlay class-names=$CLASSES team-colors=true trails=false show-ids=false show-labels=false draw-from-detections=true min-confidence=$DRAWCONF merge-iou=$MERGE position-smoothing=$SMOOTH highlight-focal=false"
 
 if [[ "$BACKEND" == "fp16" ]]; then
-  export LD_LIBRARY_PATH="$(python -c "import os,nvidia,glob;b=os.path.dirname(nvidia.__file__);print(':'.join(sorted(set(glob.glob(b+'/*/lib')))))"):${LD_LIBRARY_PATH:-}"
+  # nvidia is a namespace package (no __file__), so walk __path__ for the pip CUDA libs.
+  export LD_LIBRARY_PATH="$(python -c "import os,glob,nvidia;print(':'.join(sorted({d for p in nvidia.__path__ for d in glob.glob(os.path.join(p,'*','lib'))})))"):${LD_LIBRARY_PATH:-}"
   DETECT="pyml_objectdetector engine-name=onnx model-name=models/football/football_fp16.onnx device=cuda:0 input-format=nchw post-process=anchor_free interval=$INTERVAL"
-  IN_FMT="RGB"; FORCE_SQUARE=1
+  IN_FMT="RGB"
 else
   DETECT="pyml_yolo model-name=models/football/football device=cuda:0 interval=$INTERVAL confidence=$CONF nms-iou=$IOU"
-  IN_FMT="RGBA"; FORCE_SQUARE=0
+  IN_FMT="RGBA"
 fi
 
 POST_DETECT="$TRACK"
@@ -65,7 +66,6 @@ CHAIN="$Q ! $DETECT ! $Q ! $POST_DETECT ! $Q ! $OVERLAY"
 MODE="${1:-file}"
 if [[ "$MODE" == "camera" ]]; then
   DEV="${2:-/dev/video0}"; SIZE="${3:-1280x720}"
-  [[ "$FORCE_SQUARE" == "1" ]] && SIZE="640x640"
   W="${SIZE%x*}"; H="${SIZE#*x}"
   echo "[$BACKEND] live camera $DEV @ ${W}x${H} -> autovideosink (needs a display)"
   exec gst-launch-1.0 -e \
@@ -76,7 +76,6 @@ if [[ "$MODE" == "camera" ]]; then
 elif [[ "$MODE" == "display" ]]; then
   IN="${2:-data/soccer_tracking.mp4}"
   SIZE="${3:-1280x720}"
-  [[ "$FORCE_SQUARE" == "1" ]] && SIZE="640x640"
   W="${SIZE%x*}"; H="${SIZE#*x}"
   [[ -f "$IN" ]] || { echo "input not found: $IN" >&2; exit 1; }
   echo "[$BACKEND] '$IN' @ ${W}x${H} -> live display (real-time, sync=true)"
@@ -89,7 +88,6 @@ else
   IN="${1:-data/soccer_tracking.mp4}"
   OUT="${2:-demo/football/out.mp4}"
   SIZE="${3:-1280x720}"
-  [[ "$FORCE_SQUARE" == "1" ]] && SIZE="640x640"
   W="${SIZE%x*}"; H="${SIZE#*x}"
   [[ -f "$IN" ]] || { echo "input not found: $IN" >&2; exit 1; }
   echo "[$BACKEND] '$IN' @ ${W}x${H} -> '$OUT'"
