@@ -68,4 +68,6 @@ def test_a_bad_description_is_reported_and_leaves_nothing_running():
 
 def test_inspect_lists_the_sink_location():
     described = pyml_mcp.inspect("pyml_metasink")
-    assert any(spec["name"] == "location" for spec in described["properties"])
+    defaults = {spec["name"]: spec["default"] for spec in described["properties"]}
+    assert defaults["location"] == ""
+    assert defaults["last-sample"] == ""

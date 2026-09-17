@@ -104,9 +104,11 @@ def named_element(name):
 
 
 def serialized(spec, value):
+    if value is None:
+        return ""
     # an enum reads as its nick, as on a gst-launch line
     if spec.value_type == GObject.TYPE_STRING:
-        return "" if value is None else value
+        return value
     holder = GObject.Value(spec.value_type)
     holder.set_value(value)
     spelled = Gst.value_serialize(holder)
