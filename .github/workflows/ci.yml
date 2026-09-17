@@ -47,6 +47,8 @@ jobs:
             python-version: "3.14"
         include:
           - os: ubuntu-latest
+            # the gst python plugin loader links the system libpython
+            venv-python: /usr/bin/python3
             gst-install: |
               sudo apt-get update
               sudo apt-get install -y \
@@ -61,6 +63,7 @@ jobs:
                 python3-gi \
                 python3-gi-cairo \
                 python3-gst-1.0 \
+                python3-venv \
                 gstreamer1.0-python3-plugin-loader \
                 libcairo2 \
                 libcairo2-dev \
@@ -96,7 +99,7 @@ jobs:
       - name: Create venv and install CPU dependencies
         shell: bash
         run: |
-          python -m venv --system-site-packages .venv
+          ${{ matrix.venv-python || 'python' }} -m venv --system-site-packages .venv
           if [[ "$RUNNER_OS" == "Windows" ]]; then
             source .venv/Scripts/activate
           else
@@ -116,6 +119,7 @@ jobs:
           else
             source .venv/bin/activate
           fi
+          unset LD_LIBRARY_PATH
           python -c "
           import gi
           gi.require_version('Gst', '1.0')
@@ -166,13 +170,10 @@ jobs:
         run: |
           source .venv/bin/activate
           pip install pytest mcp
-          VENV_SITE=$(python -c "import sysconfig; print(sysconfig.get_path('purelib'))")
-          # the plugin loader links the system libpython
-          export PYTHONPATH="${VENV_SITE}:${{ github.workspace }}/plugins/python"
           unset LD_LIBRARY_PATH
           rm -rf ~/.cache/gstreamer-1.0
           # README pipelines need the GPU and the data dir, the other two load models
-          /usr/bin/python3 -m pytest tests/ -q \
+          python -m pytest tests/ -q \
             --ignore=tests/test_pipelines.py \
             --ignore=tests/test_zeroshotdetector.py \
             --ignore=tests/test_engines.py
