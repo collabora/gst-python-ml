@@ -39,6 +39,7 @@ is >= 1.24.
   - [Classification](#classification)
   - [Torch Compile](#torch-compile)
   - [Object Detection](#object-detection)
+  - [Zero-Shot Object Detection](#zero-shot-object-detection)
   - [Pose Estimation](#pose-estimation)
   - [Depth Estimation](#depth-estimation)
   - [Zero-Shot Classification (CLIP / SigLIP)](#zero-shot-classification-clip--siglip)
@@ -1064,6 +1065,29 @@ python pyml-launch.py filesrc location=data/people.mp4 ! decodebin name=d \
   ! "video/x-raw,format=RGB,width=640,height=640" \
   ! pyml_objectdetector model-name=fasterrcnn_resnet50_fpn device=cuda compile=True \
   ! videoconvert ! pyml_overlay ! videoconvert ! autovideosink
+```
+
+### Zero-Shot Object Detection
+
+`pyml_zeroshotdetector` detects the classes named in its `labels` property, so
+`pyml_alert`, `pyml_tracker`, `pyml_overlay` and `pyml_metasink` work on a class
+no detector was trained for. Detections carry the label text, as
+`stream_0_handbag`.
+
+Supported models:
+```
+google/owlv2-base-patch16-ensemble  (default)
+IDEA-Research/grounding-dino-tiny   (faster, smaller)
+```
+
+#### Alert on a class no detector was trained for
+
+```
+python pyml-launch.py filesrc location=data/people.mp4 ! decodebin name=d \
+  d. ! queue ! videoconvert ! videoscale ! "video/x-raw,width=640,height=480" \
+  ! pyml_zeroshotdetector device=cuda labels="person, handbag" confidence=0.2 \
+  ! pyml_alert rules='{"class":"handbag"}' \
+  ! pyml_overlay ! videoconvert ! autovideosink sync=false
 ```
 
 ### Pose Estimation
