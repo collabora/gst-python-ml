@@ -98,15 +98,8 @@ class Metadata:
         metadata_bytes = self.HEADER + meta_bytes
 
         # Append to buffer
-        metadata_memory = Gst.Memory.new_wrapped(
-            Gst.MemoryFlags.READONLY,
-            metadata_bytes,
-            len(metadata_bytes),
-            0,
-            len(metadata_bytes),
-            None,
-        )
-        buffer.append_memory(metadata_memory.copy(0, -1))  # Append metadata last
+        # Gst.Memory.new_wrapped aborts in pygobject
+        buffer.append_memory(Gst.Buffer.new_wrapped(metadata_bytes).get_memory(0))
 
     def present(self, buffer: Gst.Buffer) -> bool:
         if buffer.n_memory() < 1:

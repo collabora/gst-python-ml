@@ -56,7 +56,7 @@ from embedding_index import EmbeddingIndex  # noqa: E402
 from log.logger_factory import LoggerFactory  # noqa: E402
 
 BACKEND = os.environ.get("PYML_BACKEND", "gst").lower()
-MODEL_DEVICE = os.environ.get("PYML_MCP_DEVICE", "cpu")
+MODEL_DEVICE = os.environ.get("PYML_MCP_DEVICE", "")
 VLM_MODEL = os.environ.get("PYML_MCP_VLM_MODEL", "HuggingFaceTB/SmolVLM-500M-Instruct")
 ELEMENT_PREFIX = "pyml_"
 RECENT_RECORDS = 1000
@@ -333,7 +333,7 @@ def vlm_engine(model_name):
         from engine.vlm_engine import VlmEngine
 
         engine = VlmEngine()
-        engine.do_set_device(MODEL_DEVICE)
+        engine.do_set_device(model_device())
         engine.do_load_model(model_name)
         vlm_engines[model_name] = engine
     return engine
@@ -354,6 +354,14 @@ def describe_frame(
     )
 
 
+def model_device():
+    if MODEL_DEVICE:
+        return MODEL_DEVICE
+    import torch
+
+    return "cuda" if torch.cuda.is_available() else "cpu"
+
+
 text_embedding_engines = {}
 
 
@@ -364,7 +372,7 @@ def text_embedding_engine(model_name):
         from engine.embedding_engine import EmbeddingEngine
 
         engine = EmbeddingEngine()
-        engine.do_set_device(MODEL_DEVICE)
+        engine.do_set_device(model_device())
         engine.do_load_model(model_name)
         text_embedding_engines[model_name] = engine
     return engine

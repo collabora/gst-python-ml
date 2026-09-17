@@ -1730,14 +1730,15 @@ ones carrying a key such as `detections`, and returns them with the pipeline
 status. `snapshot_frame` returns the newest frame a sink rendered as a JPEG image.
 `describe_frame` captions that frame with the vision-language model
 `PYML_MCP_VLM_MODEL` names, `HuggingFaceTB/SmolVLM-500M-Instruct` by default, on
-the `PYML_MCP_DEVICE` device, where a caption takes tens of seconds on `cpu`.
+the `PYML_MCP_DEVICE` device, `cuda` when torch sees one and the variable is
+unset, else `cpu` where a caption takes tens of seconds.
 `load_metadata` reads a JSON lines file a `pyml_metasink` wrote back in, so a
 finished run can be read without running a pipeline again. `clip_at` cuts a webm
 of the seconds around a pts out of a video file, which turns a `search_video` hit
 into a clip.
 `search_video` reads an index `pyml_embeddingsink` wrote and returns the frames
 closest to a description, embedding it with the index's own model on the device
-`PYML_MCP_DEVICE` names, `cpu` when it is unset. The server also offers every
+`PYML_MCP_DEVICE` names, chosen the same way. The server also offers every
 pipeline section of this README as a prompt named after the section, such as
 `object_detection`.
 

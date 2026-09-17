@@ -39,6 +39,18 @@ BACKEND = os.environ.get("PYML_BACKEND", "gst").lower()
 # absolute here.
 LAUNCHER = f"python {BASE_DIR / 'pyml-launch.py'}"
 
+# only the pipelines a runner with no gpu, model, display or microphone can run
+HEADLESS = os.environ.get("HEADLESS_PIPELINES") == "1"
+MODEL_MARKERS = ("model-name=", "cuda")
+CAPTURE_SOURCES = ("pulsesrc", "autoaudiosrc", "alsasrc", "v4l2src")
+DISPLAY_SINK_PATTERN = re.compile(r"\b(?:autovideosink|glimagesink)\b")
+HEADLESS_SINK = "fakevideosink"
+
+
+def runs_headless(pipeline):
+    return not any(marker in pipeline for marker in MODEL_MARKERS + CAPTURE_SOURCES)
+
+
 if BACKEND == "gst" and not shutil.which("gst-launch-1.0"):
     raise RuntimeError("gst-launch-1.0 not found in PATH. Please install GStreamer.")
 
@@ -55,6 +67,12 @@ def get_pipelines_from_readme():
         for descriptions in sections.values()
         for description in descriptions
     ]
+    if HEADLESS:
+        pipelines = [
+            DISPLAY_SINK_PATTERN.sub(HEADLESS_SINK, pipeline)
+            for pipeline in pipelines
+            if runs_headless(pipeline)
+        ]
 
     modified_pipelines = []
     for pipeline in pipelines:
