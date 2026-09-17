@@ -107,7 +107,7 @@ jobs:
             source .venv/bin/activate
           fi
           pip install --no-deps -e .
-          pip install numpy opencv-python-headless ultralytics
+          pip install numpy scipy opencv-python-headless ultralytics
           # pygobject/pycairo from pip need C build deps; install only where available
           pip install pygobject pycairo || echo "pygobject/pycairo pip install failed (using system packages)"
 
