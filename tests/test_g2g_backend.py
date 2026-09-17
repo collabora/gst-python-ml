@@ -39,25 +39,49 @@ from backend import (
 
 
 class StubMetaSink:
-    """Stand-in for the host's write-only `g2g.MetaSink`.
+    """Stand-in for the host's `g2g.MetaSink`.
 
     Like the real sink, every `add_*` stages one record into a single list and
-    returns its index, which is the handle `relate` takes.
+    returns its index, which is the handle `relate` takes, and the read methods
+    hand back the upstream metadata the host fills the sink with before the
+    call, which is what the constructor takes.
     """
 
-    def __init__(self):
+    def __init__(
+        self,
+        upstream_objects=(),
+        upstream_blobs=None,
+        upstream_class_names=(),
+        upstream_tracking_ids=(),
+    ):
         self.staged = []
         self.relations = []
-        self.class_names = None
+        self.staged_class_names = None
         self.emitted = []
         self.emitted_durations = []
+        self._objects = list(upstream_objects)
+        self._blobs = dict(upstream_blobs or {})
+        self._class_names = list(upstream_class_names)
+        self._tracking_ids = list(upstream_tracking_ids)
+
+    def objects(self):
+        return list(self._objects)
+
+    def class_names(self):
+        return list(self._class_names)
+
+    def blobs(self):
+        return dict(self._blobs)
+
+    def tracking_ids(self):
+        return list(self._tracking_ids)
 
     def emit(self, payload, duration_ns=None):
         self.emitted.append(payload)
         self.emitted_durations.append(duration_ns)
 
     def set_class_names(self, names):
-        self.class_names = list(names)
+        self.staged_class_names = list(names)
 
     def _stage(self, record):
         self.staged.append(record)
@@ -82,11 +106,11 @@ class StubMetaSink:
         return [record[1:] for record in self.staged if record[0] == kind]
 
     @property
-    def objects(self):
+    def staged_objects(self):
         return self._of_kind("object")
 
     @property
-    def blobs(self):
+    def staged_blobs(self):
         return self._of_kind("blob")
 
 
@@ -247,7 +271,7 @@ def test_frameio_read_write_round_trip():
     assert all(b == 200 for b in buf), "write_frame must update the buffer in place"
 
     frameio.append_blob(buf, "tag", b"\x01\x02")
-    assert sink.blobs == [("tag", b"\x01\x02")]
+    assert sink.staged_blobs == [("tag", b"\x01\x02")]
 
 
 def test_analytics_maps_onto_flat_sink():
@@ -264,10 +288,10 @@ def test_analytics_maps_onto_flat_sink():
     analytics.add_object(meta, "handbag", 0, 0, 1, 1, 0.5)
 
     assert analytics.relation_length(meta) == 3
-    labels = [o[0] for o in sink.objects]
+    labels = [o[0] for o in sink.staged_objects]
     assert labels[0] == labels[1], "same string -> same id"
     assert labels[2] != labels[0], "different string -> different id"
-    assert sink.objects[0][5] == 0.9
+    assert sink.staged_objects[0][5] == 0.9
 
 
 def test_class_names_are_published_so_a_consumer_can_name_a_label():
@@ -280,7 +304,7 @@ def test_class_names_are_published_so_a_consumer_can_name_a_label():
 
     # The table is indexed by the label id staged on the detection, so a
     # consumer holding only the id can look the name up.
-    names = sink.class_names
+    names = sink.staged_class_names
     assert names is not None, "the sink was never sent a name table"
     assert names[sink.staged[person][1]] == "person"
     assert names[sink.staged[handbag][1]] == "handbag"
@@ -294,15 +318,15 @@ def test_class_names_are_resent_for_each_frames_sink():
     staged = analytics.add_object(
         analytics.add_relation_meta(None), "person", 1, 2, 3, 4, 0.9
     )
-    assert first.class_names[first.staged[staged][1]] == "person"
+    assert first.staged_class_names[first.staged[staged][1]] == "person"
 
     second = StubMetaSink()
     analytics.bind(second)
     staged = analytics.add_object(
         analytics.add_relation_meta(None), "person", 5, 6, 7, 8, 0.8
     )
-    assert second.class_names is not None, "the second sink was sent no table"
-    assert second.class_names[second.staged[staged][1]] == "person"
+    assert second.staged_class_names is not None, "the second sink was sent no table"
+    assert second.staged_class_names[second.staged[staged][1]] == "person"
 
 
 def test_tracking_relates_to_its_detection():
@@ -319,6 +343,62 @@ def test_tracking_relates_to_its_detection():
     assert sink.staged[od][0] == "object"
     assert sink.staged[track] == ("tracking", 77)
     assert sink.relations == [(od, track)]
+
+
+#: One detection in the dict shape the analytics interface states, as the host
+#: hands the frame's incoming objects over.
+UPSTREAM_OBJECTS = [{"label": "person", "x": 1, "y": 2, "w": 3, "h": 4, "score": 0.9}]
+
+#: One incoming blob, keyed the way the host spells `GST-ALERT:` back.
+UPSTREAM_BLOBS = {"alert": b'[{"detection": {"label": "person"}}]'}
+
+
+def test_the_frames_upstream_detections_read_back():
+    sink = StubMetaSink(upstream_objects=UPSTREAM_OBJECTS)
+    analytics.bind(sink)
+
+    meta = analytics.get_relation_meta(None)
+    assert meta is not None, "the frame arrived carrying detections"
+    assert analytics.read_objects(meta) == UPSTREAM_OBJECTS
+
+
+def test_a_frame_with_no_metadata_at_all_has_no_relation_meta():
+    analytics.bind(StubMetaSink())
+    assert analytics.get_relation_meta(None) is None
+
+
+def test_the_frames_upstream_blobs_read_back():
+    frameio.bind(StubMetaSink(upstream_blobs=UPSTREAM_BLOBS), "RGB")
+    assert frameio.read_blobs(bytearray(4)) == UPSTREAM_BLOBS
+
+
+def only_on_ran(only_on, sink):
+    """Whether a gated element ran, driven exactly as the host drives it."""
+
+    class CountFrames(VideoTransform):
+        def process_frames(self, frames, num_sources, fmt, target):
+            processed.append(fmt)
+
+    processed = []
+    elem = CountFrames()
+    elem.engine_name = None  # nothing to load: the gate is what is under test
+    elem.only_on = only_on
+    width, height = 4, 3
+    elem.g2g_process(bytearray(width * height * 3), width, height, "RGB", sink)
+    return bool(processed)
+
+
+def test_only_on_a_blob_skips_the_frame_that_does_not_carry_it():
+    assert only_on_ran("alert", StubMetaSink()) is False
+    assert only_on_ran("alert", StubMetaSink(upstream_blobs=UPSTREAM_BLOBS)) is True
+
+
+def test_only_on_detections_keys_on_the_upstream_objects():
+    assert only_on_ran("detections", StubMetaSink()) is False
+    assert (
+        only_on_ran("detections", StubMetaSink(upstream_objects=UPSTREAM_OBJECTS))
+        is True
+    )
 
 
 def test_video_transform_g2g_process_end_to_end():
@@ -345,8 +425,8 @@ def test_video_transform_g2g_process_end_to_end():
 
     assert ret is None
     assert all(b == 245 for b in buf), "frame inverted in place (255 - 10)"
-    assert len(sink.objects) == 1
-    assert sink.objects[0][5] == 0.99
+    assert len(sink.staged_objects) == 1
+    assert sink.staged_objects[0][5] == 0.99
     assert elem.width == width and elem.height == height
 
 
@@ -391,7 +471,7 @@ def test_g2g_caption_stages_the_caption_on_the_frame():
 
     captions = [record for record in sink.staged if record[0] == "classification"]
     assert len(captions) == 1, "the caption was not staged"
-    assert sink.class_names[captions[0][1]] == "a cat on a mat"
+    assert sink.staged_class_names[captions[0][1]] == "a cat on a mat"
 
 
 def test_a_packed_frame_is_reduced_to_rgb_in_channel_order():
@@ -442,8 +522,8 @@ def test_two_elements_on_their_own_threads_keep_their_own_sinks():
 
     assert len(staged["first"]) == 2, "the first element lost a record to the second"
     assert len(staged["second"]) == 2
-    assert sinks["first"].blobs == [("tag", b"person")]
-    assert sinks["second"].blobs == [("tag", b"handbag")]
+    assert sinks["first"].staged_blobs == [("tag", b"person")]
+    assert sinks["second"].staged_blobs == [("tag", b"handbag")]
 
 
 class RecordingLogger:

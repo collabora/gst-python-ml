@@ -592,13 +592,23 @@ glass2glass instead.
 Under `gst` it runs GStreamer with `GST_PLUGIN_PATH` pointing at this checkout.
 Under `g2g` it runs `g2g-launch-py`, rewriting the three things g2g spells
 differently: a `pyml_*` element becomes `pyelement` plus the module and class to
-host, `pyml_overlay` becomes g2g's native `analyticsoverlay`, and a raw-video
-caps filter with no format gains `format=RGBA`. An element it cannot map is an
-error, not a silent pass-through.
+host, an element g2g implements itself becomes that one, and a raw-video caps
+filter with no format gains `format=RGBA`. An element it cannot map is an error,
+not a silent pass-through.
+
+Seven elements are native on g2g rather than hosted: `pyml_overlay` becomes
+`analyticsoverlay`, `pyml_alert` becomes `analyticsalert`, `pyml_digest` becomes
+`textdigest`, and `pyml_metasink`, `pyml_metareplay`, `pyml_alertrecorder` and
+`pyml_embeddingsink` drop the prefix. Their `location`, `rules`, `cooldown`,
+`draw-alert`, `webhook-url`, `encoder`, `seconds-before`, `seconds-after`,
+`window-seconds`, `source-id` and `model-name` carry over under the same names,
+and the file formats match, so `search_video` reads an index either backend
+wrote. g2g runs no MQTT, so `pyml_alert`'s `mqtt-broker` and `mqtt-topic` are
+refused rather than dropped.
 
 `analyticsoverlay` has its own properties (`show-label`, `show-track`,
-`show-score`, `show-trail`, `trail-length`, `thickness`, `mask-alpha`), so
-`pyml_overlay`'s do not carry over; pass none and set them on the g2g side.
+`show-score`, `show-trail`, `trail-length`, `thickness`, `mask-alpha`), so only
+`pyml_overlay`'s `tracking` carries over, as `show-track`.
 
 Build `g2g-launch-py` from a glass2glass checkout and put it on `PATH`, or point
 `G2G_LAUNCH` at it:
@@ -1586,7 +1596,8 @@ works on `pyml_caption_qwen`, `pyml_depth` or any other video element.
 python pyml-launch.py filesrc location=data/people.mp4 ! decodebin ! videoconvert ! videoscale ! video/x-raw,width=640,height=480 ! pyml_yolo model-name=yolo11m device=cuda ! pyml_alert rules='{"class":"person","min_score":0.8}' cooldown=5 draw-alert=false ! pyml_vlm model-name=HuggingFaceTB/SmolVLM-500M-Instruct device=cuda only-on=alert max-tokens=40 prompt="What is the person in the centre doing?" ! pyml_metasink location=people.jsonl
 ```
 
-The g2g backend does not gate: a hosted element gets no upstream metadata.
+The g2g host hands a hosted element the frame's upstream detections and
+blobs, so `only-on` gates the same way on both backends.
 
 ### Embedding Extractor
 
@@ -1748,4 +1759,6 @@ claude mcp add gst-python-ml -- /path/to/gst-python-ml/.venv/bin/pyml-mcp
 ```
 
 For the g2g backend use glass2glass's own `g2g-mcp`, which drives its pipelines
-natively.
+natively. It has `latest_metadata`, `wait_for_records`, `load_metadata`,
+`snapshot_frame`, `clip_at`, `set_property` and `get_property` under these names,
+and prompts of its own. `describe_frame` and `search_video` stay here.

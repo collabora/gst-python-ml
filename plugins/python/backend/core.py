@@ -159,6 +159,10 @@ def ml_property_namespace(gobject):
     return namespace
 
 
+#: The `only-on` value naming the analytics detections rather than a blob.
+ONLY_ON_DETECTIONS = "detections"
+
+
 class FrameProcessingMixin:
     """The per-frame work a video element does, shared by every backend.
 
@@ -192,6 +196,19 @@ class FrameProcessingMixin:
             result = result[0]
         output, blob = self.decode(frame, result, fmt)
         frameio.write_result(target, output, blob, self.META_HEADER)
+
+    def carries_only_on(self, target):
+        """Whether `target` carries what `only-on` names, so this frame runs.
+
+        Both backends gate on the same two things: the detections an upstream
+        element attached, or a blob under its own name.
+        """
+        from backend import analytics, frameio
+
+        if self._only_on == ONLY_ON_DETECTIONS:
+            meta = analytics.get_relation_meta(target)
+            return meta is not None and bool(analytics.read_objects(meta))
+        return self._only_on in frameio.read_blobs(target)
 
 
 class PayloadProcessingMixin:

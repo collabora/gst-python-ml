@@ -59,6 +59,15 @@ class FrameIO(ABC):
         """Append an opaque metadata blob (``header`` bytes followed by
         ``payload`` bytes) to ``target``. Returns True on success."""
 
+    def read_blobs(self, target):
+        """The metadata blobs on `target`, keyed by header name: lowercase,
+        without the ``GST-`` prefix and the trailing colon. Empty for a target
+        carrying none."""
+        # imported here so a backend that overrides this never loads gi
+        from utils.blobs import read_blobs
+
+        return read_blobs(target)
+
     def write_result(self, target, output=None, blob=None, header=None):
         """Write back what an element produced: a frame, a blob, or both.
 

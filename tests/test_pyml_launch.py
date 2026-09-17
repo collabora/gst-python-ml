@@ -5,6 +5,7 @@ plugin that stops declaring `register_gst_element` fails a test rather than
 silently dropping out of the map.
 """
 
+import json
 import subprocess
 import sys
 from pathlib import Path
@@ -74,6 +75,73 @@ def test_overlay_properties_carry_over_under_the_native_name(shells):
     assert pyml_launch.rewrite_segment("pyml_overlay tracking=True", shells) == [
         "analyticsoverlay",
         "show-track=True",
+    ]
+
+
+def test_metasink_becomes_the_native_element(shells):
+    assert pyml_launch.rewrite_segment(
+        "pyml_metasink location=people.jsonl", shells
+    ) == ["metasink", "location=people.jsonl"]
+
+
+def test_metareplay_becomes_the_native_element(shells):
+    assert pyml_launch.rewrite_segment(
+        "pyml_metareplay location=people.jsonl", shells
+    ) == ["metareplay", "location=people.jsonl"]
+
+
+def test_alert_becomes_the_native_element(shells):
+    assert pyml_launch.rewrite_segment(
+        ["pyml_alert", "cooldown=5", "draw-alert=false", "webhook-url=http://host/a"],
+        shells,
+    ) == [
+        "analyticsalert",
+        "cooldown=5",
+        "draw-alert=false",
+        "webhook-url=http://host/a",
+    ]
+
+
+def test_an_alert_property_with_no_g2g_counterpart_is_refused(shells):
+    # g2g runs no MQTT, so the broker cannot be carried over or dropped.
+    with pytest.raises(SystemExit, match="mqtt-broker"):
+        pyml_launch.rewrite_segment("pyml_alert mqtt-broker=host", shells)
+
+
+def test_alertrecorder_becomes_the_native_element(shells):
+    assert pyml_launch.rewrite_segment(
+        [
+            "pyml_alertrecorder",
+            "location=alert-%s.avi",
+            "encoder=vp8enc ! webmmux",
+            "seconds-before=2",
+            "seconds-after=3",
+        ],
+        shells,
+    ) == [
+        "alertrecorder",
+        "location=alert-%s.avi",
+        r'encoder="vp8enc \! webmmux"',
+        "seconds-before=2",
+        "seconds-after=3",
+    ]
+
+
+def test_digest_becomes_the_native_element(shells):
+    assert pyml_launch.rewrite_segment("pyml_digest window-seconds=5", shells) == [
+        "textdigest",
+        "window-seconds=5",
+    ]
+
+
+def test_embeddingsink_becomes_the_native_element(shells):
+    assert pyml_launch.rewrite_segment(
+        "pyml_embeddingsink location=index.db source-id=camera model-name=clip", shells
+    ) == [
+        "embeddingsink",
+        "location=index.db",
+        "source-id=camera",
+        "model-name=clip",
     ]
 
 
@@ -340,16 +408,91 @@ G2G_VIDEO_SOURCE = (
 )
 
 
-def test_the_native_element_and_the_names_it_renames_to_still_exist():
+#: The text chain `textdigest` reads, and the one cue the file holds.
+G2G_TEXT_SOURCE = ("subtitlesrc", "location={directory}/cues.srt", "!", "subparse", "!")
+SUBTITLE_CUE = "1\n00:00:00,000 --> 00:00:01,000\nhello\n\n"
+
+#: One record in the shape `pyml_metasink` writes and `metareplay` reads back.
+METADATA_RECORD = {
+    "pts": 0.0,
+    "detections": [{"label": "person", "x": 1, "y": 2, "w": 3, "h": 4, "score": 0.9}],
+}
+
+#: What it takes to run each native element for real: one valid value per
+#: property that carries over, the chain ahead of it, and what follows it, which
+#: is nothing for a sink. `{directory}` is a temporary directory of the run's own.
+NATIVE_PROBES = {
+    "pyml_overlay": (("tracking=true",), G2G_VIDEO_SOURCE, ("!", "fakesink")),
+    "pyml_metasink": (
+        ("location={directory}/meta.jsonl",),
+        G2G_VIDEO_SOURCE,
+        (),
+    ),
+    "pyml_metareplay": (
+        ("location={directory}/records.jsonl",),
+        G2G_VIDEO_SOURCE,
+        ("!", "fakesink"),
+    ),
+    "pyml_alert": (
+        (
+            'rules={"class":"person"}',
+            "cooldown=1",
+            "draw-alert=true",
+            "webhook-url=http://127.0.0.1:1/alert",
+        ),
+        G2G_VIDEO_SOURCE,
+        ("!", "fakesink"),
+    ),
+    "pyml_alertrecorder": (
+        (
+            "location={directory}/alert-%s.avi",
+            "encoder=mjpegenc ! avimux",
+            "seconds-before=1",
+            "seconds-after=1",
+        ),
+        G2G_VIDEO_SOURCE,
+        ("!", "fakesink"),
+    ),
+    "pyml_digest": (("window-seconds=5",), G2G_TEXT_SOURCE, ("!", "fakesink")),
+    "pyml_embeddingsink": (
+        (
+            "location={directory}/index.db",
+            "source-id=camera",
+            "model-name=clip-vit-b32",
+        ),
+        G2G_VIDEO_SOURCE,
+        (),
+    ),
+}
+
+
+def filled(tokens, directory):
+    """The tokens with the run's temporary directory in place of the placeholder.
+
+    `str.replace` rather than `str.format`: a rules table is full of braces.
+    """
+    return [token.replace("{directory}", str(directory)) for token in tokens]
+
+
+def test_the_native_element_and_the_names_it_renames_to_still_exist(shells, tmp_path):
     """`NATIVE_EQUIVALENTS` and `NATIVE_PROPERTIES` copy names out of glass2glass,
-    and `G2G_RAW_VIDEO_FORMAT` states what that element negotiates. Nothing here
-    notices when any of the three changes there, so run one and see."""
+    and `G2G_RAW_VIDEO_FORMAT` states what those elements negotiate. Nothing here
+    notices when any of the three changes there, so run each one and see."""
+    (tmp_path / "records.jsonl").write_text(json.dumps(METADATA_RECORD) + "\n")
+    (tmp_path / "cues.srt").write_text(SUBTITLE_CUE)
+
     for element, native in pyml_launch.NATIVE_EQUIVALENTS.items():
-        renames = pyml_launch.NATIVE_PROPERTIES.get(element, {})
-        properties = [f"{name}=true" for name in renames.values()]
-        result = g2g_pipeline(*G2G_VIDEO_SOURCE, native, *properties, "!", "fakesink")
+        properties, source, tail = NATIVE_PROBES[element]
+        assert {property.partition("=")[0] for property in properties} == set(
+            pyml_launch.NATIVE_PROPERTIES.get(element, {})
+        ), f"{element} carries a property no sample value here covers"
+        rewritten = pyml_launch.rewrite_segment(
+            [element, *filled(properties, tmp_path)], shells
+        )
+        assert rewritten[0] == native
+        result = g2g_pipeline(*filled(source, tmp_path), *rewritten, *tail)
         assert result.returncode == 0, (
-            f"{element} rewrites to `{native} {' '.join(properties)}`, which g2g "
+            f"{element} rewrites to `{' '.join(rewritten)}`, which g2g "
             f"no longer runs:\n{result.stdout}{result.stderr}"
         )
 

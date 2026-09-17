@@ -11,7 +11,8 @@
 The host calls `g2g_process(buf, w, h, fmt, sink)` once per frame. This base
 binds the frame's sink onto the shared `frameio` / `analytics` (so leaf task code
 that calls them through `from backend import frameio, analytics` reaches this
-frame's buffer and sink), extracts the frame, then hands off to `process_frames`,
+frame's buffer and sink), applies `only-on` to the upstream metadata the sink
+carries, extracts the frame, then hands off to `process_frames`,
 the framework-agnostic per-frame hook the leaf element supplies (the same hook the
 gst backend drives from `do_transform_ip`).
 """
@@ -37,6 +38,8 @@ class VideoTransform(BaseTransform, FrameProcessingMixin):
         # leaf task code uses.
         frameio.bind(sink, fmt)
         analytics.bind(sink)
+        if self._only_on and not self.carries_only_on(buf):
+            return None
         self._ensure_model()
         self._ensure_started()
         frames, num_sources, fmt = frameio.read_frames(buf, None, width, height)

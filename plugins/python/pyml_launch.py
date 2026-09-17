@@ -23,8 +23,10 @@
 
   * a `pyml_*` element is the generic `pyelement` host plus the module and class
     to load;
-  * `pyml_overlay` is g2g's own `analyticsoverlay`, a native element with its own
-    properties rather than a hosted one;
+  * seven elements are g2g's own rather than hosted ones: `pyml_overlay` is
+    `analyticsoverlay`, `pyml_alert` is `analyticsalert`, `pyml_digest` is
+    `textdigest`, and `pyml_metasink` / `pyml_metareplay` / `pyml_alertrecorder`
+    / `pyml_embeddingsink` drop the prefix;
   * `pyelement` and `analyticsoverlay` both work on RGBA, so a raw-video caps
     filter that leaves the format open has to pin it;
   * a hosted element carries no pad templates into g2g, so an element that
@@ -66,11 +68,42 @@ PY_ELEMENT = "pyelement"
 PY_AGGREGATOR = "pyaggregator"
 
 #: gst-python-ml elements that g2g implements natively instead of hosting.
-NATIVE_EQUIVALENTS = {"pyml_overlay": "analyticsoverlay"}
+NATIVE_EQUIVALENTS = {
+    "pyml_overlay": "analyticsoverlay",
+    "pyml_metasink": "metasink",
+    "pyml_metareplay": "metareplay",
+    "pyml_alert": "analyticsalert",
+    "pyml_alertrecorder": "alertrecorder",
+    "pyml_digest": "textdigest",
+    "pyml_embeddingsink": "embeddingsink",
+}
 
 #: What each native element calls the properties it shares with the one it
-#: replaces. A property missing here has no counterpart at all.
-NATIVE_PROPERTIES = {"pyml_overlay": {"tracking": "show-track"}}
+#: replaces. A property missing here has no counterpart at all: g2g runs no
+#: MQTT, so `pyml_alert`'s broker and topic are refused rather than dropped.
+NATIVE_PROPERTIES = {
+    "pyml_overlay": {"tracking": "show-track"},
+    "pyml_metasink": {"location": "location"},
+    "pyml_metareplay": {"location": "location"},
+    "pyml_alert": {
+        "rules": "rules",
+        "cooldown": "cooldown",
+        "draw-alert": "draw-alert",
+        "webhook-url": "webhook-url",
+    },
+    "pyml_alertrecorder": {
+        "location": "location",
+        "encoder": "encoder",
+        "seconds-before": "seconds-before",
+        "seconds-after": "seconds-after",
+    },
+    "pyml_digest": {"window-seconds": "window-seconds"},
+    "pyml_embeddingsink": {
+        "location": "location",
+        "source-id": "source-id",
+        "model-name": "model-name",
+    },
+}
 
 #: What separates two elements, on both spellings.
 SEPARATOR = "!"

@@ -10,9 +10,10 @@
 
 GStreamer attaches a `GstAnalyticsRelationMeta` to the buffer and relates
 detections, classifications and tracking records. The g2g host instead hands the
-element a flat, write-only `MetaSink` per frame with `add_object(label, x, y, w,
-h, score)` / `add_classification(label, score)` / `add_blob(...)`; the host then
-materializes those into the frame's `AnalyticsMeta`. This backend maps the rich
+element a flat `MetaSink` per frame with `add_object(label, x, y, w, h, score)` /
+`add_classification(label, score)` / `add_blob(...)` to stage into and
+`objects()` / `blobs()` to read the frame's incoming metadata back; the host then
+materializes what was staged into the frame's `AnalyticsMeta`. This backend maps the rich
 `AnalyticsBackend` interface the leaf task code uses onto that flat sink:
 
   * the "relation meta" handle is a thin wrapper over the bound sink that counts
@@ -20,8 +21,9 @@ materializes those into the frame's `AnalyticsMeta`. This backend maps the rich
   * string labels are interned to the `u32` ids the sink expects (`quark`);
   * `add_*` return the sink's own staging handle, which `relate` passes back to
     pair a detection with its tracking id;
-  * the sink stages straight into the host frame with no read path, so
-    `read_objects` cannot see its own records back.
+  * the host fills the sink with the frame's incoming detections before the
+    call, so `read_objects` returns what an upstream element attached; what this
+    element stages is appended to those on the way out.
 """
 
 import threading
@@ -108,7 +110,12 @@ class G2gAnalyticsBackend(AnalyticsBackend):
         return bound.meta
 
     def get_relation_meta(self, buf):
-        return self._bound.meta
+        # An upstream detection is reason enough for a handle: the element does
+        # not have to have staged anything of its own first.
+        bound = self._bound
+        if bound.meta is None and bound.sink is not None and bound.sink.objects():
+            bound.meta = _RelationMeta(bound.sink)
+        return bound.meta
 
     def remove_relation_meta(self, buf):
         bound = self._bound
@@ -153,9 +160,9 @@ class G2gAnalyticsBackend(AnalyticsBackend):
         return True
 
     def read_objects(self, meta):
-        # The sink is write-only (staged straight into the host frame); the
-        # element cannot read its own staged detections back.
-        return []
+        # The frame's incoming detections, already in the dict shape the
+        # interface states. What this element stages is not read back.
+        return meta.sink.objects() if meta else []
 
 
 #: Defined here, like `frameio`, to avoid a circular import through `backend`.

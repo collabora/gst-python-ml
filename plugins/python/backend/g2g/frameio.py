@@ -100,6 +100,12 @@ class G2gFrameIO(FrameIO):
         view[:n] = flat[:n]
         return True
 
+    def read_blobs(self, target):
+        # The host fills the sink with the frame's incoming blobs; `target` is
+        # the pixel buffer and carries none.
+        sink = self._sink
+        return sink.blobs() if sink is not None else {}
+
     def append_blob(self, target, header, payload):
         if self._sink is None:
             return False
