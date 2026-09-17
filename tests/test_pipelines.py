@@ -45,6 +45,7 @@ MODEL_MARKERS = ("model-name=", "cuda")
 CAPTURE_SOURCES = ("pulsesrc", "autoaudiosrc", "alsasrc", "v4l2src")
 DISPLAY_SINK_PATTERN = re.compile(r"\b(?:autovideosink|glimagesink)\b")
 HEADLESS_SINK = "fakevideosink"
+LOG_TAIL_LINES = 40
 
 
 def runs_headless(pipeline):
@@ -228,8 +229,10 @@ def test_pipeline(pipeline, tmp_path):
     failures = [m.group(0) for p in FATAL_LOG_PATTERNS for m in p.finditer(log_content)]
     if failures:
         reported = "\n".join(failures)
+        log_tail = "\n".join(log_content.splitlines()[-LOG_TAIL_LINES:])
         pytest.fail(
-            f"Errors found in pipeline:\n{reported}\nFull pipeline: {pipeline}\nSee {log_file}"
+            f"Errors found in pipeline:\n{reported}\nFull pipeline: {pipeline}\n"
+            f"Last {LOG_TAIL_LINES} log lines:\n{log_tail}"
         )
 
     # Without this a pipeline that never left PAUSED passes on an empty log.

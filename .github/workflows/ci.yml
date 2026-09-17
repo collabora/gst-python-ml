@@ -184,7 +184,7 @@ jobs:
         run: |
           source .venv/bin/activate
           unset LD_LIBRARY_PATH
-          HEADLESS_PIPELINES=1 PIPELINE_TIMEOUT=20 python -m pytest tests/test_pipelines.py -q
+          HEADLESS_PIPELINES=1 PIPELINE_TIMEOUT=20 GST_DEBUG=2 python -m pytest tests/test_pipelines.py -q
 
       - name: ONNX pipeline smoke test (Linux)
         if: runner.os == 'Linux'
