@@ -59,6 +59,7 @@ is >= 1.24.
   - [Audio Classification (CLAP)](#audio-classification-clap)
   - [Vision-Language Model (VLM)](#vision-language-model-vlm)
   - [Embedding Extractor](#embedding-extractor)
+  - [Video Memory](#video-memory)
   - [Multi-Object Tracker](#multi-object-tracker)
   - [ML Alert](#ml-alert)
   - [Alert Recorder](#alert-recorder)
@@ -1566,6 +1567,18 @@ python pyml-launch.py filesrc location=data/people.mp4 ! decodebin name=d \
   ! fakesink
 ```
 
+### Video Memory
+
+`pyml_embeddingsink` stores the vectors `pyml_embedding` produces in an sqlite
+index, one row per embedded frame: its `pts` in seconds, the `source-id` you give
+the stream, and the embedding. Search it by text through the MCP server's
+`search_video`. One index holds one model, and the embedding blob does not carry
+the model name, so set `model-name` on the sink to the extractor's model.
+
+```
+python pyml-launch.py filesrc location=data/people.mp4 ! decodebin ! videoconvert ! videoscale ! video/x-raw,width=640,height=480 ! pyml_embedding model-name=openai/clip-vit-base-patch32 device=cuda frame-stride=30 ! pyml_embeddingsink location=people.sqlite source-id=people model-name=openai/clip-vit-base-patch32
+```
+
 ### Multi-Object Tracker
 
 `pyml_tracker` is a standalone tracker that works with any upstream detector.
@@ -1655,8 +1668,11 @@ python pyml-launch.py filesrc location=data/people.mp4 ! decodebin ! videoconver
 server over stdio that runs the gst backend in-process, so a property can change
 while the pipeline runs. Its tools are `start_pipeline`, `pipeline_status`,
 `stop_pipeline`, `latest_metadata`, `set_property`, `get_property`,
-`list_elements` and `inspect`. Records reach `latest_metadata` from a
-`pyml_metasink` at the end of the pipeline, so end every pipeline with one.
+`list_elements`, `inspect` and `search_video`. Records reach `latest_metadata`
+from a `pyml_metasink` at the end of the pipeline, so end every pipeline with one.
+`search_video` reads an index `pyml_embeddingsink` wrote and returns the frames
+closest to a description, embedding it with the index's own model on the device
+`PYML_MCP_DEVICE` names, `cpu` when it is unset.
 
 ```
 uv sync --extra mcp
