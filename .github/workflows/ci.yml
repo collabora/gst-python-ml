@@ -161,6 +161,22 @@ jobs:
           gst-inspect-1.0 python
           gst-inspect-1.0 pyml_objectdetector
 
+      - name: Run gst backend tests (Linux)
+        if: runner.os == 'Linux'
+        run: |
+          source .venv/bin/activate
+          pip install pytest mcp
+          VENV_SITE=$(python -c "import sysconfig; print(sysconfig.get_path('purelib'))")
+          # the plugin loader links the system libpython
+          export PYTHONPATH="${VENV_SITE}:${{ github.workspace }}/plugins/python"
+          unset LD_LIBRARY_PATH
+          rm -rf ~/.cache/gstreamer-1.0
+          # README pipelines need the GPU and the data dir, the other two load models
+          /usr/bin/python3 -m pytest tests/ -q \
+            --ignore=tests/test_pipelines.py \
+            --ignore=tests/test_zeroshotdetector.py \
+            --ignore=tests/test_engines.py
+
       - name: ONNX pipeline smoke test (Linux)
         if: runner.os == 'Linux'
         run: |

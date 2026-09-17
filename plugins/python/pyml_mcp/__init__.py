@@ -21,6 +21,7 @@ import os
 import sys
 import threading
 from collections import deque
+from importlib.metadata import version
 
 from mcp.server import MCPServer
 from mcp.server.mcpserver.exceptions import ToolError
@@ -53,6 +54,7 @@ RECENT_RECORDS = 1000
 
 server = MCPServer(
     "gst-python-ml",
+    version=version("gst-python-ml"),
     instructions=(
         "Pipelines are gst-launch descriptions. End one with pyml_metasink to read "
         "its detections, transcripts and alerts back through latest_metadata."
