@@ -44,8 +44,10 @@ from gi.repository import GLib, GObject, Gst  # noqa: E402
 Gst.init(None)
 
 import metasink  # noqa: E402
+from embedding_index import EmbeddingIndex  # noqa: E402
 
 BACKEND = os.environ.get("PYML_BACKEND", "gst").lower()
+EMBEDDING_DEVICE = os.environ.get("PYML_MCP_DEVICE", "cpu")
 ELEMENT_PREFIX = "pyml_"
 RECENT_RECORDS = 1000
 
@@ -166,6 +168,43 @@ def stop_pipeline() -> dict:
 def latest_metadata(count: int = 10) -> list[dict]:
     with session.lock:
         return list(session.records)[-count:]
+
+
+text_embedding_engines = {}
+
+
+def text_embedding_engine(model_name):
+    engine = text_embedding_engines.get(model_name)
+    if engine is None:
+        # torch loads only once a search asks for it
+        from engine.embedding_engine import EmbeddingEngine
+
+        engine = EmbeddingEngine()
+        engine.do_set_device(EMBEDDING_DEVICE)
+        engine.do_load_model(model_name)
+        text_embedding_engines[model_name] = engine
+    return engine
+
+
+@server.tool(
+    description="Search a video index written by pyml_embeddingsink for the frames a description "
+    "matches, closest first: each result has a pts in seconds, the source_id of its "
+    "stream, and a cosine similarity score."
+)
+def search_video(query: str, index: str, count: int = 5) -> list[dict]:
+    if not os.path.isfile(index):
+        raise ToolError(f"no embedding index at {index!r}")
+    opened = EmbeddingIndex.open(index)
+    try:
+        model_name = opened.model_name()
+        if not model_name:
+            raise ToolError(f"the index at {index!r} is empty")
+        vector = text_embedding_engine(model_name).do_text_embedding(query)
+        if vector is None:
+            raise ToolError(f"{model_name} cannot embed text, index with a CLIP model")
+        return opened.search(vector, count)
+    finally:
+        opened.close()
 
 
 @server.tool(
