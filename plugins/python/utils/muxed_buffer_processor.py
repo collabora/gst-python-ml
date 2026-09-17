@@ -74,8 +74,8 @@ class MuxedBufferProcessor:
                 self.logger.error("Buffer has no memory chunks")
                 return None, None, None, None
 
-            # Single frame case: no metadata
-            if num_chunks == 1:
+            # a blob appended upstream is an extra memory too, only the muxer's trailing metadata means a batch
+            if not self.metadata.present(buf):
                 self.logger.info("Single frame mode (no metadata)")
                 with buf.peek_memory(0).map(Gst.MapFlags.READ) as info:
                     frame = self.format_converter.get_rgb_frame(

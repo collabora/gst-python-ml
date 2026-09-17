@@ -27,6 +27,10 @@ from gi.repository import Gst  # noqa: E402
 
 from backend.core import FrameProcessingMixin  # noqa: E402
 from backend.gst.transform import BaseTransform  # noqa: E402
+from utils.blobs import read_blobs  # noqa: E402
+
+# the only-on value that names the analytics relation meta rather than a blob
+ONLY_ON_DETECTIONS = "detections"
 
 
 class VideoTransform(BaseTransform, FrameProcessingMixin):
@@ -63,6 +67,8 @@ class VideoTransform(BaseTransform, FrameProcessingMixin):
         # still being constructed when this module is imported.
         from backend import frameio
 
+        if self._only_on and not self.carries_only_on(buf):
+            return Gst.FlowReturn.OK
         try:
             frames, num_sources, fmt = frameio.read_frames(
                 buf,
@@ -82,3 +88,11 @@ class VideoTransform(BaseTransform, FrameProcessingMixin):
         except Exception as e:
             self.logger.error(f"Transform error: {e}\n{traceback.format_exc()}")
             return Gst.FlowReturn.ERROR
+
+    def carries_only_on(self, buf):
+        from backend import analytics
+
+        if self._only_on == ONLY_ON_DETECTIONS:
+            meta = analytics.get_relation_meta(buf)
+            return meta is not None and bool(analytics.read_objects(meta))
+        return self._only_on in read_blobs(buf)

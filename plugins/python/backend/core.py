@@ -136,6 +136,15 @@ def ml_property_namespace(gobject):
         else:
             self.kwargs.pop("compile", None)
 
+    @gobject.Property(type=str, default="")
+    def only_on(self):
+        "Run only on frames carrying this blob, for example alert, or detections for any analytics object"
+        return self._only_on
+
+    @only_on.setter
+    def only_on(self, value):
+        self._only_on = value
+
     namespace = {
         "device": device,
         "model_name": model_name,
@@ -143,6 +152,7 @@ def ml_property_namespace(gobject):
         "input_format": input_format,
         "post_process": post_process,
         "compile": compile,
+        "only_on": only_on,
     }
     for name, value_type, default, blurb in ENGINE_TUNABLES:
         namespace[name] = _engine_tunable(gobject, name, value_type, default, blurb)
@@ -245,6 +255,7 @@ class MLEngineMixin:
         self._system_prompt = None
         self._prompt = None
         self._compile = False
+        self._only_on = ""
 
     @property
     def engine(self):

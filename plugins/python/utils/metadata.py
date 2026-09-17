@@ -108,6 +108,13 @@ class Metadata:
         )
         buffer.append_memory(metadata_memory.copy(0, -1))  # Append metadata last
 
+    def present(self, buffer: Gst.Buffer) -> bool:
+        if buffer.n_memory() < 1:
+            return False
+        last_memory = buffer.peek_memory(buffer.n_memory() - 1)
+        with last_memory.map(Gst.MapFlags.READ) as map_info:
+            return bytes(map_info.data[: len(self.HEADER)]) == self.HEADER
+
     def read(self, buffer: Gst.Buffer) -> tuple:
         """Read values from the last memory chunk, verifying the header."""
         if buffer.n_memory() < 1:
