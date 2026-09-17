@@ -34,7 +34,7 @@ try:
     from gi.repository import Gst, GstBase  # noqa: E402
 
     from log.logger_factory import LoggerFactory  # noqa: E402
-    from backend import analytics, GObject  # noqa: E402
+    from backend import analytics, frameio, GObject  # noqa: E402
 
     # Header prefix for alert buffer metadata
     ALERT_META_HEADER = b"GST-ALERT:"
@@ -83,14 +83,15 @@ class AlertTransform(GstBase.BaseTransform):
         )
         __gsttemplates__ = (src_template, sink_template)
 
-    rules = GObject.Property(
-        type=str,
-        default="",
-        nick="Alert Rules",
-        blurb="JSON string defining alert rules, e.g. "
-        '[{"class": "person", "min_score": 0.8, "zone": [0,0,320,240]}]',
-        flags=GObject.ParamFlags.READWRITE,
-    )
+    @GObject.Property(type=str, default="")
+    def rules(self):
+        """JSON string defining alert rules, e.g. [{"class": "person", "min_score": 0.8, "zone": [0,0,320,240]}]"""
+        return self._rules
+
+    @rules.setter
+    def rules(self, value):
+        self._rules = value
+        self._parse_rules(value)
 
     webhook_url = GObject.Property(
         type=str,
@@ -108,13 +109,15 @@ class AlertTransform(GstBase.BaseTransform):
         flags=GObject.ParamFlags.READWRITE,
     )
 
-    mqtt_broker = GObject.Property(
-        type=str,
-        default="",
-        nick="MQTT Broker",
-        blurb="MQTT broker address (host:port)",
-        flags=GObject.ParamFlags.READWRITE,
-    )
+    @GObject.Property(type=str, default="")
+    def mqtt_broker(self):
+        """MQTT broker address (host:port)"""
+        return self._mqtt_broker
+
+    @mqtt_broker.setter
+    def mqtt_broker(self, value):
+        self._mqtt_broker = value
+        self._setup_mqtt()
 
     cooldown = GObject.Property(
         type=int,
@@ -137,47 +140,15 @@ class AlertTransform(GstBase.BaseTransform):
     def __init__(self):
         super().__init__()
         self.logger = LoggerFactory.get(LoggerFactory.LOGGER_TYPE_GST)
-        self.set_passthrough(True)
+        # not passthrough: appending the alert blob needs a writable buffer
         self.set_in_place(True)
+        self._rules = ""
+        self._mqtt_broker = ""
         self._parsed_rules = []
         self._last_alert_times = {}
         self._mqtt_client = None
         self.width = 0
         self.height = 0
-
-    def do_get_property(self, prop):
-        if prop.name == "rules":
-            return self.rules
-        elif prop.name == "webhook-url":
-            return self.webhook_url
-        elif prop.name == "mqtt-topic":
-            return self.mqtt_topic
-        elif prop.name == "mqtt-broker":
-            return self.mqtt_broker
-        elif prop.name == "cooldown":
-            return self.cooldown
-        elif prop.name == "draw-alert":
-            return self.draw_alert
-        else:
-            raise AttributeError(f"Unknown property {prop.name}")
-
-    def do_set_property(self, prop, value):
-        if prop.name == "rules":
-            self.rules = value
-            self._parse_rules(value)
-        elif prop.name == "webhook-url":
-            self.webhook_url = value
-        elif prop.name == "mqtt-topic":
-            self.mqtt_topic = value
-        elif prop.name == "mqtt-broker":
-            self.mqtt_broker = value
-            self._setup_mqtt()
-        elif prop.name == "cooldown":
-            self.cooldown = value
-        elif prop.name == "draw-alert":
-            self.draw_alert = value
-        else:
-            raise AttributeError(f"Unknown property {prop.name}")
 
     def _parse_rules(self, rules_json):
         """Parse alert rules from JSON string."""
@@ -295,9 +266,7 @@ class AlertTransform(GstBase.BaseTransform):
     def _attach_alert_meta(self, buf, alert_payload):
         """Attach GST-ALERT: metadata to the buffer."""
         alert_json = json.dumps(alert_payload).encode("utf-8")
-        meta_bytes = ALERT_META_HEADER + alert_json
-        mem = Gst.Memory.new_wrapped(0, meta_bytes, len(meta_bytes), 0, None, None)
-        buf.append_memory(mem)
+        frameio.append_blob(buf, ALERT_META_HEADER, alert_json)
 
     def _draw_alert_overlay(self, buf):
         """Draw a red border and ALERT text on the frame."""

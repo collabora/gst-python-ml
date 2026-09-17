@@ -1,7 +1,7 @@
 # DESIGN_TODO
 
 A terse catalogue of open tasks only. Gaps on the host side of the glass2glass
-Python-element host are tracked in that repo's `DESIGN_TODO.md`, under
+Python-element host are tracked in that repo's `design/TODO.md`, under
 "Python-element host", not here.
 
 ## g2g backend coverage
@@ -20,14 +20,29 @@ Python-element host are tracked in that repo's `DESIGN_TODO.md`, under
   machine otherwise idle, including between backends: a model still resident
   from the previous run fails the next one at preroll.
 
-- **Eleven elements have no per-frame seam, so they cannot run on g2g at all.**
-  `alert`, `tracker`, `vad`, `clap`, `overlay_counter`, `kafkasink`,
-  `streammux`, `streamdemux`, `coalescehistory` and `llm_remote` subclass a
-  GStreamer base directly. `stablediffusion` is hosted but fills in neither
-  `process_frames` nor `process_payload`. Reparenting a family onto one of those
-  two seams in `backend/core.py` is what makes its pipelines runnable.
-  `overlay_counter` inherits `overlay`, which the launcher rewrites to g2g's
-  native `analyticsoverlay`, so the plain overlay line works regardless.
+- **Thirteen elements have no per-frame seam, so they cannot run on g2g at all.**
+  `alert`, `alertrecorder`, `metasink`, `tracker`, `vad`, `clap`,
+  `overlay_counter`, `kafkasink`, `streammux`, `streamdemux`, `coalescehistory`
+  and `llm_remote` subclass a GStreamer base directly. `stablediffusion` is
+  hosted but fills in neither `process_frames` nor `process_payload`.
+  Reparenting a family onto one of those two seams in `backend/core.py` is what
+  makes its pipelines runnable. `overlay_counter` inherits `overlay`, which the
+  launcher rewrites to g2g's native `analyticsoverlay`, so the plain overlay
+  line works regardless.
+
+- **The elements that read upstream metadata cannot be ported until the host
+  passes it in.** `alert`, `alertrecorder`, `metasink`, `kafkasink` and
+  `tracker` read the detections and blobs an upstream element attached. The
+  g2g host calls `g2g_process(buffer, width, height, format, sink)` with a
+  write-only `MetaSink`, so `G2gAnalyticsBackend.read_objects` returns nothing
+  by design. Host side: hand the frame's incoming objects and blobs to the call.
+
+- **`pyml-mcp` drives the gst backend only.** It runs the pipeline in-process
+  with `Gst.parse_launch`, which is what lets `set_property` work on a running
+  pipeline. glass2glass ships its own `g2g-mcp` with `start_pipeline`,
+  `pipeline_status`, `stop_pipeline`, `list_elements` and `inspect` under the
+  same names. A gst-spelled pipeline still needs the launcher's rewrite before
+  `g2g-mcp` can take it.
 
 - **A hosted element's properties are only checked once its class loads.** The
   g2g host takes any name it does not read itself and hands it to the Python

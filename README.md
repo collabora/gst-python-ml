@@ -60,6 +60,9 @@ is >= 1.24.
   - [Embedding Extractor](#embedding-extractor)
   - [Multi-Object Tracker](#multi-object-tracker)
   - [ML Alert](#ml-alert)
+  - [Alert Recorder](#alert-recorder)
+  - [Metadata Sink](#metadata-sink)
+- [MCP Server](#mcp-server)
 
 ## Install
 
@@ -1589,3 +1592,49 @@ python pyml-launch.py filesrc location=data/people.mp4 ! decodebin name=d \
               mqtt-broker=localhost:1883 mqtt-topic=alerts/zone1 cooldown=5 \
   ! pyml_overlay ! videoconvert ! autovideosink sync=false
 ```
+
+### Alert Recorder
+
+`pyml_alertrecorder` writes a clip around each alert that an upstream `pyml_alert`
+attached to the buffer. It keeps `seconds-before` of video in memory and records
+until `seconds-after` have passed since the last alert. `%s` in `location` is the
+time the alert fired. The default encoder is `vp8enc deadline=1 ! webmmux`. Set
+`encoder` and the extension together, for example
+`encoder="x264enc tune=zerolatency ! mp4mux" location=alert-%s.mp4`.
+
+```
+python pyml-launch.py filesrc location=data/people.mp4 ! decodebin ! videoconvert ! videoscale ! video/x-raw,width=640,height=480 ! pyml_yolo model-name=yolo11m device=cuda ! pyml_alert rules='{"class":"person","min_score":0.7}' cooldown=8 draw-alert=false ! pyml_alertrecorder location=alert-%s.webm seconds-before=2 seconds-after=3 ! pyml_overlay ! videoconvert ! autovideosink sync=false
+```
+
+### Metadata Sink
+
+`pyml_metasink` writes one JSON line per buffer with whatever the pipeline knows
+about it: `pts` in seconds, `detections` from the analytics metadata, any JSON
+blob an element attached under its name (`alert`, `depth`, `vlm`, ...) and, for a
+text stream, `text`. Lines go to `location`, or to stdout when it is unset. Use a
+`tee` to keep a display alongside it.
+
+```
+python pyml-launch.py filesrc location=data/people.mp4 ! decodebin ! videoconvert ! videoscale ! video/x-raw,width=640,height=480 ! pyml_yolo model-name=yolo11m device=cuda ! pyml_alert rules='{"class":"person","min_score":0.7}' draw-alert=false ! pyml_metasink location=people.jsonl
+```
+
+```
+{"pts": 0.08, "detections": [{"label": "stream_0_person", "x": 469, "y": 312, "w": 37, "h": 82, "score": 0.85}], "alert": [{"timestamp": 1789611763.6, "rule": {"class": "person", "min_score": 0.7}, "detection": {"label": "stream_0_person", "x": 469, "y": 312, "w": 37, "h": 82, "score": 0.85}}]}
+```
+
+## MCP Server
+
+`pyml-mcp` lets an LLM agent run a pipeline and read its results. It is an MCP
+server over stdio that runs the gst backend in-process, so a property can change
+while the pipeline runs. Its tools are `start_pipeline`, `pipeline_status`,
+`stop_pipeline`, `latest_metadata`, `set_property`, `get_property`,
+`list_elements` and `inspect`. Records reach `latest_metadata` from a
+`pyml_metasink` at the end of the pipeline, so end every pipeline with one.
+
+```
+uv sync --extra mcp
+claude mcp add gst-python-ml -- /path/to/gst-python-ml/.venv/bin/pyml-mcp
+```
+
+For the g2g backend use glass2glass's own `g2g-mcp`, which drives its pipelines
+natively.

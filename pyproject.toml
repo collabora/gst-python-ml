@@ -98,6 +98,9 @@ vad = [
     "pysilero-vad",
     "faster-whisper",
 ]
+mcp = [
+    "mcp>=2.2.0",
+]
 all = [
     "gst-python-ml[onnx,tinygrad,llamacpp,openvino,tensorflow,litert,vad]",
 ]
@@ -120,6 +123,7 @@ markers = [
 
 [project.scripts]
 pyml-launch = "pyml_launch:main"
+pyml-mcp = "pyml_mcp:main"
 
 [tool.setuptools]
 include-package-data = true
