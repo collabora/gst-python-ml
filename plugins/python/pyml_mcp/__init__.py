@@ -243,6 +243,13 @@ def list_elements() -> list[dict]:
     ]
 
 
+def initial_value(instance, spec):
+    # a fresh instance's value stands in for the default, as in gst-inspect
+    if not spec.flags & GObject.ParamFlags.READABLE:
+        return None
+    return serialized(spec, instance.get_property(spec.name))
+
+
 @server.tool(
     description="An element's description and properties, for any element gst-launch knows."
 )
@@ -259,7 +266,7 @@ def inspect(element: str) -> dict:
                 "name": spec.name,
                 "type": spec.value_type.name,
                 "blurb": spec.blurb,
-                "default": serialized(spec, spec.get_default_value()),
+                "default": initial_value(instance, spec),
             }
             for spec in instance.list_properties()
         ],
