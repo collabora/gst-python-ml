@@ -96,9 +96,6 @@ class StreamDemux(Gst.Element):
         if "src_" in name:
             pad = Gst.Pad.new_from_template(template, name)
             self.add_pad(pad)
-            if not hasattr(pad, "stream_started"):
-                pad.push_event(Gst.Event.new_stream_start(f"demux-stream-{name}"))
-                pad.stream_started = True
             if self.sinkpad.has_current_caps():
                 caps = self.sinkpad.get_current_caps()
                 self.logger.info(f"Setting caps on {pad.get_name()}: {caps}")
@@ -228,7 +225,14 @@ class StreamDemux(Gst.Element):
 
     def event(self, pad, parent, event):
         self.logger.debug(f"Received event: {event.type}")
-        return Gst.PadProbeReturn.OK
+        # the src pads push their own stream-start, caps and segment
+        if event.type in (
+            Gst.EventType.EOS,
+            Gst.EventType.FLUSH_START,
+            Gst.EventType.FLUSH_STOP,
+        ):
+            return Gst.Pad.event_default(pad, parent, event)
+        return True
 
 
 if backend.BACKEND == "gst":

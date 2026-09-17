@@ -117,6 +117,8 @@ class StreamMux(GstBase.Aggregator):
 
         if len(self.batch_buffer) == self.batch_size:
             self.output_batch()
+        elif all(pad.is_eos() for pad in self.sinkpads):
+            return Gst.FlowReturn.EOS
 
         return Gst.FlowReturn.OK
 
