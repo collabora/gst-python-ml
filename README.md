@@ -46,6 +46,7 @@ is >= 1.24.
   - [Transcription](#transcription)
   - [LLM](#llm)
   - [Remote LLM (Ollama)](#remote-llm-ollama)
+  - [Incident Digest](#incident-digest)
   - [Stable Diffusion](#stablediffusion)
   - [Kafka Sink](#kafkasink)
   - [Segment Anything (SAM)](#segment-anything-sam)
@@ -1296,6 +1297,17 @@ python pyml-launch.py filesrc location=data/prompt_for_llm.txt \
     system-prompt="You are a helpful assistant. Answer concisely." \
     temperature=0.5 \
   ! fakesink
+```
+
+### Incident Digest
+
+`pyml_digest` collects the text buffers of a time window into one text buffer,
+so `pyml_llm` summarises half a minute of captions rather than a single line.
+The window closes when a buffer's timestamp passes it, and the open window is
+flushed at end of stream.
+
+```
+python pyml-launch.py filesrc location=data/soccer_single_camera.mp4 ! decodebin ! videoconvertscale ! video/x-raw,width=640,height=480 ! tee name=t t. ! queue ! textoverlay name=overlay wait-text=false ! videoconvert ! autovideosink t. ! queue leaky=2 max-size-buffers=1 ! videoconvertscale ! video/x-raw,width=240,height=180 ! pyml_caption_qwen device=cuda:0 prompt="In one sentence, describe what you see?" model-name="Qwen/Qwen2.5-VL-3B-Instruct-AWQ" name=cap cap.src ! fakesink async=0 sync=0 cap.text_src ! queue ! pyml_digest window-seconds=30 ! pyml_llm model-name="Qwen/Qwen3-0.6B" device=cuda system-prompt="You receive every caption of the last thirty seconds. Write one paragraph describing what happened, and NEVER mention the specific times." ! queue ! overlay.text_sink
 ```
 
 ### stablediffusion
