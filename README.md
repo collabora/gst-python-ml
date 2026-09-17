@@ -62,6 +62,7 @@ is >= 1.24.
   - [ML Alert](#ml-alert)
   - [Alert Recorder](#alert-recorder)
   - [Metadata Sink](#metadata-sink)
+  - [Metadata Replay](#metadata-replay)
 - [MCP Server](#mcp-server)
 
 ## Install
@@ -1620,6 +1621,20 @@ python pyml-launch.py filesrc location=data/people.mp4 ! decodebin ! videoconver
 
 ```
 {"pts": 0.08, "detections": [{"label": "stream_0_person", "x": 469, "y": 312, "w": 37, "h": 82, "score": 0.85}], "alert": [{"timestamp": 1789611763.6, "rule": {"class": "person", "min_score": 0.7}, "detection": {"label": "stream_0_person", "x": 469, "y": 312, "w": 37, "h": 82, "score": 0.85}}]}
+```
+
+### Metadata Replay
+
+`pyml_metareplay` reads a JSON lines file a `pyml_metasink` wrote and reattaches
+each record to the frame at the same timestamp: `detections` become analytics
+metadata again, every other key becomes the blob it came from. A record matches a
+frame whose timestamp is within half a frame duration of it. Downstream
+`pyml_tracker`, `pyml_alert`, `pyml_overlay` and `pyml_alertrecorder` then run
+with no model loaded. Record once, then rerun the rules as often as you like.
+
+```
+python pyml-launch.py filesrc location=data/people.mp4 ! decodebin ! videoconvert ! videoscale ! video/x-raw,width=640,height=480 ! pyml_yolo model-name=yolo11m device=cuda ! pyml_metasink location=people.jsonl
+python pyml-launch.py filesrc location=data/people.mp4 ! decodebin ! videoconvert ! videoscale ! video/x-raw,width=640,height=480 ! pyml_metareplay location=people.jsonl ! pyml_tracker tracker-type=sort ! pyml_overlay ! videoconvert ! autovideosink sync=false
 ```
 
 ## MCP Server
