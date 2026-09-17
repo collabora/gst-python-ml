@@ -18,7 +18,6 @@
 
 import sqlite3
 
-import numpy as np
 
 CREATE_TABLE = """
 CREATE TABLE IF NOT EXISTS embeddings (
@@ -34,7 +33,7 @@ INSERT_ROW = (
 SELECT_ROWS = "SELECT source_id, pts, vector FROM embeddings"
 SELECT_MODEL_NAME = "SELECT model_name FROM embeddings LIMIT 1"
 
-VECTOR_DTYPE = np.float32
+VECTOR_DTYPE = "float32"
 SMALLEST_USABLE_NORM = 1e-12
 
 
@@ -63,6 +62,8 @@ class EmbeddingIndex:
             raise ValueError(
                 f"the index holds {held} embeddings, it cannot also hold {model_name}"
             )
+        import numpy as np
+
         blob = np.asarray(vector, dtype=VECTOR_DTYPE).tobytes()
         self.connection.execute(
             INSERT_ROW, (source_id, float(pts_seconds), model_name, blob)
@@ -70,6 +71,8 @@ class EmbeddingIndex:
         self.connection.commit()
 
     def search(self, vector, count):
+        import numpy as np
+
         rows = self.connection.execute(SELECT_ROWS).fetchall()
         if not rows:
             return []

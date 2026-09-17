@@ -1579,8 +1579,11 @@ detector decides which frames an expensive model sees.
 
 #### VLM only on alerted frames
 
+The alert decides which frames the vision-language model sees. The same property
+works on `pyml_caption_qwen`, `pyml_depth` or any other video element.
+
 ```
-python pyml-launch.py filesrc location=data/people.mp4 ! decodebin ! videoconvert ! videoscale ! video/x-raw,width=640,height=480 ! pyml_yolo model-name=yolo11m device=cuda ! pyml_alert rules='{"class":"person","min_score":0.8}' draw-alert=false ! pyml_vlm model-name=llava-hf/llava-1.5-7b-hf device=cuda only-on=alert prompt="What is the person in the centre doing?" ! pyml_metasink location=people.jsonl
+python pyml-launch.py filesrc location=data/people.mp4 ! decodebin ! videoconvert ! videoscale ! video/x-raw,width=640,height=480 ! pyml_yolo model-name=yolo11m device=cuda ! pyml_alert rules='{"class":"person","min_score":0.8}' cooldown=5 draw-alert=false ! pyml_vlm model-name=HuggingFaceTB/SmolVLM-500M-Instruct device=cuda only-on=alert max-tokens=40 prompt="What is the person in the centre doing?" ! pyml_metasink location=people.jsonl
 ```
 
 The g2g backend does not gate: a hosted element gets no upstream metadata.
@@ -1699,9 +1702,17 @@ frame whose timestamp is within half a frame duration of it. Downstream
 `pyml_tracker`, `pyml_alert`, `pyml_overlay` and `pyml_alertrecorder` then run
 with no model loaded. Record once, then rerun the rules as often as you like.
 
+Record once:
+
 ```
-python pyml-launch.py filesrc location=data/people.mp4 ! decodebin ! videoconvert ! videoscale ! video/x-raw,width=640,height=480 ! pyml_yolo model-name=yolo11m device=cuda ! pyml_metasink location=people.jsonl
-python pyml-launch.py filesrc location=data/people.mp4 ! decodebin ! videoconvert ! videoscale ! video/x-raw,width=640,height=480 ! pyml_metareplay location=people.jsonl ! pyml_tracker tracker-type=sort ! pyml_overlay ! videoconvert ! autovideosink sync=false
+python pyml-launch.py filesrc location=data/people.mp4 ! decodebin ! videoconvert ! videoscale ! video/x-raw,width=640,height=480 ! pyml_yolo model-name=yolo11m device=cuda confidence=0.5 ! pyml_metasink location=people.jsonl
+```
+
+Then replay. `data/people.jsonl` is that recording, shipped so this line runs with
+no GPU at all:
+
+```
+python pyml-launch.py filesrc location=data/people.mp4 ! decodebin ! videoconvert ! videoscale ! video/x-raw,width=640,height=480 ! pyml_metareplay location=data/people.jsonl ! pyml_tracker tracker-type=sort ! pyml_overlay ! videoconvert ! autovideosink sync=false
 ```
 
 ## MCP Server

@@ -54,8 +54,10 @@ def buffer_record(buffer, media_type):
             record["text"] = bytes(info.data).decode("utf-8", errors="replace")
         return record
     meta = analytics.get_relation_meta(buffer)
-    if meta:
-        record["detections"] = analytics.read_objects(meta)
+    detections = analytics.read_objects(meta) if meta else []
+    # a pooled buffer keeps an emptied relation meta from an earlier frame
+    if detections:
+        record["detections"] = detections
     for name, payload in read_blobs(buffer).items():
         # embedding blobs are binary, not json
         try:
@@ -96,6 +98,8 @@ class MetaSink(GstBase.BaseSink):
         super().__init__()
         self.logger = LoggerFactory.get(LoggerFactory.LOGGER_TYPE_GST)
         self.set_sync(False)
+        # a sporadic feed like a caption pad must not hold the pipeline in preroll
+        self.set_async_enabled(False)
         self._output = None
         self._media_type = None
 

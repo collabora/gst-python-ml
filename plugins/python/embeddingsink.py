@@ -98,6 +98,8 @@ class EmbeddingSink(GstBase.BaseSink):
         super().__init__()
         self.logger = LoggerFactory.get(LoggerFactory.LOGGER_TYPE_GST)
         self.set_sync(False)
+        # a sporadic feed like a caption pad must not hold the pipeline in preroll
+        self.set_async_enabled(False)
         self._index = None
 
     def do_start(self):

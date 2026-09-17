@@ -94,7 +94,7 @@ class CountFrames(VideoTransform):
 
 
 GObject.type_register(TagOneFrame)
-Gst.Element.register(None, "tagoneframe", Gst.Rank.NONE, TagOneFrame)
+Gst.Element.register(None, "onlyontagger", Gst.Rank.NONE, TagOneFrame)
 GObject.type_register(CountFrames)
 Gst.Element.register(None, "countframes", Gst.Rank.NONE, CountFrames)
 
@@ -104,7 +104,7 @@ def processed_frames(only_on=None):
     pipeline = Gst.parse_launch(
         f"videotestsrc num-buffers={FRAMES} "
         f"! video/x-raw,width=64,height=48,framerate={FRAMERATE}/1,format=RGBA "
-        "! tagoneframe "
+        "! onlyontagger "
         f"! countframes name=counter {gating}"
         "! fakesink"
     )

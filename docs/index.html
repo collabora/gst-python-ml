@@ -884,6 +884,7 @@
         <ul class="nav-links">
             <li><a href="#engines">Engines</a></li>
             <li><a href="#elements">Elements</a></li>
+            <li><a href="#mcp">MCP</a></li>
             <li><a href="#features">Features</a></li>
             <li><a href="#pipelines">Pipelines</a></li>
             <li><a href="#install">Install</a></li>
@@ -942,7 +943,7 @@
                 <p>ML Engines</p>
             </div>
             <div class="stat-cell">
-                <h3>39</h3>
+                <h3>45</h3>
                 <p>GStreamer Elements</p>
             </div>
             <div class="stat-cell">
@@ -1331,6 +1332,73 @@
                 <p>Rule-based alerting triggered by upstream detections. Webhook, MQTT, and metadata output with per-rule cooldowns.</p>
                 <span class="element-tag tag-utility">Utility</span>
             </div>
+            <div class="element-card">
+                <span class="f-icon">&#127909;</span>
+                <code>pyml_alertrecorder</code>
+                <h3>Alert Recorder</h3>
+                <p>Writes a video clip around each alert: a few seconds before, and until the alerts stop. Any encoder and muxer GStreamer has.</p>
+                <span class="element-tag tag-utility">Utility</span>
+            </div>
+            <div class="element-card">
+                <span class="f-icon">&#127919;</span>
+                <code>pyml_zeroshotdetector</code>
+                <h3>Zero-Shot Object Detection</h3>
+                <p>Type the classes: <code>labels="forklift, hard hat"</code>. OWLv2 or Grounding DINO boxes flow into alerts, tracking and overlay with no training.</p>
+                <span class="element-tag tag-vision">Vision</span>
+            </div>
+            <div class="element-card">
+                <span class="f-icon">&#128257;</span>
+                <code>pyml_metareplay</code>
+                <h3>Metadata Replay</h3>
+                <p>Reattaches a recorded JSON lines file to the frames, so tracker, alert and overlay run with no model and no GPU.</p>
+                <span class="element-tag tag-utility">Utility</span>
+            </div>
+            <div class="element-card">
+                <span class="f-icon">&#129504;</span>
+                <code>pyml_embeddingsink</code>
+                <h3>Video Memory</h3>
+                <p>Stores CLIP frame embeddings in a local index. The MCP server's <code>search_video</code> finds moments by text.</p>
+                <span class="element-tag tag-utility">Utility</span>
+            </div>
+            <div class="element-card">
+                <span class="f-icon">&#128221;</span>
+                <code>pyml_digest</code>
+                <h3>Incident Digest</h3>
+                <p>Collects a time window of captions or transcripts into one text buffer, so an LLM summarises a minute rather than a line.</p>
+                <span class="element-tag tag-utility">Utility</span>
+            </div>
+            <div class="element-card">
+                <span class="f-icon">&#128203;</span>
+                <code>pyml_metasink</code>
+                <h3>Metadata Sink</h3>
+                <p>One JSON line per frame: detections, alerts, depth and other blobs, transcripts. To a file, stdout, or the bus for the MCP server.</p>
+                <span class="element-tag tag-utility">Utility</span>
+            </div>
+        </div>
+    </div>
+</section>
+
+<!-- ═══ MCP ═══ -->
+<section id="mcp">
+    <div class="section-inner">
+        <span class="section-label">Agents</span>
+        <h2 class="section-title">Give an LLM Agent Eyes and Ears</h2>
+        <p class="section-desc"><code>pyml-mcp</code> is a Model Context Protocol server over stdio. It runs a GStreamer pipeline in-process, so an agent in Claude Code, Claude Desktop or any MCP client can start a pipeline, read what it sees, and tune it while it runs.</p>
+        <div class="features-grid fade-in">
+            <div class="feat-card">
+                <h3>Tools</h3>
+                <p><code>start_pipeline</code>, <code>pipeline_status</code>, <code>stop_pipeline</code>, <code>latest_metadata</code>, <code>set_property</code>, <code>get_property</code>, <code>list_elements</code>, <code>inspect</code>, <code>search_video</code>.</p>
+            </div>
+            <div class="feat-card">
+                <h3>Results</h3>
+                <p>End the pipeline with <code>pyml_metasink</code>. Every record it posts, detections, alerts, transcripts, reaches the agent through <code>latest_metadata</code>.</p>
+            </div>
+            <div class="feat-card">
+                <h3>Setup</h3>
+<pre>uv sync --extra mcp
+claude mcp add gst-python-ml -- \
+  /path/to/gst-python-ml/.venv/bin/pyml-mcp</pre>
+            </div>
         </div>
     </div>
 </section>
@@ -1370,6 +1438,22 @@
             <div class="feat-card">
                 <h3>&#127760; Transcribe &rarr; Translate &rarr; Speak</h3>
                 <p>Chain <code>pyml_whispertranscribe</code> &rarr; <code>pyml_mariantranslate</code> &rarr; <code>pyml_coquitts</code> for end-to-end speech-to-speech translation in one pipeline.</p>
+            </div>
+            <div class="feat-card">
+                <h3>&#129302; Agent Access over MCP</h3>
+                <p><code>pyml-mcp</code> is an MCP server that runs a pipeline in-process. An LLM agent starts it, reads detections and transcripts from <code>pyml_metasink</code>, and changes element properties while it runs.</p>
+            </div>
+            <div class="feat-card">
+                <h3>&#9878; Cascade Gating</h3>
+                <p><code>only-on=alert</code> on any video element runs it only on the frames a cheap detector flagged. YOLO decides, the VLM answers.</p>
+            </div>
+            <div class="feat-card">
+                <h3>&#128269; Search Footage by Text</h3>
+                <p><code>pyml_embeddingsink</code> indexes CLIP embeddings, and an agent asks <code>search_video("a red van at the gate")</code> over MCP to get timestamps back.</p>
+            </div>
+            <div class="feat-card">
+                <h3>&#127909; Alert Clips</h3>
+                <p><code>pyml_alert</code> tags the frame, <code>pyml_alertrecorder</code> writes the seconds around it to a file. No external recorder, no polling.</p>
             </div>
             <div class="feat-card">
                 <h3>&#128232; Kafka Integration</h3>
@@ -1451,6 +1535,18 @@
         <p class="section-desc">Real pipelines you can run right now. Every example works with <code style="background: var(--bg-tertiary); padding: 2px 6px; border-radius: 4px; font-size: 0.9rem; font-family: 'JetBrains Mono', monospace; color: var(--green);">pyml-launch</code>.</p>
 
         <div class="pipeline-grid fade-in">
+            <div class="pipeline-card">
+                <span class="pipe-tag">Alerts</span>
+                <h3>Detect, Alert, Record, Log</h3>
+                <p>YOLO detections raise an alert, the recorder writes a clip, the sink logs every frame as JSON.</p>
+<pre>python pyml-launch.py filesrc location=video.mp4 \
+  ! decodebin ! videoconvert ! videoscale \
+  ! video/x-raw,width=640,height=480 \
+  ! pyml_yolo model-name=yolo11m device=cuda \
+  ! pyml_alert rules='{"class":"person","min_score":0.7}' \
+  ! pyml_alertrecorder location=alert-%s.webm \
+  ! pyml_metasink location=people.jsonl</pre>
+            </div>
             <div class="pipeline-card">
                 <span class="pipe-tag">Vision</span>
                 <h3>YOLO + Tracking</h3>

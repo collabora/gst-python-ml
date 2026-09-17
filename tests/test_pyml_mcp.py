@@ -38,7 +38,7 @@ def test_text_flows_from_the_sink_to_latest_metadata(tmp_path):
         f"filesrc location={text} ! text/x-raw,format=utf8 ! pyml_metasink"
     )
     wait_until_ended()
-    assert pyml_mcp.latest_metadata() == [{"text": "hello"}]
+    assert [record["text"] for record in pyml_mcp.latest_metadata()] == ["hello"]
     assert pyml_mcp.stop_pipeline() == {"state": "none"}
 
 

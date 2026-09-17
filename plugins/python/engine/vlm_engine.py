@@ -36,12 +36,19 @@ class VlmEngine(PyTorchEngine):
     def do_load_model(self, model_name, **kwargs):
         try:
             import torch
-            from transformers import AutoProcessor, AutoModelForVision2Seq
+            import transformers
+            from transformers import AutoProcessor
 
+            # transformers 5 renamed AutoModelForVision2Seq
+            loader = getattr(
+                transformers,
+                "AutoModelForImageTextToText",
+                getattr(transformers, "AutoModelForVision2Seq", None),
+            )
             self.processor = AutoProcessor.from_pretrained(model_name)
-            self.model = AutoModelForVision2Seq.from_pretrained(
+            self.model = loader.from_pretrained(
                 model_name,
-                torch_dtype=torch.float16,
+                dtype=torch.float16,
                 device_map=self.device,
             )
             self.model.eval()

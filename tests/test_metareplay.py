@@ -88,7 +88,7 @@ def test_replayed_records_alert_at_the_recorded_timestamp(tmp_path):
         )
     )
     # videotestsrc recycles pooled buffers, so the empty relation meta is recorded too
-    recorded = [line for line in read_lines(records) if line["detections"]]
+    recorded = [line for line in read_lines(records) if line.get("detections")]
     assert len(recorded) == 1
     assert recorded[0]["pts"] == pytest.approx(TAGGED_FRAME / FRAMERATE)
 

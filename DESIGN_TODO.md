@@ -20,10 +20,11 @@ Python-element host are tracked in that repo's `design/TODO.md`, under
   machine otherwise idle, including between backends: a model still resident
   from the previous run fails the next one at preroll.
 
-- **Thirteen elements have no per-frame seam, so they cannot run on g2g at all.**
-  `alert`, `alertrecorder`, `metasink`, `tracker`, `vad`, `clap`,
-  `overlay_counter`, `kafkasink`, `streammux`, `streamdemux`, `coalescehistory`
-  and `llm_remote` subclass a GStreamer base directly. `stablediffusion` is
+- **Sixteen elements have no per-frame seam, so they cannot run on g2g at all.**
+  `alert`, `alertrecorder`, `metasink`, `metareplay`, `embeddingsink`, `digest`,
+  `tracker`, `vad`, `clap`, `overlay_counter`, `kafkasink`, `streammux`,
+  `streamdemux`, `coalescehistory` and `llm_remote` subclass a GStreamer base
+  directly. `stablediffusion` is
   hosted but fills in neither `process_frames` nor `process_payload`.
   Reparenting a family onto one of those two seams in `backend/core.py` is what
   makes its pipelines runnable. `overlay_counter` inherits `overlay`, which the
@@ -36,6 +37,11 @@ Python-element host are tracked in that repo's `design/TODO.md`, under
   g2g host calls `g2g_process(buffer, width, height, format, sink)` with a
   write-only `MetaSink`, so `G2gAnalyticsBackend.read_objects` returns nothing
   by design. Host side: hand the frame's incoming objects and blobs to the call.
+
+- **`only-on` gates on gst only.** The gate reads the buffer's blobs in
+  `VideoTransform.do_transform_ip` in `backend/gst/video_transform.py`. The
+  g2g driver in `backend/g2g/video_transform.py` has no upstream metadata to
+  read, so a hosted element ignores the property. Same host gap as above.
 
 - **`pyml-mcp` drives the gst backend only.** It runs the pipeline in-process
   with `Gst.parse_launch`, which is what lets `set_property` work on a running

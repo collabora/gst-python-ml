@@ -19,6 +19,11 @@
 from .pytorch_engine import PyTorchEngine
 
 
+# transformers 5 returns a model output here, 4 returned the tensor itself
+def projected(features):
+    return getattr(features, "pooler_output", features)
+
+
 class EmbeddingEngine(PyTorchEngine):
     """
     PyTorch engine for image/text embedding extraction.
@@ -94,7 +99,7 @@ class EmbeddingEngine(PyTorchEngine):
 
             with torch.no_grad():
                 if self._is_clip:
-                    emb = self.model.get_image_features(**inputs)
+                    emb = projected(self.model.get_image_features(**inputs))
                 else:
                     outputs = self.model(**inputs)
                     # Use CLS token embedding
@@ -132,7 +137,7 @@ class EmbeddingEngine(PyTorchEngine):
             inputs = self.processor(text=[text], return_tensors="pt", padding=True)
             inputs = {k: v.to(self.device) for k, v in inputs.items()}
             with torch.no_grad():
-                emb = self.model.get_text_features(**inputs)
+                emb = projected(self.model.get_text_features(**inputs))
             emb = emb.squeeze(0).cpu().numpy().astype(np.float32)
             if normalize:
                 norm = np.linalg.norm(emb)

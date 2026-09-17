@@ -6,7 +6,6 @@
 # as published by the Free Software Foundation; either version 2
 # of the License, or (at your option) any later version.
 
-import numpy as np
 from gi.repository import Gst
 
 from .format_converter import FormatConverter
@@ -56,6 +55,8 @@ class MuxedBufferProcessor:
 
             Returns (None, None, None, None) on error.
         """
+        import numpy as np
+
         self.logger.info(f"Extracting frames from buffer: {hex(id(buf))}")
         try:
             # Set PTS if not present
