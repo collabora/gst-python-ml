@@ -58,6 +58,7 @@ is >= 1.24.
   - [Anomaly Detection](#anomaly-detection)
   - [Audio Classification (CLAP)](#audio-classification-clap)
   - [Vision-Language Model (VLM)](#vision-language-model-vlm)
+  - [Cascade Gating](#cascade-gating)
   - [Embedding Extractor](#embedding-extractor)
   - [Video Memory](#video-memory)
   - [Multi-Object Tracker](#multi-object-tracker)
@@ -1542,6 +1543,23 @@ python pyml-launch.py filesrc location=data/people.mp4 ! decodebin name=d \
             prompt="What is happening in this scene?" \
   ! fakesink
 ```
+
+### Cascade Gating
+
+Every video element takes `only-on`, the name of a blob a frame has to carry
+before the element runs on it. `only-on=alert` runs on the frames `pyml_alert`
+flagged, `only-on=detections` on the frames that carry at least one analytics
+object, and any other value names the blob an element attached under its own
+name (`depth`, `vlm`, ...). Frames without it pass through untouched, so a cheap
+detector decides which frames an expensive model sees.
+
+#### VLM only on alerted frames
+
+```
+python pyml-launch.py filesrc location=data/people.mp4 ! decodebin ! videoconvert ! videoscale ! video/x-raw,width=640,height=480 ! pyml_yolo model-name=yolo11m device=cuda ! pyml_alert rules='{"class":"person","min_score":0.8}' draw-alert=false ! pyml_vlm model-name=llava-hf/llava-1.5-7b-hf device=cuda only-on=alert prompt="What is the person in the centre doing?" ! pyml_metasink location=people.jsonl
+```
+
+The g2g backend does not gate: a hosted element gets no upstream metadata.
 
 ### Embedding Extractor
 
