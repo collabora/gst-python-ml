@@ -2,12 +2,17 @@ import subprocess
 import os
 import signal
 import re
+import sys
 import pytest
 from pathlib import Path
 import shutil
 import uuid
 import stat
 import time
+
+sys.path.insert(0, str(Path(__file__).resolve().parent.parent / "plugins" / "python"))
+
+from readme_pipelines import pipelines_by_section  # noqa: E402
 
 # Base directory for the project
 BASE_DIR = Path(__file__).resolve().parent.parent
@@ -44,25 +49,15 @@ def get_pipelines_from_readme():
     if not readme_path.exists():
         pytest.fail("README.md not found in project root")
 
-    with open(readme_path, "r") as f:
-        content = f.read()
-
-    # Match pyml-launch commands, accounting for Markdown backticks
-    pipeline_pattern = (
-        r"(?:`)?\s*(python pyml-launch\.py\s+.*?)(?:`)?(?=\n\n|\n\s*\n|$)"
-    )
-    pipelines = re.findall(pipeline_pattern, content, re.DOTALL)
+    sections = pipelines_by_section(readme_path)
+    pipelines = [
+        f"{LAUNCHER} {description}"
+        for descriptions in sections.values()
+        for description in descriptions
+    ]
 
     modified_pipelines = []
     for pipeline in pipelines:
-        pipeline = pipeline.strip().strip("`")
-        print(f"Raw pipeline after stripping: {pipeline}")
-
-        if not pipeline.startswith("python pyml-launch.py"):
-            print(f"Skipping invalid pipeline: {pipeline}")
-            continue
-        pipeline = pipeline.replace("python pyml-launch.py", LAUNCHER, 1)
-
         parts = pipeline.split("!")
 
         # A `filesrc` run has no equivalent cap: these mp4s carry `moov` at the
@@ -79,7 +74,6 @@ def get_pipelines_from_readme():
                 break
 
         modified_pipeline = " ! ".join(parts).strip()
-        print(f"Modified pipeline: {modified_pipeline}")
         modified_pipelines.append(modified_pipeline)
     return modified_pipelines
 

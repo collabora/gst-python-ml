@@ -1720,12 +1720,26 @@ python pyml-launch.py filesrc location=data/people.mp4 ! decodebin ! videoconver
 `pyml-mcp` lets an LLM agent run a pipeline and read its results. It is an MCP
 server over stdio that runs the gst backend in-process, so a property can change
 while the pipeline runs. Its tools are `start_pipeline`, `pipeline_status`,
-`stop_pipeline`, `latest_metadata`, `set_property`, `get_property`,
+`stop_pipeline`, `latest_metadata`, `wait_for_records`, `snapshot_frame`,
+`describe_frame`, `load_metadata`, `clip_at`, `set_property`, `get_property`,
 `list_elements`, `inspect` and `search_video`. Records reach `latest_metadata`
-from a `pyml_metasink` at the end of the pipeline, so end every pipeline with one.
+from a `pyml_metasink` at the end of the pipeline, so end every pipeline with
+one.
+`wait_for_records` blocks until that sink posts new records, optionally only the
+ones carrying a key such as `detections`, and returns them with the pipeline
+status. `snapshot_frame` returns the newest frame a sink rendered as a JPEG image.
+`describe_frame` captions that frame with the vision-language model
+`PYML_MCP_VLM_MODEL` names, `HuggingFaceTB/SmolVLM-500M-Instruct` by default, on
+the `PYML_MCP_DEVICE` device, where a caption takes tens of seconds on `cpu`.
+`load_metadata` reads a JSON lines file a `pyml_metasink` wrote back in, so a
+finished run can be read without running a pipeline again. `clip_at` cuts a webm
+of the seconds around a pts out of a video file, which turns a `search_video` hit
+into a clip.
 `search_video` reads an index `pyml_embeddingsink` wrote and returns the frames
 closest to a description, embedding it with the index's own model on the device
-`PYML_MCP_DEVICE` names, `cpu` when it is unset.
+`PYML_MCP_DEVICE` names, `cpu` when it is unset. The server also offers every
+pipeline section of this README as a prompt named after the section, such as
+`object_detection`.
 
 ```
 uv sync --extra mcp

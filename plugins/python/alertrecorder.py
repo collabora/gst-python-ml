@@ -59,8 +59,9 @@ class Clip:
         self.logger = logger
         self.pipeline = Gst.parse_launch(
             f"appsrc name=source format=time max-bytes=0 ! videoconvert ! {encoder} "
-            f"! filesink location={path}"
+            "! filesink name=output"
         )
+        self.pipeline.get_by_name("output").set_property("location", path)
         self.source = self.pipeline.get_by_name("source")
         self.source.set_property("caps", caps)
         self.pipeline.set_state(Gst.State.PLAYING)

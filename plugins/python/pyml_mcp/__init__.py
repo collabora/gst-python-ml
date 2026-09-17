@@ -18,13 +18,17 @@
 
 import json
 import os
+import re
 import sys
+import tempfile
 import threading
 from collections import deque
 from importlib.metadata import version
+from pathlib import Path
 
 from mcp.server import MCPServer
 from mcp.server.mcpserver.exceptions import ToolError
+from mcp.server.mcpserver.utilities.types import Image
 
 import pyml_launch
 
@@ -40,17 +44,39 @@ sys.path.insert(0, str(pyml_launch.plugin_dir()))
 import gi  # noqa: E402
 
 gi.require_version("Gst", "1.0")
-from gi.repository import GLib, GObject, Gst  # noqa: E402
+gi.require_version("GstVideo", "1.0")
+from gi.repository import GLib, GObject, Gst, GstVideo  # noqa: E402
 
 Gst.init(None)
 
 import metasink  # noqa: E402
+import readme_pipelines  # noqa: E402
+from alertrecorder import Clip, DEFAULT_ENCODER  # noqa: E402
 from embedding_index import EmbeddingIndex  # noqa: E402
+from log.logger_factory import LoggerFactory  # noqa: E402
 
 BACKEND = os.environ.get("PYML_BACKEND", "gst").lower()
-EMBEDDING_DEVICE = os.environ.get("PYML_MCP_DEVICE", "cpu")
+MODEL_DEVICE = os.environ.get("PYML_MCP_DEVICE", "cpu")
+VLM_MODEL = os.environ.get("PYML_MCP_VLM_MODEL", "HuggingFaceTB/SmolVLM-500M-Instruct")
 ELEMENT_PREFIX = "pyml_"
 RECENT_RECORDS = 1000
+SNAPSHOT_IMAGE_FORMAT = "jpeg"
+FRAME_CONVERT_SECONDS = 5
+RGB_CAPS = "video/x-raw,format=RGB"
+RGB_BYTES_PER_PIXEL = 3
+# greedy, so the same frame captions the same way twice
+VLM_TEMPERATURE = 0.0
+CLIP_DECODE_PIPELINE = (
+    "filesrc name=source ! decodebin ! videoconvert ! video/x-raw,format=I420 "
+    "! appsink name=frames sync=false"
+)
+PREROLL_SECONDS = 10
+CLIP_FINISH_SECONDS = 20
+README_PATH = (
+    pyml_launch.CHECKOUT_PLUGINS.parent / "README.md"
+    if pyml_launch.CHECKOUT_PLUGINS
+    else None
+)
 
 server = MCPServer(
     "gst-python-ml",
@@ -66,9 +92,11 @@ class Session:
     def __init__(self):
         self.pipeline = None
         self.records = deque(maxlen=RECENT_RECORDS)
+        # the deque drops its oldest entries
+        self.posted = 0
         self.errors = []
         self.ended = False
-        self.lock = threading.Lock()
+        self.lock = threading.Condition()
 
     def on_message(self, bus, message):
         if message.type == Gst.MessageType.APPLICATION:
@@ -77,12 +105,17 @@ class Session:
                 record = json.loads(structure.get_string(metasink.BUS_MESSAGE_FIELD))
                 with self.lock:
                     self.records.append(record)
+                    self.posted += 1
+                    self.lock.notify_all()
         elif message.type == Gst.MessageType.ERROR:
             error, _debug = message.parse_error()
             with self.lock:
                 self.errors.append(f"{message.src.get_name()}: {error.message}")
+                self.lock.notify_all()
         elif message.type == Gst.MessageType.EOS:
-            self.ended = True
+            with self.lock:
+                self.ended = True
+                self.lock.notify_all()
         # nothing else pops this bus
         return Gst.BusSyncReply.DROP
 
@@ -94,6 +127,12 @@ def running_pipeline():
     if session.pipeline is None:
         raise ToolError("no pipeline is running, call start_pipeline first")
     return session.pipeline
+
+
+def metadata_sinks(pipeline):
+    for element in pipeline.iterate_elements():
+        if element.get_factory().get_name() == metasink.MetaSink.GST_PLUGIN_NAME:
+            yield element
 
 
 def named_element(name):
@@ -128,10 +167,9 @@ def start_pipeline(pipeline: str) -> dict:
     session.__init__()
     session.pipeline = parsed
     # records already arrive over the bus
-    for element in parsed.iterate_elements():
-        is_sink = element.get_factory().get_name() == metasink.MetaSink.GST_PLUGIN_NAME
-        if is_sink and not element.get_property("location"):
-            element.set_property("location", os.devnull)
+    for sink in metadata_sinks(parsed):
+        if not sink.get_property("location"):
+            sink.set_property("location", os.devnull)
     parsed.get_bus().set_sync_handler(session.on_message)
     if parsed.set_state(Gst.State.PLAYING) == Gst.StateChangeReturn.FAILURE:
         errors = ", ".join(session.errors) or "the pipeline refused to start"
@@ -174,6 +212,148 @@ def latest_metadata(count: int = 10) -> list[dict]:
         return list(session.records)[-count:]
 
 
+@server.tool(
+    description="Load the JSON lines a pyml_metasink wrote to a file as the current records, "
+    "so latest_metadata and wait_for_records read a finished run with no pipeline running."
+)
+def load_metadata(path: str) -> dict:
+    if not os.path.isfile(path):
+        raise ToolError(f"no metadata file at {path!r}")
+    stop_pipeline()
+    session.__init__()
+    with open(path) as lines:
+        for line in lines:
+            if not line.strip():
+                continue
+            session.records.append(json.loads(line))
+            session.posted += 1
+    # nothing more will arrive
+    session.ended = True
+    return {"records": session.posted}
+
+
+def records_posted_since(posted_before, key):
+    fresh = min(session.posted - posted_before, len(session.records))
+    recent = list(session.records)[len(session.records) - fresh :]
+    if not key:
+        return recent
+    return [record for record in recent if key in record]
+
+
+@server.tool(
+    description="Wait for pyml_metasink to post new records, oldest first, and return them "
+    "with the pipeline status. Give a key such as detections or alert to wait only for "
+    "records carrying it. Returns whatever arrived when the pipeline ends, fails, or "
+    "the timeout in seconds passes first."
+)
+def wait_for_records(count: int = 1, key: str = "", timeout: float = 30) -> dict:
+    # a run loaded from a file has no pipeline behind it
+    if not session.ended:
+        running_pipeline()
+    with session.lock:
+        # an ended run posts nothing more
+        posted_before = 0 if session.ended else session.posted
+        errors_before = len(session.errors)
+
+        def settled():
+            return (
+                len(records_posted_since(posted_before, key)) >= count
+                or session.ended
+                or len(session.errors) > errors_before
+            )
+
+        session.lock.wait_for(settled, timeout)
+        matched = records_posted_since(posted_before, key)
+    return {"records": matched, "status": pipeline_status()}
+
+
+def newest_frame(element):
+    if element:
+        target = named_element(element)
+    else:
+        target = next(metadata_sinks(running_pipeline()), None)
+        if target is None:
+            raise ToolError("the pipeline has no pyml_metasink to snapshot")
+    name = target.get_name()
+    if target.find_property("last-sample") is None:
+        raise ToolError(f"{name} has no last-sample property")
+    sample = target.get_property("last-sample")
+    if sample is None:
+        raise ToolError(f"no frame has reached {name} yet")
+    return name, sample
+
+
+def converted_frame(name, sample, caps):
+    try:
+        return GstVideo.video_convert_sample(
+            sample, Gst.Caps.from_string(caps), FRAME_CONVERT_SECONDS * Gst.SECOND
+        )
+    except GLib.Error as error:
+        raise ToolError(f"{name} is not carrying video: {error.message}") from error
+
+
+@server.tool(
+    description="The newest frame a pyml_metasink rendered, as a JPEG image. Names a sink of "
+    "the running pipeline, or the first pyml_metasink when left empty."
+)
+def snapshot_frame(element: str = "") -> Image:
+    name, sample = newest_frame(element)
+    buffer = converted_frame(
+        name, sample, f"image/{SNAPSHOT_IMAGE_FORMAT}"
+    ).get_buffer()
+    return Image(
+        data=buffer.extract_dup(0, buffer.get_size()), format=SNAPSHOT_IMAGE_FORMAT
+    )
+
+
+def frame_image(sample):
+    import numpy
+    from PIL import Image as PillowImage
+
+    caps = sample.get_caps()
+    structure = caps.get_structure(0)
+    width = structure.get_value("width")
+    height = structure.get_value("height")
+    buffer = sample.get_buffer()
+    rows = numpy.frombuffer(buffer.extract_dup(0, buffer.get_size()), dtype=numpy.uint8)
+    packed = width * RGB_BYTES_PER_PIXEL
+    stride = GstVideo.VideoInfo.new_from_caps(caps).stride[0]
+    if stride != packed:
+        rows = rows.reshape(height, stride)[:, :packed]
+    return PillowImage.fromarray(rows.reshape(height, width, RGB_BYTES_PER_PIXEL))
+
+
+vlm_engines = {}
+
+
+def vlm_engine(model_name):
+    engine = vlm_engines.get(model_name)
+    if engine is None:
+        # torch loads only once a caption asks for it
+        from engine.vlm_engine import VlmEngine
+
+        engine = VlmEngine()
+        engine.do_set_device(MODEL_DEVICE)
+        engine.do_load_model(model_name)
+        vlm_engines[model_name] = engine
+    return engine
+
+
+@server.tool(
+    description="Caption the newest frame a pyml_metasink rendered with a vision-language "
+    "model, answering the prompt about it. Names a sink of the running pipeline, or the "
+    "first pyml_metasink when left empty. On cpu a caption takes tens of seconds."
+)
+def describe_frame(
+    prompt: str = "Describe this image.", element: str = "", max_tokens: int = 64
+) -> str:
+    name, sample = newest_frame(element)
+    image = frame_image(converted_frame(name, sample, RGB_CAPS))
+    return vlm_engine(VLM_MODEL).do_generate(
+        image, prompt, None, max_tokens, VLM_TEMPERATURE
+    )
+
+
 text_embedding_engines = {}
 
 
@@ -184,7 +364,7 @@ def text_embedding_engine(model_name):
         from engine.embedding_engine import EmbeddingEngine
 
         engine = EmbeddingEngine()
-        engine.do_set_device(EMBEDDING_DEVICE)
+        engine.do_set_device(MODEL_DEVICE)
         engine.do_load_model(model_name)
         text_embedding_engines[model_name] = engine
     return engine
@@ -209,6 +389,68 @@ def search_video(query: str, index: str, count: int = 5) -> list[dict]:
         return opened.search(vector, count)
     finally:
         opened.close()
+
+
+def decode_failure(pipeline, source):
+    message = pipeline.get_bus().pop_filtered(Gst.MessageType.ERROR)
+    if message is None:
+        return f"cannot decode {source!r}"
+    return message.parse_error()[0].message
+
+
+@server.tool(
+    description="Cut the seconds of video around a pts out of a video file into a webm, so a "
+    "search_video hit becomes a clip. Returns where it was written, the range it covers "
+    "and how many frames it holds."
+)
+def clip_at(source: str, pts: float, seconds: float = 4.0, location: str = "") -> dict:
+    if not os.path.isfile(source):
+        raise ToolError(f"no video at {source!r}")
+    start = max(pts - seconds / 2, 0)
+    end = start + seconds
+    path = location or str(
+        Path(tempfile.gettempdir()) / f"{Path(source).stem}-{start:.2f}.webm"
+    )
+    decode = Gst.parse_launch(CLIP_DECODE_PIPELINE)
+    # a launch line would split the path on spaces
+    decode.get_by_name("source").set_property("location", source)
+    frames = decode.get_by_name("frames")
+    decode.set_state(Gst.State.PAUSED)
+    result, _state, _pending = decode.get_state(PREROLL_SECONDS * Gst.SECOND)
+    if result == Gst.StateChangeReturn.FAILURE:
+        reason = decode_failure(decode, source)
+        decode.set_state(Gst.State.NULL)
+        raise ToolError(reason)
+    seeked = decode.seek(
+        1.0,
+        Gst.Format.TIME,
+        Gst.SeekFlags.FLUSH | Gst.SeekFlags.ACCURATE,
+        Gst.SeekType.SET,
+        int(start * Gst.SECOND),
+        Gst.SeekType.SET,
+        int(end * Gst.SECOND),
+    )
+    if not seeked:
+        decode.set_state(Gst.State.NULL)
+        raise ToolError(f"cannot seek {source!r}")
+    decode.set_state(Gst.State.PLAYING)
+    clip = None
+    frame_count = 0
+    while True:
+        sample = frames.emit("pull-sample")
+        if sample is None:
+            break
+        buffer = sample.get_buffer()
+        if clip is None:
+            logger = LoggerFactory.get(LoggerFactory.LOGGER_TYPE_GST)
+            clip = Clip(path, DEFAULT_ENCODER, sample.get_caps(), buffer.pts, logger)
+        clip.push(buffer)
+        frame_count += 1
+    decode.set_state(Gst.State.NULL)
+    if clip is None:
+        raise ToolError(f"no frames in {source!r} between {start} and {end}")
+    clip.finish().join(CLIP_FINISH_SECONDS)
+    return {"path": path, "start": start, "end": end, "frames": frame_count}
 
 
 @server.tool(
@@ -273,6 +515,37 @@ def inspect(element: str) -> dict:
             for spec in instance.list_properties()
         ],
     }
+
+
+def prompt_name(heading):
+    return re.sub(r"[^a-z0-9]+", "_", heading.lower()).strip("_")
+
+
+def section_prompt(heading, descriptions, repository):
+    def readme_section():
+        opening = (
+            f"These are the {heading} pipelines from the gst-python-ml README. "
+            "start_pipeline takes each line below as written, swap a display sink such as "
+            "autovideosink for pyml_metasink to read the results back, and file paths are "
+            f"relative to {repository}."
+        )
+        return "\n".join([opening, *descriptions])
+
+    return readme_section
+
+
+def register_readme_prompts(readme_path):
+    sections = readme_pipelines.pipelines_by_section(readme_path)
+    for heading, descriptions in sections.items():
+        server.prompt(
+            name=prompt_name(heading),
+            description=f"The README pipelines under {heading}",
+        )(section_prompt(heading, descriptions, readme_path.parent))
+
+
+# an installed wheel has no README beside the plugins
+if README_PATH is not None:
+    register_readme_prompts(README_PATH)
 
 
 def main():
