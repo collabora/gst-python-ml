@@ -42,7 +42,7 @@ LAUNCHER = f"python {BASE_DIR / 'pyml-launch.py'}"
 # only the pipelines a runner with no gpu, model, display or microphone can run
 HEADLESS = os.environ.get("HEADLESS_PIPELINES") == "1"
 MODEL_MARKERS = ("model-name=", "cuda")
-CAPTURE_SOURCES = ("pulsesrc", "autoaudiosrc", "alsasrc", "v4l2src")
+CAPTURE_SOURCES = ("pulsesrc", "pipewiresrc", "autoaudiosrc", "alsasrc", "v4l2src")
 DISPLAY_SINK_PATTERN = re.compile(r"\b(?:autovideosink|glimagesink)\b")
 HEADLESS_SINK = "fakevideosink"
 LOG_TAIL_LINES = 40

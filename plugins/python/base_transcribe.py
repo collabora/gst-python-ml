@@ -78,6 +78,8 @@ class BaseTranscribe(BaseAggregator):
         self._vad_chunk_size = self._vad.chunk_samples()
 
         self.clip_buffer = collections.deque()
+        # live sources send buffers shorter than one vad chunk
+        self._pending_audio = b""
         self.active_clip = False
         self.silence_counter = 0
         chunk_duration_ms = (self._vad_chunk_size / STT_SAMPLE_RATE) * 1000
@@ -139,11 +141,10 @@ class BaseTranscribe(BaseAggregator):
         """
         import numpy as np
 
-        audio_data = np.frombuffer(payload, dtype=np.int16)
-
-        if len(audio_data) < self._vad_chunk_size:
-            self.logger.warning("Insufficient audio data for processing")
-            return []
+        audio_data = np.frombuffer(self._pending_audio + payload, dtype=np.int16)
+        whole_chunks = len(audio_data) - len(audio_data) % self._vad_chunk_size
+        self._pending_audio = audio_data[whole_chunks:].tobytes()
+        audio_data = audio_data[:whole_chunks]
 
         payloads = []
         while len(audio_data) >= self._vad_chunk_size:

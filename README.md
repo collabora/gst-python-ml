@@ -1239,13 +1239,34 @@ python pyml-launch.py filesrc location=data/people.mp4 ! decodebin name=d \
 python pyml-launch.py pulsesrc ! audio/x-raw,format=S16LE,rate=16000,channels=1 ! pyml_vad threshold=0.7 ! fakesink
 ```
 
-#### VAD gating before transcription (mute silent audio, reduce Whisper latency)
-
-```
-python pyml-launch.py filesrc location=data/air_traffic_korean_with_english.wav ! decodebin ! audioconvert ! audioresample ! audio/x-raw,format=S16LE,rate=16000,channels=1 ! pyml_vad threshold=0.6 gate=true ! pyml_whispertranscribe device=cuda language=ko ! fakesink
-```
+`pyml_whispertranscribe` has its own VAD to split speech into clips, so `pyml_vad` is not needed in front of it.
 
 ### Transcription
+
+Transcripts are logged at GStreamer info level. Run with `GST_DEBUG=python:4` to see them.
+
+faster-whisper's CTranslate2 wheel loads CUDA 12 cuBLAS. With a CUDA 13 torch install, add it to the venv and the loader path. On Linux:
+
+```
+pip install nvidia-cublas-cu12
+export LD_LIBRARY_PATH=$(python -c "import nvidia.cublas, os; print(os.path.join(nvidia.cublas.__path__[0], 'lib'))"):$LD_LIBRARY_PATH
+```
+
+On Windows add the same package's `bin` directory to `PATH` instead.
+
+#### live microphone (Linux)
+
+`pulsesrc` works on PulseAudio (Ubuntu) and on PipeWire's Pulse server (Fedora), and is the reliable choice. `pipewiresrc` on PipeWire 1.4.11 stalls after a few buffers even into `fakesink`: its buffer timestamps and the clock it provides disagree, so GstBaseSrc's clock wait hangs. `do-timestamp=true` helps but is not consistent.
+
+```
+python pyml-launch.py pulsesrc ! audioconvert ! audioresample ! audio/x-raw,format=S16LE,rate=16000,channels=1 ! pyml_whispertranscribe device=cuda language=en ! fakesink
+```
+
+```
+python pyml-launch.py pipewiresrc do-timestamp=true ! audioconvert ! audioresample ! audio/x-raw,format=S16LE,rate=16000,channels=1 ! pyml_whispertranscribe device=cuda language=en ! fakesink
+```
+
+If nothing is transcribed, check which port the source captures from with `pactl list sources | grep "Active Port"`. Laptop combo jacks often report a plugged-in headset mic as not available and keep the internal mic. Force it with `pactl set-source-port <source> analog-input-mic`. On PipeWire, WirePlumber then drops that source as the default, so name it: `pulsesrc device=<source>` or `pipewiresrc target-object=<source>`. On Windows and macOS use `autoaudiosrc` and pick the input device in the OS sound settings.
 
 #### transcription with initial prompt set
 

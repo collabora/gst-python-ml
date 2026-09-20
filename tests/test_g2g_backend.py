@@ -876,6 +876,44 @@ def test_gst_transcribe_pushes_nothing_for_a_buffer_below_one_vad_chunk(monkeypa
     assert pushed == []
 
 
+def test_gst_payload_excludes_metadata_memories_appended_upstream():
+    Gst = gst()
+    from backend.gst.aggregator import BaseAggregator as GstBaseAggregator
+
+    driver = gst_payload_driver()
+    seen = []
+
+    class RecordingLeaf(BaseAggregator, driver):
+        def process_payload(self, payload):
+            seen.append(payload)
+            return []
+
+    leaf = RecordingLeaf()
+    leaf.engine_name = None
+    audio = speech()
+    inbuf = Gst.Buffer.new_allocate(None, len(audio), None)
+    inbuf.fill(0, audio)
+    meta = Gst.Buffer.new_allocate(None, 12, None)
+    meta.fill(0, b"GST-VAD:" + b"\x00\x00\x80\x3f")
+    inbuf.append_memory(meta.get_memory(0))
+
+    GstBaseAggregator.do_process(leaf, inbuf)
+
+    assert seen == [audio]
+
+
+def test_gst_transcribe_accumulates_buffers_below_one_vad_chunk(monkeypatch):
+    leaf = transcribe_leaf(monkeypatch, "hello world")
+    third = len(speech()) // 3
+
+    for start in range(0, len(speech()), third):
+        _, pushed = drive_gst_payload(leaf, speech()[start : start + third])
+        assert pushed == [], "speech is still being accumulated"
+
+    _, pushed = drive_gst_payload(leaf, silence(3))
+    assert [buffer_bytes(buf) for buf in pushed] == [b"hello world"]
+
+
 def test_gst_separate_pushes_one_buffer_per_whole_chunk():
     leaf = separate_leaf()
     samples = np.arange(1, 11, dtype=np.int16)  # ten samples, so two chunks of four

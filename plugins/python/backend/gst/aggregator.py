@@ -56,13 +56,15 @@ class PayloadDriver:
         each payload it returns as its own buffer. Elements supply
         `process_payload`, not this."""
         try:
-            success, map_info = buf.map(Gst.MapFlags.READ)
+            # memories after the first are metadata blobs appended upstream
+            memory = buf.peek_memory(0)
+            success, map_info = memory.map(Gst.MapFlags.READ)
             if not success:
                 self.logger.error("Failed to map input buffer")
                 return Gst.FlowReturn.ERROR
 
             payload = bytes(map_info.data)
-            buf.unmap(map_info)
+            memory.unmap(map_info)
 
             for output in self.process_payload(payload):
                 outbuf = Gst.Buffer.new_allocate(None, len(output), None)
