@@ -1256,7 +1256,7 @@ On Windows add the same package's `bin` directory to `PATH` instead.
 
 #### live microphone (Linux)
 
-`pulsesrc` works on PulseAudio (Ubuntu) and on PipeWire's Pulse server (Fedora), and is the reliable choice. `pipewiresrc` on PipeWire 1.4.11 stalls after a few buffers even into `fakesink`: its buffer timestamps and the clock it provides disagree, so GstBaseSrc's clock wait hangs. `do-timestamp=true` helps but is not consistent.
+`pulsesrc` works on PulseAudio (Ubuntu) and on PipeWire's Pulse server (Fedora). `pipewiresrc` does not work with GStreamer 1.26 (PipeWire 1.4): it stalls after a few buffers even into `fakesink`, because its buffer timestamps and the clock it provides disagree and GstBaseSrc's clock wait hangs. `do-timestamp=true` helps but is not consistent.
 
 ```
 python pyml-launch.py pulsesrc ! audioconvert ! audioresample ! audio/x-raw,format=S16LE,rate=16000,channels=1 ! pyml_whispertranscribe device=cuda language=en ! fakesink

@@ -110,6 +110,14 @@ class ClapTransform(GstBase.BaseTransform):
         flags=GObject.ParamFlags.READWRITE,
     )
 
+    device = GObject.Property(
+        type=str,
+        default="cpu",
+        nick="Device",
+        blurb="Device to run the model on, cpu or cuda",
+        flags=GObject.ParamFlags.READWRITE,
+    )
+
     def __init__(self):
         super().__init__()
         self.logger = LoggerFactory.get(LoggerFactory.LOGGER_TYPE_GST)
@@ -134,6 +142,7 @@ class ClapTransform(GstBase.BaseTransform):
     def do_start(self):
         try:
             self._engine = EngineFactory.create("pyml_clap_engine")
+            self._engine.do_set_device(self.device)
             self._engine.do_load_model(self.model_name, labels=self._labels)
             self.logger.info(f"CLAP element started with {len(self._labels)} labels")
         except Exception as e:
