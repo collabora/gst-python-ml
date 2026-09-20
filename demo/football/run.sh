@@ -8,6 +8,7 @@
 #   demo/football/run.sh [INPUT.mp4] [OUTPUT.mp4] [WxH]      # file -> annotated mp4
 #   demo/football/run.sh display [INPUT.mp4] [WxH]           # file -> live on-screen
 #   demo/football/run.sh camera [/dev/videoN] [WxH]          # live camera -> on-screen
+#   demo/football/run.sh print [INPUT.mp4] [WxH]             # echo the display pipeline for pyml-mcp
 set -euo pipefail
 
 REPO="$(cd "$(dirname "$0")/../.." && pwd)"
@@ -20,7 +21,7 @@ export PYTHONPATH="$REPO/plugins/python:$VENV_SITE:${PYTHONPATH:-}"
 
 BACKEND="${BACKEND:-pt}"
 # The weights live on the Hugging Face Hub; this is a no-op once cached.
-python demo/football/fetch_models.py "$BACKEND"
+python demo/football/fetch_models.py "$BACKEND" >&2
 INTERVAL="${INTERVAL:-3}"   # run detection every Nth frame; tracker/overlay stay per-frame
 CONF="${CONF:-0.1}"        # detector confidence threshold (low = more detections)
 IOU="${IOU:-0.7}"          # NMS IoU (ultralytics/football_analyzer default)
@@ -34,15 +35,15 @@ TRACK="pyml_tracker tracker-type=bytetrack new-track-confidence=$NEWTRACK"
 # tracking drift/phantoms/doubles); merge collapses overlaps and
 # position-smoothing low-passes the positions. DRAWCONF defaults 0 so no
 # detection is hidden; the tracker still runs so the HUD keeps its stats.
-OVERLAY="pyml_football_overlay class-names=$CLASSES team-colors=true trails=false show-ids=false show-labels=false draw-from-detections=true min-confidence=$DRAWCONF merge-iou=$MERGE position-smoothing=$SMOOTH highlight-focal=false"
+OVERLAY="pyml_football_overlay name=overlay class-names=$CLASSES team-colors=true trails=false show-ids=false show-labels=false draw-from-detections=true min-confidence=$DRAWCONF merge-iou=$MERGE position-smoothing=$SMOOTH highlight-focal=false"
 
 if [[ "$BACKEND" == "fp16" ]]; then
   # nvidia is a namespace package (no __file__), so walk __path__ for the pip CUDA libs.
   export LD_LIBRARY_PATH="$(python -c "import os,glob,nvidia;print(':'.join(sorted({d for p in nvidia.__path__ for d in glob.glob(os.path.join(p,'*','lib'))})))"):${LD_LIBRARY_PATH:-}"
-  DETECT="pyml_objectdetector engine-name=onnx model-name=models/football/football_fp16.onnx device=cuda:0 input-format=nchw post-process=anchor_free interval=$INTERVAL"
+  DETECT="pyml_objectdetector name=detector engine-name=onnx model-name=models/football/football_fp16.onnx device=cuda:0 input-format=nchw post-process=anchor_free interval=$INTERVAL"
   IN_FMT="RGB"
 else
-  DETECT="pyml_yolo model-name=models/football/football device=cuda:0 interval=$INTERVAL confidence=$CONF nms-iou=$IOU"
+  DETECT="pyml_yolo name=detector model-name=models/football/football device=cuda:0 interval=$INTERVAL confidence=$CONF nms-iou=$IOU"
   IN_FMT="RGBA"
 fi
 
@@ -73,17 +74,21 @@ if [[ "$MODE" == "camera" ]]; then
     ! "video/x-raw,width=${W},height=${H},format=${IN_FMT}" \
     ! $CHAIN \
     ! $Q ! videoconvert ! autovideosink sync=false
-elif [[ "$MODE" == "display" ]]; then
+elif [[ "$MODE" == "display" || "$MODE" == "print" ]]; then
   IN="${2:-data/soccer_tracking.mp4}"
   SIZE="${3:-1280x720}"
   W="${SIZE%x*}"; H="${SIZE#*x}"
   [[ -f "$IN" ]] || { echo "input not found: $IN" >&2; exit 1; }
-  echo "[$BACKEND] '$IN' @ ${W}x${H} -> live display (real-time, sync=true)"
-  exec gst-launch-1.0 -e \
-    filesrc location="$IN" ! decodebin ! videoconvert ! videoscale \
-    ! "video/x-raw,width=${W},height=${H},format=${IN_FMT}" \
+  PIPELINE="filesrc location=$IN ! decodebin ! videoconvert ! videoscale \
+    ! video/x-raw,width=${W},height=${H},format=${IN_FMT} \
     ! $CHAIN \
-    ! $PREROLL ! videoconvert ! autovideosink sync=true
+    ! $PREROLL ! videoconvert ! autovideosink sync=true"
+  if [[ "$MODE" == "print" ]]; then
+    echo "$PIPELINE"
+    exit 0
+  fi
+  echo "[$BACKEND] '$IN' @ ${W}x${H} -> live display (real-time, sync=true)"
+  exec gst-launch-1.0 -e $PIPELINE
 else
   IN="${1:-data/soccer_tracking.mp4}"
   OUT="${2:-demo/football/out.mp4}"

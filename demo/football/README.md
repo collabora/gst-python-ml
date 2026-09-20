@@ -52,6 +52,29 @@ demo/football/run.sh display 08fd33_4.mp4 1280x720
 demo/football/run.sh camera /dev/video0
 ```
 
+## Typed commands through pyml-mcp
+
+`agent.py` runs the display pipeline inside `pyml-mcp` and lets you change it
+by typing. It starts a local `llama-server` with Qwen 3.5 9B (paths at the top
+of the file point at the liquid runtime on this laptop, 20 layers on the GPU,
+about 5 s per tool call), spawns `.venv/bin/pyml-mcp`, and shows each tool
+call as it happens. The model sees five tools: `start_football_demo`,
+`set_property`, `get_property`, `pipeline_status`, `stop_pipeline`. It knows
+`overlay show-ball`, `overlay trails`, `overlay show-hud` and
+`detector confidence`.
+
+```bash
+.venv/bin/python demo/football/agent.py
+> start the football demo
+> show the ball
+> /fault          # sets detector confidence to 0.99 without telling the model
+> the circles on the players disappeared, what happened?
+> /quit
+```
+
+`run.sh print` echoes the display pipeline the agent starts. Server logs go to
+`football-agent-llama.log` and `football-agent-pyml-mcp.log` in the temp dir.
+
 ## Environment knobs
 
 | Var        | Default | Meaning |

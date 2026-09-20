@@ -148,6 +148,9 @@ def serialized(spec, value):
     # an enum reads as its nick, as on a gst-launch line
     if spec.value_type == GObject.TYPE_STRING:
         return value
+    # Gst.value_serialize spells 0.99 as 0.98999999999999999
+    if spec.value_type in (GObject.TYPE_DOUBLE, GObject.TYPE_FLOAT):
+        return f"{value:g}"
     holder = GObject.Value(spec.value_type)
     holder.set_value(value)
     spelled = Gst.value_serialize(holder)

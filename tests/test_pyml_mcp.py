@@ -130,10 +130,12 @@ def test_wait_for_records_gives_up_on_a_key_no_record_carries():
 
 def test_a_property_can_change_while_the_pipeline_runs():
     pyml_mcp.start_pipeline(
-        "videotestsrc name=source pattern=snow ! pyml_metasink name=sink"
+        "videotestsrc name=source pattern=snow ! videobalance name=balance "
+        "! pyml_metasink name=sink"
     )
     assert pyml_mcp.get_property("source", "pattern") == "snow"
     assert pyml_mcp.set_property("source", "pattern", "ball") == {"pattern": "ball"}
+    assert pyml_mcp.set_property("balance", "contrast", "0.99") == {"contrast": "0.99"}
     assert pyml_mcp.set_property("sink", "location", "a b") == {"location": "a b"}
     with pytest.raises(ToolError, match="no property"):
         pyml_mcp.set_property("source", "no-such-property", "1")
