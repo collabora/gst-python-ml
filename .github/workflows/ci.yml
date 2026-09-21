@@ -82,7 +82,7 @@ jobs:
             ~/.cache/pip
             ~/.cache/huggingface
             ~/.config/Ultralytics
-          key: engines-${{ matrix.engine }}-${{ hashFiles('pyproject.toml') }}
+          key: engines-${{ matrix.engine }}-${{ hashFiles('pyproject.toml', '.github/workflows/ci.yml') }}
 
       # the project's own dependency list needs cairo headers, the extra alone does not
       - name: Install the engine
