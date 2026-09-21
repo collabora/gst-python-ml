@@ -52,6 +52,30 @@ def runs_headless(pipeline):
     return not any(marker in pipeline for marker in MODEL_MARKERS + CAPTURE_SOURCES)
 
 
+# a pulse source with no device named opens the default source
+BARE_PULSE_SOURCE = re.compile(
+    r"\b(?:pulsesrc|pipewiresrc)\b(?![^!]*\b(?:device|target-object)=)"
+)
+DEFAULT_SOURCE_METADATA_KEY = "key:'default.audio.source'"
+
+
+# after a forced mic port pactl info still names a default but wireplumber has none
+def pipewire_has_default_audio_source():
+    if shutil.which("pw-metadata") is None:
+        return True
+    result = subprocess.run(
+        ["pw-metadata", "0", "default.audio.source"], capture_output=True, text=True
+    )
+    return DEFAULT_SOURCE_METADATA_KEY in result.stdout
+
+
+def skip_without_default_audio_source(pipeline):
+    if not BARE_PULSE_SOURCE.search(pipeline):
+        return
+    if not pipewire_has_default_audio_source():
+        pytest.skip("wireplumber has no default audio source for a bare pulsesrc")
+
+
 if BACKEND == "gst" and not shutil.which("gst-launch-1.0"):
     raise RuntimeError("gst-launch-1.0 not found in PATH. Please install GStreamer.")
 
@@ -142,6 +166,7 @@ def test_pipeline(pipeline, tmp_path):
     A pipeline still running at `PIPELINE_TIMEOUT` passes: only `videotestsrc`
     takes a frame cap, so a file-backed one runs as long as its media lasts.
     """
+    skip_without_default_audio_source(pipeline)
     LOG_DIR.mkdir(parents=True, exist_ok=True)
     os.sync()
     pipeline = absolutize_project_inputs(pipeline)
