@@ -6,7 +6,7 @@ Python-element host are tracked in that repo's `design/TODO.md`, under
 
 ## g2g backend coverage
 
-- **How many README pipelines run under `PYML_BACKEND=g2g` needs measuring.**
+- **How many PIPELINES.md pipelines run under `PYML_BACKEND=g2g` needs measuring.**
   Run `tests/test_pipelines.py` under each backend and compare: one that passes
   on gst and fails on g2g is a gap, one that fails on both is the environment.
   Only the error categories count as gaps. `pipeline error: Hardware(Other)` is
@@ -51,6 +51,6 @@ Python-element host are tracked in that repo's `design/TODO.md`, under
 
 - **An engine that fails to load its model keeps running with `model=None`**,
   so the first frame raises somewhere further on instead of naming what went
-  wrong. The README caption line wants `gptqmodel` for its AWQ model; without it
+  wrong. The PIPELINES.md caption line wants `gptqmodel` for its AWQ model; without it
   `CaptionQwen` logs the load failure, then dies on `captioning returned None`.
   Failing at load time would name the missing package.

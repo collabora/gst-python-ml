@@ -34,7 +34,7 @@ GGUF_FILE = "tinyllamas/stories260K.gguf"
 GENERATION_PROMPT = "Once upon a time"
 GENERATION_TOKENS = 8
 
-# the tensorflow exports take channels last, the rest take channels first like the README pipelines
+# the tensorflow exports take channels last, the rest take channels first like the PIPELINES.md pipelines
 DETECTION_ENGINES = [
     ("onnx", "onnxruntime", "onnx", ".onnx", "nchw"),
     ("openvino", "openvino", "openvino", ".xml", "nchw"),

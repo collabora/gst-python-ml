@@ -225,7 +225,7 @@ def test_textoverlay_drops_the_wait_it_never_does(shells):
     ) == ["textoverlay", "name=overlay"]
 
 
-def test_whole_readme_pipeline_rewrites(shells):
+def test_whole_documented_pipeline_rewrites(shells):
     pipeline = (
         "filesrc location=data/soccer_tracking.mp4 ! decodebin ! videoconvert "
         "! videoscale ! video/x-raw,width=640,height=480 "

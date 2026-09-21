@@ -239,7 +239,7 @@ def test_load_metadata_names_the_file_it_cannot_find(tmp_path):
         pyml_mcp.load_metadata(str(tmp_path / "missing.jsonl"))
 
 
-def test_every_readme_section_is_offered_as_a_prompt():
+def test_every_pipelines_section_is_offered_as_a_prompt():
     names = [prompt.name for prompt in asyncio.run(pyml_mcp.server.list_prompts())]
     assert "object_detection" in names
     assert "metadata_sink" in names

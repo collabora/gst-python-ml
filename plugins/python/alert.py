@@ -275,7 +275,7 @@ class AlertTransform(GstBase.BaseTransform):
         if self.width == 0 or self.height == 0:
             return
         try:
-            success, mapinfo = buf.map(Gst.MapFlags.READWRITE)
+            success, mapinfo = buf.map(Gst.MapFlags.READ | Gst.MapFlags.WRITE)
             if not success:
                 return
             # Interpret as RGBA (4 channels)

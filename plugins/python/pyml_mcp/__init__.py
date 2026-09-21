@@ -50,7 +50,7 @@ from gi.repository import GLib, GObject, Gst, GstVideo  # noqa: E402
 Gst.init(None)
 
 import metasink  # noqa: E402
-import readme_pipelines  # noqa: E402
+import documented_pipelines  # noqa: E402
 from alertrecorder import Clip, DEFAULT_ENCODER  # noqa: E402
 from embedding_index import EmbeddingIndex  # noqa: E402
 from log.logger_factory import LoggerFactory  # noqa: E402
@@ -72,8 +72,8 @@ CLIP_DECODE_PIPELINE = (
 )
 PREROLL_SECONDS = 10
 CLIP_FINISH_SECONDS = 20
-README_PATH = (
-    pyml_launch.CHECKOUT_PLUGINS.parent / "README.md"
+PIPELINES_PATH = (
+    pyml_launch.CHECKOUT_PLUGINS.parent / "PIPELINES.md"
     if pyml_launch.CHECKOUT_PLUGINS
     else None
 )
@@ -533,30 +533,30 @@ def prompt_name(heading):
 
 
 def section_prompt(heading, descriptions, repository):
-    def readme_section():
+    def pipeline_section():
         opening = (
-            f"These are the {heading} pipelines from the gst-python-ml README. "
+            f"These are the {heading} pipelines from gst-python-ml's PIPELINES.md. "
             "start_pipeline takes each line below as written, swap a display sink such as "
             "autovideosink for pyml_metasink to read the results back, and file paths are "
             f"relative to {repository}."
         )
         return "\n".join([opening, *descriptions])
 
-    return readme_section
+    return pipeline_section
 
 
-def register_readme_prompts(readme_path):
-    sections = readme_pipelines.pipelines_by_section(readme_path)
+def register_pipeline_prompts(doc_path):
+    sections = documented_pipelines.pipelines_by_section(doc_path)
     for heading, descriptions in sections.items():
         server.prompt(
             name=prompt_name(heading),
-            description=f"The README pipelines under {heading}",
-        )(section_prompt(heading, descriptions, readme_path.parent))
+            description=f"The PIPELINES.md pipelines under {heading}",
+        )(section_prompt(heading, descriptions, doc_path.parent))
 
 
-# an installed wheel has no README beside the plugins
-if README_PATH is not None:
-    register_readme_prompts(README_PATH)
+# an installed wheel has no PIPELINES.md beside the plugins
+if PIPELINES_PATH is not None:
+    register_pipeline_prompts(PIPELINES_PATH)
 
 
 def main():

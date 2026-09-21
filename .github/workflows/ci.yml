@@ -239,18 +239,30 @@ jobs:
           pip install pytest mcp
           unset LD_LIBRARY_PATH
           rm -rf ~/.cache/gstreamer-1.0
-          # README pipelines need the GPU and the data dir, the other two load models
+          # PIPELINES.md pipelines need the GPU and the data dir, the other two load models
           python -m pytest tests/ -q \
             --ignore=tests/test_pipelines.py \
             --ignore=tests/test_zeroshotdetector.py \
             --ignore=tests/test_engines.py
 
-      - name: Run the README pipelines a headless runner can (Linux)
+      - name: Cache the PIPELINES.md models (Linux)
+        if: runner.os == 'Linux'
+        uses: actions/cache@v4
+        with:
+          path: |
+            ~/.cache/huggingface
+            ~/.cache/torch
+            ~/.config/Ultralytics
+          key: pipelines-${{ hashFiles('PIPELINES.md') }}
+
+      # the build venv lacks what the kept elements import
+      - name: Run the PIPELINES.md pipelines a headless runner can (Linux)
         if: runner.os == 'Linux'
         run: |
           source .venv/bin/activate
           unset LD_LIBRARY_PATH
-          HEADLESS_PIPELINES=1 PIPELINE_TIMEOUT=20 GST_DEBUG=2 python -m pytest tests/test_pipelines.py -q
+          pip install transformers pillow paho-mqtt lap huggingface_hub
+          HEADLESS_PIPELINES=1 PIPELINE_TIMEOUT=180 GST_DEBUG=2 python -m pytest tests/test_pipelines.py -q
 
       - name: ONNX pipeline smoke test (Linux)
         if: runner.os == 'Linux'

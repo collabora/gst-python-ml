@@ -1,4 +1,4 @@
-# readme_pipelines
+# documented_pipelines
 # Copyright (C) 2024-2026 Collabora Ltd.
 #
 # This library is free software; you can redistribute it and/or
@@ -36,8 +36,8 @@ def preceding_heading(headings, position):
     return heading
 
 
-def pipelines_by_section(readme_path):
-    content = Path(readme_path).read_text()
+def pipelines_by_section(doc_path):
+    content = Path(doc_path).read_text()
     headings = [
         (match.start(), match.group(1).strip())
         for match in HEADING_PATTERN.finditer(content)

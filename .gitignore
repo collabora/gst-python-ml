@@ -12,3 +12,4 @@ dist/
 runs/
 tests/logs
 .pytest_cache/
+pretrained_models/

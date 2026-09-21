@@ -37,7 +37,7 @@
 
 Everything else is named the same on both: `filesrc`, `decodebin`,
 `videoconvert`, `videoscale`, `autovideosink`. Write the pipeline the way the
-README does, in `gst-launch` spelling, and this translates it. Either way the
+PIPELINES.md does, in `gst-launch` spelling, and this translates it. Either way the
 line the backend runs is printed, so it can be pasted back and extended.
 """
 

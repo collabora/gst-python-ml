@@ -136,7 +136,8 @@ class StreamMux(GstBase.Aggregator):
             self.logger.warning("No buffers available, skipping batch output.")
             return
 
-        num_sources = len(self.sinkpads)  # 🚀 Dynamically get active sink pads
+        # a timeout flushes a partial batch
+        num_sources = len(self.batch_buffer)
         self.logger.info(f"Embedding num-sources={num_sources} into buffer memory")
 
         # Create a new buffer

@@ -12,7 +12,7 @@ import time
 
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent / "plugins" / "python"))
 
-from readme_pipelines import pipelines_by_section  # noqa: E402
+from documented_pipelines import pipelines_by_section  # noqa: E402
 
 # Base directory for the project
 BASE_DIR = Path(__file__).resolve().parent.parent
@@ -35,21 +35,71 @@ FATAL_LOG_PATTERNS = (
 
 BACKEND = os.environ.get("PYML_BACKEND", "gst").lower()
 
-# The launcher the README examples name. Runs from a tmp dir, so it is spelled
+# The launcher the PIPELINES.md examples name. Runs from a tmp dir, so it is spelled
 # absolute here.
 LAUNCHER = f"python {BASE_DIR / 'pyml-launch.py'}"
 
-# only the pipelines a runner with no gpu, model, display or microphone can run
+# small models on the cpu, no display or microphone
 HEADLESS = os.environ.get("HEADLESS_PIPELINES") == "1"
-MODEL_MARKERS = ("model-name=", "cuda")
 CAPTURE_SOURCES = ("pulsesrc", "pipewiresrc", "autoaudiosrc", "alsasrc", "v4l2src")
+# the engines job covers exported models, torch.compile takes minutes on a runner
+EXPORTED_MODEL_MARKERS = ("engine-name=", "compile=True")
+# too large for a runner, or needing a server or a model file outside the repo
+HEAVY_ELEMENTS = (
+    "pyml_llm",
+    "pyml_stablediffusion",
+    "pyml_whisper",
+    "pyml_mariantranslate",
+    "pyml_caption_qwen",
+    "pyml_vlm",
+    "pyml_sam",
+    "pyml_kafkasink",
+    "demo_soccer",
+    "pyml_demucs",
+    "pyml_sepformer",
+    "pyml_superres",
+    "pyml_face",
+    "pyml_ocr",
+)
+HEADLESS_SKIP_MARKERS = CAPTURE_SOURCES + EXPORTED_MODEL_MARKERS + HEAVY_ELEMENTS
 DISPLAY_SINK_PATTERN = re.compile(r"\b(?:autovideosink|glimagesink)\b")
 HEADLESS_SINK = "fakevideosink"
+HEADLESS_REWRITES = (
+    (re.compile(r"\bdevice=cuda(?::\d+)?\b"), "device=cpu"),
+    (re.compile(r"\byolo11m\b"), "yolo11n"),
+    (DISPLAY_SINK_PATTERN, HEADLESS_SINK),
+)
+# an eos this many buffers before the first ml element proves frames went through it
+HEADLESS_FRAME_CAP = 20
+FRAME_CAP_ELEMENT = f"identity eos-after={HEADLESS_FRAME_CAP}"
+FIRST_ML_ELEMENT = re.compile(r"\b(?:pyml_\w+|demo_\w+)\b")
 LOG_TAIL_LINES = 40
 
 
 def runs_headless(pipeline):
-    return not any(marker in pipeline for marker in MODEL_MARKERS + CAPTURE_SOURCES)
+    return not any(marker in pipeline for marker in HEADLESS_SKIP_MARKERS)
+
+
+def headless_pipeline(pipeline):
+    for pattern, replacement in HEADLESS_REWRITES:
+        pipeline = pattern.sub(replacement, pipeline)
+    return capped_before_first_element(pipeline)
+
+
+# only with one source and no mux or tee does an eos on that path end the whole pipeline
+def capped_before_first_element(pipeline):
+    if (
+        pipeline.count("filesrc") != 1
+        or "pyml_streammux" in pipeline
+        or " tee " in pipeline
+    ):
+        return pipeline
+    first = FIRST_ML_ELEMENT.search(pipeline)
+    if first is None:
+        return pipeline
+    return (
+        f"{pipeline[: first.start()]}{FRAME_CAP_ELEMENT} ! {pipeline[first.start():]}"
+    )
 
 
 # a pulse source with no device named opens the default source
@@ -80,13 +130,12 @@ if BACKEND == "gst" and not shutil.which("gst-launch-1.0"):
     raise RuntimeError("gst-launch-1.0 not found in PATH. Please install GStreamer.")
 
 
-# Read pipelines from README and modify for frame limit
-def get_pipelines_from_readme():
-    readme_path = BASE_DIR / "README.md"
-    if not readme_path.exists():
-        pytest.fail("README.md not found in project root")
+def get_documented_pipelines():
+    doc_path = BASE_DIR / "PIPELINES.md"
+    if not doc_path.exists():
+        pytest.fail("PIPELINES.md not found in project root")
 
-    sections = pipelines_by_section(readme_path)
+    sections = pipelines_by_section(doc_path)
     pipelines = [
         f"{LAUNCHER} {description}"
         for descriptions in sections.values()
@@ -94,7 +143,7 @@ def get_pipelines_from_readme():
     ]
     if HEADLESS:
         pipelines = [
-            DISPLAY_SINK_PATTERN.sub(HEADLESS_SINK, pipeline)
+            headless_pipeline(pipeline)
             for pipeline in pipelines
             if runs_headless(pipeline)
         ]
@@ -121,7 +170,7 @@ def get_pipelines_from_readme():
     return modified_pipelines
 
 
-PIPELINES = get_pipelines_from_readme()
+PIPELINES = get_documented_pipelines()
 
 
 def end_process_group(process):
@@ -161,7 +210,7 @@ def absolutize_project_inputs(pipeline):
 @pytest.mark.parametrize("pipeline", PIPELINES, ids=lambda p: p)
 def test_pipeline(pipeline, tmp_path):
     """
-    Run a README pipeline and check its log for errors.
+    Run a PIPELINES.md pipeline and check its log for errors.
 
     A pipeline still running at `PIPELINE_TIMEOUT` passes: only `videotestsrc`
     takes a frame cap, so a file-backed one runs as long as its media lasts.
@@ -266,6 +315,12 @@ def test_pipeline(pipeline, tmp_path):
             f"Pipeline never reached PLAYING. Full pipeline: {pipeline}. See {log_file}"
         )
 
+    if ran_to_the_cap and FRAME_CAP_ELEMENT in pipeline:
+        pytest.fail(
+            f"Pipeline did not push {HEADLESS_FRAME_CAP} buffers through its first "
+            f"element within {PIPELINE_TIMEOUT}s. Full pipeline: {pipeline}. See {log_file}"
+        )
+
     # Check exit code
     if not ran_to_the_cap and return_code != 0:
         if (
@@ -281,9 +336,9 @@ def test_pipeline(pipeline, tmp_path):
 
 
 def test_pipelines_found():
-    """Ensure at least one pipeline was found in README."""
+    """Ensure at least one pipeline was found in PIPELINES.md."""
     if not PIPELINES:
-        pytest.fail("No pyml-launch pipelines found in README.md")
+        pytest.fail("No pyml-launch pipelines found in PIPELINES.md")
     print(f"Found {len(PIPELINES)} pipelines to test")
 
 
