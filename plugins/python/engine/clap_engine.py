@@ -16,7 +16,7 @@
 # Free Software Foundation, Inc., 51 Franklin Street, Fifth Floor,
 # Boston, MA 02110-1301, USA.
 
-from .pytorch_engine import PyTorchEngine
+from .pytorch_engine import PyTorchEngine, projected
 
 CLAP_SAMPLE_RATE = 48000
 
@@ -61,7 +61,7 @@ class ClapEngine(PyTorchEngine):
         inputs = self.processor(text=self._labels, return_tensors="pt", padding=True)
         inputs = {k: v.to(self.device) for k, v in inputs.items()}
         with torch.no_grad():
-            text_emb = self.model.get_text_features(**inputs)
+            text_emb = projected(self.model.get_text_features(**inputs))
             self.text_embeddings = text_emb / text_emb.norm(dim=-1, keepdim=True)
         self.logger.info(f"Precomputed text embeddings for {len(self._labels)} labels")
 
@@ -83,14 +83,15 @@ class ClapEngine(PyTorchEngine):
             return None
 
         try:
-            inputs = self.processor(
-                audios=audio_waveform,
+            # the processor kwarg is `audios` on transformers 4 and `audio` on 5
+            inputs = self.processor.feature_extractor(
+                audio_waveform,
                 sampling_rate=CLAP_SAMPLE_RATE,
                 return_tensors="pt",
             )
             inputs = {k: v.to(self.device) for k, v in inputs.items()}
             with torch.no_grad():
-                audio_emb = self.model.get_audio_features(**inputs)
+                audio_emb = projected(self.model.get_audio_features(**inputs))
                 audio_emb = audio_emb / audio_emb.norm(dim=-1, keepdim=True)
                 similarities = (audio_emb @ self.text_embeddings.T).squeeze(0)
                 scores = similarities.cpu().numpy()

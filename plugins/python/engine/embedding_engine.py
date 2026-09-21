@@ -16,12 +16,7 @@
 # Free Software Foundation, Inc., 51 Franklin Street, Fifth Floor,
 # Boston, MA 02110-1301, USA.
 
-from .pytorch_engine import PyTorchEngine
-
-
-# transformers 5 returns a model output here, 4 returned the tensor itself
-def projected(features):
-    return getattr(features, "pooler_output", features)
+from .pytorch_engine import PyTorchEngine, projected
 
 
 class EmbeddingEngine(PyTorchEngine):

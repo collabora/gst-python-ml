@@ -23,6 +23,11 @@ import traceback
 from .ml_engine import MLEngine
 
 
+# transformers 5 returns a model output from get_*_features, 4 returned the tensor
+def projected(features):
+    return getattr(features, "pooler_output", features)
+
+
 class PyTorchEngine(MLEngine):
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
