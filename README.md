@@ -822,7 +822,7 @@ python pyml-launch.py filesrc location=data/people.mp4 ! decodebin name=d \
 
 #### tinygrad Engine
 
-tinygrad supports TorchVision models, SafeTensors files, and Transformers models.
+tinygrad runs the torchvision resnet family (resnet, resnext, wide_resnet) from torchvision weights.
 Set `engine-name=tinygrad` for lightweight GPU/CPU inference with automatic kernel optimization.
 
 ##### ResNet18 classification with tinygrad on GPU

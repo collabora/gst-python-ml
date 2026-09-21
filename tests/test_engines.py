@@ -56,15 +56,7 @@ CLASSIFICATION_ENGINES = [
             reason="the engine imports tvm.contrib.graph_executor, gone from apache-tvm 0.26",
         ),
     ),
-    pytest.param(
-        "tinygrad",
-        "tinygrad",
-        id="tinygrad",
-        marks=pytest.mark.xfail(
-            strict=True,
-            reason="tinygrad copies the state dict and has no graph to run",
-        ),
-    ),
+    pytest.param("tinygrad", "tinygrad", id="tinygrad"),
 ]
 
 

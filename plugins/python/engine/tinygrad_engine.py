@@ -16,7 +16,6 @@
 # Free Software Foundation, Inc., 51 Franklin Street, Fifth Floor,
 # Boston, MA 02110-1301, USA.
 
-import os
 import numpy as np
 
 from .ml_engine import MLEngine
@@ -30,7 +29,7 @@ class TinyGradEngine(MLEngine):
         self.kwargs = None
 
     def do_load_model(self, model_name, **kwargs):
-        """Load a model via TinyGrad from a local SafeTensors file, TorchVision, or Transformers."""
+        """Load a torchvision resnet into TinyGrad, or a Transformers model."""
 
         processor_name = kwargs.get("processor_name")
         tokenizer_name = kwargs.get("tokenizer_name")
@@ -38,36 +37,22 @@ class TinyGradEngine(MLEngine):
         self.kwargs = kwargs
 
         try:
-            # Local SafeTensors model
-            if os.path.isfile(model_name) and model_name.endswith(
-                (".safetensors", ".npz")
-            ):
-                from tinygrad.nn.state import safe_load
-
-                state = safe_load(model_name)
-                self.model = state
-                self.model_type = "custom"
-                self.logger.info(f"TinyGrad model loaded from local path: {model_name}")
-                return True
-
             # TorchVision models
             from torchvision import models as tv_models
 
             if hasattr(tv_models, model_name):
                 pt_model = getattr(tv_models, model_name)(pretrained=True)
-                self._load_from_pytorch(pt_model)
+                if not isinstance(pt_model, tv_models.ResNet):
+                    self.logger.error(
+                        f"TinyGrad runs the torchvision resnet family, not '{model_name}'."
+                    )
+                    return False
+                from .tinygrad_resnet import tinygrad_resnet
+
+                self.model = tinygrad_resnet(pt_model.eval())
                 self.model_type = "classification"
                 self.logger.info(
                     f"Pre-trained vision model '{model_name}' loaded with TinyGrad."
-                )
-                return True
-
-            if hasattr(tv_models.detection, model_name):
-                pt_model = getattr(tv_models.detection, model_name)(pretrained=True)
-                self._load_from_pytorch(pt_model)
-                self.model_type = "detection"
-                self.logger.info(
-                    f"Pre-trained detection model '{model_name}' loaded with TinyGrad."
                 )
                 return True
 
@@ -115,42 +100,24 @@ class TinyGradEngine(MLEngine):
             self.model = None
             return False
 
-    def _load_from_pytorch(self, pt_model):
-        """Convert a PyTorch model's state dict to TinyGrad tensors."""
-        from tinygrad import Tensor
-
-        pt_model.eval()
-        state_dict = pt_model.state_dict()
-        self.model = {k: Tensor(v.cpu().numpy()) for k, v in state_dict.items()}
-
-    def _to_tinygrad_tensor(self, arr):
-        """Convert a NumPy array to a TinyGrad Tensor on the configured device."""
-        from tinygrad import Tensor
-
-        t = Tensor(arr)
-        if self.device and self.device != "cpu":
-            t = t.to(self.device.upper())
-        return t
-
     def do_set_device(self, device):
         """Set TinyGrad device for the model."""
         from tinygrad import Device
+        from tinygrad.helpers import DEV
 
         self.device = device
         self.logger.info(f"Setting device to {device}")
 
         device_upper = device.upper() if device else "CPU"
-        if device_upper.startswith("CUDA") or device_upper.startswith("GPU"):
-            device_upper = "GPU"
-
         try:
-            Device.DEFAULT = device_upper
+            Device[device_upper]
+            DEV.value = device_upper
         except Exception:
             self.logger.warning(
                 f"Device '{device}' not available in TinyGrad, falling back to CPU"
             )
             self.device = "cpu"
-            Device.DEFAULT = "CPU"
+            DEV.value = "CPU"
 
     def _forward_classification(self, frames):
         """Handle inference for classification models."""
@@ -163,10 +130,9 @@ class TinyGradEngine(MLEngine):
             img_array = np.transpose(img_array, (2, 0, 1))
             img_array = np.expand_dims(img_array, 0)
 
-        t = self._to_tinygrad_tensor(img_array)
-        # For state-dict-based models, run through a simple linear classification
-        # This is a placeholder; real usage requires reconstructing the model graph
-        preds = t.numpy()
+        from tinygrad import Tensor
+
+        preds = self.model(Tensor(img_array)).numpy()
         probs = np.exp(preds) / np.sum(np.exp(preds), axis=1, keepdims=True)
         top_classes = np.argmax(probs, axis=1)
         confidences = np.max(probs, axis=1)
@@ -226,24 +192,6 @@ class TinyGradEngine(MLEngine):
 
         elif self.model_type == "classification":
             return self._forward_classification(frames)
-
-        elif self.model_type == "detection":
-            writable_frames = np.array(frames, copy=True, dtype=np.float32) / 255.0
-            if is_batch:
-                img_array = np.transpose(writable_frames, (0, 3, 1, 2))
-            else:
-                img_array = np.transpose(writable_frames, (2, 0, 1))
-                img_array = np.expand_dims(img_array, 0)
-
-            t = self._to_tinygrad_tensor(img_array)
-            preds = t.numpy()
-            return preds
-
-        elif self.model_type == "custom":
-            img = self._apply_input_format(frames.astype(np.float32) / 255.0, is_batch)
-            t = self._to_tinygrad_tensor(img)
-            raw = t.numpy()
-            return self._apply_post_process(raw, is_batch)
 
         else:
             raise ValueError("Unsupported model type.")

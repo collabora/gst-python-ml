@@ -59,13 +59,12 @@ jobs:
             extra: onnx
           - engine: llamacpp
             extra: llamacpp
-          # strict xfails, the leg goes red only when the engine starts passing
+          # strict xfail, the leg goes red only when the engine starts passing
           - engine: tvm
             extra: tvm
             expected-broken: true
           - engine: tinygrad
             extra: tinygrad
-            expected-broken: true
     continue-on-error: ${{ matrix.expected-broken || false }}
     steps:
       - uses: actions/checkout@v6
