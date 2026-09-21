@@ -47,15 +47,7 @@ DETECTION_ENGINES = [
 
 CLASSIFICATION_ENGINES = [
     pytest.param("pytorch", "torch", id="pytorch"),
-    pytest.param(
-        "tvm",
-        "tvm",
-        id="tvm",
-        marks=pytest.mark.xfail(
-            strict=True,
-            reason="the engine imports tvm.contrib.graph_executor, gone from apache-tvm 0.26",
-        ),
-    ),
+    pytest.param("tvm", "tvm", id="tvm"),
     pytest.param("tinygrad", "tinygrad", id="tinygrad"),
 ]
 

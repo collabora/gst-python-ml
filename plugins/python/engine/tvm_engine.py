@@ -19,61 +19,50 @@
 import os
 import numpy as np
 import tvm
-from tvm.contrib import graph_executor
+from tvm import relax
 
 from .ml_engine import MLEngine
+
+CLASSIFIER_INPUT_SHAPE = (1, 3, 224, 224)
+# the torch importer names the exported graph main
+ENTRY_FUNCTION = "main"
 
 
 class TVMEngine(MLEngine):
     def __init__(self):
         super().__init__()
-        self.module = None
+        self.vm = None
         self.model_type = None
         self.model_name = None
         self.kwargs = None
         self.tvm_device = None
-        self.input_names = None
-        self.output_names = None
 
     def do_load_model(self, model_name, **kwargs):
-        """Load a compiled TVM model from a local path, TorchVision (via Relay), or Transformers."""
         processor_name = kwargs.get("processor_name")
         tokenizer_name = kwargs.get("tokenizer_name")
         self.model_name = model_name
         self.kwargs = kwargs
 
         try:
-            # Local compiled TVM model (.so / .tar)
             if os.path.isfile(model_name) and model_name.endswith((".so", ".tar")):
-                self._load_compiled(model_name)
+                self._start_vm(tvm.runtime.load_module(model_name))
                 self.model_type = "custom"
                 self.logger.info(
                     f"TVM compiled model loaded from local path: {model_name}"
                 )
                 return True
 
-            # TorchVision models via Relay conversion
             from torchvision import models as tv_models
 
             if hasattr(tv_models, model_name):
                 pt_model = getattr(tv_models, model_name)(pretrained=True)
-                self._compile_pytorch_model(pt_model, (1, 3, 224, 224))
+                self._compile_pytorch_model(pt_model, CLASSIFIER_INPUT_SHAPE)
                 self.model_type = "classification"
                 self.logger.info(
                     f"Pre-trained vision model '{model_name}' compiled with TVM."
                 )
                 return True
 
-            if hasattr(tv_models.detection, model_name):
-                pt_model = getattr(tv_models.detection, model_name)(pretrained=True)
-                self._compile_pytorch_model(pt_model, (1, 3, 224, 224))
-                self.model_type = "detection"
-                self.logger.info(
-                    f"Pre-trained detection model '{model_name}' compiled with TVM."
-                )
-                return True
-
-            # Vision-text models via Transformers
             if processor_name and tokenizer_name:
                 from transformers import (
                     AutoTokenizer,
@@ -99,7 +88,6 @@ class TVMEngine(MLEngine):
                 )
                 return True
 
-            # LLM models via Transformers
             from transformers import AutoTokenizer, AutoModelForCausalLM
 
             self.tokenizer = AutoTokenizer.from_pretrained(model_name)
@@ -115,44 +103,35 @@ class TVMEngine(MLEngine):
             self.tokenizer = None
             self.image_processor = None
             self.model = None
-            self.module = None
+            self.vm = None
             return False
 
     def _compile_pytorch_model(self, pt_model, input_shape):
-        """Convert a PyTorch model to TVM via Relay and compile it."""
         import torch
-        from tvm import relay
+        from tvm.relax.frontend.torch import from_exported_program
 
         pt_model.eval()
-        dummy_input = torch.randn(*input_shape)
-        scripted = torch.jit.trace(pt_model, dummy_input)
-        shape_list = [("input", input_shape)]
-        mod, params = relay.frontend.from_pytorch(scripted, shape_list)
+        exported = torch.export.export(pt_model, (torch.randn(*input_shape),))
+        module = from_exported_program(exported)
+        self._start_vm(tvm.compile(module, self._get_target()))
 
-        target = self._get_target()
-        with tvm.transform.PassContext(opt_level=3):
-            lib = relay.build(mod, target=target, params=params)
-
+    def _start_vm(self, module):
         self.tvm_device = self._get_tvm_device()
-        self.module = graph_executor.GraphModule(lib["default"](self.tvm_device))
+        self.vm = relax.VirtualMachine(module, self.tvm_device)
 
-    def _load_compiled(self, path):
-        """Load a pre-compiled TVM module from a .so or .tar file."""
-        from tvm.contrib import graph_executor
-        from tvm.runtime import load_module
-
-        lib = load_module(path)
-        self.tvm_device = self._get_tvm_device()
-        self.module = graph_executor.GraphModule(lib["default"](self.tvm_device))
+    def _run(self, img):
+        input_tensor = tvm.runtime.tensor(np.ascontiguousarray(img), self.tvm_device)
+        outputs = self.vm[ENTRY_FUNCTION](input_tensor)
+        if not hasattr(outputs, "__len__"):
+            outputs = [outputs]
+        return [output.numpy() for output in outputs]
 
     def _get_target(self):
-        """Return the TVM target string for the current device."""
         if self.device and "cuda" in self.device:
-            return tvm.target.Target("cuda")
+            return tvm.target.Target("cuda", host="llvm")
         return tvm.target.Target("llvm")
 
     def _get_tvm_device(self):
-        """Return the TVM device context for the current device."""
         if self.device and "cuda" in self.device:
             index = 0
             if ":" in self.device:
@@ -164,7 +143,6 @@ class TVMEngine(MLEngine):
         return tvm.cpu(0)
 
     def do_set_device(self, device):
-        """Set TVM device for the model."""
         self.device = device
         self.logger.info(f"Setting device to {device}")
 
@@ -175,25 +153,19 @@ class TVMEngine(MLEngine):
                 )
                 self.device = "cpu"
 
-        # Recompile/reload model if already loaded
         if self.model_name:
             self.do_load_model(self.model_name, **self.kwargs)
 
     def _forward_classification(self, frames):
-        """Handle inference for classification models."""
         is_batch = frames.ndim == 4
         img_array = np.array(frames, dtype=np.float32) / 255.0
         if is_batch:
-            img_array = np.transpose(
-                img_array, (0, 3, 1, 2)
-            )  # (B, H, W, C) -> (B, C, H, W)
+            img_array = np.transpose(img_array, (0, 3, 1, 2))
         else:
-            img_array = np.transpose(img_array, (2, 0, 1))  # (H, W, C) -> (C, H, W)
+            img_array = np.transpose(img_array, (2, 0, 1))
             img_array = np.expand_dims(img_array, 0)
 
-        self.module.set_input(0, tvm.nd.array(img_array, device=self.tvm_device))
-        self.module.run()
-        preds = self.module.get_output(0).numpy()
+        preds = self._run(img_array)[0]
         probs = np.exp(preds) / np.sum(np.exp(preds), axis=1, keepdims=True)
         top_classes = np.argmax(probs, axis=1)
         confidences = np.max(probs, axis=1)
@@ -204,7 +176,6 @@ class TVMEngine(MLEngine):
         return results[0] if not is_batch else results
 
     def do_forward(self, frames):
-        """Handle inference for different types of models, supporting single frames or batches."""
         is_batch = isinstance(frames, np.ndarray) and frames.ndim == 4
         if not isinstance(frames, (np.ndarray, str)):
             self.logger.error(f"Invalid input type for forward: {type(frames)}")
@@ -222,7 +193,6 @@ class TVMEngine(MLEngine):
             if len(self.frame_buffer) >= self.batch_size:
                 self.logger.info(f"Processing {self.batch_size} frames")
                 try:
-
                     gen_kwargs = {"min_length": 10, "max_length": 20, "num_beams": 8}
                     pixel_values = self.image_processor(
                         self.frame_buffer, return_tensors="pt"
@@ -244,7 +214,6 @@ class TVMEngine(MLEngine):
             if is_batch:
                 self.logger.error("Batch processing not supported for LLM-only models.")
                 return None
-
             inputs = self.tokenizer(frames, return_tensors="pt")
             generated_tokens = self.model.generate(**inputs)
             generated_text = self.tokenizer.batch_decode(
@@ -256,44 +225,9 @@ class TVMEngine(MLEngine):
         elif self.model_type == "classification":
             return self._forward_classification(frames)
 
-        elif self.model_type == "detection":
-            writable_frames = np.array(frames, copy=True, dtype=np.float32) / 255.0
-            if is_batch:
-                img_array = np.transpose(
-                    writable_frames, (0, 3, 1, 2)
-                )  # (B, H, W, C) -> (B, C, H, W)
-            else:
-                img_array = np.transpose(writable_frames, (2, 0, 1))
-                img_array = np.expand_dims(img_array, 0)
-
-            self.module.set_input(0, tvm.nd.array(img_array, device=self.tvm_device))
-            self.module.run()
-            num_outputs = self.module.get_num_outputs()
-            outputs = [self.module.get_output(i).numpy() for i in range(num_outputs)]
-            if len(outputs) == 3:
-                boxes, labels, scores = outputs
-                results = []
-                for i in range(img_array.shape[0]):
-                    valid = scores[i] > 0.5
-                    res = {
-                        "boxes": boxes[i][valid],
-                        "labels": labels[i][valid].astype(int),
-                        "scores": scores[i][valid],
-                    }
-                    results.append(res)
-            else:
-                raise ValueError("Unexpected output format for detection model.")
-            self.logger.debug(
-                f"Batch inference results: {len(results)} frames processed"
-            )
-            return results[0] if not is_batch else results
-
         elif self.model_type == "custom":
             img = self._apply_input_format(frames.astype(np.float32) / 255.0, is_batch)
-            self.module.set_input(0, tvm.nd.array(img, device=self.tvm_device))
-            self.module.run()
-            num_outputs = self.module.get_num_outputs()
-            outputs = [self.module.get_output(i).numpy() for i in range(num_outputs)]
+            outputs = self._run(img)
             raw = outputs if len(outputs) > 1 else outputs[0]
             return self._apply_post_process(raw, is_batch)
 
@@ -303,7 +237,6 @@ class TVMEngine(MLEngine):
     def do_generate(self, input_text, max_length=1000, system_prompt=None):
         if self.model_type != "llm":
             raise ValueError("Generate is only supported for LLM models.")
-
         inputs = self.tokenizer(input_text, return_tensors="pt")
         outputs = self.model.generate(**inputs, max_length=max_length)
         generated_text = self.tokenizer.decode(outputs[0], skip_special_tokens=True)

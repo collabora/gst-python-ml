@@ -247,25 +247,11 @@ maturin develop -r
 
 #### Apache TVM
 
-TVM is a deep learning compiler for model optimization and deployment. The PyPI
-`apache-tvm` package is stale — install from source:
+The PyPI wheel ships LLVM and CUDA support, so the extra is enough:
 
 ```
-sudo apt install zlib1g-dev libxml2-dev  # Ubuntu/Debian
-git clone --recursive https://github.com/apache/tvm.git
-cd tvm
-mkdir build && cd build
-cp ../cmake/config.cmake .
-echo "set(CMAKE_BUILD_TYPE RelWithDebInfo)" >> config.cmake
-echo "set(USE_LLVM \"llvm-config --ignore-libllvm --link-static\")" >> config.cmake
-echo "set(USE_CUDA ON)" >> config.cmake  # set OFF if no GPU
-cmake .. && cmake --build . --parallel $(nproc)
-cd ../3rdparty/tvm-ffi && pip install . && cd ../..
-pip install -e .
+uv pip install ".[tvm]"
 ```
-
-Requires: CMake >= 3.24, LLVM >= 15, Python >= 3.10.
-See [TVM install docs](https://tvm.apache.org/docs/install/from_source.html) for full details.
 
 #### JAX
 
@@ -886,7 +872,8 @@ python pyml-launch.py filesrc location=data/people.mp4 ! decodebin name=d \
 #### TVM Engine
 
 Apache TVM compiles models for optimized inference. Supports compiled `.so`/`.tar`
-models and TorchVision models (auto-compiled via Relay). Set `engine-name=tvm`.
+models and TorchVision models (exported with torch.export and compiled through relax).
+Set `engine-name=tvm`.
 
 ##### TorchVision model compiled with TVM
 
