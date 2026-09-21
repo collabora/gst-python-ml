@@ -2,31 +2,21 @@
 
 [![CI](https://github.com/collabora/gst-python-ml/actions/workflows/ci.yml/badge.svg)](https://github.com/collabora/gst-python-ml/actions/workflows/ci.yml)
 
-This project provides a pure Python ML framework for upstream GStreamer, supporting a broad range of ML vision and language features. 
+Pure Python ML elements for upstream GStreamer 1.24 or later.
 
-Supported functionality includes:
+Video: object detection, zero-shot detection, tracking, pose, depth, zero-shot
+classification with CLIP or SigLIP, segmentation with SAM2, OCR, face recognition,
+optical flow, super-resolution, action recognition, anomaly detection, captioning,
+vision-language models and embeddings. Audio: voice activity detection,
+transcription, translation, speech separation, text to speech and audio
+classification with CLAP. Text: local and remote LLMs, digests, text to image.
+Around them: alerts over webhooks and MQTT, clip recording, metadata sinks and
+replay, a Kafka sink, and an MCP server for agents.
 
-1. object detection
-1. tracking
-1. pose estimation (COCO 17-keypoint skeleton)
-1. monocular depth estimation
-1. zero-shot classification (CLIP / SigLIP)
-1. video captioning
-1. translation
-1. transcription
-1. voice activity detection
-1. speech to text
-1. text to speech
-1. text to image
-1. LLMs
-1. serializing model metadata to Kafka server
-
-Different ML toolkits are supported via the `MLEngine` abstraction: PyTorch, ONNX Runtime, OpenVINO,
-LiteRT (TFLite), TensorFlow, Apache TVM, tinygrad, Apple MLX, Meta ExecuTorch, llama.cpp, HuggingFace Candle, JAX/Flax, AMD MiGraphX, IREE, and NCNN (Vulkan).
-All testing thus far has been done primarily with PyTorch.
-
-These elements will work with your distribution's GStreamer packages as long as the GStreamer version
-is >= 1.24.
+Models run through one of the engines: PyTorch, ONNX Runtime, OpenVINO, LiteRT,
+TensorFlow, Apache TVM, tinygrad, Apple MLX, ExecuTorch, llama.cpp, Candle, JAX,
+MiGraphX, IREE, NCNN and Renesas DRP-AI. CI runs every engine that installs from
+PyPI on the CPU and checks its output against PyTorch.
 
 ## Table of Contents
 
@@ -35,6 +25,13 @@ is >= 1.24.
   - [Docker Install](#docker-install)
 - [Post Install](#post-install)
 - [Custom Plugins](#custom-plugins)
+  - [Directory Structure](#directory-structure)
+  - [Example: Custom Object Detector](#example-custom-object-detector)
+  - [Environment Setup](#environment-setup)
+  - [Available Base Classes](#available-base-classes)
+  - [Verify](#verify)
+- [Running a pipeline](#running-a-pipeline)
+  - [Choosing the backend](#choosing-the-backend)
 - [Pipelines](#pipelines)
   - [Classification](#classification)
   - [Torch Compile](#torch-compile)
@@ -46,10 +43,12 @@ is >= 1.24.
   - [Voice Activity Detection](#voice-activity-detection)
   - [Transcription](#transcription)
   - [LLM](#llm)
-  - [Remote LLM (Ollama)](#remote-llm-ollama)
   - [Incident Digest](#incident-digest)
-  - [Stable Diffusion](#stablediffusion)
-  - [Kafka Sink](#kafkasink)
+  - [Stable Diffusion](#stable-diffusion)
+  - [Caption](#caption)
+  - [Kafka Sink](#kafka-sink)
+  - [Overlay from a metadata file](#overlay-from-a-metadata-file)
+  - [Stream Mux and Demux](#stream-mux-and-demux)
   - [Segment Anything (SAM)](#segment-anything-sam)
   - [OCR](#ocr)
   - [Face Detection & Recognition](#face-detection--recognition)
@@ -71,8 +70,6 @@ is >= 1.24.
 
 ## Install
 
-There are two installation options described below: on host machine or on Docker container:
-
 ### Host Install
 
 #### Install distribution packages
@@ -89,7 +86,7 @@ sudo apt install -y python3-pip  python3-venv \
 
 ##### Fedora
 
-(adjust Fedora version from 42 to match your version number)
+Adjust the Fedora version in the rpmfusion URLs.
 
 ```
 sudo dnf install https://download1.rpmfusion.org/free/fedora/rpmfusion-free-release-42.noarch.rpm https://download1.rpmfusion.org/nonfree/fedora/rpmfusion-nonfree-release-42.noarch.rpm
@@ -110,11 +107,10 @@ sudo dnf install -y python3-pip \
 
 ##### Windows
 
-1. **Install GStreamer** from the [official site](https://gstreamer.freedesktop.org/download/#windows).
-   Download and install both the **runtime** and **development** MSVC x86_64 installers.
-   The default install path is `C:\gstreamer\1.0\msvc_x86_64`.
+1. Install the runtime and development MSVC x86_64 installers from the
+   [GStreamer site](https://gstreamer.freedesktop.org/download/#windows). The default path is `C:\gstreamer\1.0\msvc_x86_64`.
 
-2. **Set environment variables** (adjust paths if your install location differs):
+2. Set the environment variables:
 
 ```powershell
 # Add GStreamer to PATH
@@ -124,17 +120,15 @@ sudo dnf install -y python3-pip \
 [Environment]::SetEnvironmentVariable("GST_PLUGIN_PATH", "D:\Workspace\gst-python-ml\plugins", "User")
 ```
 
-3. **Install Python 3.12+** from [python.org](https://www.python.org/downloads/) or via conda.
+3. Install Python 3.12 or later.
 
-4. **Install PyGObject** — on Windows the easiest route is via conda or the
-   [gstreamer-python](https://pypi.org/project/gstreamer-python/) wheel:
+4. Install PyGObject, through conda or the [gstreamer-python](https://pypi.org/project/gstreamer-python/) wheel:
 
 ```powershell
 pip install gstreamer-python
 ```
 
-5. **CUDA (optional)** — install the [CUDA Toolkit](https://developer.nvidia.com/cuda-downloads)
-   matching your GPU driver version, then install the CUDA-enabled PyTorch:
+5. For CUDA, install the [CUDA Toolkit](https://developer.nvidia.com/cuda-downloads) matching your driver, then the CUDA PyTorch:
 
 ```powershell
 pip install torch torchvision torchaudio --index-url https://download.pytorch.org/whl/cu128
@@ -142,16 +136,13 @@ pip install torch torchvision torchaudio --index-url https://download.pytorch.or
 
 #### Manage Python packages
 
-##### Important: Python version must match GStreamer
+##### Python version
 
-GStreamer's Python plugin loader (`libgstpython.so`) embeds the system Python interpreter.
-The virtual environment **must** be created with the same Python version that GStreamer uses,
-otherwise `import` errors will occur at runtime (e.g. `No module named 'torch'`).
+GStreamer's Python plugin loader embeds the system interpreter, so the venv must
+use the same Python. Ubuntu 24.04 is 3.12, Fedora 42 and Ubuntu 26.04 are 3.14. A
+mismatch shows up at run time as `No module named 'torch'`.
 
-On Fedora 42+ this is Python 3.14. On Ubuntu 26.04 this is Python 3.14.
-On Ubuntu 24.04 this is Python 3.12.
-
-##### set up venv with system Python
+##### venv on the system Python
 
 ```
 python3 -m venv --system-site-packages .venv
@@ -161,9 +152,9 @@ pip install torch torchvision torchaudio --index-url https://download.pytorch.or
 pip install -e .
 ```
 
-##### Alternative: manage with uv
+##### With uv
 
-If using uv, ensure uv uses the **system** Python (not a downloaded one):
+Point uv at the system Python, not a downloaded one:
 
 ```
 curl -LsSf https://astral.sh/uv/install.sh | sh
@@ -172,128 +163,51 @@ source .venv/bin/activate
 uv sync
 ```
 
-Do not pre-install torch from the PyTorch CUDA index here. `uv sync` resolves torch
-from `uv.lock` (PyPI), which on Linux already pulls the CUDA wheels, and it will
-replace anything installed beforehand.
+Do not pre-install torch from the PyTorch index here. `uv sync` resolves torch from
+`uv.lock`, which on Linux already pulls the CUDA wheels, and replaces whatever was
+installed before.
 
-#### ONNX Runtime
+#### Engine extras
 
-For CPU inference:
+Every engine beyond PyTorch is an extra: `onnx`, `onnx-gpu`, `openvino`,
+`tensorflow`, `litert`, `tvm`, `tinygrad`, `mlx`, `executorch`, `llamacpp`,
+`mlx-cpu`, `jax-cpu`, `jax-gpu`, `jax-tpu`, `iree`, `ncnn`.
+
 ```
 uv sync --extra onnx
 ```
 
-For GPU inference (requires CUDA):
-```
-uv sync --extra onnx-gpu
-```
+- ExecuTorch has no Python 3.14 wheel.
+- llama.cpp builds a CPU wheel. For CUDA: `CMAKE_ARGS="-DGGML_CUDA=on" pip install llama-cpp-python`.
+- MLX runs on Apple Silicon. On Linux use the `mlx-cpu` extra.
+- Candle has no wheel. Build the bindings: `pip install maturin`, clone
+  [candle](https://github.com/huggingface/candle), then `maturin develop -r` in `candle-pyo3`.
+- NCNN takes `.param` and `.bin` files. Convert an ONNX model with
+  `python -m onnxsim model.onnx model_sim.onnx` (`pip install onnx-simplifier`), then
+  `onnx2ncnn model_sim.onnx model.param model.bin`.
+- The ONNX engine with `device=npu` needs the [Ryzen AI SDK](https://ryzenai.docs.amd.com/) on AMD Ryzen AI laptops.
+- ZenDNN speeds up ONNX Runtime and TensorFlow on AMD EPYC CPUs with
+  `ZENDNN_INT8_SUPPORT=1` and `OMP_NUM_THREADS=$(nproc)`, no separate engine.
 
-#### tinygrad
+#### flash-attn
 
-```
-pip install tinygrad
-```
-or
-```
-uv sync --extra tinygrad
-```
-
-#### Apple MLX (macOS Apple Silicon only)
-
-```
-pip install mlx mlx-lm
-```
-or
-```
-uv sync --extra mlx
-```
-
-#### ExecuTorch
-
-Requires Python 3.10–3.13 (no 3.14 wheel yet).
+Install the prebuilt wheel matching your Python, torch and CUDA from
+[flash-attention-prebuild-wheels](https://github.com/mjun0812/flash-attention-prebuild-wheels/releases), for example:
 
 ```
-pip install executorch
+pip install ./flash_attn-2.8.3+cu128torch2.11-cp314-cp314-manylinux_2_24_x86_64.manylinux_2_28_x86_64.whl
 ```
-or
-```
-uv sync --extra executorch
-```
-
-#### llama.cpp
-
-```
-pip install llama-cpp-python
-```
-or
-```
-uv sync --extra llamacpp
-```
-
-For GPU support, set the build flag:
-```
-CMAKE_ARGS="-DGGML_CUDA=on" pip install llama-cpp-python
-```
-
-#### Candle
-
-Candle (HuggingFace Rust inference) requires building from source with `maturin`:
-```
-pip install maturin
-git clone https://github.com/huggingface/candle.git
-cd candle/candle-pyo3
-maturin develop -r
-```
-
-#### Apache TVM
-
-The PyPI wheel ships LLVM and CUDA support, so the extra is enough:
-
-```
-uv pip install ".[tvm]"
-```
-
-#### JAX
-
-For CPU:
-```
-pip install jax[cpu]
-```
-or
-```
-uv sync --extra jax-cpu
-```
-
-For GPU (CUDA 12):
-```
-pip install jax[cuda12]
-```
-or
-```
-uv sync --extra jax-gpu
-```
-
-Now manually install flash-attn wheel (must match your version of python, torch and cuda)
-For example, for torch 2.11 + CUDA 12.8 + Python 3.14:
-
-`pip install ./flash_attn-2.8.3+cu128torch2.11-cp314-cp314-manylinux_2_24_x86_64.manylinux_2_28_x86_64.whl`
-
-Pre-built wheels can be found here:
-https://github.com/mjun0812/flash-attention-prebuild-wheels/releases
-
 
 #### MiGraphX (AMD ROCm)
 
-MiGraphX is AMD's graph inference engine for optimized model execution on AMD GPUs (ROCm).
-
 ##### Ubuntu
 
-Install MiGraphX (requires ROCm):
+Needs ROCm:
 ```
 sudo apt install migraphx
 ```
 
-Set the Python path so that the `migraphx` module is importable:
+Make the `migraphx` module importable:
 ```
 export PYTHONPATH=/opt/rocm/lib:$PYTHONPATH
 ```
@@ -325,63 +239,14 @@ CXX=/usr/lib64/rocm/llvm/bin/clang++ cmake -S . -B build -G Ninja \
 ninja -C build install
 ```
 
-Use ROCm's `clang++` rather than `hipcc` as the compiler: `hipcc` compiles every file as HIP and
-the protobuf sources fail to link. Set the Python path so that the `migraphx` module is importable:
+`hipcc` compiles every file as HIP and the protobuf sources fail to link, hence ROCm's
+`clang++`. Make the `migraphx` module importable:
 ```
 export PYTHONPATH=$HOME/src/AMDMIGraphX/install/lib:$PYTHONPATH
 ```
 
 The first GPU compile of a model takes a couple of minutes. The `device=cpu` reference target
 runs but is very slow on detection models.
-
-#### IREE
-
-IREE is a compiler-based ML runtime (backed by AMD/Google) supporting ROCm, Vulkan, CUDA, and CPU.
-
-```
-pip install iree-base-compiler[onnx] iree-base-runtime
-```
-
-#### NCNN (Vulkan)
-
-NCNN is a lightweight inference framework with Vulkan GPU support for AMD/NVIDIA/Intel GPUs
-(no ROCm or CUDA required).
-
-```
-pip install ncnn
-```
-
-Convert ONNX models to NCNN format:
-```
-pip install onnx-simplifier
-python -m onnxsim model.onnx model_sim.onnx
-# Use ncnn's onnx2ncnn tool:
-onnx2ncnn model_sim.onnx model.param model.bin
-```
-
-#### AMD Ryzen AI (NPU)
-
-For AMD Ryzen AI laptops (7040/8040/Strix Point) with on-chip NPU, use the ONNX engine
-with `device=npu`. Requires the [Ryzen AI SDK](https://ryzenai.docs.amd.com/):
-
-```
-# Install Ryzen AI SDK (provides VitisAIExecutionProvider for ONNX Runtime)
-# See: https://ryzenai.docs.amd.com/en/latest/inst.html
-```
-
-#### AMD ZenDNN (CPU Optimization)
-
-ZenDNN optimizes inference on AMD EPYC/Zen CPUs. It works as a backend for existing
-frameworks (ONNX Runtime, TensorFlow) — no separate engine needed. Set environment
-variables to enable:
-
-```
-export ZENDNN_INT8_SUPPORT=1
-export OMP_NUM_THREADS=$(nproc)
-# Then use engine-name=onnx or engine-name=tensorflow as usual
-```
-
-See: https://www.amd.com/en/developer/zendnn.html
 
 #### Clone repo
 
@@ -390,7 +255,7 @@ cd $HOME/src
 git clone https://github.com/collabora/gst-python-ml.git
 ```
 
-#### Update .bashrc
+#### Plugin path
 
 ```
 echo 'export GST_PLUGIN_PATH=$HOME/src/gst-python-ml/plugins:$GST_PLUGIN_PATH' >> ~/.bashrc
@@ -399,17 +264,11 @@ source ~/.bashrc
 
 ### Docker Install
 
-#### Build Docker Container
-
-Important Note:
-
-This Dockerfile maps a local `gst-python-ml` repository to the container,
-and expects this repository to be located in `$HOME/src` i.e.  `$HOME/src/gst-python-ml`.
-
+The Dockerfiles mount the checkout from `$HOME/src/gst-python-ml`.
 
 #### Enable Docker GPU Support on Host
 
-To use the host GPU in a docker container, you will need to install the nvidia container toolkit. If running on CPU, these steps can be skipped.
+Skip this on CPU.
 
 
 ##### Ubuntu
@@ -488,7 +347,7 @@ docker run --rm --gpus all nvidia/cuda:12.0.0-base-ubuntu22.04 nvidia-smi
 
 #### Run Docker Container
 
-Note: If running on CPU, just remove `--gpus all` from commands below:
+Drop `--gpus all` on CPU.
 
 `docker run -v ~/src/gst-python-ml/:/root/gst-python-ml -it --rm --gpus all --name ubuntu24 ubuntu24:latest /bin/bash`
 
@@ -500,7 +359,7 @@ or
 
 `docker run -v ~/src/gst-python-ml/:/root/gst-python-ml -it --rm --gpus all --name fedora42 fedora42:latest /bin/bash`
 
-Now, in the container shell, set up the `venv` as detailed above.
+Then set up the venv in the container shell as above.
 
 
 ## Post Install
@@ -509,8 +368,7 @@ Run `gst-inspect-1.0 python` to list pyml elements.
 
 ## Custom Plugins
 
-You can create your own GStreamer elements that inherit from the gst-python-ml base classes
-(`BaseObjectDetector`, `BaseTransform`, `BaseClassifier`, etc.) in a separate directory.
+Your own elements can inherit the base classes below from a separate directory.
 
 ### Directory Structure
 
@@ -549,9 +407,8 @@ if CAN_REGISTER_ELEMENT:
     __gstelementfactory__ = ("my_detector", Gst.Rank.NONE, MyDetector)
 ```
 
-Note: When a pipeline begins, GStreamer scans all scripts for GStreamer elements, including elements that are not actually in the pipeline. To ensure that startup
-is fast, please avoid placing heavy imports such as NumPy at the module level, as these
-will be imported by GStreamer. Instead, favour importing at the method level - since Python caches imports, this will have no performance impact.
+The plugin loader imports every module on the plugin path at startup, whether or
+not the pipeline uses it, so import numpy, torch and the like inside methods.
 
 
 ### Environment Setup
@@ -564,11 +421,8 @@ export GST_PLUGIN_PATH=$HOME/src/gst-python-ml/plugins:$HOME/my_plugins:$GST_PLU
 export PYTHONPATH=$HOME/my_plugins/python:$PYTHONPATH
 ```
 
-The gst-python loader adds the first `python/` directory it finds to `sys.path`.
-By listing the framework directory first, all gst-python-ml base classes (`base_objectdetector`,
-`base_transform`, `base_classifier`, `base_caption`, `base_llm`, etc.) are importable
-by custom plugins. The `PYTHONPATH` entry ensures gst-python can also resolve your
-custom modules from the second directory.
+The loader adds only the first `python/` directory it finds to `sys.path`, so list
+this checkout first for the base classes and put your own directory on `PYTHONPATH`.
 
 ### Available Base Classes
 
@@ -589,8 +443,6 @@ custom modules from the second directory.
 ```bash
 gst-inspect-1.0 my_detector
 ```
-
-## Using GStreamer Python ML Elements
 
 ## Running a pipeline
 
@@ -644,7 +496,7 @@ PYO3_PYTHON=$(which python) cargo build --release -p g2g-python --features ml \
 
 ## Pipelines
 
-Below are some sample pipelines for the various elements in this project.
+One or two lines per element. Paths are relative to the checkout.
 
 ### Classification
 
@@ -655,9 +507,8 @@ python pyml-launch.py  filesrc location=data/people.mp4 ! decodebin ! videoconve
 
 ### Torch Compile
 
-Any PyTorch element supports `torch.compile` optimization via the `compile` property.
-This triggers PyTorch's JIT compiler to fuse operations and generate optimized kernels,
-improving steady-state throughput at the cost of a longer first-frame warm-up.
+Every PyTorch element takes `compile=True` to run the model through `torch.compile`,
+which trades a slow first frame for higher steady throughput.
 
 #### Classification with torch.compile
 
@@ -682,14 +533,8 @@ python pyml-launch.py filesrc location=data/people.mp4 ! decodebin ! videoconver
 
 #### TorchVision
 
-`pyml_objectdetector` supports all TorchVision  object detection models.
-Simply choose a suitable model name and set it on the `model-name` property.
-A few possible model names:
-
-```
-fasterrcnn_resnet50_fpn
-ssdlite320_mobilenet_v3_large
-```
+`pyml_objectdetector` takes any torchvision detection model name, such as
+`fasterrcnn_resnet50_fpn` or `ssdlite320_mobilenet_v3_large`.
 
 ##### fasterrcnn
 
@@ -697,13 +542,13 @@ ssdlite320_mobilenet_v3_large
 
 ##### fasterrcnn/kafka
 
-a) run pipeline from host
+From the host:
 
 ```
 python pyml-launch.py  filesrc location=data/people.mp4 ! decodebin ! videoconvert ! videoscale ! video/x-raw,width=640,height=480 ! pyml_objectdetector model-name=fasterrcnn_resnet50_fpn device=cuda batch-size=4 ! pyml_kafkasink schema-file=data/pyml_object_detector.json broker=localhost:29092 topic=test-kafkasink-topic
 ```
 
-b) run pipeline from docker
+From a container:
 
 ```
 python pyml-launch.py  filesrc location=data/people.mp4 ! decodebin ! videoconvert ! videoscale ! video/x-raw,width=640,height=480 ! pyml_objectdetector model-name=fasterrcnn_resnet50_fpn device=cuda batch-size=4 ! pyml_kafkasink schema-file=data/pyml_object_detector.json broker=kafka:9092 topic=test-kafkasink-topic
@@ -734,10 +579,7 @@ python pyml-launch.py filesrc location=data/soccer_tracking.mp4 ! decodebin ! vi
 
 #### ONNX Engine
 
-`pyml_objectdetector` supports any ONNX model via the `engine-name=onnx` property.
-YOLO11 ONNX output (`[B, 4+nc, anchors]`) is automatically decoded with NMS — no manual post-processing required.
-
-Export a YOLO11 model to ONNX with ultralytics:
+Export a YOLO11 model with ultralytics:
 
 ```
 yolo export model=yolo11m.pt format=onnx
@@ -745,9 +587,8 @@ yolo export model=yolo11m.pt format=onnx
 
 ##### YOLO11m ONNX object detection with overlay
 
-Use `input-format=nchw` because YOLO expects channels-first input, and
-`post-process=anchor_free` to decode the raw `[B, 4+nc, anchors]` output into
-bounding boxes before handing off to `pyml_overlay`.
+YOLO takes channels first, hence `input-format=nchw`. `post-process=anchor_free`
+decodes the raw `[B, 4+nc, anchors]` output into boxes with NMS.
 
 ```
 python pyml-launch.py filesrc location=data/people.mp4 ! decodebin name=d \
@@ -761,7 +602,7 @@ python pyml-launch.py filesrc location=data/people.mp4 ! decodebin name=d \
 
 ##### Generic ONNX passthrough (logs raw inference output)
 
-Use `pyml_inference` to test any ONNX model and inspect raw output:
+`pyml_inference` runs any model and logs the raw output:
 
 ```
 python pyml-launch.py filesrc location=data/people.mp4 ! decodebin name=d \
@@ -771,17 +612,15 @@ python pyml-launch.py filesrc location=data/people.mp4 ! decodebin name=d \
   ! fakesink
 ```
 
-`pyml_inference` also accepts `engine-name=pytorch`, `engine-name=openvino`, etc.
+It takes every `engine-name` below.
 
 #### OpenVINO Engine
 
-Export a YOLO11 model to OpenVINO IR format with ultralytics:
 
 ```
 yolo export model=yolo11m.pt format=openvino
 ```
 
-This produces `yolo11m_openvino_model/yolo11m.xml` and `yolo11m.bin`.
 
 ##### YOLO11m OpenVINO object detection with overlay
 
@@ -796,21 +635,20 @@ python pyml-launch.py filesrc location=data/people.mp4 ! decodebin name=d \
   ! pyml_overlay ! videoconvert ! autovideosink
 ```
 
-Use `device=GPU` for Intel GPU acceleration (OpenVINO uses uppercase device names).
+`device=GPU` targets an Intel GPU. OpenVINO device names are uppercase.
 
 #### LiteRT (TFLite) Engine
 
-Export a YOLO11 model to TFLite with ultralytics:
 
 ```
 yolo export model=yolo11m.pt format=tflite
 ```
 
-This produces `yolo11m_saved_model/yolo11m_float32.tflite`.
 
 ##### YOLO11m TFLite object detection with overlay
 
-TFLite models expect NHWC input (default), so `input-format` does not need to be set.
+The engine reads the input layout from the model and scales the normalized boxes an
+ultralytics export returns back to pixels.
 
 ```
 python pyml-launch.py filesrc location=data/people.mp4 ! decodebin name=d \
@@ -825,7 +663,6 @@ python pyml-launch.py filesrc location=data/people.mp4 ! decodebin name=d \
 
 #### TensorFlow Engine
 
-Export a YOLO11 model to TensorFlow SavedModel with ultralytics:
 
 ```
 yolo export model=yolo11m.pt format=saved_model
@@ -846,8 +683,8 @@ python pyml-launch.py filesrc location=data/people.mp4 ! decodebin name=d \
 
 #### tinygrad Engine
 
-tinygrad runs the torchvision resnet family (resnet, resnext, wide_resnet) from torchvision weights.
-Set `engine-name=tinygrad` for lightweight GPU/CPU inference with automatic kernel optimization.
+tinygrad runs the torchvision resnet family (resnet, resnext, wide_resnet) from
+torchvision weights.
 
 ##### ResNet18 classification with tinygrad on GPU
 
@@ -871,9 +708,8 @@ python pyml-launch.py filesrc location=data/people.mp4 ! decodebin name=d \
 
 #### TVM Engine
 
-Apache TVM compiles models for optimized inference. Supports compiled `.so`/`.tar`
-models and TorchVision models (exported with torch.export and compiled through relax).
-Set `engine-name=tvm`.
+TVM takes a compiled `.so` or `.tar`, or a torchvision model name, which it exports
+with torch.export and compiles through relax at load time.
 
 ##### TorchVision model compiled with TVM
 
@@ -897,8 +733,7 @@ python pyml-launch.py filesrc location=data/people.mp4 ! decodebin name=d \
 
 #### Apple MLX Engine
 
-MLX is designed for Apple Silicon (M1/M2/M3/M4). Supports SafeTensors, `.npz` weights,
-and mlx-lm text generation. Set `engine-name=mlx`.
+MLX takes the torchvision resnet family, SafeTensors or `.npz` weights, and mlx-lm models.
 
 ```
 python pyml-launch.py filesrc location=data/people.mp4 ! decodebin name=d \
@@ -910,8 +745,7 @@ python pyml-launch.py filesrc location=data/people.mp4 ! decodebin name=d \
 
 #### ExecuTorch Engine
 
-Meta ExecuTorch runs `.pte` models for on-device inference. Export a model with
-`torch.export` + ExecuTorch, then set `engine-name=executorch`.
+ExecuTorch runs `.pte` files, for example `yolo export model=yolo11n.pt format=executorch`.
 
 ```
 python pyml-launch.py filesrc location=data/people.mp4 ! decodebin name=d \
@@ -923,8 +757,7 @@ python pyml-launch.py filesrc location=data/people.mp4 ! decodebin name=d \
 
 #### llama.cpp Engine
 
-GGUF quantized LLM inference via llama-cpp-python. Set `engine-name=llamacpp`
-and point to a `.gguf` model file.
+llama.cpp runs `.gguf` files.
 
 ```
 python pyml-launch.py filesrc location=data/prompt_for_llm.txt \
@@ -934,8 +767,7 @@ python pyml-launch.py filesrc location=data/prompt_for_llm.txt \
 
 #### Candle Engine
 
-HuggingFace Candle (Rust) inference via Python bindings. Supports SafeTensors models.
-Set `engine-name=candle`.
+Candle takes SafeTensors files.
 
 ```
 python pyml-launch.py filesrc location=data/people.mp4 ! decodebin name=d \
@@ -947,8 +779,7 @@ python pyml-launch.py filesrc location=data/people.mp4 ! decodebin name=d \
 
 #### JAX/Flax Engine
 
-Google JAX with XLA compilation. Supports Flax checkpoints and HuggingFace models.
-Set `engine-name=jax` for JIT-compiled inference on GPU, TPU, or CPU.
+JAX takes the torchvision resnet family and Flax checkpoints.
 
 ```
 python pyml-launch.py filesrc location=data/people.mp4 ! decodebin name=d \
@@ -960,9 +791,7 @@ python pyml-launch.py filesrc location=data/people.mp4 ! decodebin name=d \
 
 #### MiGraphX Engine
 
-AMD MiGraphX graph inference engine for optimized execution on AMD GPUs via ROCm.
-Set `engine-name=migraphx` and point to an ONNX model file. Requires ROCm and
-`migraphx` Python module (see install section above).
+MiGraphX takes ONNX files and needs the ROCm install above.
 
 ##### YOLO11m MiGraphX object detection with overlay
 
@@ -988,10 +817,8 @@ python pyml-launch.py filesrc location=data/people.mp4 ! decodebin name=d \
 
 #### IREE Engine
 
-IREE (Intermediate Representation Execution Environment) is a compiler-based ML runtime
-backed by AMD and Google. Supports ROCm (AMD GPU), Vulkan, CUDA, and CPU targets.
-Set `engine-name=iree` and point to a pre-compiled `.vmfb` or an `.onnx` model
-(auto-compiled at load time).
+IREE takes a compiled `.vmfb`, or an `.onnx` it compiles at load time, for `hip`,
+`vulkan`, `cuda` or `cpu`.
 
 ##### IREE on AMD GPU (ROCm/HIP)
 
@@ -1026,9 +853,7 @@ python pyml-launch.py filesrc location=data/people.mp4 ! decodebin name=d \
 
 #### NCNN Engine (Vulkan)
 
-NCNN is a lightweight inference framework with Vulkan GPU acceleration.
-Works on AMD, NVIDIA, and Intel GPUs without requiring ROCm or CUDA.
-Set `engine-name=ncnn` and point to an NCNN `.param` file (`.bin` must be alongside).
+NCNN takes a `.param` with its `.bin` alongside and runs on any Vulkan GPU or the CPU.
 
 ##### NCNN on Vulkan GPU
 
@@ -1052,8 +877,7 @@ python pyml-launch.py filesrc location=data/people.mp4 ! decodebin name=d \
 
 #### ONNX Runtime on AMD GPUs (ROCm)
 
-The ONNX engine supports AMD GPUs via ROCm execution providers. Set `device=rocm`
-to use MIGraphXExecutionProvider (preferred) or ROCMExecutionProvider as fallback.
+`device=rocm` picks the MIGraphX execution provider, falling back to ROCm's.
 
 ```
 python pyml-launch.py filesrc location=data/people.mp4 ! decodebin name=d \
@@ -1067,7 +891,7 @@ python pyml-launch.py filesrc location=data/people.mp4 ! decodebin name=d \
 
 #### ONNX Runtime on AMD Ryzen AI NPU
 
-For AMD Ryzen AI laptops with on-chip NPU, set `device=npu`:
+`device=npu` needs the Ryzen AI SDK.
 
 ```
 python pyml-launch.py filesrc location=data/people.mp4 ! decodebin name=d \
@@ -1081,8 +905,7 @@ python pyml-launch.py filesrc location=data/people.mp4 ! decodebin name=d \
 
 #### PyTorch on AMD GPUs (ROCm)
 
-The PyTorch engine supports AMD GPUs natively when PyTorch is installed with ROCm.
-Use `device=cuda` (PyTorch uses the CUDA API mapping for ROCm):
+A ROCm torch answers to `device=cuda`:
 
 ```
 pip install torch torchvision torchaudio --index-url https://download.pytorch.org/whl/rocm6.3
@@ -1096,7 +919,7 @@ python pyml-launch.py filesrc location=data/people.mp4 ! decodebin name=d \
   ! videoconvert ! pyml_overlay ! videoconvert ! autovideosink
 ```
 
-With `torch.compile` and Triton for AMD GPU kernel optimization:
+With `torch.compile`, which uses Triton on AMD:
 
 ```
 python pyml-launch.py filesrc location=data/people.mp4 ! decodebin name=d \
@@ -1131,7 +954,7 @@ python pyml-launch.py filesrc location=data/people.mp4 ! decodebin name=d \
 
 ### Pose Estimation
 
-`pyml_yolo_pose` supports all YOLO pose models. Recommended model names:
+`pyml_yolo_pose` takes any YOLO pose model:
 ```
 yolo11n-pose  (fastest)
 yolo11s-pose
@@ -1160,14 +983,14 @@ python pyml-launch.py filesrc location=data/people.mp4 ! decodebin name=d \
 
 ### Depth Estimation
 
-`pyml_depth` supports DepthAnything V2 models from HuggingFace. Available model sizes:
+`pyml_depth` takes the Depth Anything V2 models:
 ```
 depth-anything/Depth-Anything-V2-Small-hf  (fastest, ~100 MB)
 depth-anything/Depth-Anything-V2-Base-hf
 depth-anything/Depth-Anything-V2-Large-hf  (most accurate)
 ```
 
-Available colormaps: `inferno` (default), `jet`, `viridis`, `plasma`, `magma`
+Colormaps: `inferno` (default), `jet`, `viridis`, `plasma`, `magma`.
 
 #### DepthAnything V2 with inferno colormap
 
@@ -1212,8 +1035,7 @@ python pyml-launch.py filesrc location=data/people.mp4 ! decodebin name=d \
 
 ### Zero-Shot Classification (CLIP / SigLIP)
 
-`pyml_clip` classifies each frame against a user-defined set of text labels
-with no fixed label set — labels are set at pipeline launch time.
+`pyml_clip` classifies each frame against the text labels you pass.
 
 Supported models:
 ```
@@ -1307,9 +1129,16 @@ python pyml-launch.py filesrc location=data/air_traffic_korean_with_english.wav 
 
 #### demucs audio separation
 
-
 ```
 python pyml-launch.py filesrc location=data/air_traffic_korean_with_english.wav ! decodebin ! audioconvert ! audioresample ! pyml_demucs device=cuda ! wavenc ! filesink location=separated_vocals.wav
+```
+
+#### sepformer audio separation
+
+`stem` picks the output, `vocals` by default.
+
+```
+python pyml-launch.py filesrc location=data/air_traffic_korean_with_english.wav ! decodebin ! audioconvert ! audioresample ! pyml_sepformer device=cuda ! wavenc ! filesink location=separated_vocals.wav
 ```
 
 
@@ -1331,9 +1160,7 @@ python pyml-launch.py filesrc location=data/air_traffic_korean_with_english.wav 
 python pyml-launch.py filesrc location=data/air_traffic_korean_with_english.wav ! decodebin ! audioconvert ! pyml_whispertranscribe device=cuda language=ko translate=yes ! pyml_mariantranslate device=cuda src=en target=fr ! fakesink
 ```
 
-Supported src/target languages:
-
-https://huggingface.co/models?sort=trending&search=Helsinki
+`src` and `target` take any pair with a [Helsinki-NLP opus-mt model](https://huggingface.co/models?search=Helsinki).
 
 
 #### whisperlive
@@ -1342,22 +1169,16 @@ https://huggingface.co/models?sort=trending&search=Helsinki
 
 ### LLM
 
-1. generate HuggingFace token
-
-2. `huggingface-cli login`
-    and pass in token
-
-3. LLM pipeline (in this case, we use phi-2)
+Gated models need `hf auth login` first.
 
 `python pyml-launch.py filesrc location=data/prompt_for_llm.txt !  pyml_llm device=cuda model-name="microsoft/phi-2" ! fakesink`
 
 #### Remote LLM
 
-`pyml_llm_remote` sends text to a remote LLM endpoint via HTTP. The examples use
-the OpenAI-compatible `/v1/chat/completions` path, which Ollama, llama.cpp and
-vLLM all serve, so the same line works against any of them. The element picks the
-request format from the URL: drop `url=` to fall back to its default, Ollama's
-native `/api/generate`.
+`pyml_llm_remote` posts text to an LLM server. The OpenAI-compatible
+`/v1/chat/completions` path works against Ollama, llama.cpp and vLLM. Without
+`url=` it uses Ollama's native `/api/generate`, and it picks the request format
+from the path.
 
 ##### Basic call
 
@@ -1392,40 +1213,32 @@ flushed at end of stream.
 python pyml-launch.py filesrc location=data/soccer_single_camera.mp4 ! decodebin ! videoconvertscale ! video/x-raw,width=640,height=480 ! tee name=t t. ! queue ! textoverlay name=overlay wait-text=false ! videoconvert ! autovideosink t. ! queue leaky=2 max-size-buffers=1 ! videoconvertscale ! video/x-raw,width=240,height=180 ! pyml_caption_qwen device=cuda:0 prompt="In one sentence, describe what you see?" model-name="Qwen/Qwen2.5-VL-3B-Instruct-AWQ" name=cap cap.src ! fakesink async=0 sync=0 cap.text_src ! queue ! pyml_digest window-seconds=30 ! pyml_llm model-name="Qwen/Qwen3-0.6B" device=cuda system-prompt="You receive every caption of the last thirty seconds. Write one paragraph describing what happened, and NEVER mention the specific times." ! queue ! overlay.text_sink
 ```
 
-### stablediffusion
+### Stable Diffusion
 
 `python pyml-launch.py filesrc location=data/prompt_for_stable_diffusion.txt ! pyml_stablediffusion device=cuda ! pngenc ! filesink location=output_image.png`
 
-#### Caption
+### Caption
 
-#### caption qwen with history
-
-(should also work with "microsoft/Phi-3.5-vision-instruct" model)
+`pyml_caption_qwen` captions frames with Qwen2.5-VL, `pyml_caption_phi` with
+Phi-3.5-vision. Here `coalescehistory` hands the last ten captions to an LLM for a
+running summary:
 
 ```
 python pyml-launch.py filesrc location=data/soccer_single_camera.mp4 ! decodebin ! videoconvertscale ! video/x-raw,width=640,height=480 ! tee name=t t. ! queue ! textoverlay name=overlay wait-text=false ! videoconvert ! autovideosink t. ! queue leaky=2 max-size-buffers=1 ! videoconvertscale ! video/x-raw,width=240,height=180 ! pyml_caption_qwen device=cuda:0 prompt="In one sentence, describe what you see?" model-name="Qwen/Qwen2.5-VL-3B-Instruct-AWQ" name=cap cap.src ! fakesink async=0 sync=0 cap.text_src ! queue ! coalescehistory history-length=10 ! pyml_llm model-name="Qwen/Qwen3-0.6B" device=cuda system-prompt="You receive the history of what happened in recent times, summarize it nicely with excitement but NEVER mention the specific times. Focus on the most recent events." ! queue ! overlay.text_sink
 ```
 
-### kafkasink
+### Kafka Sink
 
-#### Setting up kafka network
+`pyml_kafkasink` needs a broker. Create a docker network and add `--network kafka-network`
+to the `docker run` line above so a containerised pipeline reaches it:
 
-`docker network create kafka-network`
-
-and list networks
-
-`docker network ls`
-
-#### docker launch
-
-To launch a docker instance with the kafka network, add ` --network kafka-network  `
-to the docker launch command above.
+```
+docker network create kafka-network
+```
 
 #### Set up kafka and zookeeper
 
-Note: setup below assumes you are running your pipeline in a docker container. 
-If running pipeline from host, then the port changes from `9092` to `29092`,
-and the broker changes from `kafka` to `localhost`.
+From the host the broker is `localhost:29092` instead of `kafka:9092`.
 
 ```
 docker stop kafka zookeeper
@@ -1444,32 +1257,25 @@ docker run -d --name kafka --network kafka-network \
   confluentinc/cp-kafka:latest
 ```
 
-#### Create test topic
+#### Topics
+
 ```
 docker exec kafka kafka-topics --create --topic test-kafkasink-topic --bootstrap-server kafka:9092 --partitions 1 --replication-factor 1
+docker exec -it kafka kafka-topics --list --bootstrap-server kafka:9092
+docker exec -it kafka kafka-topics --delete --topic test-topic --bootstrap-server kafka:9092
+docker exec -it kafka kafka-console-consumer --bootstrap-server kafka:9092 --topic test-kafkasink-topic --from-beginning
 ```
 
-#### list topics
+### Overlay from a metadata file
 
-`docker exec -it kafka kafka-topics --list --bootstrap-server kafka:9092`
-
-
-#### delete topic
-
-`docker exec -it kafka kafka-topics --delete --topic test-topic --bootstrap-server kafka:9092`
-
-
-#### consume topic
-
-`docker exec -it kafka kafka-console-consumer --bootstrap-server kafka:9092 --topic test-kafkasink-topic --from-beginning`
-
-
-### non ML
+`pyml_overlay` and `pyml_overlay_counter` draw the detections in `meta-path` with no model in the pipeline.
 
 `python pyml-launch.py videotestsrc ! video/x-raw,width=1280,height=720 ! pyml_overlay meta-path=data/sample_metadata.json tracking=true ! videoconvert ! autovideosink`
 
+`python pyml-launch.py videotestsrc ! video/x-raw,width=1280,height=720 ! pyml_overlay_counter meta-path=data/sample_metadata.json tracking=true ! videoconvert ! autovideosink`
 
-### streammux/streamdemux pipeline
+
+### Stream Mux and Demux
 
 ```
  python pyml-launch.py   videotestsrc pattern=ball ! video/x-raw, width=320, height=240 ! queue ! pyml_streammux name=mux   videotestsrc pattern=smpte ! video/x-raw, width=320, height=240 ! queue ! mux.sink_1   videotestsrc pattern=smpte ! video/x-raw, width=320, height=240 ! queue ! mux.sink_2   mux.src ! queue ! pyml_streamdemux name=demux   demux.src_0 ! queue ! glimagesink  demux.src_1 ! queue ! glimagesink   demux.src_2 ! queue  ! glimagesink
@@ -1477,7 +1283,7 @@ docker exec kafka kafka-topics --create --topic test-kafkasink-topic --bootstrap
 
 ### Segment Anything (SAM)
 
-`pyml_sam` runs Meta SAM2 for zero-shot segmentation with point, box, or automatic prompts.
+`pyml_sam` runs SAM2 with point, box or automatic prompts.
 
 #### Auto-mask segmentation (segment everything)
 
@@ -1513,7 +1319,7 @@ python pyml-launch.py filesrc location=data/document.mp4 ! decodebin name=d \
 
 ### Face Detection & Recognition
 
-`pyml_face` detects faces with RetinaFace and optionally identifies them using ArcFace embeddings.
+`pyml_face` detects faces with RetinaFace and names them from ArcFace embeddings of a gallery.
 
 #### Face detection only
 
@@ -1526,8 +1332,7 @@ python pyml-launch.py filesrc location=data/people.mp4 ! decodebin name=d \
 
 #### Face detection + recognition with gallery
 
-`gallery-path` is a directory of your own images, one face per file, named after
-the person. Without it the element detects faces but names none.
+`gallery-path` holds one image per person, named after them. Without it faces are detected but not named.
 
 ```
 python pyml-launch.py filesrc location=data/people.mp4 ! decodebin name=d \
@@ -1538,7 +1343,7 @@ python pyml-launch.py filesrc location=data/people.mp4 ! decodebin name=d \
 
 ### Optical Flow
 
-`pyml_optical_flow` estimates dense optical flow between consecutive frames using RAFT.
+`pyml_optical_flow` runs RAFT between consecutive frames.
 
 #### RAFT optical flow with color visualization
 
@@ -1551,7 +1356,7 @@ python pyml-launch.py filesrc location=data/people.mp4 ! decodebin name=d \
 
 ### Super-Resolution
 
-`pyml_superres` upscales video frames using Real-ESRGAN.
+`pyml_superres` upscales with Real-ESRGAN.
 
 #### 2x upscale
 
@@ -1573,7 +1378,7 @@ python pyml-launch.py filesrc location=data/people.mp4 ! decodebin name=d \
 
 ### Action Recognition
 
-`pyml_action` classifies activities over sliding temporal windows using SlowFast or X3D.
+`pyml_action` classifies the action in a sliding window of frames.
 
 #### SlowFast action recognition
 
@@ -1586,7 +1391,7 @@ python pyml-launch.py filesrc location=data/people.mp4 ! decodebin name=d \
 
 ### Anomaly Detection
 
-`pyml_anomaly` detects visual anomalies using PatchCore for manufacturing QA.
+`pyml_anomaly` scores frames against PatchCore features of normal ones in `reference-path`.
 
 #### PatchCore anomaly detection
 
@@ -1599,7 +1404,7 @@ python pyml-launch.py filesrc location=data/factory.mp4 ! decodebin name=d \
 
 ### Audio Classification (CLAP)
 
-`pyml_clap` performs zero-shot audio classification using LAION CLAP.
+`pyml_clap` classifies audio against the labels you pass with LAION CLAP.
 
 #### CLAP audio event detection
 
@@ -1612,7 +1417,7 @@ python pyml-launch.py filesrc location=data/audio_sample.wav ! decodebin \
 
 ### Vision-Language Model (VLM)
 
-`pyml_vlm` runs generic VLMs (LLaVA, InternVL, etc.) for visual question answering.
+`pyml_vlm` answers `prompt` about each frame with a vision-language model such as LLaVA or SmolVLM.
 
 #### LLaVA visual question answering
 
@@ -1647,7 +1452,7 @@ blobs, so `only-on` gates the same way on both backends.
 
 ### Embedding Extractor
 
-`pyml_embedding` extracts dense vector embeddings from video frames.
+`pyml_embedding` attaches a CLIP or DINOv2 embedding to each frame.
 
 #### CLIP embedding extraction
 
@@ -1683,7 +1488,7 @@ python pyml-launch.py filesrc location=data/people.mp4 ! decodebin ! videoconver
 
 ### Multi-Object Tracker
 
-`pyml_tracker` is a standalone tracker that works with any upstream detector.
+`pyml_tracker` tracks the detections of any upstream detector.
 
 #### YOLO + standalone SORT tracker
 
@@ -1697,7 +1502,7 @@ python pyml-launch.py filesrc location=data/soccer_tracking.mp4 ! decodebin name
 
 ### ML Alert
 
-`pyml_alert` triggers alerts based on upstream detection metadata.
+`pyml_alert` fires on upstream detections that match `rules`.
 
 #### Webhook alert on person detection
 
@@ -1774,30 +1579,19 @@ python pyml-launch.py filesrc location=data/people.mp4 ! decodebin ! videoconver
 
 ## MCP Server
 
-`pyml-mcp` lets an LLM agent run a pipeline and read its results. It is an MCP
-server over stdio that runs the gst backend in-process, so a property can change
-while the pipeline runs. Its tools are `start_pipeline`, `pipeline_status`,
-`stop_pipeline`, `latest_metadata`, `wait_for_records`, `snapshot_frame`,
-`describe_frame`, `load_metadata`, `clip_at`, `set_property`, `get_property`,
-`list_elements`, `inspect` and `search_video`. Records reach `latest_metadata`
-from a `pyml_metasink` at the end of the pipeline, so end every pipeline with
-one.
-`wait_for_records` blocks until that sink posts new records, optionally only the
-ones carrying a key such as `detections`, and returns them with the pipeline
-status. `snapshot_frame` returns the newest frame a sink rendered as a JPEG image.
-`describe_frame` captions that frame with the vision-language model
-`PYML_MCP_VLM_MODEL` names, `HuggingFaceTB/SmolVLM-500M-Instruct` by default, on
-the `PYML_MCP_DEVICE` device, `cuda` when torch sees one and the variable is
-unset, else `cpu` where a caption takes tens of seconds.
-`load_metadata` reads a JSON lines file a `pyml_metasink` wrote back in, so a
-finished run can be read without running a pipeline again. `clip_at` cuts a webm
-of the seconds around a pts out of a video file, which turns a `search_video` hit
-into a clip.
-`search_video` reads an index `pyml_embeddingsink` wrote and returns the frames
-closest to a description, embedding it with the index's own model on the device
-`PYML_MCP_DEVICE` names, chosen the same way. The server also offers every
-pipeline section of this README as a prompt named after the section, such as
-`object_detection`.
+`pyml-mcp` is an MCP server over stdio that runs the gst backend in-process, so an
+agent can start a pipeline, read its results and change a property while it runs.
+End every pipeline with a `pyml_metasink`, that is where records come from.
+
+- `start_pipeline`, `pipeline_status`, `stop_pipeline`, `set_property`, `get_property`, `list_elements`, `inspect`.
+- `latest_metadata` returns the newest records. `wait_for_records` blocks until the sink posts new ones, optionally only those carrying a key such as `detections`.
+- `load_metadata` reads a JSON lines file a `pyml_metasink` wrote, so a finished run needs no pipeline.
+- `snapshot_frame` returns the newest rendered frame as a JPEG. `describe_frame` captions it with the model `PYML_MCP_VLM_MODEL` names, `HuggingFaceTB/SmolVLM-500M-Instruct` by default.
+- `search_video` reads an index `pyml_embeddingsink` wrote and returns the frames closest to a description, embedded with the index's own model. `clip_at` cuts a webm around a pts, which turns a hit into a clip.
+- Every pipeline section of this README is a prompt named after it, such as `object_detection`.
+
+Models run on `PYML_MCP_DEVICE`, `cuda` when torch sees one, else `cpu`, where a
+caption takes tens of seconds.
 
 ```
 uv sync --extra mcp
