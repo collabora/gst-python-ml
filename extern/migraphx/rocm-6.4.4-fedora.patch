@@ -1,0 +1,43 @@
+diff --git a/cmake/PythonModules.cmake b/cmake/PythonModules.cmake
+index f0030aed1..d299e4e1e 100755
+--- a/cmake/PythonModules.cmake
++++ b/cmake/PythonModules.cmake
+@@ -86,7 +86,7 @@ function(py_add_module NAME)
+     )
+ 
+ endfunction()
+-set(PYTHON_SEARCH_VERSIONS 3.5 3.6 3.7 3.8 3.9 3.10 3.11 3.12)
++set(PYTHON_SEARCH_VERSIONS 3.5 3.6 3.7 3.8 3.9 3.10 3.11 3.12 3.13 3.14)
+ set(PYTHON_DISABLE_VERSIONS "" CACHE STRING "")
+ foreach(PYTHON_DISABLE_VERSION ${PYTHON_DISABLE_VERSIONS})
+     list(REMOVE_ITEM PYTHON_SEARCH_VERSIONS ${PYTHON_DISABLE_VERSION})
+diff --git a/src/targets/gpu/mlir.cpp b/src/targets/gpu/mlir.cpp
+index 61e0325ac..1dc54caef 100644
+--- a/src/targets/gpu/mlir.cpp
++++ b/src/targets/gpu/mlir.cpp
+@@ -30,11 +30,11 @@
+ #include <migraphx/dead_code_elimination.hpp>
+ #include <migraphx/pass_manager.hpp>
+ #include <migraphx/gpu/mlir.hpp>
+-#include <mlir-c/Dialect/RockEnums.h>
+ #include <numeric>
+ #include <ostream>
+ 
+ #ifdef MIGRAPHX_MLIR
++#include <mlir-c/Dialect/RockEnums.h>
+ #include <mlir-c/IR.h>
+ #include <mlir-c/BuiltinAttributes.h>
+ #include <mlir-c/BuiltinTypes.h>
+@@ -1291,6 +1291,12 @@ tuning_config get_tuning_config_mlir(const context&, module, const std::vector<s
+ {
+     return {};
+ }
++
++bool is_module_fusible(const module&, const context&, const value&) { return false; }
++
++void dump_mlir_to_mxr(module, const std::vector<instruction_ref>&, const fs::path&) {}
++
++void dump_mlir_to_file(module, const std::vector<shape>&, const fs::path&) {}
+ // NOLINTEND(performance-unnecessary-value-param)
+ 
+ #endif

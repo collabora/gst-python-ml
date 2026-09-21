@@ -300,6 +300,8 @@ https://github.com/mjun0812/flash-attention-prebuild-wheels/releases
 
 MiGraphX is AMD's graph inference engine for optimized model execution on AMD GPUs (ROCm).
 
+##### Ubuntu
+
 Install MiGraphX (requires ROCm):
 ```
 sudo apt install migraphx
@@ -309,6 +311,42 @@ Set the Python path so that the `migraphx` module is importable:
 ```
 export PYTHONPATH=/opt/rocm/lib:$PYTHONPATH
 ```
+
+##### Fedora
+
+Fedora ships ROCm but not MiGraphX, so build it from source against the distro packages.
+Tested on Fedora 43 with ROCm 6.4 and a Rembrandt APU (gfx1035).
+
+```
+sudo dnf install -y rocminfo rocm-hip-devel rocm-cmake rocblas-devel miopen-devel \
+    half-devel protobuf-devel msgpack-devel json-devel sqlite-devel \
+    python3-devel python3-pybind11 cmake ninja-build
+rocminfo | grep -o -m1 'gfx[0-9a-f]*'
+```
+
+Build with the gfx name printed above as `GPU_TARGETS`. The patch adds Python 3.13 and 3.14
+to MiGraphX's search list and fixes the build with rocMLIR disabled (Fedora does not package it).
+
+```
+cd $HOME/src
+git clone --branch rocm-6.4.4 --depth 1 https://github.com/ROCm/AMDMIGraphX.git
+cd AMDMIGraphX
+git apply $HOME/src/gst-python-ml/extern/migraphx/rocm-6.4.4-fedora.patch
+CXX=/usr/lib64/rocm/llvm/bin/clang++ cmake -S . -B build -G Ninja \
+    -DCMAKE_BUILD_TYPE=Release -DGPU_TARGETS=gfx1035 \
+    -DMIGRAPHX_ENABLE_MLIR=OFF -DMIGRAPHX_USE_COMPOSABLEKERNEL=OFF -DMIGRAPHX_USE_HIPBLASLT=OFF \
+    -DMIGRAPHX_ENABLE_PYTHON=ON -DBUILD_TESTING=OFF -DCMAKE_INSTALL_PREFIX=$PWD/install
+ninja -C build install
+```
+
+Use ROCm's `clang++` rather than `hipcc` as the compiler: `hipcc` compiles every file as HIP and
+the protobuf sources fail to link. Set the Python path so that the `migraphx` module is importable:
+```
+export PYTHONPATH=$HOME/src/AMDMIGraphX/install/lib:$PYTHONPATH
+```
+
+The first GPU compile of a model takes a couple of minutes. The `device=cpu` reference target
+runs but is very slow on detection models.
 
 #### IREE
 

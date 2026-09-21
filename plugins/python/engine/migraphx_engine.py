@@ -133,13 +133,13 @@ class MiGraphXEngine(MLEngine):
         img = self._apply_input_format(frames.astype(np.float32) / 255.0, is_batch)
 
         # Build parameter dict — map first input name to the data
-        params = {self.input_names[0]: migraphx.argument(img)}
+        params = {self.input_names[0]: migraphx.argument(np.ascontiguousarray(img))}
 
         # Run inference
         results = self.program.run(params)
 
         # Convert results to numpy
-        outputs = [np.array(r.tolist()) for r in results]
+        outputs = [np.array(r) for r in results]
         raw = outputs if len(outputs) > 1 else outputs[0]
 
         return self._apply_post_process(raw, is_batch)
