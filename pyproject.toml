@@ -61,7 +61,9 @@ onnx = [
 onnx-gpu = [
     "onnxruntime-gpu",
 ]
-# tvm: install from source (PyPI wheels are stale) - see README
+tvm = [
+    "apache-tvm",
+]
 tinygrad = [
     "tinygrad",
 ]
@@ -93,6 +95,14 @@ tensorflow = [
 ]
 litert = [
     "ai-edge-litert",
+]
+ncnn = [
+    "ncnn",
+]
+iree = [
+    "iree-base-runtime",
+    "iree-base-compiler",
+    "onnx",
 ]
 vad = [
     "pysilero",

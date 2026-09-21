@@ -33,6 +33,66 @@ jobs:
           pip install pytest numpy
           pytest tests/test_g2g_backend.py -q
 
+  # each leg installs one engine's extra so their pins never have to agree
+  engines:
+    needs: lint
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - engine: onnx
+            extra: onnx
+          - engine: openvino
+            extra: openvino
+          - engine: tensorflow
+            extra: tensorflow
+          - engine: tflite
+            extra: tensorflow
+          - engine: ncnn
+            extra: ncnn
+          - engine: executorch
+            extra: executorch
+          - engine: iree
+            extra: iree
+          - engine: pytorch
+            extra: onnx
+          - engine: llamacpp
+            extra: llamacpp
+          # strict xfails, the leg goes red only when the engine starts passing
+          - engine: tvm
+            extra: tvm
+            expected-broken: true
+          - engine: tinygrad
+            extra: tinygrad
+            expected-broken: true
+    continue-on-error: ${{ matrix.expected-broken || false }}
+    steps:
+      - uses: actions/checkout@v6
+
+      - name: Set up Python
+        uses: actions/setup-python@v6
+        with:
+          python-version: "3.12"
+
+      - name: Cache model downloads
+        uses: actions/cache@v4
+        with:
+          path: |
+            ~/.cache/pip
+            ~/.cache/huggingface
+            ~/.config/Ultralytics
+          key: engines-${{ matrix.engine }}-${{ hashFiles('pyproject.toml') }}
+
+      - name: Install the engine
+        run: |
+          pip install -e ".[${{ matrix.extra }}]" ultralytics opencv-python-headless huggingface_hub pytest
+
+      - name: Run the engine tests
+        env:
+          PYML_REQUIRE_ENGINE: ${{ matrix.engine }}
+        run: python -m pytest tests/test_engines.py -q -k "${{ matrix.engine }}"
+
   build:
     needs: lint
     strategy:

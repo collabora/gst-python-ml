@@ -20,12 +20,6 @@ import os
 import numpy as np
 import tensorflow as tf
 from tensorflow import keras
-from transformers import (
-    AutoTokenizer,
-    TFAutoModelForCausalLM,
-    AutoImageProcessor,
-    TFVisionEncoderDecoderModel,
-)
 
 from .ml_engine import MLEngine
 
@@ -70,6 +64,12 @@ class LiteRTEngine(MLEngine):
                     model = getattr(keras.applications, model_name)(weights="imagenet")
                     self.model_type = "classification"
                 elif processor_name and tokenizer_name:
+                    from transformers import (
+                        AutoImageProcessor,
+                        AutoTokenizer,
+                        TFVisionEncoderDecoderModel,
+                    )
+
                     self.image_processor = AutoImageProcessor.from_pretrained(
                         processor_name
                     )
@@ -85,6 +85,8 @@ class LiteRTEngine(MLEngine):
                         "Vision-text models in TFLite may require custom generation loops."
                     )
                 else:
+                    from transformers import AutoTokenizer, TFAutoModelForCausalLM
+
                     self.tokenizer = AutoTokenizer.from_pretrained(model_name)
                     model = TFAutoModelForCausalLM.from_pretrained(model_name)
                     self.model_type = "llm"

@@ -4,15 +4,14 @@ from pathlib import Path
 import pytest
 
 BASE_DIR = Path(__file__).resolve().parent.parent
-sys.path.insert(0, str(BASE_DIR / "benchmarks"))
+sys.path.insert(0, str(BASE_DIR / "plugins" / "python"))
 
-pytest.importorskip("gi")
-
-from engine_parity import (  # noqa: E402
-    IOU_THRESHOLD,
+from utils.box_matching import (  # noqa: E402
     intersection_over_union,
     matched_box_fraction,
 )
+
+IOU_THRESHOLD = 0.5
 
 
 def box(x, y, width, height):

@@ -20,12 +20,6 @@ import os
 import numpy as np
 import tensorflow as tf
 from tensorflow import keras
-from transformers import (
-    AutoTokenizer,
-    TFAutoModelForCausalLM,
-    AutoImageProcessor,
-    TFVisionEncoderDecoderModel,
-)
 
 from .ml_engine import MLEngine
 
@@ -58,6 +52,12 @@ class TensorFlowEngine(MLEngine):
                         f"Pre-trained vision model '{model_name}' loaded from keras.applications"
                     )
                 elif processor_name and tokenizer_name:
+                    from transformers import (
+                        AutoImageProcessor,
+                        AutoTokenizer,
+                        TFVisionEncoderDecoderModel,
+                    )
+
                     self.image_processor = AutoImageProcessor.from_pretrained(
                         processor_name
                     )
@@ -73,6 +73,8 @@ class TensorFlowEngine(MLEngine):
                         f"Vision-Text model '{model_name}' loaded with processor and tokenizer."
                     )
                 else:
+                    from transformers import AutoTokenizer, TFAutoModelForCausalLM
+
                     self.logger.info(
                         f"Loading tokenizer for language model {model_name}"
                     )
