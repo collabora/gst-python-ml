@@ -36,6 +36,9 @@ except ImportError as e:
 ANOMALY_META_HEADER = b"GST-ANOMALY:"
 
 
+DEFAULT_BACKBONE = "wide_resnet50_2"
+
+
 class AnomalyTransform(VideoTransform, AnomalyTask):
     """
     GStreamer element for anomaly detection in video frames.
@@ -89,6 +92,7 @@ class AnomalyTransform(VideoTransform, AnomalyTask):
         super().__init__()
         self.mgr.engine_name = "pyml_anomaly_engine"
         EngineFactory.register(self.mgr.engine_name, AnomalyEngine)
+        self.model_name = DEFAULT_BACKBONE
         self.format_converter = FormatConverter()
         self._reference_loaded = False
 

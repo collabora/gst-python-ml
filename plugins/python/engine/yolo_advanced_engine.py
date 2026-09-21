@@ -603,10 +603,8 @@ def safe_int_pair(wx, wy, W, H):
 
 
 class YoloAdvancedEngine(PyTorchEngine):
-    def __init__(self, device=None, **kwargs):
-        super().__init__(device=device)
-        # Then set self.device_str = device if device else 'auto'
-        self.device_str = device if device else "auto"
+    def __init__(self, **kwargs):
+        super().__init__()
         self.det_model = None
         self.fb_model = None
         self.people_tracker = None
