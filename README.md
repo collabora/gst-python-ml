@@ -2,27 +2,52 @@
 
 [![CI](https://github.com/collabora/gst-python-ml/actions/workflows/ci.yml/badge.svg)](https://github.com/collabora/gst-python-ml/actions/workflows/ci.yml)
 
-Pure Python ML elements for upstream GStreamer 1.24 or later. Each task is one
-element. Write the pipeline in `gst-launch` spelling and run it with
-`pyml-launch`, on GStreamer or on
+Run any model with ease inside any GStreamer pipeline. Pure Python ML elements
+for upstream GStreamer 1.24 or later: one element per task, or bring your own
+model through the engines and base classes. Write the pipeline in `gst-launch`
+spelling and run it with `pyml-launch`, on GStreamer or on
 [glass2glass](https://gitlab.collabora.com/glass2glass/glass2glass).
 
 ## Features
 
-- **Video**: object detection, zero-shot detection, tracking, pose, depth,
-  zero-shot classification with CLIP or SigLIP, segmentation with SAM2, OCR,
-  face recognition, optical flow, super-resolution, action recognition, anomaly
-  detection, captioning, vision-language models and embeddings.
-- **Audio**: voice activity detection, transcription, translation, speech
-  separation, text to speech and audio classification with CLAP.
-- **Text**: local and remote LLMs, digests, text to image.
-- **Around them**: alerts over webhooks and MQTT, clip recording, metadata sinks
-  and replay, a Kafka sink, and an [MCP server](PIPELINES.md#mcp-server) for
-  agents.
-- **Engines**: PyTorch by default. Also ONNX Runtime, OpenVINO, LiteRT,
-  TensorFlow, Apache TVM, tinygrad, Apple MLX, ExecuTorch, llama.cpp, Candle,
-  JAX, MiGraphX, IREE, NCNN and Renesas DRP-AI. CI runs every engine that
-  installs from PyPI on the CPU and checks its output against PyTorch.
+- Video
+  - object detection and zero-shot detection
+  - tracking
+  - pose estimation
+  - depth estimation
+  - zero-shot classification with CLIP or SigLIP
+  - segmentation with SAM2
+  - OCR
+  - face detection and recognition
+  - optical flow
+  - super-resolution
+  - action recognition
+  - anomaly detection
+  - captioning and vision-language models
+  - embeddings and video search
+- Audio
+  - voice activity detection
+  - transcription and translation
+  - speech separation
+  - text to speech
+  - audio classification with CLAP
+- Text
+  - local and remote LLMs
+  - incident digests
+  - text to image
+- Around them
+  - alerts over webhooks and MQTT
+  - clip recording
+  - metadata sink and replay
+  - Kafka sink
+  - [MCP server](PIPELINES.md#mcp-server) for agents
+- Engines
+  - PyTorch by default
+  - ONNX Runtime, OpenVINO, LiteRT, TensorFlow
+  - Apache TVM, tinygrad, Apple MLX, ExecuTorch, llama.cpp, Candle, JAX
+  - MiGraphX, IREE, NCNN, Renesas DRP-AI
+  - CI runs every engine that installs from PyPI on the CPU and checks its
+    output against PyTorch
 
 ## Install
 
@@ -93,5 +118,9 @@ run them under glass2glass, and the MCP server.
 
 ## Blog post
 
-[Unleashing gst-python-ml: Analytics GStreamer Pipelines](https://www.collabora.com/news-and-blog/blog/2025/05/12/unleashing-gst-python-ml-analytics-gstreamer-pipelines/)
-walks through the elements from object detection to video captioning.
+[![Unleashing gst-python-ml](https://www.collabora.com/assets/images/blog/Collabora-GStPython.jpg)](https://www.collabora.com/news-and-blog/blog/2025/05/12/unleashing-gst-python-ml-analytics-gstreamer-pipelines/)
+
+**[Unleashing gst-python-ml: Python-powered ML analytics for GStreamer pipelines](https://www.collabora.com/news-and-blog/blog/2025/05/12/unleashing-gst-python-ml-analytics-gstreamer-pipelines/)**
+
+Combining GStreamer with machine learning frameworks into video analytics
+pipelines, from object detection to video captioning.
