@@ -235,6 +235,9 @@ class LiteRTEngine(MLEngine):
 
         else:  # Assume detection or custom
             input_shape = self.input_details[0]["shape"]
+            if self.input_format == "auto":
+                # a litert export puts channels first, an onnx2tf export puts them last
+                self.input_format = "nchw" if input_shape[1] in (1, 3, 4) else "nhwc"
             img = self._apply_input_format(frames.astype(np.float32) / 255.0, is_batch)
             if is_batch:
                 new_shape = [img.shape[0]] + list(input_shape[1:])
@@ -266,7 +269,25 @@ class LiteRTEngine(MLEngine):
                 return results[0] if not is_batch else results
             else:
                 raw = outputs[0] if len(outputs) == 1 else outputs
-                return self._apply_post_process(raw, is_batch)
+                results = self._apply_post_process(raw, is_batch)
+                return self._scaled_to_input(results, input_shape)
+
+    # ultralytics tflite exports return boxes as fractions of the input size
+    def _scaled_to_input(self, results, input_shape):
+        if self.input_format == "nchw":
+            height, width = input_shape[2], input_shape[3]
+        else:
+            height, width = input_shape[1], input_shape[2]
+        for result in results if isinstance(results, list) else [results]:
+            if not isinstance(result, dict):
+                continue
+            boxes = np.asarray(result["boxes"], dtype=np.float32)
+            if len(boxes) == 0 or boxes.max() > 1.0:
+                continue
+            result["boxes"] = boxes * np.array(
+                [width, height, width, height], dtype=np.float32
+            )
+        return results
 
     def do_generate(self, input_text, max_length=1000, system_prompt=None):
         if self.model_type != "llm":

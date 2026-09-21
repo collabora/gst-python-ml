@@ -136,7 +136,8 @@ class NCNNEngine(MLEngine):
 
             # NCNN expects CHW format
             if img.ndim == 3 and img.shape[2] in (1, 3, 4):
-                img = np.transpose(img, (2, 0, 1))  # HWC -> CHW
+                # ncnn reads the raw buffer, a transposed view feeds it garbage
+                img = np.ascontiguousarray(np.transpose(img, (2, 0, 1)))
 
             # Create ncnn Mat from numpy
             mat_in = ncnn.Mat(img)

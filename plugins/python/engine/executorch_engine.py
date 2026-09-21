@@ -96,7 +96,8 @@ class ExecuTorchEngine(MLEngine):
             return None
 
         img = self._apply_input_format(frames.astype(np.float32) / 255.0, is_batch)
-        input_tensor = torch.from_numpy(img)
+        # the runtime reads the buffer as laid out, a transposed view crashes it
+        input_tensor = torch.from_numpy(np.ascontiguousarray(img))
 
         try:
             outputs = self.model.execute([input_tensor])

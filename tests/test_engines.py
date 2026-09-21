@@ -34,14 +34,15 @@ GGUF_FILE = "tinyllamas/stories260K.gguf"
 GENERATION_PROMPT = "Once upon a time"
 GENERATION_TOKENS = 8
 
+# the tensorflow exports take channels last, the rest take channels first like the README pipelines
 DETECTION_ENGINES = [
-    ("onnx", "onnxruntime", "onnx", ".onnx"),
-    ("openvino", "openvino", "openvino", ".xml"),
-    ("tensorflow", "tensorflow", "saved_model", None),
-    ("tflite", "tensorflow", "tflite", "_float32.tflite"),
-    ("ncnn", "ncnn", "ncnn", ".param"),
-    ("executorch", "executorch", "executorch", ".pte"),
-    ("iree", "iree.runtime", "onnx", ".onnx"),
+    ("onnx", "onnxruntime", "onnx", ".onnx", "nchw"),
+    ("openvino", "openvino", "openvino", ".xml", "nchw"),
+    ("tensorflow", "tensorflow", "saved_model", None, "auto"),
+    ("tflite", "tensorflow", "tflite", "_float32.tflite", "auto"),
+    ("ncnn", "ncnn", "ncnn", ".param", "nchw"),
+    ("executorch", "executorch", "executorch", ".pte", "nchw"),
+    ("iree", "iree.runtime", "onnx", ".onnx", "nchw"),
 ]
 
 CLASSIFICATION_ENGINES = [
@@ -161,7 +162,7 @@ def detections_as_boxes(result):
 
 
 @pytest.mark.parametrize(
-    "engine_name, module_name, export_format, suffix",
+    "engine_name, module_name, export_format, suffix, input_format",
     DETECTION_ENGINES,
     ids=[row[0] for row in DETECTION_ENGINES],
 )
@@ -170,13 +171,14 @@ def test_detections_match_reference(
     module_name,
     export_format,
     suffix,
+    input_format,
     exported_detector,
     reference_boxes,
     people_frames_rgb,
 ):
     engine = engine_on_cpu(engine_name, module_name)
     model_path = artifact_path(exported_detector(export_format), suffix)
-    engine.input_format = "nchw"
+    engine.input_format = input_format
     engine.post_process = "anchor_free"
     assert engine.do_load_model(str(model_path)) is True
 

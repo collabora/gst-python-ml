@@ -40,6 +40,7 @@ class TensorFlowEngine(MLEngine):
                     )
                 except Exception:
                     self.model = tf.saved_model.load(model_name)
+                    self.infer = self.model.signatures["serving_default"]
                     self.logger.info(f"SavedModel loaded from local path: {model_name}")
                 self.model_type = "custom"
             else:
@@ -230,6 +231,8 @@ class TensorFlowEngine(MLEngine):
                     k: v.numpy() if isinstance(v, tf.Tensor) else v
                     for k, v in results.items()
                 }
+                if len(output_np) == 1:
+                    output_np = next(iter(output_np.values()))
             elif isinstance(results, (list, tuple)):
                 output_np = [
                     v.numpy() if isinstance(v, tf.Tensor) else v for v in results
