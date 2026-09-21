@@ -32,17 +32,15 @@ class TensorFlowEngine(MLEngine):
         self.model_type = None
 
         try:
-            if os.path.exists(model_name):
-                try:
-                    self.model = tf.keras.models.load_model(model_name)
-                    self.logger.info(
-                        f"Keras model loaded from local path: {model_name}"
-                    )
-                except Exception:
-                    self.model = tf.saved_model.load(model_name)
-                    self.infer = self.model.signatures["serving_default"]
-                    self.logger.info(f"SavedModel loaded from local path: {model_name}")
+            if os.path.isdir(model_name):
+                self.model = tf.saved_model.load(model_name)
+                self.infer = self.model.signatures["serving_default"]
                 self.model_type = "custom"
+                self.logger.info(f"SavedModel loaded from local path: {model_name}")
+            elif os.path.isfile(model_name):
+                self.model = tf.keras.models.load_model(model_name)
+                self.model_type = "custom"
+                self.logger.info(f"Keras model loaded from local path: {model_name}")
             else:
                 if hasattr(keras.applications, model_name):
                     self.model = getattr(keras.applications, model_name)(

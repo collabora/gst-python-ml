@@ -63,7 +63,7 @@ class ExecuTorchEngine(MLEngine):
             from executorch.runtime import Runtime
 
             runtime = Runtime.get()
-            program = runtime.load_program(open(model_name, "rb").read())
+            program = runtime.load_program(model_name)
             self.model = program.load_method("forward")
             self.model_type = "pte"
             self.logger.info(f"ExecuTorch model loaded from: {model_name}")
