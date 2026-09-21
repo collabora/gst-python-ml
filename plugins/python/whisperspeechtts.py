@@ -40,6 +40,7 @@ TTS_SAMPLE_RATE = 24000
 model_ref = "collabora/whisperspeech:s2a-q4-base-en+pl.model"
 
 
+# a new tts backend is a BaseTts subclass with OUTPUT_CAPS, do_load_model and do_generate_speech
 class WhisperSpeechTTS(BaseTts):
     __gstmetadata__ = (
         "WhisperSpeechTTS",

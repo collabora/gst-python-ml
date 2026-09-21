@@ -271,13 +271,13 @@ def test_the_batching_host_takes_the_caps_of_an_audio_in_text_out_element(shells
 
 def test_the_batching_host_takes_the_caps_of_a_text_in_audio_out_element(shells):
     assert pyml_launch.rewrite_segment(
-        "pyml_coquitts", shells, host=pyml_launch.PY_AGGREGATOR
+        "pyml_whisperspeechtts", shells, host=pyml_launch.PY_AGGREGATOR
     ) == [
         "pyaggregator",
-        "module=coquitts",
-        "class=CoquiTTS",
+        "module=whisperspeechtts",
+        "class=WhisperSpeechTTS",
         "input-caps=text/x-raw,format=utf8",
-        "output-caps=audio/x-raw,format=S16LE,layout=interleaved,rate=22050,channels=1",
+        "output-caps=audio/x-raw,format=S16LE,layout=interleaved,rate=24000,channels=1",
     ]
 
 
@@ -299,14 +299,16 @@ def test_the_one_in_host_takes_the_caps_of_an_audio_in_text_out_element(shells):
 
 
 def test_the_one_in_host_takes_the_caps_of_a_text_in_audio_out_element(shells):
-    pipeline = "filesrc location=data/lines.txt ! pyml_coquitts ! fakesink".split()
+    pipeline = (
+        "filesrc location=data/lines.txt ! pyml_whisperspeechtts ! fakesink".split()
+    )
     assert (
         pyml_launch.rewrite_for_g2g(pipeline, shells)
         == (
             "filesrc location=data/lines.txt "
-            "! pyelement module=coquitts class=CoquiTTS "
+            "! pyelement module=whisperspeechtts class=WhisperSpeechTTS "
             "input-caps=text/x-raw,format=utf8 "
-            "output-caps=audio/x-raw,format=S16LE,layout=interleaved,rate=22050,channels=1 "
+            "output-caps=audio/x-raw,format=S16LE,layout=interleaved,rate=24000,channels=1 "
             "! fakesink"
         ).split()
     )

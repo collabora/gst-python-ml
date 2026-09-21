@@ -1142,12 +1142,6 @@ python pyml-launch.py filesrc location=data/air_traffic_korean_with_english.wav 
 ```
 
 
-#### coquitts
-
-```
-python pyml-launch.py filesrc location=data/air_traffic_korean_with_english.wav ! decodebin ! audioconvert ! pyml_whispertranscribe device=cuda language=ko translate=yes ! pyml_coquitts device=cuda ! audioconvert ! wavenc ! filesink location=output_audio.wav
-```
-
 #### whisperspeechtts
 
 ```

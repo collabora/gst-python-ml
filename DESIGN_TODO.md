@@ -43,8 +43,7 @@ Python-element host are tracked in that repo's `design/TODO.md`, under
 
 - **`WhisperSpeechTTS.do_generate_speech` returns a `(1, n)` array**, which
   `soundfile` rejects with `LibsndfileError: Format not recognised`, so the
-  element emits no audio. `CoquiTTS` returns 1-D and is fine. Pre-existing on
-  both backends.
+  element emits no audio. Pre-existing on both backends.
 
 - **`AnomalyEngine._transform` is assigned only in `do_load_model`**, so
   `_get_transform` raises `AttributeError` on an engine whose model never

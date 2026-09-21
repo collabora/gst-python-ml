@@ -131,7 +131,6 @@ HOSTED_ELEMENT_MODULES = [
     "llm",
     "demucs",
     "sepformer",
-    "coquitts",
     "whisperspeechtts",
     "caption_phi",
     "caption_qwen",
