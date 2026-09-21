@@ -86,6 +86,9 @@ jobs:
 
       # the project's own dependency list needs cairo headers, the extra alone does not
       - name: Install the engine
+        env:
+          # the cached llama.cpp wheel must run on whichever cpu the next runner has
+          CMAKE_ARGS: -DGGML_NATIVE=OFF
         run: |
           pip install --no-deps -e .
           python -c "import tomllib; print('\n'.join(tomllib.load(open('pyproject.toml', 'rb'))['project']['optional-dependencies']['${{ matrix.extra }}']))" \
