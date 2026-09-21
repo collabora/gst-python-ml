@@ -79,6 +79,24 @@ class JAXEngine(MLEngine):
             if os.path.isfile(model_name) and model_name.endswith(".msgpack"):
                 return self._load_msgpack(model_name)
 
+            from torchvision import models as tv_models
+
+            if hasattr(tv_models, model_name):
+                pt_model = getattr(tv_models, model_name)(pretrained=True)
+                if not isinstance(pt_model, tv_models.ResNet):
+                    self.logger.error(
+                        f"JAX runs the torchvision resnet family, not '{model_name}'."
+                    )
+                    return False
+                from .jax_resnet import jax_resnet
+
+                self.model = jax_resnet(pt_model.eval())
+                self.model_type = "classification"
+                self.logger.info(
+                    f"Pre-trained vision model '{model_name}' compiled with JAX."
+                )
+                return True
+
             # HuggingFace Flax model
             return self._load_from_huggingface(model_name, tokenizer_name)
 
@@ -183,19 +201,28 @@ class JAXEngine(MLEngine):
 
         img = self._apply_input_format(frames.astype(np.float32) / 255.0, is_batch)
         jax_input = jnp.array(img)
-
+        if self.model_type == "classification":
+            preds = np.asarray(self.model(jax_input))
+            probs = np.exp(preds) / np.sum(np.exp(preds), axis=1, keepdims=True)
+            top_classes = np.argmax(probs, axis=1)
+            confidences = np.max(probs, axis=1)
+            results = [
+                {"labels": [int(c)], "scores": [float(s)]}
+                for c, s in zip(top_classes, confidences)
+            ]
+            return results[0] if not is_batch else results
+        if self.apply_fn is None:
+            self.logger.error(
+                "A bare Flax checkpoint has no graph to run, load a model."
+            )
+            return None
         try:
-            if self.apply_fn is not None and hasattr(self.apply_fn, "__call__"):
-                outputs = self.apply_fn(pixel_values=jax_input, params=self.params)
-                if hasattr(outputs, "logits"):
-                    raw = np.array(outputs.logits)
-                elif hasattr(outputs, "last_hidden_state"):
-                    raw = np.array(outputs.last_hidden_state)
-                else:
-                    raw = np.array(jax_input)
-            else:
-                raw = np.array(jax_input)
-
+            outputs = self.apply_fn(pixel_values=jax_input, params=self.params)
+            raw = np.array(
+                outputs.logits
+                if hasattr(outputs, "logits")
+                else outputs.last_hidden_state
+            )
             return self._apply_post_process(raw, is_batch)
         except Exception as e:
             self.logger.error(f"JAX inference failed: {e}")

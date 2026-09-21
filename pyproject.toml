@@ -71,6 +71,10 @@ mlx = [
     "mlx>=0.20.0",
     "mlx-lm",
 ]
+# linux has no metal, the cpu backend is a separate wheel
+mlx-cpu = [
+    "mlx[cpu]>=0.20.0",
+]
 executorch = [
     "executorch; python_version < '3.14'",
 ]
@@ -80,12 +84,15 @@ llamacpp = [
 # candle: install manually (not on PyPI) - see README
 jax-cpu = [
     "jax[cpu]",
+    "flax",
 ]
 jax-gpu = [
     "jax[cuda12]",
+    "flax",
 ]
 jax-tpu = [
     "jax[tpu]",
+    "flax",
 ]
 openvino = [
     "openvino>=2024.0",

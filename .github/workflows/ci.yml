@@ -61,6 +61,10 @@ jobs:
             extra: llamacpp
           - engine: tvm
             extra: tvm
+          - engine: mlx
+            extra: mlx-cpu
+          - engine: jax
+            extra: jax-cpu
           - engine: tinygrad
             extra: tinygrad
     steps:

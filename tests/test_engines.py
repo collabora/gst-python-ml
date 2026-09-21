@@ -48,6 +48,8 @@ DETECTION_ENGINES = [
 CLASSIFICATION_ENGINES = [
     pytest.param("pytorch", "torch", id="pytorch"),
     pytest.param("tvm", "tvm", id="tvm"),
+    pytest.param("mlx", "mlx.core", id="mlx"),
+    pytest.param("jax", "jax", id="jax"),
     pytest.param("tinygrad", "tinygrad", id="tinygrad"),
 ]
 

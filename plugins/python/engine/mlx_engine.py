@@ -70,6 +70,24 @@ class MLXEngine(MLEngine):
                 self.logger.info(f"MLX model loaded from local path: {model_name}")
                 return True
 
+            from torchvision import models as tv_models
+
+            if hasattr(tv_models, model_name):
+                pt_model = getattr(tv_models, model_name)(pretrained=True)
+                if not isinstance(pt_model, tv_models.ResNet):
+                    self.logger.error(
+                        f"MLX runs the torchvision resnet family, not '{model_name}'."
+                    )
+                    return False
+                from .mlx_resnet import mlx_resnet
+
+                self.model = mlx_resnet(pt_model.eval())
+                self.model_type = "classification"
+                self.logger.info(
+                    f"Pre-trained vision model '{model_name}' loaded with MLX."
+                )
+                return True
+
             # LLM via mlx-lm
             try:
                 from mlx_lm import load as mlx_lm_load
@@ -127,15 +145,20 @@ class MLXEngine(MLEngine):
 
         img = self._apply_input_format(frames.astype(np.float32) / 255.0, is_batch)
         mx_input = mx.array(img)
-
+        if self.model_type == "classification":
+            preds = np.array(self.model(mx_input))
+            probs = np.exp(preds) / np.sum(np.exp(preds), axis=1, keepdims=True)
+            top_classes = np.argmax(probs, axis=1)
+            confidences = np.max(probs, axis=1)
+            results = [
+                {"labels": [int(c)], "scores": [float(s)]}
+                for c, s in zip(top_classes, confidences)
+            ]
+            return results[0] if not is_batch else results
         if self.model_type == "custom" and callable(self.model):
-            raw = self.model(mx_input)
-            raw = np.array(raw)
-        else:
-            # State-dict models: pass-through for custom post-processing
-            raw = np.array(mx_input)
-
-        return self._apply_post_process(raw, is_batch)
+            return self._apply_post_process(np.array(self.model(mx_input)), is_batch)
+        self.logger.error("A bare state dict has no graph to run, load a model.")
+        return None
 
     def do_generate(self, input_text, max_length=1000, system_prompt=None):
         """Generate text using mlx-lm for LLM models."""
