@@ -89,7 +89,7 @@ jobs:
         run: |
           pip install --no-deps -e .
           python -c "import tomllib; print('\n'.join(tomllib.load(open('pyproject.toml', 'rb'))['project']['optional-dependencies']['${{ matrix.extra }}']))" \
-            | xargs -d '\n' pip install ultralytics opencv-python-headless huggingface_hub pytest
+            | xargs -d '\n' pip install ultralytics transformers opencv-python-headless huggingface_hub pytest
 
       - name: Run the engine tests
         env:

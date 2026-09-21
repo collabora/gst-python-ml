@@ -155,7 +155,8 @@ class NCNNEngine(MLEngine):
             results.append(out)
 
         if not is_batch:
-            raw = results[0]
+            # ncnn drops the batch axis the decoder expects
+            raw = results[0][None] if results[0] is not None else None
         else:
             raw = np.stack(results) if all(r is not None for r in results) else results
 

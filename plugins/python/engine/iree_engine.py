@@ -24,6 +24,9 @@ from iree import runtime as ireert
 
 from .ml_engine import MLEngine
 
+# iree-import-onnx names the graph entry point main_graph
+ONNX_IMPORT_FUNCTION = "main_graph"
+
 
 class IREEEngine(MLEngine):
     def __init__(self):
@@ -105,7 +108,10 @@ class IREEEngine(MLEngine):
         """Load a pre-compiled .vmfb module or compile from .onnx."""
         self.model_name = model_name
         self.kwargs = kwargs
-        self.function_name = kwargs.get("function_name", "forward")
+        default_function = (
+            ONNX_IMPORT_FUNCTION if model_name.endswith(".onnx") else "forward"
+        )
+        self.function_name = kwargs.get("function_name", default_function)
 
         try:
             if model_name.endswith(".vmfb"):

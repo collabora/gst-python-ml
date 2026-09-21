@@ -32,7 +32,7 @@ class TensorFlowEngine(MLEngine):
         self.model_type = None
 
         try:
-            if os.path.isfile(model_name):
+            if os.path.exists(model_name):
                 try:
                     self.model = tf.keras.models.load_model(model_name)
                     self.logger.info(
