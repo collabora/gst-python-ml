@@ -84,9 +84,12 @@ jobs:
             ~/.config/Ultralytics
           key: engines-${{ matrix.engine }}-${{ hashFiles('pyproject.toml') }}
 
+      # the project's own dependency list needs cairo headers, the extra alone does not
       - name: Install the engine
         run: |
-          pip install -e ".[${{ matrix.extra }}]" ultralytics opencv-python-headless huggingface_hub pytest
+          pip install --no-deps -e .
+          python -c "import tomllib; print('\n'.join(tomllib.load(open('pyproject.toml', 'rb'))['project']['optional-dependencies']['${{ matrix.extra }}']))" \
+            | xargs pip install ultralytics opencv-python-headless huggingface_hub pytest
 
       - name: Run the engine tests
         env:
