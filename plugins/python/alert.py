@@ -22,6 +22,7 @@ import backend
 CAN_REGISTER_ELEMENT = True
 try:
     import json
+    import os
     import time
     import threading
     import urllib.request
@@ -98,6 +99,14 @@ class AlertTransform(GstBase.BaseTransform):
         default="",
         nick="Webhook URL",
         blurb="HTTP POST endpoint for alert notifications",
+        flags=GObject.ParamFlags.READWRITE,
+    )
+
+    webhook_token_environment_variable = GObject.Property(
+        type=str,
+        default="",
+        nick="Webhook Token Environment Variable",
+        blurb="Environment variable holding the bearer token to send with the webhook",
         flags=GObject.ParamFlags.READWRITE,
     )
 
@@ -231,10 +240,26 @@ class AlertTransform(GstBase.BaseTransform):
             return True
         return False
 
+    def _webhook_headers(self):
+        headers = {"Content-Type": "application/json"}
+        variable = self.webhook_token_environment_variable
+        if not variable:
+            return headers
+        # a named but unset variable would post unauthenticated and read as a server fault
+        token = os.environ.get(variable)
+        if not token:
+            raise ValueError(
+                f"webhook token environment variable {variable} is not set"
+            )
+        headers["Authorization"] = f"Bearer {token}"
+        return headers
+
     def _send_webhook(self, alert_payload):
         """Send alert via HTTP POST in a background thread."""
         if not self.webhook_url:
             return
+
+        headers = self._webhook_headers()
 
         def _post():
             try:
@@ -242,7 +267,7 @@ class AlertTransform(GstBase.BaseTransform):
                 req = urllib.request.Request(
                     self.webhook_url,
                     data=data,
-                    headers={"Content-Type": "application/json"},
+                    headers=headers,
                     method="POST",
                 )
                 with urllib.request.urlopen(req, timeout=5) as resp:

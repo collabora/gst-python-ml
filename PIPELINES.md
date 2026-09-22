@@ -1069,6 +1069,12 @@ python pyml-launch.py filesrc location=data/people.mp4 ! decodebin name=d \
   ! pyml_overlay ! videoconvert ! autovideosink sync=false
 ```
 
+To authenticate the POST, set `webhook-token-environment-variable` to the name of
+an environment variable holding the token. The element sends its value as
+`Authorization: Bearer`, and fails at the first alert if the variable is unset.
+The token never appears in the pipeline string this way. Native `analyticsalert`
+has no counterpart, so the launcher refuses the property under g2g.
+
 #### MQTT alert with zone filtering
 
 ```
