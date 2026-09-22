@@ -38,19 +38,3 @@ Python-element host are tracked in that repo's `design/TODO.md`, under
   class, which is the only thing that knows the real set, so a typo fails at
   pipeline start rather than at parse. `gst-inspect` on `pyelement` lists the
   host's own properties and says the rest come from the class.
-
-## Elements
-
-- **`WhisperSpeechTTS.do_generate_speech` returns a `(1, n)` array**, which
-  `soundfile` rejects with `LibsndfileError: Format not recognised`, so the
-  element emits no audio. Pre-existing on both backends.
-
-- **`AnomalyEngine._transform` is assigned only in `do_load_model`**, so
-  `_get_transform` raises `AttributeError` on an engine whose model never
-  loaded. Pre-existing on both backends.
-
-- **An engine that fails to load its model keeps running with `model=None`**,
-  so the first frame raises somewhere further on instead of naming what went
-  wrong. The PIPELINES.md caption line wants `gptqmodel` for its AWQ model; without it
-  `CaptionQwen` logs the load failure, then dies on `captioning returned None`.
-  Failing at load time would name the missing package.
