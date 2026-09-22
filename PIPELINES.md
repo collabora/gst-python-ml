@@ -715,7 +715,9 @@ python pyml-launch.py filesrc location=data/air_traffic_korean_with_english.wav 
 
 #### whisperlive
 
-`python pyml-launch.py filesrc location=data/air_traffic_korean_with_english.wav ! decodebin ! audioconvert ! pyml_whisperlive device=cuda language=ko translate=yes llm-model-name="microsoft/phi-2" ! audioconvert ! wavenc ! filesink location=output_audio.wav`
+`python pyml-launch.py filesrc location=data/air_traffic_korean_with_english.wav ! decodebin ! audioconvert ! pyml_whisperlive device=cuda language=ko translate=yes llm-model-name="Qwen/Qwen2.5-0.5B-Instruct" ! audioconvert ! wavenc ! filesink location=output_audio.wav`
+
+With more than 6 GB of GPU memory, `llm-model-name="microsoft/phi-2"` also works well. On a 6 GB card it runs out of memory next to whisper and WhisperSpeech.
 
 ### LLM
 
@@ -876,7 +878,7 @@ python pyml-launch.py filesrc location=data/document.mp4 ! decodebin name=d \
 ```
 python pyml-launch.py filesrc location=data/people.mp4 ! decodebin name=d \
   d. ! queue ! videoconvert ! videoscale ! "video/x-raw,width=640,height=480" \
-  ! pyml_face device=cuda \
+  ! pyml_face model-name=buffalo_l device=cuda \
   ! videoconvert ! pyml_overlay ! videoconvert ! autovideosink sync=false
 ```
 
@@ -887,7 +889,7 @@ python pyml-launch.py filesrc location=data/people.mp4 ! decodebin name=d \
 ```
 python pyml-launch.py filesrc location=data/people.mp4 ! decodebin name=d \
   d. ! queue ! videoconvert ! videoscale ! "video/x-raw,width=640,height=480" \
-  ! pyml_face device=cuda gallery-path=data/face_gallery/ threshold=0.6 \
+  ! pyml_face model-name=buffalo_l device=cuda gallery-path=data/face_gallery/ threshold=0.6 \
   ! videoconvert ! pyml_overlay ! videoconvert ! autovideosink sync=false
 ```
 
@@ -913,7 +915,7 @@ python pyml-launch.py filesrc location=data/people.mp4 ! decodebin name=d \
 ```
 python pyml-launch.py filesrc location=data/people.mp4 ! decodebin name=d \
   d. ! queue ! videoconvert ! videoscale ! "video/x-raw,width=320,height=240" \
-  ! pyml_superres device=cuda scale-factor=2 \
+  ! pyml_superres model-name=real-esrgan-x2 device=cuda scale-factor=2 \
   ! videoconvert ! autovideosink sync=false
 ```
 
@@ -922,7 +924,7 @@ python pyml-launch.py filesrc location=data/people.mp4 ! decodebin name=d \
 ```
 python pyml-launch.py filesrc location=data/people.mp4 ! decodebin name=d \
   d. ! queue ! videoconvert ! videoscale ! "video/x-raw,width=320,height=240" \
-  ! pyml_superres device=cuda scale-factor=4 \
+  ! pyml_superres model-name=real-esrgan-x4 device=cuda scale-factor=4 \
   ! videoconvert ! autovideosink sync=false
 ```
 
@@ -969,15 +971,17 @@ python pyml-launch.py filesrc location=data/audio_sample.wav ! decodebin \
 
 `pyml_vlm` answers `prompt` about each frame with a vision-language model such as LLaVA or SmolVLM.
 
-#### LLaVA visual question answering
+#### SmolVLM visual question answering
 
 ```
 python pyml-launch.py filesrc location=data/people.mp4 ! decodebin name=d \
   d. ! queue ! videoconvert ! videoscale ! "video/x-raw,width=640,height=480" \
-  ! pyml_vlm model-name=llava-hf/llava-1.5-7b-hf device=cuda \
+  ! pyml_vlm model-name=HuggingFaceTB/SmolVLM-500M-Instruct device=cuda \
             prompt="What is happening in this scene?" \
   ! fakesink
 ```
+
+`model-name=llava-hf/llava-1.5-7b-hf` also works well. It needs about 14 GB of GPU memory in fp16.
 
 ### Cascade Gating
 

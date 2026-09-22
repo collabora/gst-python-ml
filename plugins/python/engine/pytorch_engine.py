@@ -393,12 +393,18 @@ class PyTorchEngine(MLEngine):
         messages = [{"role": "user", "content": input_text}]
         if system_prompt:
             messages.append({"role": "system", "content": system_prompt})
-        input_text = self.tokenizer.apply_chat_template(
-            messages,
-            tokenize=False,
-            add_generation_prompt=True,
-            enable_thinking=False,  # Switches between thinking and non-thinking modes. Default is True.
-        )
+        # base models such as phi-2 ship no chat template
+        if self.tokenizer.chat_template is None:
+            input_text = (
+                f"{system_prompt}\n{input_text}" if system_prompt else input_text
+            )
+        else:
+            input_text = self.tokenizer.apply_chat_template(
+                messages,
+                tokenize=False,
+                add_generation_prompt=True,
+                enable_thinking=False,  # Switches between thinking and non-thinking modes. Default is True.
+            )
 
         if self.is_executorch:
             if not self.tokenizer:
@@ -419,7 +425,7 @@ class PyTorchEngine(MLEngine):
             return generated_text
 
         inputs = self.tokenizer(input_text, return_tensors="pt").to(self.device)
-        outputs = self.model.generate(**inputs, max_length=max_length)
+        outputs = self.model.generate(**inputs, max_new_tokens=max_length)
         generated_text = self.tokenizer.decode(outputs[0], skip_special_tokens=True)
         outputs = outputs[0][len(inputs.input_ids[0]) :].tolist()
         try:

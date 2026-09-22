@@ -43,6 +43,9 @@ except ImportError as e:
 FACE_META_HEADER = b"GST-FACE:"
 
 
+DEFAULT_MODEL_NAME = "buffalo_l"
+
+
 class FaceTransform(BaseObjectDetector):
     """
     GStreamer element for face detection and recognition using InsightFace.
@@ -86,6 +89,7 @@ class FaceTransform(BaseObjectDetector):
         self.mgr.engine_name = "pyml_face_engine"
         EngineFactory.register(self.mgr.engine_name, FaceEngine)
         self._gallery_loaded = False
+        self.model_name = DEFAULT_MODEL_NAME
 
     @GObject.Property(type=str)
     def engine_name(self):

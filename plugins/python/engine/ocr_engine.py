@@ -31,9 +31,18 @@ class OcrEngine(PyTorchEngine):
 
     def do_load_model(self, model_name, **kwargs):
         try:
-            from transformers import TrOCRProcessor, VisionEncoderDecoderModel
+            from transformers import (
+                AutoImageProcessor,
+                RobertaTokenizerFast,
+                TrOCRProcessor,
+                VisionEncoderDecoderModel,
+            )
 
-            self.processor = TrOCRProcessor.from_pretrained(model_name)
+            # AutoTokenizer cannot build the trocr tokenizer from vocab.json alone
+            self.processor = TrOCRProcessor(
+                image_processor=AutoImageProcessor.from_pretrained(model_name),
+                tokenizer=RobertaTokenizerFast.from_pretrained(model_name),
+            )
             self.model = VisionEncoderDecoderModel.from_pretrained(model_name)
             self.execute_with_stream(lambda: self.model.to(self.device))
             self.model.eval()

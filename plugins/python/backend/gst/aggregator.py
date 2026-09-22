@@ -103,6 +103,9 @@ class PayloadDriver:
             self.finish_buffer(outbuf)
             return
         ret = self.srcpad.push(outbuf)
+        # an answer finished after the pipeline stopped has nowhere to go
+        if ret in (Gst.FlowReturn.FLUSHING, Gst.FlowReturn.EOS):
+            return
         if ret != Gst.FlowReturn.OK:
             raise RuntimeError(f"Error pushing payload to pipeline: {ret}")
 

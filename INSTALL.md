@@ -109,6 +109,7 @@ what most elements need. Each extra adds the packages for a group of elements:
 - `awq`: AWQ quantized models, through gptqmodel, which builds its CUDA kernels with nvcc on the first model load
 - `audio`: `pyml_whisperspeechtts`, `pyml_whisperlive`, `pyml_demucs`, `pyml_sepformer`
 - `diffusion`: `pyml_stablediffusion`
+- `face`: `pyml_face`
 - `kafka`: `pyml_kafkasink`
 - `mqtt`: `pyml_alert` with `mqtt-broker=` set
 - `mcp`: the MCP server
@@ -118,7 +119,7 @@ what most elements need. Each extra adds the packages for a group of elements:
 uv sync --extra yolo --extra audio
 ```
 
-`all` covers `yolo`, `llm`, `audio`, `diffusion`, `kafka`, `mqtt` and `vad`, plus
+`all` covers `yolo`, `llm`, `audio`, `diffusion`, `face`, `kafka`, `mqtt` and `vad`, plus
 the ONNX, tinygrad, llama.cpp, OpenVINO, TensorFlow and LiteRT engines. It leaves
 out `awq`, which needs nvcc. TensorFlow has no 3.14 wheel either, so `all`
 resolves on 3.12 and 3.13 only.

@@ -23,32 +23,35 @@ class CaptionQwenEngine(PyTorchVisionEngine):
     def do_load_model(self, model_name, **kwargs):
         """Load a Qwen2.5-VL model from Hugging Face."""
         import torch
-        from transformers import Qwen2_5_VLForConditionalGeneration, AutoProcessor
+        from transformers import (
+            AutoConfig,
+            AutoProcessor,
+            Qwen2_5_VLForConditionalGeneration,
+        )
 
-        try:
-            self.model = Qwen2_5_VLForConditionalGeneration.from_pretrained(
-                model_name,
-                torch_dtype="auto",
-                dtype=torch.float16,
-                device_map="auto",
-            )
-            self.processor = AutoProcessor.from_pretrained(model_name)
+        config = AutoConfig.from_pretrained(model_name)
+        quantization = getattr(config, "quantization_config", None)
+        if isinstance(quantization, dict):
+            # awq hub configs skip "visual", transformers 5 names it "model.visual"
+            quantization["modules_to_not_convert"] = [
+                "model.visual" if module == "visual" else module
+                for module in quantization.get("modules_to_not_convert") or []
+            ]
+        self.model = Qwen2_5_VLForConditionalGeneration.from_pretrained(
+            model_name,
+            config=config,
+            dtype=torch.float16,
+            device_map="auto",
+        )
+        self.processor = AutoProcessor.from_pretrained(model_name)
 
-            self.logger.info(f"{model_name} model and processor loaded successfully.")
-            self.model.eval()
+        self.logger.info(f"{model_name} model and processor loaded successfully.")
+        self.model.eval()
 
-            # Skip .to() for quantized models
-            if not (hasattr(self.model, "is_quantized") and self.model.is_quantized):
-                self.execute_with_stream(lambda: self.model.to(self.device))
-                self.logger.info(f"Model moved to {self.device}")
-
-            return True
-
-        except Exception as e:
-            self.logger.error(f"Error loading model '{model_name}': {e}")
-            self.processor = None
-            self.model = None
-            return False
+        # Skip .to() for quantized models
+        if not (hasattr(self.model, "is_quantized") and self.model.is_quantized):
+            self.execute_with_stream(lambda: self.model.to(self.device))
+            self.logger.info(f"Model moved to {self.device}")
 
     def _prepare_messages(self, images):
         content = [{"type": "image", "image": img} for img in images]

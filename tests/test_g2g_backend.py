@@ -705,6 +705,24 @@ def test_gst_payload_driver_pushes_every_payload_as_its_own_buffer():
     assert leaf.logger.warnings == []
 
 
+class StoppedSrcPad:
+    def push(self, buf):
+        return gst().FlowReturn.FLUSHING
+
+
+# an llm answer can finish after the src pad starts flushing
+def test_gst_payload_push_after_the_pipeline_stopped_is_not_an_error():
+    Gst = gst()
+    from backend.gst.aggregator import BaseAggregator as GstBaseAggregator
+
+    leaf = llm_leaf()
+    leaf.srcpad = StoppedSrcPad()
+    inbuf = Gst.Buffer.new_allocate(None, 5, None)
+    inbuf.fill(0, b"hello")
+
+    assert GstBaseAggregator.do_process(leaf, inbuf) == Gst.FlowReturn.OK
+
+
 VAD_CHUNK_SAMPLES = 2400  # 150 ms at 16 kHz, so two silent chunks end a clip
 
 

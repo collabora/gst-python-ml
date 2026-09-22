@@ -33,6 +33,9 @@ except ImportError as e:
     GlobalLogger().warning(f"The 'superres' element will not be available. Error {e}")
 
 
+DEFAULT_MODEL_NAME = "real-esrgan-x4"
+
+
 class SuperResTransform(VideoTransform, SuperResTask):
     """
     GStreamer element for image super-resolution using Real-ESRGAN.
@@ -66,6 +69,7 @@ class SuperResTransform(VideoTransform, SuperResTask):
         self.mgr.engine_name = "pyml_superres_engine"
         EngineFactory.register(self.mgr.engine_name, SuperResEngine)
         self.format_converter = FormatConverter()
+        self.model_name = DEFAULT_MODEL_NAME
 
     @GObject.Property(type=str)
     def engine_name(self):

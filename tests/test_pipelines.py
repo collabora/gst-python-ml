@@ -176,8 +176,8 @@ def skip_without_engine_or_exported_model(pipeline):
             pytest.skip(f"exported model {model} is not present")
 
 
-def skip_without_broker(pipeline):
-    match = re.search(r"\bbroker=([^\s!:]+):(\d+)", pipeline)
+def skip_without_server(pipeline):
+    match = re.search(r"\b(?:broker|url)=(?:https?://)?([^\s!:/]+):(\d+)", pipeline)
     if not match:
         return
     host, port = match.group(1), int(match.group(2))
@@ -290,7 +290,7 @@ def test_pipeline(pipeline, tmp_path):
     os.sync()
     pipeline = absolutize_project_inputs(pipeline)
     skip_without_engine_or_exported_model(pipeline)
-    skip_without_broker(pipeline)
+    skip_without_server(pipeline)
     unique_id = uuid.uuid4().hex[:8]
     log_file = LOG_DIR / f"test_{unique_id}.log"
 

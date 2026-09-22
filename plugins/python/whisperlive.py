@@ -110,9 +110,7 @@ class WhisperLive(BaseTranscribe):
         self.logger.info(
             f"Initializing WhisperSpeech TTS model on device: {self.device}"
         )
-        self.pipeline = Pipeline(
-            s2a_ref=model_ref, device=self.device, torch_compile=True
-        )
+        self.pipeline = Pipeline(s2a_ref=model_ref)
         if self.pipeline is not None:
             self.logger.info(
                 f"WhisperSpeech pipeline initialized successfully: {self.get_model()}"

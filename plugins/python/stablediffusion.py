@@ -71,11 +71,16 @@ class StableDiffusion(BaseAggregator):
         """
         Initialize the Stable Diffusion model
         """
+        import torch
         from diffusers import StableDiffusionPipeline
 
         self.logger.info(f"Initializing Stable Diffusion model on {self.device}")
+        # fp32 weights do not fit a 6 GB card
+        dtype = torch.float16 if str(self.device).startswith("cuda") else torch.float32
         self.set_model(
-            StableDiffusionPipeline.from_pretrained("CompVis/stable-diffusion-v1-4")
+            StableDiffusionPipeline.from_pretrained(
+                "CompVis/stable-diffusion-v1-4", torch_dtype=dtype
+            )
         )
         self.get_model().to(self.device)
 

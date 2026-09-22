@@ -61,7 +61,8 @@ class SamEngine(PyTorchEngine):
             xs = np.linspace(0, W - 1, grid_size).astype(int)
             ys = np.linspace(0, H - 1, grid_size).astype(int)
             points = [[int(x), int(y)] for y in ys for x in xs][:max_masks]
-            input_points = [points]
+            # sam2 nests points as image, object, point, xy
+            input_points = [[[point] for point in points]]
 
             inputs = self.processor(
                 images=pil_img,
@@ -74,9 +75,7 @@ class SamEngine(PyTorchEngine):
                 outputs = self.model(**inputs)
 
             masks = self.processor.post_process_masks(
-                outputs.pred_masks,
-                inputs["original_sizes"],
-                inputs["reshaped_input_sizes"],
+                outputs.pred_masks, inputs["original_sizes"]
             )
             scores = outputs.iou_scores
 

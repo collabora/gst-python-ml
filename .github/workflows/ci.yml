@@ -243,6 +243,8 @@ jobs:
             --ignore=tests/test_pipelines.py \
             --ignore=tests/test_zeroshotdetector.py \
             --ignore=tests/test_engines.py
+          # the g2g job has no gi to run its gst driver tests
+          python -m pytest tests/test_g2g_backend.py -q
 
       - name: Cache the PIPELINES.md models (Linux)
         if: runner.os == 'Linux'
