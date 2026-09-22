@@ -164,6 +164,8 @@ class LLMStreamFilter(VideoTransform):
             self.get_pad_template("text_src"), "text_src"
         )
         self.add_pad(self.text_src_pad)
+        if not super().do_start():
+            return False
 
         # Load captions if caption_file is set
         if self.caption_file:
@@ -185,12 +187,10 @@ class LLMStreamFilter(VideoTransform):
             if not self.engine:
                 self.initialize_engine()
                 if not self.engine:
-                    self.logger.error("Failed to initialize caption engine")
-                    return False
+                    raise RuntimeError("caption engine failed to initialize")
             self.engine.do_load_model(self.model_name)
             if not self.engine.get_model():
-                self.logger.error("Failed to load caption model")
-                return False
+                raise RuntimeError(f"caption model {self.model_name} did not load")
 
         # Initialize LLM engine with enhanced quantization
         if not self.llm_engine:
@@ -208,11 +208,8 @@ class LLMStreamFilter(VideoTransform):
             self.llm_engine_helper.do_load_model(self.llm_model_name)
             self.llm_engine = self.llm_engine_helper.engine
             if not self.llm_engine:
-                self.logger.error("Failed to load LLM engine")
-                return False
+                raise RuntimeError(f"llm model {self.llm_model_name} did not load")
             self.llm_engine.prompt = self.prompt
-
-        return True
 
     def link_to_downstream_text_sink(self):
         """
