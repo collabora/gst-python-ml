@@ -36,20 +36,21 @@ class StreamDemux(Gst.Element):
         "Aaron Boxer <aaron.boxer@collabora.com>",
     )
 
-    __gsttemplates__ = (
-        Gst.PadTemplate.new(
-            "sink",
-            Gst.PadDirection.SINK,
-            Gst.PadPresence.ALWAYS,
-            Gst.Caps.from_string("video/x-raw"),
-        ),
-        Gst.PadTemplate.new(
-            "src_%u",
-            Gst.PadDirection.SRC,
-            Gst.PadPresence.REQUEST,
-            Gst.Caps.from_string("video/x-raw"),
-        ),
-    )
+    if backend.BACKEND == "gst":
+        __gsttemplates__ = (
+            Gst.PadTemplate.new(
+                "sink",
+                Gst.PadDirection.SINK,
+                Gst.PadPresence.ALWAYS,
+                Gst.Caps.from_string("video/x-raw"),
+            ),
+            Gst.PadTemplate.new(
+                "src_%u",
+                Gst.PadDirection.SRC,
+                Gst.PadPresence.REQUEST,
+                Gst.Caps.from_string("video/x-raw"),
+            ),
+        )
 
     __gproperties__ = {
         "max-queue-size": (

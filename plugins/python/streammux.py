@@ -36,22 +36,23 @@ class StreamMux(GstBase.Aggregator):
         "Aaron Boxer <aaron.boxer@collabora.com>",
     )
 
-    __gsttemplates__ = (
-        Gst.PadTemplate.new_with_gtype(
-            "sink_%u",
-            Gst.PadDirection.SINK,
-            Gst.PadPresence.REQUEST,
-            Gst.Caps.from_string("video/x-raw"),
-            GstBase.AggregatorPad.__gtype__,
-        ),
-        Gst.PadTemplate.new_with_gtype(
-            "src",
-            Gst.PadDirection.SRC,
-            Gst.PadPresence.ALWAYS,
-            Gst.Caps.from_string("video/x-raw"),
-            GstBase.AggregatorPad.__gtype__,
-        ),
-    )
+    if backend.BACKEND == "gst":
+        __gsttemplates__ = (
+            Gst.PadTemplate.new_with_gtype(
+                "sink_%u",
+                Gst.PadDirection.SINK,
+                Gst.PadPresence.REQUEST,
+                Gst.Caps.from_string("video/x-raw"),
+                GstBase.AggregatorPad.__gtype__,
+            ),
+            Gst.PadTemplate.new_with_gtype(
+                "src",
+                Gst.PadDirection.SRC,
+                Gst.PadPresence.ALWAYS,
+                Gst.Caps.from_string("video/x-raw"),
+                GstBase.AggregatorPad.__gtype__,
+            ),
+        )
 
     timeout = GObject.Property(
         type=int,
