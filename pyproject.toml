@@ -47,7 +47,7 @@ llm = [
     "bitsandbytes>=0.49.2",
     "qwen-vl-utils[decord]>=0.0.8",
 ]
-# gptqmodel ships an sdist only, so this extra compiles against the installed torch
+# gptqmodel builds its cuda kernels with nvcc on the first model load
 awq = [
     "gptqmodel",
 ]

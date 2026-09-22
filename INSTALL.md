@@ -106,7 +106,7 @@ what most elements need. Each extra adds the packages for a group of elements:
 
 - `yolo`: `pyml_yolo`, `pyml_yolo_pose`, `demo_soccer`, and the `bytetrack` and `botsort` types of `pyml_tracker`
 - `llm`: `pyml_llm`, `pyml_llmstreamfilter`, `pyml_caption_qwen`, `pyml_caption_phi`
-- `awq`: AWQ quantized models, through gptqmodel, which has no wheel and builds against the installed torch
+- `awq`: AWQ quantized models, through gptqmodel, which builds its CUDA kernels with nvcc on the first model load
 - `audio`: `pyml_whisperspeechtts`, `pyml_whisperlive`, `pyml_demucs`, `pyml_sepformer`
 - `diffusion`: `pyml_stablediffusion`
 - `kafka`: `pyml_kafkasink`
@@ -120,7 +120,7 @@ uv sync --extra yolo --extra audio
 
 `all` covers `yolo`, `llm`, `audio`, `diffusion`, `kafka`, `mqtt` and `vad`, plus
 the ONNX, tinygrad, llama.cpp, OpenVINO, TensorFlow and LiteRT engines. It leaves
-out `awq`, which has no wheel. TensorFlow has no 3.14 wheel either, so `all`
+out `awq`, which needs nvcc. TensorFlow has no 3.14 wheel either, so `all`
 resolves on 3.12 and 3.13 only.
 
 ### Engine extras
