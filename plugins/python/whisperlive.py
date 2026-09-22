@@ -83,6 +83,8 @@ class WhisperLive(BaseTranscribe):
     def do_set_property(self, prop: GObject.ParamSpec, value):
         if prop.name == "llm-model-name":
             self.llm_model_name = value
+            if self.llm_model is None:
+                return
             try:
                 self.do_load_model()
             except Exception as exception:

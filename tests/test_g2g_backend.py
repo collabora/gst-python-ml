@@ -1095,3 +1095,10 @@ def test_a_model_that_cannot_load_raises_to_the_host():
         elem.g2g_process(bytearray(8 * 8 * 3), 8, 8, "RGB", StubMetaSink())
 
     assert elem.engine.model is None
+
+
+def test_error_helpers_raise_to_the_host():
+    with pytest.raises(ValueError, match="no weights"):
+        backend.post_model_load_error(None, "m.pt", ValueError("no weights"))
+    with pytest.raises(ValueError, match="no weights"):
+        backend.post_error(None, "summary", ValueError("no weights"))
