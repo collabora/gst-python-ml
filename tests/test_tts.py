@@ -54,9 +54,19 @@ def element(request, monkeypatch):
     from whisperspeechtts import WhisperSpeechTTS
 
     element = WhisperSpeechTTS()
+    element.device = "cuda"
     element.do_load_model()
     assert element.get_model() is not None
     return element
+
+
+def test_load_on_cpu_names_cuda():
+    from whisperspeechtts import WhisperSpeechTTS
+
+    element = WhisperSpeechTTS()
+    element.device = "cpu"
+    with pytest.raises(ValueError, match="whisperspeech runs on cuda only"):
+        element.do_load_model()
 
 
 def test_generated_speech_is_mono_float32(element):

@@ -65,27 +65,19 @@ class WhisperSpeechTTS(BaseTts):
         )
 
     def do_load_model(self):
+        # the whisperspeech package moves its models with .cuda()
+        if not self.device.startswith("cuda"):
+            raise ValueError("whisperspeech runs on cuda only")
+
         from whisperspeech.pipeline import Pipeline
 
         self.logger.info(
             f"Initializing WhisperSpeech TTS model on device: {self.device}"
         )
-        try:
-            self.set_model(
-                Pipeline(s2a_ref=model_ref, device=self.device, torch_compile=True)
-            )
-            if self.get_model() is not None:
-                self.logger.info(
-                    f"WhisperSpeech Pipeline initialized successfully: {self.get_model()}"
-                )
-            else:
-                self.logger.error("Failed to create WhisperSpeech model")
-        except Exception as e:
-            self.logger.error(f"Exception during model initialization: {e}")
+        self.set_model(Pipeline(s2a_ref=model_ref))
 
     def do_generate_speech(self, transcript):
         audio_tensor = self.get_model().generate(transcript, lang=self.language)
-        # the whisperspeech vocoder returns (1, n) on the model device
         return audio_tensor.float().cpu().numpy().reshape(-1)
 
     def do_get_sample_rate(self):
