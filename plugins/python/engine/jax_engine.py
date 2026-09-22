@@ -70,42 +70,34 @@ class JAXEngine(MLEngine):
         self.kwargs = kwargs
         tokenizer_name = kwargs.get("tokenizer_name")
 
-        try:
-            # Local Flax checkpoint directory
-            if os.path.isdir(model_name):
-                return self._load_local_checkpoint(model_name)
+        # Local Flax checkpoint directory
+        if os.path.isdir(model_name):
+            return self._load_local_checkpoint(model_name)
 
-            # Local .msgpack file
-            if os.path.isfile(model_name) and model_name.endswith(".msgpack"):
-                return self._load_msgpack(model_name)
+        # Local .msgpack file
+        if os.path.isfile(model_name) and model_name.endswith(".msgpack"):
+            return self._load_msgpack(model_name)
 
-            from torchvision import models as tv_models
+        from torchvision import models as tv_models
 
-            if hasattr(tv_models, model_name):
-                pt_model = getattr(tv_models, model_name)(pretrained=True)
-                if not isinstance(pt_model, tv_models.ResNet):
-                    self.logger.error(
-                        f"JAX runs the torchvision resnet family, not '{model_name}'."
-                    )
-                    return False
-                from .jax_resnet import jax_resnet
-
-                self.model = jax_resnet(pt_model.eval())
-                self.model_type = "classification"
-                self.logger.info(
-                    f"Pre-trained vision model '{model_name}' compiled with JAX."
+        if hasattr(tv_models, model_name):
+            pt_model = getattr(tv_models, model_name)(pretrained=True)
+            if not isinstance(pt_model, tv_models.ResNet):
+                self.logger.error(
+                    f"JAX runs the torchvision resnet family, not '{model_name}'."
                 )
-                return True
+                return False
+            from .jax_resnet import jax_resnet
 
-            # HuggingFace Flax model
-            return self._load_from_huggingface(model_name, tokenizer_name)
+            self.model = jax_resnet(pt_model.eval())
+            self.model_type = "classification"
+            self.logger.info(
+                f"Pre-trained vision model '{model_name}' compiled with JAX."
+            )
+            return True
 
-        except Exception as e:
-            self.logger.error(f"Error loading model '{model_name}': {e}")
-            self.model = None
-            self.params = None
-            self.tokenizer = None
-            return False
+        # HuggingFace Flax model
+        return self._load_from_huggingface(model_name, tokenizer_name)
 
     def _load_local_checkpoint(self, model_dir):
         """Load Flax params from a local checkpoint directory."""
@@ -169,18 +161,12 @@ class JAXEngine(MLEngine):
         except Exception:
             pass
 
-        try:
-            self.model = FlaxAutoModel.from_pretrained(model_name)
-            self.params = self.model.params
-            self.apply_fn = self.model
-            self.model_type = "encoder"
-            self.logger.info(
-                f"Flax encoder model '{model_name}' loaded from HuggingFace."
-            )
-            return True
-        except Exception as e:
-            self.logger.error(f"Failed to load Flax model from HuggingFace: {e}")
-            return False
+        self.model = FlaxAutoModel.from_pretrained(model_name)
+        self.params = self.model.params
+        self.apply_fn = self.model
+        self.model_type = "encoder"
+        self.logger.info(f"Flax encoder model '{model_name}' loaded from HuggingFace.")
+        return True
 
     def do_forward(self, frames):
         """Execute inference by converting numpy to JAX arrays."""
@@ -216,17 +202,11 @@ class JAXEngine(MLEngine):
                 "A bare Flax checkpoint has no graph to run, load a model."
             )
             return None
-        try:
-            outputs = self.apply_fn(pixel_values=jax_input, params=self.params)
-            raw = np.array(
-                outputs.logits
-                if hasattr(outputs, "logits")
-                else outputs.last_hidden_state
-            )
-            return self._apply_post_process(raw, is_batch)
-        except Exception as e:
-            self.logger.error(f"JAX inference failed: {e}")
-            return None
+        outputs = self.apply_fn(pixel_values=jax_input, params=self.params)
+        raw = np.array(
+            outputs.logits if hasattr(outputs, "logits") else outputs.last_hidden_state
+        )
+        return self._apply_post_process(raw, is_batch)
 
     def do_generate(self, input_text, max_length=1000, system_prompt=None):
         """Generate text using Flax model's generate method."""
@@ -237,22 +217,18 @@ class JAXEngine(MLEngine):
             self.logger.error("No LLM model or tokenizer loaded.")
             return None
 
-        try:
-            prompt = input_text
-            if system_prompt:
-                prompt = f"{system_prompt}\n\n{input_text}"
+        prompt = input_text
+        if system_prompt:
+            prompt = f"{system_prompt}\n\n{input_text}"
 
-            inputs = self.tokenizer(prompt, return_tensors="jax")
-            output_ids = self.model.generate(
-                **inputs,
-                max_length=max_length,
-                params=self.params,
-            )
-            generated_text = self.tokenizer.decode(
-                output_ids.sequences[0], skip_special_tokens=True
-            )
-            self.logger.info(f"Generated text: {generated_text[:100]}...")
-            return generated_text
-        except Exception as e:
-            self.logger.error(f"JAX generation failed: {e}")
-            return None
+        inputs = self.tokenizer(prompt, return_tensors="jax")
+        output_ids = self.model.generate(
+            **inputs,
+            max_length=max_length,
+            params=self.params,
+        )
+        generated_text = self.tokenizer.decode(
+            output_ids.sequences[0], skip_special_tokens=True
+        )
+        self.logger.info(f"Generated text: {generated_text[:100]}...")
+        return generated_text

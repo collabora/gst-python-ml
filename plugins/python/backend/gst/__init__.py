@@ -23,6 +23,7 @@ from backend.gst.aggregator import BaseAggregator  # noqa: E402
 from backend.gst.video_transform import VideoTransform  # noqa: E402
 from backend.gst.analytics import GstAnalyticsBackend  # noqa: E402
 from backend.gst.frameio import GstFrameIO  # noqa: E402
+from backend.gst.errors import post_error, post_model_load_error  # noqa: E402,F401
 
 #: The analytics metadata implementation for this backend.
 analytics = GstAnalyticsBackend()
@@ -43,4 +44,6 @@ __all__ = [
     "frameio",
     "FlowReturn",
     "GObject",
+    "post_error",
+    "post_model_load_error",
 ]

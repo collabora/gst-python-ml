@@ -180,29 +180,26 @@ class OverlaySkia(GstBase.BaseTransform):
         if not meta:
             return metadata
 
-        try:
-            count = GstAnalytics.relation_get_length(meta)
-            for index in range(count):
-                ret, od_mtd = meta.get_od_mtd(index)
-                if not ret or od_mtd is None:
-                    continue
+        count = GstAnalytics.relation_get_length(meta)
+        for index in range(count):
+            ret, od_mtd = meta.get_od_mtd(index)
+            if not ret or od_mtd is None:
+                continue
 
-                label_quark = od_mtd.get_obj_type()
-                label = GLib.quark_to_string(label_quark)
-                track_id = self.extract_id_from_label(label)
-                location = od_mtd.get_location()
-                presence, x, y, w, h, loc_conf_lvl = location
-                if presence:
-                    metadata.append(
-                        {
-                            "label": label,
-                            "track_id": track_id,
-                            "confidence": loc_conf_lvl,
-                            "box": {"x1": x, "y1": y, "x2": x + w, "y2": y + h},
-                        }
-                    )
-        except Exception as e:
-            self.logger.error(f"Error while extracting metadata: {e}")
+            label_quark = od_mtd.get_obj_type()
+            label = GLib.quark_to_string(label_quark)
+            track_id = self.extract_id_from_label(label)
+            location = od_mtd.get_location()
+            presence, x, y, w, h, loc_conf_lvl = location
+            if presence:
+                metadata.append(
+                    {
+                        "label": label,
+                        "track_id": track_id,
+                        "confidence": loc_conf_lvl,
+                        "box": {"x1": x, "y1": y, "x2": x + w, "y2": y + h},
+                    }
+                )
         return metadata
 
     def create_overlay_surface(self, map_info, width, height):

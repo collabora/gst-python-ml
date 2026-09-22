@@ -38,7 +38,7 @@ try:
         GstAnalytics,
         GLib,
     )  # noqa: E402
-    from backend import GObject  # noqa: E402
+    from backend import GObject, post_error  # noqa: E402
 
     from log.logger_factory import LoggerFactory  # noqa: E402
 
@@ -1145,8 +1145,8 @@ class FootballOverlay(GstBase.BaseTransform):
 
             return Gst.FlowReturn.OK
 
-        except Exception as e:
-            self.logger.error(f"FootballOverlay transform error: {e}")
+        except Exception as exception:
+            post_error(self, "football overlay transform error", exception)
             return Gst.FlowReturn.ERROR
 
 

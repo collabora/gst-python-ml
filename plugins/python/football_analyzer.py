@@ -30,7 +30,7 @@ try:
     gi.require_version("GstBase", "1.0")
     gi.require_version("GstVideo", "1.0")
     from gi.repository import Gst, GstBase, GstVideo  # noqa: E402
-    from backend import GObject  # noqa: E402
+    from backend import GObject, post_error  # noqa: E402
 
     # Define caps before the optional heavy imports so the element's pad
     # templates still resolve when an optional dep (e.g. supervision) is missing;
@@ -856,8 +856,8 @@ class FootballAnalyzer(GstBase.BaseTransform):
             self._duration.append(buf.duration)
             return Gst.FlowReturn.OK
 
-        except Exception as e:
-            self.logger.error(f"FootballAnalyzer chain error: {e}")
+        except Exception as exception:
+            post_error(self, "football analyzer chain error", exception)
             return Gst.FlowReturn.ERROR
 
     def do_sink_event(self, event):

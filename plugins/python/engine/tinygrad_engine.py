@@ -36,69 +36,59 @@ class TinyGradEngine(MLEngine):
         self.model_name = model_name
         self.kwargs = kwargs
 
-        try:
-            # TorchVision models
-            from torchvision import models as tv_models
+        # TorchVision models
+        from torchvision import models as tv_models
 
-            if hasattr(tv_models, model_name):
-                pt_model = getattr(tv_models, model_name)(pretrained=True)
-                if not isinstance(pt_model, tv_models.ResNet):
-                    self.logger.error(
-                        f"TinyGrad runs the torchvision resnet family, not '{model_name}'."
-                    )
-                    return False
-                from .tinygrad_resnet import tinygrad_resnet
-
-                self.model = tinygrad_resnet(pt_model.eval())
-                self.model_type = "classification"
-                self.logger.info(
-                    f"Pre-trained vision model '{model_name}' loaded with TinyGrad."
+        if hasattr(tv_models, model_name):
+            pt_model = getattr(tv_models, model_name)(pretrained=True)
+            if not isinstance(pt_model, tv_models.ResNet):
+                self.logger.error(
+                    f"TinyGrad runs the torchvision resnet family, not '{model_name}'."
                 )
-                return True
+                return False
+            from .tinygrad_resnet import tinygrad_resnet
 
-            # Vision-text models via Transformers
-            if processor_name and tokenizer_name:
-                from transformers import (
-                    AutoTokenizer,
-                    AutoImageProcessor,
-                    AutoModelForVision2Seq,
-                )
-
-                self.image_processor = AutoImageProcessor.from_pretrained(
-                    processor_name
-                )
-                self.tokenizer = AutoTokenizer.from_pretrained(tokenizer_name)
-                pt_model = AutoModelForVision2Seq.from_pretrained(model_name)
-                self.model = pt_model
-                self.frame_stride = (
-                    pt_model.config.encoder.num_frames
-                    if hasattr(pt_model.config, "encoder")
-                    and hasattr(pt_model.config.encoder, "num_frames")
-                    else 1
-                )
-                self.model_type = "vision_text"
-                self.logger.info(
-                    f"Vision-Text model '{model_name}' loaded for TinyGrad engine."
-                )
-                return True
-
-            # LLM models via Transformers
-            from transformers import AutoTokenizer, AutoModelForCausalLM
-
-            self.tokenizer = AutoTokenizer.from_pretrained(model_name)
-            self.model = AutoModelForCausalLM.from_pretrained(model_name)
-            self.model_type = "llm"
+            self.model = tinygrad_resnet(pt_model.eval())
+            self.model_type = "classification"
             self.logger.info(
-                f"Pre-trained LLM model '{model_name}' loaded for TinyGrad engine."
+                f"Pre-trained vision model '{model_name}' loaded with TinyGrad."
             )
             return True
 
-        except Exception as e:
-            self.logger.error(f"Error loading model '{model_name}': {e}")
-            self.tokenizer = None
-            self.image_processor = None
-            self.model = None
-            return False
+        # Vision-text models via Transformers
+        if processor_name and tokenizer_name:
+            from transformers import (
+                AutoTokenizer,
+                AutoImageProcessor,
+                AutoModelForVision2Seq,
+            )
+
+            self.image_processor = AutoImageProcessor.from_pretrained(processor_name)
+            self.tokenizer = AutoTokenizer.from_pretrained(tokenizer_name)
+            pt_model = AutoModelForVision2Seq.from_pretrained(model_name)
+            self.model = pt_model
+            self.frame_stride = (
+                pt_model.config.encoder.num_frames
+                if hasattr(pt_model.config, "encoder")
+                and hasattr(pt_model.config.encoder, "num_frames")
+                else 1
+            )
+            self.model_type = "vision_text"
+            self.logger.info(
+                f"Vision-Text model '{model_name}' loaded for TinyGrad engine."
+            )
+            return True
+
+        # LLM models via Transformers
+        from transformers import AutoTokenizer, AutoModelForCausalLM
+
+        self.tokenizer = AutoTokenizer.from_pretrained(model_name)
+        self.model = AutoModelForCausalLM.from_pretrained(model_name)
+        self.model_type = "llm"
+        self.logger.info(
+            f"Pre-trained LLM model '{model_name}' loaded for TinyGrad engine."
+        )
+        return True
 
     def do_set_device(self, device):
         """Set TinyGrad device for the model."""
@@ -160,22 +150,15 @@ class TinyGradEngine(MLEngine):
                 self.frame_buffer.append(frames)
             if len(self.frame_buffer) >= self.batch_size:
                 self.logger.info(f"Processing {self.batch_size} frames")
-                try:
-                    gen_kwargs = {"min_length": 10, "max_length": 20, "num_beams": 8}
-                    pixel_values = self.image_processor(
-                        self.frame_buffer, return_tensors="pt"
-                    ).pixel_values
-                    tokens = self.model.generate(pixel_values, **gen_kwargs)
-                    captions = self.tokenizer.batch_decode(
-                        tokens, skip_special_tokens=True
-                    )
-                    self.logger.info(f"Captions: {captions}")
-                    self.frame_buffer = []
-                    return captions[0]
-                except Exception as e:
-                    self.logger.error(f"Failed to process frames: {e}")
-                    self.frame_buffer = []
-                    return None
+                gen_kwargs = {"min_length": 10, "max_length": 20, "num_beams": 8}
+                pixel_values = self.image_processor(
+                    self.frame_buffer, return_tensors="pt"
+                ).pixel_values
+                tokens = self.model.generate(pixel_values, **gen_kwargs)
+                captions = self.tokenizer.batch_decode(tokens, skip_special_tokens=True)
+                self.logger.info(f"Captions: {captions}")
+                self.frame_buffer = []
+                return captions[0]
             return None
 
         elif self.model_type == "llm":

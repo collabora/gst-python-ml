@@ -78,15 +78,10 @@ class SuperResEngine(PyTorchEngine):
 
         results = []
         for frame in frames:
-            try:
-                # Real-ESRGAN expects BGR input
-                bgr = cv2.cvtColor(frame.astype(np.uint8), cv2.COLOR_RGB2BGR)
-                output, _ = self.upsampler.enhance(bgr, outscale=self._scale)
-                # Convert back to RGB
-                rgb_out = cv2.cvtColor(output, cv2.COLOR_BGR2RGB)
-                results.append(rgb_out)
-            except Exception as e:
-                self.logger.error(f"Super-resolution inference error: {e}")
-                results.append(None)
-
+            # Real-ESRGAN expects BGR input
+            bgr = cv2.cvtColor(frame.astype(np.uint8), cv2.COLOR_RGB2BGR)
+            output, _ = self.upsampler.enhance(bgr, outscale=self._scale)
+            # Convert back to RGB
+            rgb_out = cv2.cvtColor(output, cv2.COLOR_BGR2RGB)
+            results.append(rgb_out)
         return results[0] if not is_batch else results

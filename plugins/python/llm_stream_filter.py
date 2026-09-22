@@ -29,7 +29,7 @@ try:
     gi.require_version("GstVideo", "1.0")
     from gi.repository import Gst
 
-    from backend import analytics, frameio, GObject
+    from backend import analytics, frameio, GObject, post_error, post_model_load_error
     from video_transform import VideoTransform
     from engine.engine_manager import EngineManager
     from utils.caption_utils import load_captions
@@ -128,7 +128,10 @@ class LLMStreamFilter(VideoTransform):
         elif prop.name == "llm-model-name":
             self.llm_model_name = value
             if self.llm_engine:
-                self.llm_engine_helper.do_load_model(self.llm_model_name)
+                try:
+                    self.llm_engine_helper.do_load_model(self.llm_model_name)
+                except Exception as exception:
+                    post_model_load_error(self, self.llm_model_name, exception)
                 self.llm_engine = self.llm_engine_helper.engine
             self.logger.info(f"Updated llm_model_name to: {value}")
         elif prop.name == "caption-file":
@@ -176,44 +179,40 @@ class LLMStreamFilter(VideoTransform):
         import torch
         from transformers import BitsAndBytesConfig
 
-        try:
-            # Initialize caption engine (only if not using caption_file)
-            if not self.caption_file:
+        # Initialize caption engine (only if not using caption_file)
+        if not self.caption_file:
+            self.initialize_engine()
+            if not self.engine:
                 self.initialize_engine()
                 if not self.engine:
-                    self.initialize_engine()
-                    if not self.engine:
-                        self.logger.error("Failed to initialize caption engine")
-                        return False
-                self.engine.do_load_model(self.model_name)
-                if not self.engine.get_model():
-                    self.logger.error("Failed to load caption model")
+                    self.logger.error("Failed to initialize caption engine")
                     return False
+            self.engine.do_load_model(self.model_name)
+            if not self.engine.get_model():
+                self.logger.error("Failed to load caption model")
+                return False
 
-            # Initialize LLM engine with enhanced quantization
-            if not self.llm_engine:
-                self.llm_engine_helper.do_set_device(
-                    self.device if hasattr(self, "device") else "cuda:0"
+        # Initialize LLM engine with enhanced quantization
+        if not self.llm_engine:
+            self.llm_engine_helper.do_set_device(
+                self.device if hasattr(self, "device") else "cuda:0"
+            )
+            self.llm_engine_helper.initialize_engine()
+            self.llm_engine_helper.kwargs = {
+                "quantization_config": BitsAndBytesConfig(
+                    load_in_4bit=True,
+                    bnb_4bit_use_double_quant=True,
+                    bnb_4bit_compute_dtype=torch.bfloat16,
                 )
-                self.llm_engine_helper.initialize_engine()
-                self.llm_engine_helper.kwargs = {
-                    "quantization_config": BitsAndBytesConfig(
-                        load_in_4bit=True,
-                        bnb_4bit_use_double_quant=True,
-                        bnb_4bit_compute_dtype=torch.bfloat16,
-                    )
-                }
-                self.llm_engine_helper.do_load_model(self.llm_model_name)
-                self.llm_engine = self.llm_engine_helper.engine
-                if not self.llm_engine:
-                    self.logger.error("Failed to load LLM engine")
-                    return False
-                self.llm_engine.prompt = self.prompt
+            }
+            self.llm_engine_helper.do_load_model(self.llm_model_name)
+            self.llm_engine = self.llm_engine_helper.engine
+            if not self.llm_engine:
+                self.logger.error("Failed to load LLM engine")
+                return False
+            self.llm_engine.prompt = self.prompt
 
-            return True
-        except Exception as e:
-            self.logger.error(f"Error loading models: {e}")
-            return False
+        return True
 
     def link_to_downstream_text_sink(self):
         """
@@ -249,27 +248,23 @@ class LLMStreamFilter(VideoTransform):
         Uses the LLM to select the N most interesting captions.
         Returns the indices of the selected streams.
         """
-        try:
-            captions_text = "\n".join([f"{i}: {c}" for i, c in enumerate(captions)])
-            prompt = self.prompt.format(n=num_streams, captions=captions_text)
-            self.logger.info(f"LLM prompt: {prompt}")
+        captions_text = "\n".join([f"{i}: {c}" for i, c in enumerate(captions)])
+        prompt = self.prompt.format(n=num_streams, captions=captions_text)
+        self.logger.info(f"LLM prompt: {prompt}")
 
-            generated_text = self.llm_engine.generate(prompt)
-            self.logger.info(f"LLM output: {generated_text}")
+        generated_text = self.llm_engine.generate(prompt)
+        self.logger.info(f"LLM output: {generated_text}")
 
-            selected_indices = []
-            for line in generated_text.split("\n"):
-                try:
-                    idx = int(line.split(":")[0])
-                    if 0 <= idx < len(captions):
-                        selected_indices.append(idx)
-                except (ValueError, IndexError):
-                    continue
+        selected_indices = []
+        for line in generated_text.split("\n"):
+            try:
+                idx = int(line.split(":")[0])
+                if 0 <= idx < len(captions):
+                    selected_indices.append(idx)
+            except (ValueError, IndexError):
+                continue
 
-            return selected_indices[:num_streams]
-        except Exception as e:
-            self.logger.error(f"Error in LLM processing: {e}")
-            return []
+        return selected_indices[:num_streams]
 
     def do_transform_ip(self, buf):
         """
@@ -358,8 +353,8 @@ class LLMStreamFilter(VideoTransform):
 
             return Gst.FlowReturn.OK
 
-        except Exception as e:
-            self.logger.error(f"Error during transformation: {e}")
+        except Exception as exception:
+            post_error(self, "transform error", exception)
             return Gst.FlowReturn.ERROR
 
 

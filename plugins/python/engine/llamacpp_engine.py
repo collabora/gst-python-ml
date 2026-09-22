@@ -85,23 +85,18 @@ class LlamaCppEngine(MLEngine):
             )
             return False
 
-        try:
-            self.model = Llama(
-                model_path=model_name,
-                n_gpu_layers=self.n_gpu_layers,
-                n_ctx=self.n_ctx,
-                verbose=False,
-            )
-            self.model_type = "llm"
-            self.logger.info(
-                f"GGUF model loaded: {model_name} "
-                f"(n_gpu_layers={self.n_gpu_layers}, n_ctx={self.n_ctx})"
-            )
-            return True
-        except Exception as e:
-            self.logger.error(f"Error loading GGUF model '{model_name}': {e}")
-            self.model = None
-            return False
+        self.model = Llama(
+            model_path=model_name,
+            n_gpu_layers=self.n_gpu_layers,
+            n_ctx=self.n_ctx,
+            verbose=False,
+        )
+        self.model_type = "llm"
+        self.logger.info(
+            f"GGUF model loaded: {model_name} "
+            f"(n_gpu_layers={self.n_gpu_layers}, n_ctx={self.n_ctx})"
+        )
+        return True
 
     def do_forward(self, frames):
         """Forward pass is not applicable for llama.cpp LLMs."""
@@ -121,27 +116,23 @@ class LlamaCppEngine(MLEngine):
             self.logger.error("No model loaded.")
             return None
 
-        try:
-            if system_prompt:
-                messages = [
-                    {"role": "system", "content": system_prompt},
-                    {"role": "user", "content": input_text},
-                ]
-                response = self.model.create_chat_completion(
-                    messages=messages,
-                    max_tokens=max_length,
-                )
-                result = response["choices"][0]["message"]["content"]
-            else:
-                response = self.model(
-                    input_text,
-                    max_tokens=max_length,
-                    echo=False,
-                )
-                result = response["choices"][0]["text"]
+        if system_prompt:
+            messages = [
+                {"role": "system", "content": system_prompt},
+                {"role": "user", "content": input_text},
+            ]
+            response = self.model.create_chat_completion(
+                messages=messages,
+                max_tokens=max_length,
+            )
+            result = response["choices"][0]["message"]["content"]
+        else:
+            response = self.model(
+                input_text,
+                max_tokens=max_length,
+                echo=False,
+            )
+            result = response["choices"][0]["text"]
 
-            self.logger.info(f"Generated text: {result[:100]}...")
-            return result
-        except Exception as e:
-            self.logger.error(f"llama.cpp generation failed: {e}")
-            return None
+        self.logger.info(f"Generated text: {result[:100]}...")
+        return result

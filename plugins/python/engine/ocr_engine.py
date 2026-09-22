@@ -52,42 +52,37 @@ class OcrEngine(PyTorchEngine):
 
         results = []
         for frame in frames:
-            try:
-                pil_img = Image.fromarray(frame.astype(np.uint8))
-                H, W = frame.shape[:2]
+            pil_img = Image.fromarray(frame.astype(np.uint8))
+            H, W = frame.shape[:2]
 
-                # Split frame into horizontal strips for text region detection
-                strip_height = max(H // 4, 32)
-                texts = []
-                regions = []
-                for y_start in range(0, H, strip_height):
-                    y_end = min(y_start + strip_height, H)
-                    strip = pil_img.crop((0, y_start, W, y_end))
-                    pixel_values = self.processor(
-                        images=strip, return_tensors="pt"
-                    ).pixel_values.to(self.device)
+            # Split frame into horizontal strips for text region detection
+            strip_height = max(H // 4, 32)
+            texts = []
+            regions = []
+            for y_start in range(0, H, strip_height):
+                y_end = min(y_start + strip_height, H)
+                strip = pil_img.crop((0, y_start, W, y_end))
+                pixel_values = self.processor(
+                    images=strip, return_tensors="pt"
+                ).pixel_values.to(self.device)
 
-                    with torch.no_grad():
-                        generated_ids = self.model.generate(pixel_values)
+                with torch.no_grad():
+                    generated_ids = self.model.generate(pixel_values)
 
-                    text = self.processor.batch_decode(
-                        generated_ids, skip_special_tokens=True
-                    )[0].strip()
-                    if text:
-                        texts.append(text)
-                        regions.append(
-                            {
-                                "x": 0,
-                                "y": y_start,
-                                "w": W,
-                                "h": y_end - y_start,
-                                "text": text,
-                            }
-                        )
+                text = self.processor.batch_decode(
+                    generated_ids, skip_special_tokens=True
+                )[0].strip()
+                if text:
+                    texts.append(text)
+                    regions.append(
+                        {
+                            "x": 0,
+                            "y": y_start,
+                            "w": W,
+                            "h": y_end - y_start,
+                            "text": text,
+                        }
+                    )
 
-                results.append({"texts": texts, "regions": regions})
-            except Exception as e:
-                self.logger.error(f"OCR inference error on frame: {e}")
-                results.append({"texts": [], "regions": []})
-
+            results.append({"texts": texts, "regions": regions})
         return results[0] if not is_batch else results

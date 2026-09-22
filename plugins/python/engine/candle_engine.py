@@ -67,60 +67,47 @@ class CandleEngine(MLEngine):
             self.logger.error("candle is not installed.")
             return False
 
-        try:
-            # Local safetensors file
-            if os.path.isfile(model_name) and model_name.endswith(".safetensors"):
-                self.model = candle.load_safetensors(model_name)
-                self.model_type = "custom"
-                self.logger.info(f"Candle model loaded from safetensors: {model_name}")
-                return True
+        # Local safetensors file
+        if os.path.isfile(model_name) and model_name.endswith(".safetensors"):
+            self.model = candle.load_safetensors(model_name)
+            self.model_type = "custom"
+            self.logger.info(f"Candle model loaded from safetensors: {model_name}")
+            return True
 
-            # Directory containing safetensors + config
-            if os.path.isdir(model_name):
-                st_files = [
-                    f for f in os.listdir(model_name) if f.endswith(".safetensors")
-                ]
-                if not st_files:
-                    self.logger.error(
-                        f"No .safetensors files found in directory: {model_name}"
-                    )
-                    return False
-                weights = {}
-                for st_file in st_files:
-                    path = os.path.join(model_name, st_file)
-                    loaded = candle.load_safetensors(path)
-                    weights.update(loaded)
-                self.model = weights
-                self.model_type = "custom"
-                self.logger.info(
-                    f"Candle model loaded from directory: {model_name} "
-                    f"({len(st_files)} safetensors files)"
-                )
-                return True
-
-            # Try HuggingFace Hub download
-            try:
-                from huggingface_hub import hf_hub_download
-
-                path = hf_hub_download(repo_id=model_name, filename="model.safetensors")
-                self.model = candle.load_safetensors(path)
-                self.model_type = "custom"
-                self.logger.info(
-                    f"Candle model downloaded from HuggingFace: {model_name}"
-                )
-                return True
-            except ImportError:
+        # Directory containing safetensors + config
+        if os.path.isdir(model_name):
+            st_files = [f for f in os.listdir(model_name) if f.endswith(".safetensors")]
+            if not st_files:
                 self.logger.error(
-                    "huggingface_hub is not installed for remote model download."
+                    f"No .safetensors files found in directory: {model_name}"
                 )
                 return False
-            except Exception as e:
-                self.logger.error(f"Failed to download model from HuggingFace: {e}")
-                return False
+            weights = {}
+            for st_file in st_files:
+                path = os.path.join(model_name, st_file)
+                loaded = candle.load_safetensors(path)
+                weights.update(loaded)
+            self.model = weights
+            self.model_type = "custom"
+            self.logger.info(
+                f"Candle model loaded from directory: {model_name} "
+                f"({len(st_files)} safetensors files)"
+            )
+            return True
 
-        except Exception as e:
-            self.logger.error(f"Error loading Candle model '{model_name}': {e}")
-            self.model = None
+        # Try HuggingFace Hub download
+        try:
+            from huggingface_hub import hf_hub_download
+
+            path = hf_hub_download(repo_id=model_name, filename="model.safetensors")
+            self.model = candle.load_safetensors(path)
+            self.model_type = "custom"
+            self.logger.info(f"Candle model downloaded from HuggingFace: {model_name}")
+            return True
+        except ImportError:
+            self.logger.error(
+                "huggingface_hub is not installed for remote model download."
+            )
             return False
 
     def do_forward(self, frames):
@@ -142,24 +129,20 @@ class CandleEngine(MLEngine):
 
         img = self._apply_input_format(frames.astype(np.float32) / 255.0, is_batch)
 
-        try:
-            input_tensor = candle.Tensor(img)
-            if self.candle_device:
-                input_tensor = input_tensor.to_device(self.candle_device)
+        input_tensor = candle.Tensor(img)
+        if self.candle_device:
+            input_tensor = input_tensor.to_device(self.candle_device)
 
-            # For weight-dict models, return the tensor for downstream processing
-            if isinstance(self.model, dict):
-                raw = np.array(input_tensor.to_dtype(candle.f32).values())
-            elif callable(self.model):
-                output = self.model(input_tensor)
-                raw = np.array(output.values())
-            else:
-                raw = np.array(input_tensor.values())
+        # For weight-dict models, return the tensor for downstream processing
+        if isinstance(self.model, dict):
+            raw = np.array(input_tensor.to_dtype(candle.f32).values())
+        elif callable(self.model):
+            output = self.model(input_tensor)
+            raw = np.array(output.values())
+        else:
+            raw = np.array(input_tensor.values())
 
-            return self._apply_post_process(raw, is_batch)
-        except Exception as e:
-            self.logger.error(f"Candle inference failed: {e}")
-            return None
+        return self._apply_post_process(raw, is_batch)
 
     def do_generate(self, input_text, max_length=1000, system_prompt=None):
         """Basic text generation via Candle model (if supported)."""

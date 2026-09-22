@@ -27,7 +27,7 @@ try:
     gi.require_version("GstBase", "1.0")
     gi.require_version("GstVideo", "1.0")
     from gi.repository import Gst  # noqa: E402
-    from backend import analytics, GObject  # noqa: E402
+    from backend import analytics, GObject, post_model_load_error  # noqa: E402
     from base_objectdetector import BaseObjectDetector
 
     import os
@@ -185,7 +185,10 @@ class DemoSoccer(BaseObjectDetector):
     def model(self, value):
         self.__model = value
         if self.engine:
-            self.engine.do_load_model(value)
+            try:
+                self.engine.do_load_model(value)
+            except Exception as exception:
+                post_model_load_error(self, value, exception)
 
     @GObject.Property(type=str, default="auto")
     def device(self):

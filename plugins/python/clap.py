@@ -28,7 +28,7 @@ try:
     gi.require_version("Gst", "1.0")
     gi.require_version("GstBase", "1.0")
     from gi.repository import Gst, GstBase
-    from backend import GObject
+    from backend import GObject, post_model_load_error
 
     from log.logger_factory import LoggerFactory
     from engine.clap_engine import ClapEngine
@@ -145,8 +145,8 @@ class ClapTransform(GstBase.BaseTransform):
             self._engine.do_set_device(self.device)
             self._engine.do_load_model(self.model_name, labels=self._labels)
             self.logger.info(f"CLAP element started with {len(self._labels)} labels")
-        except Exception as e:
-            self.logger.error(f"Failed to start CLAP element: {e}")
+        except Exception as exception:
+            post_model_load_error(self, self.model_name, exception)
             return False
         return True
 

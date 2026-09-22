@@ -208,24 +208,19 @@ class YOLOPoseTransform(BaseObjectDetector):
         """Write result.plot() (BGR) back into the GStreamer buffer."""
         import numpy as np
 
-        try:
-            annotated_bgr = result.plot(kpt_line=True, kpt_radius=4)
-            fmt = FormatConverter.get_video_format(buf, self.sinkpad)
-            output = self._convert_bgr_to_format(annotated_bgr, fmt)
-            if output is None:
-                return
-            success, map_info = buf.map(Gst.MapFlags.WRITE)
-            if success:
-                try:
-                    frame_bytes = np.ascontiguousarray(output).tobytes()
-                    dst = (ctypes.c_char * map_info.size).from_buffer(map_info.data)
-                    ctypes.memmove(
-                        dst, frame_bytes, min(len(frame_bytes), map_info.size)
-                    )
-                finally:
-                    buf.unmap(map_info)
-        except Exception as e:
-            self.logger.error(f"Failed to write annotated pose frame: {e}")
+        annotated_bgr = result.plot(kpt_line=True, kpt_radius=4)
+        fmt = FormatConverter.get_video_format(buf, self.sinkpad)
+        output = self._convert_bgr_to_format(annotated_bgr, fmt)
+        if output is None:
+            return
+        success, map_info = buf.map(Gst.MapFlags.WRITE)
+        if success:
+            try:
+                frame_bytes = np.ascontiguousarray(output).tobytes()
+                dst = (ctypes.c_char * map_info.size).from_buffer(map_info.data)
+                ctypes.memmove(dst, frame_bytes, min(len(frame_bytes), map_info.size))
+            finally:
+                buf.unmap(map_info)
 
     @staticmethod
     def _convert_bgr_to_format(bgr, fmt):

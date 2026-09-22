@@ -48,7 +48,7 @@ try:
         GstGL,
         GstVulkan,
     )  # noqa: E402
-    from backend import GObject
+    from backend import GObject, post_error
     from log.logger_factory import LoggerFactory
 except ImportError as e:
     CAN_REGISTER_ELEMENT = False
@@ -390,8 +390,8 @@ class Overlay(GstBase.BaseTransform):
                 self.overlay_graphics.initialize(buf)
                 self.do_post_process(frame_metadata)
                 self.overlay_graphics.finalize()
-            except Exception as e:
-                self.logger.error(f"Error during Vulkan rendering: {e}")
+            except Exception as exception:
+                post_error(self, "vulkan rendering failed", exception)
                 return Gst.FlowReturn.ERROR
 
         elif self.graphics_type == GraphicsType.OPENGL:
@@ -412,8 +412,8 @@ class Overlay(GstBase.BaseTransform):
                 self.overlay_graphics.initialize(buf)
                 self.do_post_process(frame_metadata)
                 self.overlay_graphics.finalize()
-            except Exception as e:
-                self.logger.error(f"Error during OpenGL rendering: {e}")
+            except Exception as exception:
+                post_error(self, "opengl rendering failed", exception)
                 return Gst.FlowReturn.ERROR
             finally:
                 self.gl_context.make_current(False)

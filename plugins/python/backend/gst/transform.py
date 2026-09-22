@@ -33,6 +33,7 @@ gi.require_version("GstBase", "1.0")
 from gi.repository import GObject, GstBase  # noqa: E402
 
 from backend.core import MLEngineMixin, ml_property_namespace  # noqa: E402
+from backend.gst.errors import post_model_load_error  # noqa: E402
 
 
 class BaseTransform(GstBase.BaseTransform, MLEngineMixin):
@@ -60,7 +61,11 @@ class BaseTransform(GstBase.BaseTransform, MLEngineMixin):
     # GStreamer framework virtual: load the model when the element starts, then
     # run whatever the element itself needs starting (the backend-neutral hook).
     def do_start(self):
-        self.do_load_model()
+        try:
+            self.do_load_model()
+        except Exception as exception:
+            post_model_load_error(self, self._model_name, exception)
+            return False
         on_start = getattr(self, "on_start", None)
         if on_start:
             on_start()

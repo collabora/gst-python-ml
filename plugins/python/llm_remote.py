@@ -27,7 +27,7 @@ try:
     gi.require_version("GstBase", "1.0")
     gi.require_version("GLib", "2.0")
     from gi.repository import Gst, GstBase
-    from backend import GObject
+    from backend import GObject, post_error
 
     from log.logger_factory import LoggerFactory
 except ImportError as e:
@@ -243,32 +243,27 @@ class LlmRemote(GstBase.Aggregator):
 
             return self.push_generated_text(buf, generated_text)
 
-        except Exception as e:
-            self.logger.error(f"Error in remote LLM processing: {e}")
+        except Exception as exception:
+            post_error(self, "remote llm processing error", exception)
             return Gst.FlowReturn.ERROR
 
     def push_generated_text(self, inbuf, generated_text):
         """Push the generated text downstream."""
-        try:
-            generated_bytes = generated_text.encode("utf-8")
-            outbuf = Gst.Buffer.new_allocate(None, len(generated_bytes), None)
-            success, map_info_out = outbuf.map(Gst.MapFlags.WRITE)
-            if not success:
-                self.logger.error("Failed to map output buffer for writing")
-                return Gst.FlowReturn.ERROR
-
-            map_info_out.data[: len(generated_bytes)] = generated_bytes
-            outbuf.unmap(map_info_out)
-            outbuf.pts = inbuf.pts
-            outbuf.dts = inbuf.dts
-            outbuf.duration = inbuf.duration
-
-            self.logger.info("Pushed generated text downstream")
-            return self.srcpad.push(outbuf)
-
-        except Exception as e:
-            self.logger.error(f"Error pushing generated text: {e}")
+        generated_bytes = generated_text.encode("utf-8")
+        outbuf = Gst.Buffer.new_allocate(None, len(generated_bytes), None)
+        success, map_info_out = outbuf.map(Gst.MapFlags.WRITE)
+        if not success:
+            self.logger.error("Failed to map output buffer for writing")
             return Gst.FlowReturn.ERROR
+
+        map_info_out.data[: len(generated_bytes)] = generated_bytes
+        outbuf.unmap(map_info_out)
+        outbuf.pts = inbuf.pts
+        outbuf.dts = inbuf.dts
+        outbuf.duration = inbuf.duration
+
+        self.logger.info("Pushed generated text downstream")
+        return self.srcpad.push(outbuf)
 
 
 if CAN_REGISTER_ELEMENT and backend.BACKEND == "gst":

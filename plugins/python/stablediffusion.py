@@ -81,44 +81,35 @@ class StableDiffusion(BaseAggregator):
         self.get_model().to(self.device)
 
     def do_process(self, buf):
-        try:
-            success, map_info = buf.map(Gst.MapFlags.READ)
-            if not success:
-                self.logger.error("Failed to map input buffer")
-                return Gst.FlowReturn.ERROR
-
-            byte_data = bytes(map_info.data)
-            if not byte_data:
-                buf.unmap(map_info)
-                return Gst.FlowReturn.OK
-
-            try:
-                byte_data = byte_data.decode("utf-8", errors="replace")
-            except Exception as e:
-                self.logger.error(f"Error decoding text data: {e}")
-                buf.unmap(map_info)
-                return Gst.FlowReturn.ERROR
-
-            self.logger.info(f"Text to Image: received text: {byte_data}")
-
-            # Generate the image asynchronously
-            self.convert_text_to_image_async(byte_data)
-
-            buf.unmap(map_info)
-
-        except Exception as e:
-            self.logger.error(f"Error processing text buffer: {e}")
+        success, map_info = buf.map(Gst.MapFlags.READ)
+        if not success:
+            self.logger.error("Failed to map input buffer")
             return Gst.FlowReturn.ERROR
 
-    async def process_text(self, text):
+        byte_data = bytes(map_info.data)
+        if not byte_data:
+            buf.unmap(map_info)
+            return Gst.FlowReturn.OK
+
         try:
-            image_data = self.generate_image(text)
-
-            # Push the raw image buffer downstream
-            self.push_image_to_pipeline(image_data)
-
+            byte_data = byte_data.decode("utf-8", errors="replace")
         except Exception as e:
-            self.logger.error(f"Error processing text to image: {e}")
+            self.logger.error(f"Error decoding text data: {e}")
+            buf.unmap(map_info)
+            return Gst.FlowReturn.ERROR
+
+        self.logger.info(f"Text to Image: received text: {byte_data}")
+
+        # Generate the image asynchronously
+        self.convert_text_to_image_async(byte_data)
+
+        buf.unmap(map_info)
+
+    async def process_text(self, text):
+        image_data = self.generate_image(text)
+
+        # Push the raw image buffer downstream
+        self.push_image_to_pipeline(image_data)
 
     def convert_text_to_image_async(self, text):
         asyncio.run(self.process_text(text))
@@ -138,23 +129,19 @@ class StableDiffusion(BaseAggregator):
         return image_data
 
     def push_image_to_pipeline(self, image_data):
-        try:
-            # Create a new GStreamer buffer with the raw RGBA image data
-            buffer = Gst.Buffer.new_wrapped(image_data.tobytes())
+        # Create a new GStreamer buffer with the raw RGBA image data
+        buffer = Gst.Buffer.new_wrapped(image_data.tobytes())
 
-            # Set buffer PTS and duration
-            buffer.pts = Gst.CLOCK_TIME_NONE
-            buffer.duration = Gst.CLOCK_TIME_NONE
+        # Set buffer PTS and duration
+        buffer.pts = Gst.CLOCK_TIME_NONE
+        buffer.duration = Gst.CLOCK_TIME_NONE
 
-            # Push the buffer downstream to the next element (e.g., pngenc for encoding)
-            ret = self.srcpad.push(buffer)
-            if ret != Gst.FlowReturn.OK:
-                raise RuntimeError(f"Error pushing image to pipeline: {ret}")
+        # Push the buffer downstream to the next element (e.g., pngenc for encoding)
+        ret = self.srcpad.push(buffer)
+        if ret != Gst.FlowReturn.OK:
+            raise RuntimeError(f"Error pushing image to pipeline: {ret}")
 
-            self.logger.info("Raw image generated and pushed downstream successfully.")
-
-        except Exception as e:
-            self.logger.error(f"Error pushing image to pipeline: {e}")
+        self.logger.info("Raw image generated and pushed downstream successfully.")
 
 
 if CAN_REGISTER_ELEMENT and backend.BACKEND == "gst":

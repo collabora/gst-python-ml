@@ -1058,3 +1058,40 @@ def test_gst_driver_keeps_the_input_timing_including_dts():
     GstBaseAggregator.do_process(leaf, inbuf)
 
     assert (pushed[0].pts, pushed[0].dts, pushed[0].duration) == (90, 80, 70)
+
+
+def test_a_model_that_cannot_load_raises_to_the_host():
+    """On g2g there is no bus to post an error on, so the load failure reaches
+    the host as the exception it was."""
+    from engine.engine_factory import EngineFactory
+    from engine.ml_engine import MLEngine
+
+    model_name = "does-not-exist.pt"
+    load_failure = "no weights at does-not-exist.pt"
+
+    class FailingEngine(MLEngine):
+        def do_load_model(self, model_name, **kwargs):
+            raise FileNotFoundError(load_failure)
+
+        def do_set_device(self, device):
+            self.device = device
+
+        def do_forward(self, frames):
+            raise AssertionError("inference ran without a model")
+
+        def do_generate(self, input_text, max_length=1000, system_prompt=None):
+            raise AssertionError("generation ran without a model")
+
+    class LoadFails(VideoTransform):
+        def process_frames(self, frames, num_sources, fmt, target):
+            raise AssertionError("a frame was processed without a model")
+
+    EngineFactory.register("test_failing_engine", FailingEngine)
+    elem = LoadFails()
+    elem.engine_name = "test_failing_engine"
+    elem.model_name = model_name
+
+    with pytest.raises(FileNotFoundError, match=load_failure):
+        elem.g2g_process(bytearray(8 * 8 * 3), 8, 8, "RGB", StubMetaSink())
+
+    assert elem.engine.model is None

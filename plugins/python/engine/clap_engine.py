@@ -82,25 +82,19 @@ class ClapEngine(PyTorchEngine):
             self.logger.warning("No text labels configured for CLAP inference")
             return None
 
-        try:
-            # the processor kwarg is `audios` on transformers 4 and `audio` on 5
-            inputs = self.processor.feature_extractor(
-                audio_waveform,
-                sampling_rate=CLAP_SAMPLE_RATE,
-                return_tensors="pt",
-            )
-            inputs = {k: v.to(self.device) for k, v in inputs.items()}
-            with torch.no_grad():
-                audio_emb = projected(self.model.get_audio_features(**inputs))
-                audio_emb = audio_emb / audio_emb.norm(dim=-1, keepdim=True)
-                similarities = (audio_emb @ self.text_embeddings.T).squeeze(0)
-                scores = similarities.cpu().numpy()
+        # the processor kwarg is `audios` on transformers 4 and `audio` on 5
+        inputs = self.processor.feature_extractor(
+            audio_waveform,
+            sampling_rate=CLAP_SAMPLE_RATE,
+            return_tensors="pt",
+        )
+        inputs = {k: v.to(self.device) for k, v in inputs.items()}
+        with torch.no_grad():
+            audio_emb = projected(self.model.get_audio_features(**inputs))
+            audio_emb = audio_emb / audio_emb.norm(dim=-1, keepdim=True)
+            similarities = (audio_emb @ self.text_embeddings.T).squeeze(0)
+            scores = similarities.cpu().numpy()
 
-            results = [
-                (label, float(score)) for label, score in zip(self._labels, scores)
-            ]
-            results.sort(key=lambda x: x[1], reverse=True)
-            return results
-        except Exception as e:
-            self.logger.error(f"CLAP inference error: {e}")
-            return None
+        results = [(label, float(score)) for label, score in zip(self._labels, scores)]
+        results.sort(key=lambda x: x[1], reverse=True)
+        return results

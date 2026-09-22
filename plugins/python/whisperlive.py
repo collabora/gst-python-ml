@@ -21,7 +21,7 @@ import backend
 
 CAN_REGISTER_ELEMENT = True
 try:
-    from backend import GObject
+    from backend import GObject, post_model_load_error
     from base_transcribe import BaseTranscribe
 except ImportError as e:
     CAN_REGISTER_ELEMENT = False
@@ -83,7 +83,10 @@ class WhisperLive(BaseTranscribe):
     def do_set_property(self, prop: GObject.ParamSpec, value):
         if prop.name == "llm-model-name":
             self.llm_model_name = value
-            self.do_load_model()  # Load model whenever the model name is set or changed
+            try:
+                self.do_load_model()
+            except Exception as exception:
+                post_model_load_error(self, self.llm_model_name, exception)
         else:
             raise AttributeError(f"Unknown property {prop.name}")
 
@@ -105,19 +108,15 @@ class WhisperLive(BaseTranscribe):
         self.logger.info(
             f"Initializing WhisperSpeech TTS model on device: {self.device}"
         )
-        try:
-            self.pipeline = Pipeline(
-                s2a_ref=model_ref, device=self.device, torch_compile=True
+        self.pipeline = Pipeline(
+            s2a_ref=model_ref, device=self.device, torch_compile=True
+        )
+        if self.pipeline is not None:
+            self.logger.info(
+                f"WhisperSpeech pipeline initialized successfully: {self.get_model()}"
             )
-            if self.pipeline is not None:
-                self.logger.info(
-                    f"WhisperSpeech pipeline initialized successfully: {self.get_model()}"
-                )
-            else:
-                self.logger.error("Failed to create WhisperSpeech pipeline")
-        except Exception as e:
-            self.logger.error(f"Exception during model initialization: {e}")
-
+        else:
+            self.logger.error("Failed to create WhisperSpeech pipeline")
         # load LLM
         """
         Load the tokenizer and model using the specified model path or a default model.
@@ -126,20 +125,15 @@ class WhisperLive(BaseTranscribe):
             self.logger.error("LLM model name is not set. Cannot load model.")
             return
 
-        try:
-            self.logger.info(f"Loading model and tokenizer for: {self.llm_model_name}")
-            self.llm_tokenizer = AutoTokenizer.from_pretrained(self.llm_model_name)
-            self.llm_model = AutoModelForCausalLM.from_pretrained(
-                self.llm_model_name,
-                torch_dtype=torch.float16 if self.device == "cuda" else torch.float32,
-                device_map="auto",
-            )
-            self.llm_model.eval()
-            self.logger.info(f"Model {self.llm_model_name} loaded successfully.")
-        except Exception as e:
-            self.logger.error(f"Error loading model: {e}")
-            self.llm_tokenizer = None
-            self.llm_model = None
+        self.logger.info(f"Loading model and tokenizer for: {self.llm_model_name}")
+        self.llm_tokenizer = AutoTokenizer.from_pretrained(self.llm_model_name)
+        self.llm_model = AutoModelForCausalLM.from_pretrained(
+            self.llm_model_name,
+            torch_dtype=torch.float16 if self.device == "cuda" else torch.float32,
+            device_map="auto",
+        )
+        self.llm_model.eval()
+        self.logger.info(f"Model {self.llm_model_name} loaded successfully.")
 
     def do_transcribe(self, audio_data, task):
         result, _ = self.get_model().transcribe(

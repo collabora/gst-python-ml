@@ -51,77 +51,67 @@ class LiteRTEngine(MLEngine):
         self.model_name = model_name
         self.kwargs = kwargs
 
-        try:
-            if os.path.isfile(model_name) and model_name.endswith(".tflite"):
-                self.interpreter = tf.lite.Interpreter(
-                    model_path=model_name,
-                    experimental_delegates=[self.delegate] if self.delegate else None,
+        if os.path.isfile(model_name) and model_name.endswith(".tflite"):
+            self.interpreter = tf.lite.Interpreter(
+                model_path=model_name,
+                experimental_delegates=[self.delegate] if self.delegate else None,
+            )
+            self.model_type = "custom"
+            self.logger.info(f"TFLite model loaded from local path: {model_name}")
+        else:
+            if hasattr(keras.applications, model_name):
+                model = getattr(keras.applications, model_name)(weights="imagenet")
+                self.model_type = "classification"
+            elif processor_name and tokenizer_name:
+                from transformers import (
+                    AutoImageProcessor,
+                    AutoTokenizer,
+                    TFVisionEncoderDecoderModel,
                 )
-                self.model_type = "custom"
-                self.logger.info(f"TFLite model loaded from local path: {model_name}")
+
+                self.image_processor = AutoImageProcessor.from_pretrained(
+                    processor_name
+                )
+                self.tokenizer = AutoTokenizer.from_pretrained(tokenizer_name)
+                model = TFVisionEncoderDecoderModel.from_pretrained(model_name)
+                self.frame_stride = (
+                    model.config.encoder.num_frames
+                    if hasattr(model.config.encoder, "num_frames")
+                    else 1
+                )
+                self.model_type = "vision_text"
+                self.logger.warning(
+                    "Vision-text models in TFLite may require custom generation loops."
+                )
             else:
-                if hasattr(keras.applications, model_name):
-                    model = getattr(keras.applications, model_name)(weights="imagenet")
-                    self.model_type = "classification"
-                elif processor_name and tokenizer_name:
-                    from transformers import (
-                        AutoImageProcessor,
-                        AutoTokenizer,
-                        TFVisionEncoderDecoderModel,
-                    )
+                from transformers import AutoTokenizer, TFAutoModelForCausalLM
 
-                    self.image_processor = AutoImageProcessor.from_pretrained(
-                        processor_name
-                    )
-                    self.tokenizer = AutoTokenizer.from_pretrained(tokenizer_name)
-                    model = TFVisionEncoderDecoderModel.from_pretrained(model_name)
-                    self.frame_stride = (
-                        model.config.encoder.num_frames
-                        if hasattr(model.config.encoder, "num_frames")
-                        else 1
-                    )
-                    self.model_type = "vision_text"
-                    self.logger.warning(
-                        "Vision-text models in TFLite may require custom generation loops."
-                    )
-                else:
-                    from transformers import AutoTokenizer, TFAutoModelForCausalLM
-
-                    self.tokenizer = AutoTokenizer.from_pretrained(model_name)
-                    model = TFAutoModelForCausalLM.from_pretrained(model_name)
-                    self.model_type = "llm"
-                    self.logger.warning(
-                        "LLM models in TFLite require manual generation loops for inference."
-                    )
-
-                converter = tf.lite.TFLiteConverter.from_keras_model(model)
-                converter.optimizations = [tf.lite.Optimize.DEFAULT]
-                converter.target_spec.supported_ops = [
-                    tf.lite.OpsSet.TFLITE_BUILTINS,
-                    tf.lite.OpsSet.SELECT_TF_OPS,
-                ]
-                tflite_model = converter.convert()
-
-                self.interpreter = tf.lite.Interpreter(
-                    model_content=tflite_model,
-                    experimental_delegates=[self.delegate] if self.delegate else None,
-                )
-                self.logger.info(
-                    f"Model '{model_name}' converted to TFLite and loaded."
+                self.tokenizer = AutoTokenizer.from_pretrained(model_name)
+                model = TFAutoModelForCausalLM.from_pretrained(model_name)
+                self.model_type = "llm"
+                self.logger.warning(
+                    "LLM models in TFLite require manual generation loops for inference."
                 )
 
-            self.interpreter.allocate_tensors()
-            self.input_details = self.interpreter.get_input_details()
-            self.output_details = self.interpreter.get_output_details()
+            converter = tf.lite.TFLiteConverter.from_keras_model(model)
+            converter.optimizations = [tf.lite.Optimize.DEFAULT]
+            converter.target_spec.supported_ops = [
+                tf.lite.OpsSet.TFLITE_BUILTINS,
+                tf.lite.OpsSet.SELECT_TF_OPS,
+            ]
+            tflite_model = converter.convert()
 
-            return True
+            self.interpreter = tf.lite.Interpreter(
+                model_content=tflite_model,
+                experimental_delegates=[self.delegate] if self.delegate else None,
+            )
+            self.logger.info(f"Model '{model_name}' converted to TFLite and loaded.")
 
-        except Exception as e:
-            self.logger.error(f"Error loading/converting model '{model_name}': {e}")
-            self.interpreter = None
-            self.tokenizer = None
-            self.image_processor = None
-            return False
+        self.interpreter.allocate_tensors()
+        self.input_details = self.interpreter.get_input_details()
+        self.output_details = self.interpreter.get_output_details()
+
+        return True
 
     def do_set_device(self, device):
         """Set the device/delegate for TFLite."""
@@ -195,31 +185,22 @@ class LiteRTEngine(MLEngine):
             if self.counter % self.frame_stride == 0:
                 self.frame_buffer.append(frames)
             if len(self.frame_buffer) >= self.batch_size:
-                try:
-                    pixel_values = self.image_processor(
-                        self.frame_buffer, return_tensors="tf"
-                    ).pixel_values
-                    # Assuming model exported for single forward pass; adjust if needed
-                    input_shape = self.input_details[0]["shape"]
-                    if pixel_values.shape != tuple(input_shape):
-                        self.logger.error("Input shape mismatch for vision-text model.")
-                        return None
-                    self.interpreter.set_tensor(
-                        self.input_details[0]["index"], pixel_values.numpy()
-                    )
-                    self.interpreter.invoke()
-                    tokens = self.interpreter.get_tensor(
-                        self.output_details[0]["index"]
-                    )
-                    captions = self.tokenizer.batch_decode(
-                        tokens, skip_special_tokens=True
-                    )
-                    self.frame_buffer = []
-                    return captions[0]
-                except Exception as e:
-                    self.logger.error(f"Failed to process frames: {e}")
-                    self.frame_buffer = []
+                pixel_values = self.image_processor(
+                    self.frame_buffer, return_tensors="tf"
+                ).pixel_values
+                # Assuming model exported for single forward pass; adjust if needed
+                input_shape = self.input_details[0]["shape"]
+                if pixel_values.shape != tuple(input_shape):
+                    self.logger.error("Input shape mismatch for vision-text model.")
                     return None
+                self.interpreter.set_tensor(
+                    self.input_details[0]["index"], pixel_values.numpy()
+                )
+                self.interpreter.invoke()
+                tokens = self.interpreter.get_tensor(self.output_details[0]["index"])
+                captions = self.tokenizer.batch_decode(tokens, skip_special_tokens=True)
+                self.frame_buffer = []
+                return captions[0]
             return None
 
         elif self.model_type == "llm":

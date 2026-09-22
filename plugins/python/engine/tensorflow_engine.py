@@ -31,71 +31,60 @@ class TensorFlowEngine(MLEngine):
         tokenizer_name = kwargs.get("tokenizer_name")
         self.model_type = None
 
-        try:
-            if os.path.isdir(model_name):
-                self.model = tf.saved_model.load(model_name)
-                self.infer = self.model.signatures["serving_default"]
-                self.model_type = "custom"
-                self.logger.info(f"SavedModel loaded from local path: {model_name}")
-            elif os.path.isfile(model_name):
-                self.model = tf.keras.models.load_model(model_name)
-                self.model_type = "custom"
-                self.logger.info(f"Keras model loaded from local path: {model_name}")
+        if os.path.isdir(model_name):
+            self.model = tf.saved_model.load(model_name)
+            self.infer = self.model.signatures["serving_default"]
+            self.model_type = "custom"
+            self.logger.info(f"SavedModel loaded from local path: {model_name}")
+        elif os.path.isfile(model_name):
+            self.model = tf.keras.models.load_model(model_name)
+            self.model_type = "custom"
+            self.logger.info(f"Keras model loaded from local path: {model_name}")
+        else:
+            if hasattr(keras.applications, model_name):
+                self.model = getattr(keras.applications, model_name)(weights="imagenet")
+                self.model_type = "classification"
+                self.logger.info(
+                    f"Pre-trained vision model '{model_name}' loaded from keras.applications"
+                )
+            elif processor_name and tokenizer_name:
+                from transformers import (
+                    AutoImageProcessor,
+                    AutoTokenizer,
+                    TFVisionEncoderDecoderModel,
+                )
+
+                self.image_processor = AutoImageProcessor.from_pretrained(
+                    processor_name
+                )
+                self.tokenizer = AutoTokenizer.from_pretrained(tokenizer_name)
+                self.model = TFVisionEncoderDecoderModel.from_pretrained(model_name)
+                self.frame_stride = (
+                    self.model.config.encoder.num_frames
+                    if hasattr(self.model.config.encoder, "num_frames")
+                    else 1
+                )
+                self.model_type = "vision_text"
+                self.logger.info(
+                    f"Vision-Text model '{model_name}' loaded with processor and tokenizer."
+                )
             else:
-                if hasattr(keras.applications, model_name):
-                    self.model = getattr(keras.applications, model_name)(
-                        weights="imagenet"
-                    )
-                    self.model_type = "classification"
-                    self.logger.info(
-                        f"Pre-trained vision model '{model_name}' loaded from keras.applications"
-                    )
-                elif processor_name and tokenizer_name:
-                    from transformers import (
-                        AutoImageProcessor,
-                        AutoTokenizer,
-                        TFVisionEncoderDecoderModel,
-                    )
+                from transformers import AutoTokenizer, TFAutoModelForCausalLM
 
-                    self.image_processor = AutoImageProcessor.from_pretrained(
-                        processor_name
-                    )
-                    self.tokenizer = AutoTokenizer.from_pretrained(tokenizer_name)
-                    self.model = TFVisionEncoderDecoderModel.from_pretrained(model_name)
-                    self.frame_stride = (
-                        self.model.config.encoder.num_frames
-                        if hasattr(self.model.config.encoder, "num_frames")
-                        else 1
-                    )
-                    self.model_type = "vision_text"
-                    self.logger.info(
-                        f"Vision-Text model '{model_name}' loaded with processor and tokenizer."
-                    )
-                else:
-                    from transformers import AutoTokenizer, TFAutoModelForCausalLM
+                self.logger.info(f"Loading tokenizer for language model {model_name}")
+                self.tokenizer = AutoTokenizer.from_pretrained(model_name)
+                self.logger.info(f"Loading language model {model_name}")
+                self.model = TFAutoModelForCausalLM.from_pretrained(
+                    model_name,
+                )
+                self.model_type = "llm"
+                self.logger.info(
+                    f"Pre-trained LLM model '{model_name}' loaded from Transformers."
+                )
 
-                    self.logger.info(
-                        f"Loading tokenizer for language model {model_name}"
-                    )
-                    self.tokenizer = AutoTokenizer.from_pretrained(model_name)
-                    self.logger.info(f"Loading language model {model_name}")
-                    self.model = TFAutoModelForCausalLM.from_pretrained(
-                        model_name,
-                    )
-                    self.model_type = "llm"
-                    self.logger.info(
-                        f"Pre-trained LLM model '{model_name}' loaded from Transformers."
-                    )
-
-            if hasattr(self.model, "trainable"):
-                self.model.trainable = False
-            return True
-
-        except Exception as e:
-            self.logger.error(f"Error loading model '{model_name}': {e}")
-            self.tokenizer = None
-            self.model = None
-            return False
+        if hasattr(self.model, "trainable"):
+            self.model.trainable = False
+        return True
 
     def do_set_device(self, device):
         """Set TensorFlow device for the model."""
@@ -163,23 +152,16 @@ class TensorFlowEngine(MLEngine):
                 self.frame_buffer.append(frames)
             if len(self.frame_buffer) >= self.batch_size:
                 self.logger.info(f"Processing {self.batch_size} frames")
-                try:
-                    gen_kwargs = {"min_length": 10, "max_length": 20, "num_beams": 8}
-                    pixel_values = self.image_processor(
-                        self.frame_buffer, return_tensors="tf"
-                    ).pixel_values
-                    with tf.device(self.device):
-                        tokens = self.model.generate(pixel_values, **gen_kwargs)
-                    captions = self.tokenizer.batch_decode(
-                        tokens, skip_special_tokens=True
-                    )
-                    self.logger.info(f"Captions: {captions}")
-                    self.frame_buffer = []
-                    return captions[0]
-                except Exception as e:
-                    self.logger.error(f"Failed to process frames: {e}")
-                    self.frame_buffer = []
-                    return None
+                gen_kwargs = {"min_length": 10, "max_length": 20, "num_beams": 8}
+                pixel_values = self.image_processor(
+                    self.frame_buffer, return_tensors="tf"
+                ).pixel_values
+                with tf.device(self.device):
+                    tokens = self.model.generate(pixel_values, **gen_kwargs)
+                captions = self.tokenizer.batch_decode(tokens, skip_special_tokens=True)
+                self.logger.info(f"Captions: {captions}")
+                self.frame_buffer = []
+                return captions[0]
             return None
 
         elif self.model_type == "llm":

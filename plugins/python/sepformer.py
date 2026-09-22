@@ -88,7 +88,6 @@ class Sepformer(BaseSeparate):
         raise ValueError("engine_name cannot be set")
 
     def do_separate(self, audio_data):
-        import numpy as np
         import torch
 
         engine = self.engine
@@ -98,18 +97,13 @@ class Sepformer(BaseSeparate):
         audio_torch = torch.from_numpy(audio_data).float().to(engine.device)
         mixture = audio_torch.unsqueeze(0)  # (1, length) for SpeechBrain
 
-        try:
-            sources = engine.separate_sources(
-                mixture,
-                segment=(
-                    15.0 if not self.streaming else 1.0
-                ),  # Increased for better quality
-                overlap=0.1,
-            )  # (batch, sources, length)
-        except Exception as e:
-            self.logger.error(f"Separation failed: {e}")
-            return np.zeros(len(audio_data), dtype=np.float32)
-
+        sources = engine.separate_sources(
+            mixture,
+            segment=(
+                15.0 if not self.streaming else 1.0
+            ),  # Increased for better quality
+            overlap=0.1,
+        )  # (batch, sources, length)
         energies = torch.mean(sources**2, dim=[1, 2])
         if energies.sum() == 0:
             idx = 0  # Default to first source if all energies zero

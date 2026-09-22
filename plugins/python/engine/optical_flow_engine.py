@@ -54,33 +54,28 @@ class OpticalFlowEngine(PyTorchEngine):
     def do_forward(self, prev_frame, curr_frame):
         import torch
 
-        try:
-            H, W = curr_frame.shape[:2]
+        H, W = curr_frame.shape[:2]
 
-            # Convert HWC uint8 -> CHW float tensor
-            prev_t = torch.from_numpy(prev_frame).permute(2, 0, 1).float()
-            curr_t = torch.from_numpy(curr_frame).permute(2, 0, 1).float()
+        # Convert HWC uint8 -> CHW float tensor
+        prev_t = torch.from_numpy(prev_frame).permute(2, 0, 1).float()
+        curr_t = torch.from_numpy(curr_frame).permute(2, 0, 1).float()
 
-            # RAFT requires dimensions divisible by 8
-            pad_h = (8 - H % 8) % 8
-            pad_w = (8 - W % 8) % 8
-            if pad_h > 0 or pad_w > 0:
-                prev_t = torch.nn.functional.pad(prev_t, (0, pad_w, 0, pad_h))
-                curr_t = torch.nn.functional.pad(curr_t, (0, pad_w, 0, pad_h))
+        # RAFT requires dimensions divisible by 8
+        pad_h = (8 - H % 8) % 8
+        pad_w = (8 - W % 8) % 8
+        if pad_h > 0 or pad_w > 0:
+            prev_t = torch.nn.functional.pad(prev_t, (0, pad_w, 0, pad_h))
+            curr_t = torch.nn.functional.pad(curr_t, (0, pad_w, 0, pad_h))
 
-            prev_t, curr_t = self.transforms(prev_t, curr_t)
-            prev_batch = prev_t.unsqueeze(0).to(self.device)
-            curr_batch = curr_t.unsqueeze(0).to(self.device)
+        prev_t, curr_t = self.transforms(prev_t, curr_t)
+        prev_batch = prev_t.unsqueeze(0).to(self.device)
+        curr_batch = curr_t.unsqueeze(0).to(self.device)
 
-            with torch.no_grad():
-                flow_predictions = self.model(prev_batch, curr_batch)
+        with torch.no_grad():
+            flow_predictions = self.model(prev_batch, curr_batch)
 
-            # RAFT returns a list of flow predictions; take the last (finest)
-            flow = flow_predictions[-1].squeeze(0).cpu().numpy()
-            # flow shape: (2, H', W') -> transpose to (H, W, 2) and crop
-            flow = flow.transpose(1, 2, 0)[:H, :W]
-            return flow
-
-        except Exception as e:
-            self.logger.error(f"Optical flow inference error: {e}")
-            return None
+        # RAFT returns a list of flow predictions; take the last (finest)
+        flow = flow_predictions[-1].squeeze(0).cpu().numpy()
+        # flow shape: (2, H', W') -> transpose to (H, W, 2) and crop
+        flow = flow.transpose(1, 2, 0)[:H, :W]
+        return flow

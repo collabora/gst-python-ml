@@ -29,7 +29,7 @@ try:
     from gi.repository import Gst, GstBase  # noqa: E402
 
     from log.logger_factory import LoggerFactory  # noqa: E402
-    from backend import analytics, GObject  # noqa: E402
+    from backend import analytics, GObject, post_error  # noqa: E402
 
     # Building a Gst object needs Gst.init, which only the gst backend calls.
     if backend.BACKEND == "gst":
@@ -521,8 +521,8 @@ class TrackerTransform(GstBase.BaseTransform):
             )
             return Gst.FlowReturn.OK
 
-        except Exception as e:
-            self.logger.error(f"Tracker transform error: {e}")
+        except Exception as exception:
+            post_error(self, "tracker transform error", exception)
             return Gst.FlowReturn.ERROR
 
     def do_get_property(self, prop):

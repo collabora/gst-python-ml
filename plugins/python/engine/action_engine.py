@@ -55,31 +55,26 @@ class ActionEngine(PyTorchEngine):
         import torch
         from PIL import Image
 
-        try:
-            pil_frames = [Image.fromarray(f.astype(np.uint8)) for f in frame_buffer]
+        pil_frames = [Image.fromarray(f.astype(np.uint8)) for f in frame_buffer]
 
-            inputs = self.image_processor(pil_frames, return_tensors="pt")
-            inputs = {k: v.to(self.device) for k, v in inputs.items()}
+        inputs = self.image_processor(pil_frames, return_tensors="pt")
+        inputs = {k: v.to(self.device) for k, v in inputs.items()}
 
-            with torch.no_grad():
-                outputs = self.model(**inputs)
+        with torch.no_grad():
+            outputs = self.model(**inputs)
 
-            logits = outputs.logits[0]
-            probs = torch.softmax(logits, dim=-1)
-            top5_indices = probs.topk(5).indices.cpu().numpy()
-            top5_scores = probs.topk(5).values.cpu().numpy()
+        logits = outputs.logits[0]
+        probs = torch.softmax(logits, dim=-1)
+        top5_indices = probs.topk(5).indices.cpu().numpy()
+        top5_scores = probs.topk(5).values.cpu().numpy()
 
-            top1_idx = top5_indices[0]
-            label = self.model.config.id2label.get(int(top1_idx), f"class_{top1_idx}")
-            score = float(top5_scores[0])
+        top1_idx = top5_indices[0]
+        label = self.model.config.id2label.get(int(top1_idx), f"class_{top1_idx}")
+        score = float(top5_scores[0])
 
-            top5 = []
-            for idx, s in zip(top5_indices, top5_scores):
-                name = self.model.config.id2label.get(int(idx), f"class_{idx}")
-                top5.append({"label": name, "score": float(s)})
+        top5 = []
+        for idx, s in zip(top5_indices, top5_scores):
+            name = self.model.config.id2label.get(int(idx), f"class_{idx}")
+            top5.append({"label": name, "score": float(s)})
 
-            return {"label": label, "score": score, "top5": top5}
-
-        except Exception as e:
-            self.logger.error(f"Action recognition inference error: {e}")
-            return None
+        return {"label": label, "score": score, "top5": top5}

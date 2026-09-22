@@ -37,6 +37,8 @@ if BACKEND == "gst":
         frameio,
         FlowReturn,
         GObject,
+        post_error,
+        post_model_load_error,
     )
 elif BACKEND == "g2g":
     from backend.g2g import (
@@ -47,6 +49,8 @@ elif BACKEND == "g2g":
         frameio,
         FlowReturn,
         GObject,
+        post_error,
+        post_model_load_error,
     )
 else:
     raise ImportError(
@@ -76,6 +80,8 @@ __all__ = [
     "frameio",
     "FlowReturn",
     "GObject",
+    "post_error",
+    "post_model_load_error",
     "AnalyticsBackend",
     "FrameIO",
     "MLEngineMixin",

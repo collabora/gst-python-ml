@@ -35,18 +35,15 @@ class SepformerEngine(PyTorchEngine):
         self.logger.info(f"Loading Sepformer-WhamR model on device: {self.device}")
         savedir = "pretrained_models/sepformer-whamr"
         repo_id = "speechbrain/sepformer-whamr"
-        try:
-            # Download the model files manually to avoid deprecated argument issues
-            if not os.path.exists(savedir):
-                snapshot_download(repo_id=repo_id, local_dir=savedir)
-            # Load from local directory
-            self.model = SepformerSeparation.from_hparams(
-                source=savedir, savedir=savedir, run_opts={"device": self.device}
-            )
-            self.sample_rate = 8000  # Hz, as per SpeechBrain Sepformer models
-            self.sources = ["source0", "source1"]  # 2 sources for separation
-        except Exception as e:
-            self.logger.error(f"Failed to load Sepformer-WhamR model: {e}")
+        # Download the model files manually to avoid deprecated argument issues
+        if not os.path.exists(savedir):
+            snapshot_download(repo_id=repo_id, local_dir=savedir)
+        # Load from local directory
+        self.model = SepformerSeparation.from_hparams(
+            source=savedir, savedir=savedir, run_opts={"device": self.device}
+        )
+        self.sample_rate = 8000  # Hz, as per SpeechBrain Sepformer models
+        self.sources = ["source0", "source1"]  # 2 sources for separation
 
     def separate_sources(
         self,

@@ -18,7 +18,6 @@
 
 import os
 import numpy as np
-import traceback
 
 from .ml_engine import MLEngine
 
@@ -66,140 +65,112 @@ class PyTorchEngine(MLEngine):
             "trt_input_shapes", None
         )  # User-provided shapes, e.g., [(batch, channels, height, width)]
 
-        try:
-            if os.path.isfile(model_name):
-                if model_name.endswith(".pte") and et is not None:
-                    # Load ExecuTorch model
-                    self.model = et.Module(model_name)  # Load .pte file
-                    self.is_executorch = True
-                    self.logger.info(f"ExecuTorch model loaded from: {model_name}")
-                else:
-                    self.model = torch.load(model_name)
-                    self.logger.info(f"Model loaded from local path: {model_name}")
+        if os.path.isfile(model_name):
+            if model_name.endswith(".pte") and et is not None:
+                # Load ExecuTorch model
+                self.model = et.Module(model_name)  # Load .pte file
+                self.is_executorch = True
+                self.logger.info(f"ExecuTorch model loaded from: {model_name}")
             else:
-                if hasattr(models, model_name):
-                    self.model = getattr(models, model_name)(pretrained=True)
-                    self.logger.info(
-                        f"Pre-trained vision model '{model_name}' loaded from TorchVision"
-                    )
-                elif hasattr(models.detection, model_name):
-                    self.model = getattr(models.detection, model_name)(
-                        weights="DEFAULT"
-                    )
-                    self.logger.info(
-                        f"Pre-trained detection model '{model_name}' loaded from TorchVision.detection"
-                    )
-                elif processor_name and tokenizer_name:
-                    self.image_processor = AutoImageProcessor.from_pretrained(
-                        processor_name
-                    )
-                    self.tokenizer = AutoTokenizer.from_pretrained(tokenizer_name)
-                    self.model = VisionEncoderDecoderModel.from_pretrained(model_name)
-                    self.frame_stride = self.model.config.encoder.num_frames
-                    self.logger.info(
-                        f"Vision-Text model '{model_name}' loaded with processor and tokenizer."
-                    )
+                self.model = torch.load(model_name)
+                self.logger.info(f"Model loaded from local path: {model_name}")
+        else:
+            if hasattr(models, model_name):
+                self.model = getattr(models, model_name)(pretrained=True)
+                self.logger.info(
+                    f"Pre-trained vision model '{model_name}' loaded from TorchVision"
+                )
+            elif hasattr(models.detection, model_name):
+                self.model = getattr(models.detection, model_name)(weights="DEFAULT")
+                self.logger.info(
+                    f"Pre-trained detection model '{model_name}' loaded from TorchVision.detection"
+                )
+            elif processor_name and tokenizer_name:
+                self.image_processor = AutoImageProcessor.from_pretrained(
+                    processor_name
+                )
+                self.tokenizer = AutoTokenizer.from_pretrained(tokenizer_name)
+                self.model = VisionEncoderDecoderModel.from_pretrained(model_name)
+                self.frame_stride = self.model.config.encoder.num_frames
+                self.logger.info(
+                    f"Vision-Text model '{model_name}' loaded with processor and tokenizer."
+                )
+            else:
+                self.logger.info(f"Loading tokenizer for language model {model_name}")
+                self.tokenizer = AutoTokenizer.from_pretrained(model_name)
+                self.logger.info(f"Loading language model {model_name}")
+                quantization_config = BitsAndBytesConfig(load_in_4bit=True)
+                self.model = AutoModelForCausalLM.from_pretrained(
+                    model_name,
+                    torch_dtype=(
+                        torch.float16 if self.device == "cuda" else torch.float32
+                    ),
+                    device_map="auto",
+                    quantization_config=quantization_config,
+                )
+
+                self.get_model().eval()
+                self.logger.info(
+                    f"Pre-trained LLM model '{model_name}' loaded from Transformers."
+                )
+
+        if not self.is_executorch:
+            if hasattr(self.model, "to") and callable(getattr(self.model, "to")):
+                self.execute_with_stream(lambda: self.model.to(self.device))
+                self.logger.info(f"Model moved to {self.device}")
+
+            # Compile with TensorRT if enabled and available
+            if use_tensorrt and torch_tensorrt is not None and "cuda" in self.device:
+                if not torch.cuda.is_available():
+                    self.logger.warning("TensorRT requires CUDA; skipping.")
                 else:
-                    self.logger.info(
-                        f"Loading tokenizer for language model {model_name}"
-                    )
-                    self.tokenizer = AutoTokenizer.from_pretrained(model_name)
-                    self.logger.info(f"Loading language model {model_name}")
-                    quantization_config = BitsAndBytesConfig(load_in_4bit=True)
-                    self.model = AutoModelForCausalLM.from_pretrained(
-                        model_name,
-                        torch_dtype=(
-                            torch.float16 if self.device == "cuda" else torch.float32
-                        ),
-                        device_map="auto",
-                        quantization_config=quantization_config,
-                    )
+                    # Require input shapes; fail if not provided
+                    if trt_input_shapes is None:
+                        raise ValueError(
+                            "trt_input_shapes must be provided when using TensorRT. "
+                            "Example: [(1, 3, 224, 224)] for fixed shape or dict for dynamic."
+                        )
 
-                    self.get_model().eval()
-                    self.logger.info(
-                        f"Pre-trained LLM model '{model_name}' loaded from Transformers."
-                    )
+                    # Convert shapes to torch_tensorrt.Input objects (supports fixed or dynamic)
+                    trt_inputs = []
+                    for shape in trt_input_shapes:
+                        if isinstance(shape, tuple):  # Fixed shape
+                            trt_inputs.append(torch_tensorrt.Input(shape))
+                        elif isinstance(
+                            shape, dict
+                        ):  # Dynamic: {'min': (1,3,224,224), 'opt': ..., 'max': ...}
+                            trt_inputs.append(torch_tensorrt.Input(**shape))
+                        else:
+                            raise ValueError(f"Invalid trt_input_shape format: {shape}")
 
-            if not self.is_executorch:
-                if hasattr(self.model, "to") and callable(getattr(self.model, "to")):
-                    self.execute_with_stream(lambda: self.model.to(self.device))
-                    self.logger.info(f"Model moved to {self.device}")
+                    try:
+                        self.model = torch_tensorrt.compile(
+                            self.model,
+                            inputs=trt_inputs,
+                            enabled_precisions={
+                                torch.half if trt_precision == "fp16" else torch.float
+                            },  # FP16 for speed
+                            workspace_size=1 << 32,  # 4GB workspace; adjust as needed
+                        )
+                        self.is_tensorrt = True
+                        self.logger.info(
+                            f"Model compiled with TensorRT ({trt_precision} precision) using provided shapes"
+                        )
+                    except Exception as e:
+                        self.logger.error(f"Failed to compile with TensorRT: {e}")
+                        self.logger.warning("Falling back to standard PyTorch")
+            elif use_tensorrt:
+                self.logger.warning(
+                    "torch-tensorrt not installed; install with 'pip install torch-tensorrt'"
+                )
 
-                # Compile with TensorRT if enabled and available
-                if (
-                    use_tensorrt
-                    and torch_tensorrt is not None
-                    and "cuda" in self.device
-                ):
-                    if not torch.cuda.is_available():
-                        self.logger.warning("TensorRT requires CUDA; skipping.")
-                    else:
-                        # Require input shapes; fail if not provided
-                        if trt_input_shapes is None:
-                            raise ValueError(
-                                "trt_input_shapes must be provided when using TensorRT. "
-                                "Example: [(1, 3, 224, 224)] for fixed shape or dict for dynamic."
-                            )
+            if (
+                compile_model and not self.is_tensorrt
+            ):  # Standard torch.compile if not using TRT
+                self.model = torch.compile(self.model)
+                self.logger.info("Model compiled with torch.compile")
 
-                        # Convert shapes to torch_tensorrt.Input objects (supports fixed or dynamic)
-                        trt_inputs = []
-                        for shape in trt_input_shapes:
-                            if isinstance(shape, tuple):  # Fixed shape
-                                trt_inputs.append(torch_tensorrt.Input(shape))
-                            elif isinstance(
-                                shape, dict
-                            ):  # Dynamic: {'min': (1,3,224,224), 'opt': ..., 'max': ...}
-                                trt_inputs.append(torch_tensorrt.Input(**shape))
-                            else:
-                                raise ValueError(
-                                    f"Invalid trt_input_shape format: {shape}"
-                                )
-
-                        try:
-                            self.model = torch_tensorrt.compile(
-                                self.model,
-                                inputs=trt_inputs,
-                                enabled_precisions={
-                                    (
-                                        torch.half
-                                        if trt_precision == "fp16"
-                                        else torch.float
-                                    )
-                                },  # FP16 for speed
-                                workspace_size=1
-                                << 32,  # 4GB workspace; adjust as needed
-                            )
-                            self.is_tensorrt = True
-                            self.logger.info(
-                                f"Model compiled with TensorRT ({trt_precision} precision) using provided shapes"
-                            )
-                        except Exception as e:
-                            self.logger.error(f"Failed to compile with TensorRT: {e}")
-                            self.logger.warning("Falling back to standard PyTorch")
-                elif use_tensorrt:
-                    self.logger.warning(
-                        "torch-tensorrt not installed; install with 'pip install torch-tensorrt'"
-                    )
-
-                if (
-                    compile_model and not self.is_tensorrt
-                ):  # Standard torch.compile if not using TRT
-                    self.model = torch.compile(self.model)
-                    self.logger.info("Model compiled with torch.compile")
-
-            return True
-
-        except Exception as e:
-            stack_trace = (
-                traceback.format_stack()
-            )  # Capture the current call stack as a list of strings
-            self.logger.error(
-                f"Error loading model '{model_name}': {e}"
-                f"Stack trace:\n{''.join(stack_trace)}"  # Join and log the stack trace
-            )
-            self.tokenizer = None
-            self.model = None
-            return False
+        return True
 
     def do_set_device(self, device):
         """Set PyTorch device for the model (ExecuTorch handles devices via export/backends)."""
@@ -334,22 +305,15 @@ class PyTorchEngine(MLEngine):
                 self.frame_buffer.append(frames)
             if len(self.frame_buffer) >= self.batch_size:
                 self.logger.info(f"Processing {self.batch_size} frames")
-                try:
-                    gen_kwargs = {"min_length": 10, "max_length": 20, "num_beams": 8}
-                    pixel_values = self.image_processor(
-                        self.frame_buffer, return_tensors="pt"
-                    ).pixel_values.to(self.device)
-                    tokens = self.model.generate(pixel_values, **gen_kwargs)
-                    captions = self.tokenizer.batch_decode(
-                        tokens, skip_special_tokens=True
-                    )
-                    self.logger.info(f"Captions: {captions}")
-                    self.frame_buffer = []
-                    return captions[0]
-                except Exception as e:
-                    self.logger.error(f"Failed to process frames: {e}")
-                    self.frame_buffer = []
-                    return None
+                gen_kwargs = {"min_length": 10, "max_length": 20, "num_beams": 8}
+                pixel_values = self.image_processor(
+                    self.frame_buffer, return_tensors="pt"
+                ).pixel_values.to(self.device)
+                tokens = self.model.generate(pixel_values, **gen_kwargs)
+                captions = self.tokenizer.batch_decode(tokens, skip_special_tokens=True)
+                self.logger.info(f"Captions: {captions}")
+                self.frame_buffer = []
+                return captions[0]
             return None
 
         elif not self.tokenizer:

@@ -75,20 +75,13 @@ class DRPAIEngine(MLEngine):
             )
             return False
 
-        try:
-            self.runtime = drpai_runtime.Runtime()
-            if not self.runtime.load(model_name):
-                self.logger.error(f"DRP-AI failed to load model from {model_name}")
-                self.runtime = None
-                return False
-            self.logger.info(
-                f"DRP-AI model loaded from {model_name} (imgsz={self.imgsz})"
-            )
-            return True
-        except Exception as e:
-            self.logger.error(f"DRP-AI load error: {e}")
+        self.runtime = drpai_runtime.Runtime()
+        if not self.runtime.load(model_name):
+            self.logger.error(f"DRP-AI failed to load model from {model_name}")
             self.runtime = None
             return False
+        self.logger.info(f"DRP-AI model loaded from {model_name} (imgsz={self.imgsz})")
+        return True
 
     def do_set_device(self, device):
         self.device = device
@@ -133,13 +126,8 @@ class DRPAIEngine(MLEngine):
 
         results = []
         for img in batch:
-            try:
-                self.runtime.set_input(0, self._preprocess(img))
-                self.runtime.run()
-                raw = self._gather_output()
-                results.append(self._apply_post_process(raw, is_batch=False))
-            except Exception as e:
-                self.logger.error(f"DRP-AI inference error: {e}")
-                results.append(None)
-
+            self.runtime.set_input(0, self._preprocess(img))
+            self.runtime.run()
+            raw = self._gather_output()
+            results.append(self._apply_post_process(raw, is_batch=False))
         return results if is_batch else results[0]

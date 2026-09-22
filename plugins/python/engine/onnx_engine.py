@@ -112,109 +112,96 @@ class ONNXEngine(MLEngine):
         self.model_name = model_name
         self.kwargs = kwargs
 
-        try:
-            if os.path.isfile(model_name) and model_name.endswith(".onnx"):
-                self.session = ort.InferenceSession(
-                    model_name, providers=self._providers()
+        if os.path.isfile(model_name) and model_name.endswith(".onnx"):
+            self.session = ort.InferenceSession(model_name, providers=self._providers())
+            self.model = self.session
+            self.model_type = "custom"
+            self.input_names = [inp.name for inp in self.session.get_inputs()]
+            self.output_names = [out.name for out in self.session.get_outputs()]
+            self.logger.info(
+                f"ONNX model loaded from local path: {model_name} "
+                f"(active providers: {self.session.get_providers()})"
+            )
+            return True
+        else:
+            from torchvision import models as tv_models
+
+            if hasattr(tv_models, model_name):
+                pt_model = getattr(tv_models, model_name)(pretrained=True)
+                self.model_type = "classification"
+            elif hasattr(tv_models.detection, model_name):
+                pt_model = getattr(tv_models.detection, model_name)(pretrained=True)
+                self.model_type = "detection"
+            elif processor_name and tokenizer_name:
+                from transformers import AutoTokenizer, AutoImageProcessor
+                from optimum.onnxruntime import ORTModelForVision2Seq
+
+                self.image_processor = AutoImageProcessor.from_pretrained(
+                    processor_name
                 )
-                self.model = self.session
-                self.model_type = "custom"
-                self.input_names = [inp.name for inp in self.session.get_inputs()]
-                self.output_names = [out.name for out in self.session.get_outputs()]
+                self.tokenizer = AutoTokenizer.from_pretrained(tokenizer_name)
+                self.model = ORTModelForVision2Seq.from_pretrained(
+                    model_name, export=True, provider=self.provider
+                )
+                self.frame_stride = (
+                    self.model.config.encoder.num_frames
+                    if hasattr(self.model.config.encoder, "num_frames")
+                    else 1
+                )
+                self.model_type = "vision_text"
                 self.logger.info(
-                    f"ONNX model loaded from local path: {model_name} "
-                    f"(active providers: {self.session.get_providers()})"
+                    f"Vision-Text model '{model_name}' loaded with processor and tokenizer via Optimum ONNX."
                 )
                 return True
             else:
-                from torchvision import models as tv_models
+                from transformers import AutoTokenizer
+                from optimum.onnxruntime import ORTModelForCausalLM
 
-                if hasattr(tv_models, model_name):
-                    pt_model = getattr(tv_models, model_name)(pretrained=True)
-                    self.model_type = "classification"
-                elif hasattr(tv_models.detection, model_name):
-                    pt_model = getattr(tv_models.detection, model_name)(pretrained=True)
-                    self.model_type = "detection"
-                elif processor_name and tokenizer_name:
-                    from transformers import AutoTokenizer, AutoImageProcessor
-                    from optimum.onnxruntime import ORTModelForVision2Seq
-
-                    self.image_processor = AutoImageProcessor.from_pretrained(
-                        processor_name
-                    )
-                    self.tokenizer = AutoTokenizer.from_pretrained(tokenizer_name)
-                    self.model = ORTModelForVision2Seq.from_pretrained(
-                        model_name, export=True, provider=self.provider
-                    )
-                    self.frame_stride = (
-                        self.model.config.encoder.num_frames
-                        if hasattr(self.model.config.encoder, "num_frames")
-                        else 1
-                    )
-                    self.model_type = "vision_text"
-                    self.logger.info(
-                        f"Vision-Text model '{model_name}' loaded with processor and tokenizer via Optimum ONNX."
-                    )
-                    return True
-                else:
-                    from transformers import AutoTokenizer
-                    from optimum.onnxruntime import ORTModelForCausalLM
-
-                    self.tokenizer = AutoTokenizer.from_pretrained(model_name)
-                    self.model = ORTModelForCausalLM.from_pretrained(
-                        model_name, export=True, provider=self.provider
-                    )
-                    self.model_type = "llm"
-                    self.logger.info(
-                        f"Pre-trained LLM model '{model_name}' loaded via Optimum ONNX."
-                    )
-                    return True
-
-                # For TorchVision models, export to ONNX
-                import torch
-
-                pt_model.eval()
-                dummy_input = torch.randn(1, 3, 224, 224)
-                with tempfile.NamedTemporaryFile(
-                    suffix=".onnx", delete=False
-                ) as tmp_file:
-                    torch.onnx.export(
-                        pt_model,
-                        dummy_input,
-                        tmp_file.name,
-                        opset_version=11,
-                        input_names=["input"],
-                        output_names=(
-                            ["output"]
-                            if self.model_type == "classification"
-                            else ["boxes", "labels", "scores"]
-                        ),
-                        dynamic_axes=(
-                            {"input": {0: "batch_size"}, "output": {0: "batch_size"}}
-                            if self.model_type == "classification"
-                            else None
-                        ),
-                    )
-                    self.session = ort.InferenceSession(
-                        tmp_file.name, providers=self._providers()
-                    )
-                os.unlink(tmp_file.name)
-                self.model = self.session
-                self.input_names = [inp.name for inp in self.session.get_inputs()]
-                self.output_names = [out.name for out in self.session.get_outputs()]
-                self.logger.info(
-                    f"Pre-trained model '{model_name}' exported to ONNX and loaded."
+                self.tokenizer = AutoTokenizer.from_pretrained(model_name)
+                self.model = ORTModelForCausalLM.from_pretrained(
+                    model_name, export=True, provider=self.provider
                 )
+                self.model_type = "llm"
+                self.logger.info(
+                    f"Pre-trained LLM model '{model_name}' loaded via Optimum ONNX."
+                )
+                return True
 
-            return True
+            # For TorchVision models, export to ONNX
+            import torch
 
-        except Exception as e:
-            self.logger.error(f"Error loading model '{model_name}': {e}")
-            self.tokenizer = None
-            self.image_processor = None
-            self.model = None
-            self.session = None
-            return False
+            pt_model.eval()
+            dummy_input = torch.randn(1, 3, 224, 224)
+            with tempfile.NamedTemporaryFile(suffix=".onnx", delete=False) as tmp_file:
+                torch.onnx.export(
+                    pt_model,
+                    dummy_input,
+                    tmp_file.name,
+                    opset_version=11,
+                    input_names=["input"],
+                    output_names=(
+                        ["output"]
+                        if self.model_type == "classification"
+                        else ["boxes", "labels", "scores"]
+                    ),
+                    dynamic_axes=(
+                        {"input": {0: "batch_size"}, "output": {0: "batch_size"}}
+                        if self.model_type == "classification"
+                        else None
+                    ),
+                )
+                self.session = ort.InferenceSession(
+                    tmp_file.name, providers=self._providers()
+                )
+            os.unlink(tmp_file.name)
+            self.model = self.session
+            self.input_names = [inp.name for inp in self.session.get_inputs()]
+            self.output_names = [out.name for out in self.session.get_outputs()]
+            self.logger.info(
+                f"Pre-trained model '{model_name}' exported to ONNX and loaded."
+            )
+
+        return True
 
     def do_set_device(self, device):
         """Set ONNX device for the model."""
@@ -341,22 +328,15 @@ class ONNXEngine(MLEngine):
                 self.frame_buffer.append(frames)
             if len(self.frame_buffer) >= self.batch_size:
                 self.logger.info(f"Processing {self.batch_size} frames")
-                try:
-                    gen_kwargs = {"min_length": 10, "max_length": 20, "num_beams": 8}
-                    pixel_values = self.image_processor(
-                        self.frame_buffer, return_tensors="pt"
-                    ).pixel_values
-                    tokens = self.model.generate(pixel_values, **gen_kwargs)
-                    captions = self.tokenizer.batch_decode(
-                        tokens, skip_special_tokens=True
-                    )
-                    self.logger.info(f"Captions: {captions}")
-                    self.frame_buffer = []
-                    return captions[0]
-                except Exception as e:
-                    self.logger.error(f"Failed to process frames: {e}")
-                    self.frame_buffer = []
-                    return None
+                gen_kwargs = {"min_length": 10, "max_length": 20, "num_beams": 8}
+                pixel_values = self.image_processor(
+                    self.frame_buffer, return_tensors="pt"
+                ).pixel_values
+                tokens = self.model.generate(pixel_values, **gen_kwargs)
+                captions = self.tokenizer.batch_decode(tokens, skip_special_tokens=True)
+                self.logger.info(f"Captions: {captions}")
+                self.frame_buffer = []
+                return captions[0]
             return None
 
         elif self.model_type == "llm":

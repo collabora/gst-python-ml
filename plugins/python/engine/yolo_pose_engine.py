@@ -44,16 +44,10 @@ class YoloPoseEngine(PyTorchEngine):
             self.logger.error("Pose model not loaded")
             return None if not is_batch else [None] * batch_size
 
-        try:
-            img_list = (
-                [writable[i] for i in range(batch_size)] if is_batch else [writable]
-            )
-            results = self.execute_with_stream(
-                lambda: model(img_list, imgsz=640, conf=0.25, verbose=False)
-            )
-            if not results:
-                return None if not is_batch else [None] * batch_size
-            return results[0] if not is_batch else results
-        except Exception as e:
-            self.logger.error(f"Pose inference error: {e}")
+        img_list = [writable[i] for i in range(batch_size)] if is_batch else [writable]
+        results = self.execute_with_stream(
+            lambda: model(img_list, imgsz=640, conf=0.25, verbose=False)
+        )
+        if not results:
             return None if not is_batch else [None] * batch_size
+        return results[0] if not is_batch else results

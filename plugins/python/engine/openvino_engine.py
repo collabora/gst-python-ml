@@ -41,83 +41,72 @@ class OpenVinoEngine(MLEngine):
         self.model_name = model_name
         self.kwargs = kwargs
 
-        try:
-            if model_name.endswith((".xml", ".bin")):
-                base = model_name.rsplit(".", 1)[0]
-            else:
-                base = model_name
-            xml_path = f"{base}.xml"
-            bin_path = f"{base}.bin"
-            if os.path.isfile(xml_path) and os.path.isfile(bin_path):
-                self.ov_model = self.core.read_model(xml_path)
-                self.model_type = "custom"
+        if model_name.endswith((".xml", ".bin")):
+            base = model_name.rsplit(".", 1)[0]
+        else:
+            base = model_name
+        xml_path = f"{base}.xml"
+        bin_path = f"{base}.bin"
+        if os.path.isfile(xml_path) and os.path.isfile(bin_path):
+            self.ov_model = self.core.read_model(xml_path)
+            self.model_type = "custom"
+            self.logger.info(f"OpenVINO IR model loaded from local path: {model_name}")
+        else:
+            from torchvision import models
+
+            if hasattr(models, model_name):
+                pt_model = getattr(models, model_name)(pretrained=True)
+                self.ov_model = ov.convert_model(pt_model)
+                self.model_type = "classification"
                 self.logger.info(
-                    f"OpenVINO IR model loaded from local path: {model_name}"
+                    f"Pre-trained vision model '{model_name}' converted to OpenVINO."
                 )
+            elif hasattr(models.detection, model_name):
+                pt_model = getattr(models.detection, model_name)(pretrained=True)
+                self.ov_model = ov.convert_model(pt_model)
+                self.model_type = "detection"
+                self.logger.info(
+                    f"Pre-trained detection model '{model_name}' converted to OpenVINO."
+                )
+            elif processor_name and tokenizer_name:
+                from transformers import AutoTokenizer, AutoImageProcessor
+                from optimum.intel import OVModelForVision2Seq
+
+                self.image_processor = AutoImageProcessor.from_pretrained(
+                    processor_name
+                )
+                self.tokenizer = AutoTokenizer.from_pretrained(tokenizer_name)
+                self.compiled_model = OVModelForVision2Seq.from_pretrained(
+                    model_name, export=True
+                )
+                self.frame_stride = (
+                    self.compiled_model.config.encoder.num_frames
+                    if hasattr(self.compiled_model.config.encoder, "num_frames")
+                    else 1
+                )
+                self.model_type = "vision_text"
+                self.logger.info(
+                    f"Vision-Text model '{model_name}' loaded via Optimum OpenVINO."
+                )
+                return True
             else:
-                from torchvision import models
+                from transformers import AutoTokenizer
+                from optimum.intel import OVModelForCausalLM
 
-                if hasattr(models, model_name):
-                    pt_model = getattr(models, model_name)(pretrained=True)
-                    self.ov_model = ov.convert_model(pt_model)
-                    self.model_type = "classification"
-                    self.logger.info(
-                        f"Pre-trained vision model '{model_name}' converted to OpenVINO."
-                    )
-                elif hasattr(models.detection, model_name):
-                    pt_model = getattr(models.detection, model_name)(pretrained=True)
-                    self.ov_model = ov.convert_model(pt_model)
-                    self.model_type = "detection"
-                    self.logger.info(
-                        f"Pre-trained detection model '{model_name}' converted to OpenVINO."
-                    )
-                elif processor_name and tokenizer_name:
-                    from transformers import AutoTokenizer, AutoImageProcessor
-                    from optimum.intel import OVModelForVision2Seq
+                self.tokenizer = AutoTokenizer.from_pretrained(model_name)
+                self.compiled_model = OVModelForCausalLM.from_pretrained(
+                    model_name, export=True
+                )
+                self.model_type = "llm"
+                self.logger.info(
+                    f"Pre-trained LLM model '{model_name}' loaded via Optimum OpenVINO."
+                )
+                return True
 
-                    self.image_processor = AutoImageProcessor.from_pretrained(
-                        processor_name
-                    )
-                    self.tokenizer = AutoTokenizer.from_pretrained(tokenizer_name)
-                    self.compiled_model = OVModelForVision2Seq.from_pretrained(
-                        model_name, export=True
-                    )
-                    self.frame_stride = (
-                        self.compiled_model.config.encoder.num_frames
-                        if hasattr(self.compiled_model.config.encoder, "num_frames")
-                        else 1
-                    )
-                    self.model_type = "vision_text"
-                    self.logger.info(
-                        f"Vision-Text model '{model_name}' loaded via Optimum OpenVINO."
-                    )
-                    return True
-                else:
-                    from transformers import AutoTokenizer
-                    from optimum.intel import OVModelForCausalLM
+        self.compiled_model = self.core.compile_model(self.ov_model, self.device)
+        self.logger.info(f"Model compiled on {self.device}")
 
-                    self.tokenizer = AutoTokenizer.from_pretrained(model_name)
-                    self.compiled_model = OVModelForCausalLM.from_pretrained(
-                        model_name, export=True
-                    )
-                    self.model_type = "llm"
-                    self.logger.info(
-                        f"Pre-trained LLM model '{model_name}' loaded via Optimum OpenVINO."
-                    )
-                    return True
-
-            self.compiled_model = self.core.compile_model(self.ov_model, self.device)
-            self.logger.info(f"Model compiled on {self.device}")
-
-            return True
-
-        except Exception as e:
-            self.logger.error(f"Error loading model '{model_name}': {e}")
-            self.tokenizer = None
-            self.image_processor = None
-            self.compiled_model = None
-            self.ov_model = None
-            return False
+        return True
 
     def do_set_device(self, device):
         """Set OpenVINO device for the model."""
@@ -187,22 +176,15 @@ class OpenVinoEngine(MLEngine):
                 self.frame_buffer.append(frames)
             if len(self.frame_buffer) >= self.batch_size:
                 self.logger.info(f"Processing {self.batch_size} frames")
-                try:
-                    gen_kwargs = {"min_length": 10, "max_length": 20, "num_beams": 8}
-                    pixel_values = self.image_processor(
-                        self.frame_buffer, return_tensors="np"
-                    ).pixel_values
-                    tokens = self.compiled_model.generate(pixel_values, **gen_kwargs)
-                    captions = self.tokenizer.batch_decode(
-                        tokens, skip_special_tokens=True
-                    )
-                    self.logger.info(f"Captions: {captions}")
-                    self.frame_buffer = []
-                    return captions[0]
-                except Exception as e:
-                    self.logger.error(f"Failed to process frames: {e}")
-                    self.frame_buffer = []
-                    return None
+                gen_kwargs = {"min_length": 10, "max_length": 20, "num_beams": 8}
+                pixel_values = self.image_processor(
+                    self.frame_buffer, return_tensors="np"
+                ).pixel_values
+                tokens = self.compiled_model.generate(pixel_values, **gen_kwargs)
+                captions = self.tokenizer.batch_decode(tokens, skip_special_tokens=True)
+                self.logger.info(f"Captions: {captions}")
+                self.frame_buffer = []
+                return captions[0]
             return None
 
         elif self.model_type == "llm":

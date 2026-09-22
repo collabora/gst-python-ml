@@ -42,14 +42,14 @@ class EngineManager:
             self.engine.do_set_device(device)
 
     def do_load_model(self, model_name, **kwargs):
-        if self.engine.model:
-            return
         self.initialize_engine()
         if self.engine is None:
             self.logger.warning(
-                f"Cannot load model {self.model_name}: engine not initialized"
+                f"Cannot load model {model_name}: engine not initialized"
             )
             return False
+        if self.engine.model:
+            return True
         if model_name is None:
             stack_trace = (
                 traceback.format_stack()
@@ -64,11 +64,10 @@ class EngineManager:
             self.engine.do_load_model(model_name, **kwargs)
             self.logger.info(f"Model {model_name} loaded successfully")
             return True
-        except Exception as e:
-            self.logger.error(f"Failed to load model {model_name}: {e}")
+        except Exception:
             self.engine.tokenizer = None
             self.engine.model = None
-            return False
+            raise
 
     def get_model(self):
         self.initialize_engine()

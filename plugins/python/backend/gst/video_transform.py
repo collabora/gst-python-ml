@@ -16,8 +16,6 @@
 # Free Software Foundation, Inc., 51 Franklin Street, Fifth Floor,
 # Boston, MA 02110-1301, USA.
 
-import traceback
-
 import gi
 
 gi.require_version("Gst", "1.0")
@@ -26,6 +24,7 @@ gi.require_version("GstVideo", "1.0")
 from gi.repository import Gst  # noqa: E402
 
 from backend.core import FrameProcessingMixin  # noqa: E402
+from backend.gst.errors import post_error  # noqa: E402
 from backend.gst.transform import BaseTransform  # noqa: E402
 
 
@@ -81,6 +80,6 @@ class VideoTransform(BaseTransform, FrameProcessingMixin):
                 return Gst.FlowReturn.ERROR
             self.process_frames(frames, num_sources, fmt, buf)
             return Gst.FlowReturn.OK
-        except Exception as e:
-            self.logger.error(f"Transform error: {e}\n{traceback.format_exc()}")
+        except Exception as exception:
+            post_error(self, "transform error", exception)
             return Gst.FlowReturn.ERROR

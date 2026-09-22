@@ -53,54 +53,49 @@ class SamEngine(PyTorchEngine):
 
         results = []
         for frame in frames:
-            try:
-                pil_img = Image.fromarray(frame.astype(np.uint8))
-                H, W = frame.shape[:2]
+            pil_img = Image.fromarray(frame.astype(np.uint8))
+            H, W = frame.shape[:2]
 
-                # Automatic mask generation: grid of input points
-                grid_size = int(np.ceil(np.sqrt(max_masks)))
-                xs = np.linspace(0, W - 1, grid_size).astype(int)
-                ys = np.linspace(0, H - 1, grid_size).astype(int)
-                points = [[int(x), int(y)] for y in ys for x in xs][:max_masks]
-                input_points = [points]
+            # Automatic mask generation: grid of input points
+            grid_size = int(np.ceil(np.sqrt(max_masks)))
+            xs = np.linspace(0, W - 1, grid_size).astype(int)
+            ys = np.linspace(0, H - 1, grid_size).astype(int)
+            points = [[int(x), int(y)] for y in ys for x in xs][:max_masks]
+            input_points = [points]
 
-                inputs = self.processor(
-                    images=pil_img,
-                    input_points=input_points,
-                    return_tensors="pt",
-                )
-                inputs = {k: v.to(self.device) for k, v in inputs.items()}
+            inputs = self.processor(
+                images=pil_img,
+                input_points=input_points,
+                return_tensors="pt",
+            )
+            inputs = {k: v.to(self.device) for k, v in inputs.items()}
 
-                with torch.no_grad():
-                    outputs = self.model(**inputs)
+            with torch.no_grad():
+                outputs = self.model(**inputs)
 
-                masks = self.processor.post_process_masks(
-                    outputs.pred_masks,
-                    inputs["original_sizes"],
-                    inputs["reshaped_input_sizes"],
-                )
-                scores = outputs.iou_scores
+            masks = self.processor.post_process_masks(
+                outputs.pred_masks,
+                inputs["original_sizes"],
+                inputs["reshaped_input_sizes"],
+            )
+            scores = outputs.iou_scores
 
-                mask_list = []
-                if len(masks) > 0:
-                    frame_masks = masks[0].cpu().numpy()
-                    frame_scores = scores[0].cpu().numpy()
-                    for j in range(min(frame_masks.shape[0], max_masks)):
-                        best_idx = frame_scores[j].argmax()
-                        mask = frame_masks[j, best_idx]
-                        score = float(frame_scores[j, best_idx])
-                        mask_list.append(
-                            {"mask_idx": j, "score": score, "shape": list(mask.shape)}
-                        )
+            mask_list = []
+            if len(masks) > 0:
+                frame_masks = masks[0].cpu().numpy()
+                frame_scores = scores[0].cpu().numpy()
+                for j in range(min(frame_masks.shape[0], max_masks)):
+                    best_idx = frame_scores[j].argmax()
+                    mask = frame_masks[j, best_idx]
+                    score = float(frame_scores[j, best_idx])
+                    mask_list.append(
+                        {"mask_idx": j, "score": score, "shape": list(mask.shape)}
+                    )
 
-                results.append(
-                    {
-                        "masks": mask_list,
-                        "raw_masks": masks[0].cpu().numpy() if len(masks) > 0 else None,
-                    }
-                )
-            except Exception as e:
-                self.logger.error(f"SAM inference error on frame: {e}")
-                results.append({"masks": [], "raw_masks": None})
-
+            results.append(
+                {
+                    "masks": mask_list,
+                    "raw_masks": masks[0].cpu().numpy() if len(masks) > 0 else None,
+                }
+            )
         return results[0] if not is_batch else results

@@ -44,48 +44,41 @@ class NCNNEngine(MLEngine):
         self.input_name = kwargs.get("input_name", "in0")
         self.output_name = kwargs.get("output_name", "out0")
 
-        try:
-            # Determine param and bin paths
-            if model_name.endswith(".param"):
-                param_path = model_name
-                bin_path = model_name.replace(".param", ".bin")
-            elif model_name.endswith(".bin"):
-                bin_path = model_name
-                param_path = model_name.replace(".bin", ".param")
-            else:
-                # Assume base name provided
-                param_path = model_name + ".param"
-                bin_path = model_name + ".bin"
+        # Determine param and bin paths
+        if model_name.endswith(".param"):
+            param_path = model_name
+            bin_path = model_name.replace(".param", ".bin")
+        elif model_name.endswith(".bin"):
+            bin_path = model_name
+            param_path = model_name.replace(".bin", ".param")
+        else:
+            # Assume base name provided
+            param_path = model_name + ".param"
+            bin_path = model_name + ".bin"
 
-            if not os.path.isfile(param_path):
-                self.logger.error(f"NCNN param file not found: {param_path}")
-                return False
-            if not os.path.isfile(bin_path):
-                self.logger.error(f"NCNN bin file not found: {bin_path}")
-                return False
-
-            self.net = ncnn.Net()
-            self.net.opt.use_vulkan_compute = self._use_vulkan
-
-            # Set thread count
-            num_threads = kwargs.get("num_threads", 4)
-            self.net.opt.num_threads = num_threads
-
-            self.net.load_param(param_path)
-            self.net.load_model(bin_path)
-            self.model = self.net
-
-            self.logger.info(
-                f"NCNN model loaded: {param_path} "
-                f"(vulkan: {self._use_vulkan}, threads: {num_threads})"
-            )
-            return True
-
-        except Exception as e:
-            self.logger.error(f"Error loading NCNN model '{model_name}': {e}")
-            self.net = None
-            self.model = None
+        if not os.path.isfile(param_path):
+            self.logger.error(f"NCNN param file not found: {param_path}")
             return False
+        if not os.path.isfile(bin_path):
+            self.logger.error(f"NCNN bin file not found: {bin_path}")
+            return False
+
+        self.net = ncnn.Net()
+        self.net.opt.use_vulkan_compute = self._use_vulkan
+
+        # Set thread count
+        num_threads = kwargs.get("num_threads", 4)
+        self.net.opt.num_threads = num_threads
+
+        self.net.load_param(param_path)
+        self.net.load_model(bin_path)
+        self.model = self.net
+
+        self.logger.info(
+            f"NCNN model loaded: {param_path} "
+            f"(vulkan: {self._use_vulkan}, threads: {num_threads})"
+        )
+        return True
 
     def do_set_device(self, device):
         """Set NCNN compute device."""

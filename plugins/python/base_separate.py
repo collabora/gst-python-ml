@@ -20,8 +20,6 @@ import collections
 import sys
 from abc import abstractmethod
 
-import traceback
-
 import backend
 from backend import GObject
 from base_aggregator import BaseAggregator
@@ -140,15 +138,10 @@ class BaseSeparate(BaseAggregator):
         """
         import numpy as np
 
-        try:
-            # Get the current audio data from the buffer for separation
-            audio_data = chunk.astype(np.float32) / 32768.0
-            result = self.do_separate(audio_data)
-            # Convert back to int16
-            separated = np.clip(result * 32768, -32768, 32767).astype(np.int16)
-            self.logger.info(f"Separated audio length: {len(separated)}")
-            return separated
-
-        except Exception as e:
-            self.logger.error(f"Error during separation: {e}\n{traceback.format_exc()}")
-            return None
+        # Get the current audio data from the buffer for separation
+        audio_data = chunk.astype(np.float32) / 32768.0
+        result = self.do_separate(audio_data)
+        # Convert back to int16
+        separated = np.clip(result * 32768, -32768, 32767).astype(np.int16)
+        self.logger.info(f"Separated audio length: {len(separated)}")
+        return separated

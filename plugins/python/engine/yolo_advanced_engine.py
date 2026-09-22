@@ -673,51 +673,40 @@ class YoloAdvancedEngine(PyTorchEngine):
 
     def do_load_model(self, model_name, **kwargs):
         _init_ultralytics()
-        try:
-            from ultralytics import YOLO
+        from ultralytics import YOLO
 
-            # YOLO load unchanged...
-            self.det_model = YOLO(f"{model_name}.pt")
-            self.execute_with_stream(lambda: self.det_model.to(self.device))
-            self.logger.info(
-                f"YOLO primary model '{model_name}' loaded on {self.device}"
-            )
+        # YOLO load unchanged...
+        self.det_model = YOLO(f"{model_name}.pt")
+        self.execute_with_stream(lambda: self.det_model.to(self.device))
+        self.logger.info(f"YOLO primary model '{model_name}' loaded on {self.device}")
 
-            if self.hires_fallback:
-                self.fb_model = YOLO(f"{model_name}.pt")
-                self.execute_with_stream(lambda: self.fb_model.to(self.device))
+        if self.hires_fallback:
+            self.fb_model = YOLO(f"{model_name}.pt")
+            self.execute_with_stream(lambda: self.fb_model.to(self.device))
 
-            self.model = self.det_model  # Alias for base compat
+        self.model = self.det_model  # Alias for base compat
 
-            # Trackers with fallback
-            if self.tracker_people:
-                try:
-                    self.people_tracker = BoTSORTWrapper(
-                        self.tracker_people, self.frame_rate, self.people_reid
-                    )
-                    self.logger.info(
-                        f"People tracker loaded from {self.tracker_people}"
-                    )
-                except Exception as te:
-                    self.logger.warning(f"People tracker failed ({te}); disabling.")
-                    self.people_tracker = None
+        # Trackers with fallback
+        if self.tracker_people:
+            try:
+                self.people_tracker = BoTSORTWrapper(
+                    self.tracker_people, self.frame_rate, self.people_reid
+                )
+                self.logger.info(f"People tracker loaded from {self.tracker_people}")
+            except Exception as te:
+                self.logger.warning(f"People tracker failed ({te}); disabling.")
+                self.people_tracker = None
 
-            if self.tracker_ball:
-                try:
-                    self.ball_tracker = ByteTrackWrapper(
-                        self.tracker_ball, self.frame_rate
-                    )
-                    self.logger.info(f"Ball tracker loaded from {self.tracker_ball}")
-                except Exception as te:
-                    self.logger.warning(f"Ball tracker failed ({te}); disabling.")
-                    self.ball_tracker = None
+        if self.tracker_ball:
+            try:
+                self.ball_tracker = ByteTrackWrapper(self.tracker_ball, self.frame_rate)
+                self.logger.info(f"Ball tracker loaded from {self.tracker_ball}")
+            except Exception as te:
+                self.logger.warning(f"Ball tracker failed ({te}); disabling.")
+                self.ball_tracker = None
 
-            # ... kwargs update unchanged ...
-            return self.tracker_people and self.tracker_ball
-
-        except Exception as e:
-            self.logger.error(f"Core model load failed: {e}")
-            return False  # No raise—let base handle
+        # ... kwargs update unchanged ...
+        return self.tracker_people and self.tracker_ball
 
     def do_forward(self, frames):
         import cv2

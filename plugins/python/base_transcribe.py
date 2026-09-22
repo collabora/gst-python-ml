@@ -194,16 +194,11 @@ class BaseTranscribe(BaseAggregator):
         """
         import numpy as np
 
-        try:
-            # Get the current audio data from the buffer for streaming transcription
-            audio_data = np.array(chunk).astype(np.float32) / 32768.0
-            task = "translate" if self.translate else "transcribe"
-            result = self.do_transcribe(audio_data, task)
-            # Combine all segments into a single transcript
-            transcript = " ".join([seg.text.strip() for seg in list(result)])
-            self.logger.info(f"transcription: {transcript}")
-            return transcript
-
-        except Exception as e:
-            self.logger.error(f"Error during streaming transcription: {e}")
-            return ""
+        # Get the current audio data from the buffer for streaming transcription
+        audio_data = np.array(chunk).astype(np.float32) / 32768.0
+        task = "translate" if self.translate else "transcribe"
+        result = self.do_transcribe(audio_data, task)
+        # Combine all segments into a single transcript
+        transcript = " ".join([seg.text.strip() for seg in list(result)])
+        self.logger.info(f"transcription: {transcript}")
+        return transcript

@@ -83,26 +83,7 @@ class BaseLlm(BaseAggregator):
         if not self.engine:
             self.logger.info("Engine not initialized, initializing now")
             self.mgr.initialize_engine()
-            self.mgr.do_load_model(self.model_name)
-
-        # Retry model loading if tokenizer or model is missing
-        tokenizer = self.get_tokenizer()
-        model = self.get_model()
-        self.logger.info(f"Tokenizer: {tokenizer}")
-        self.logger.info(f"Model: {model}")
-        if not tokenizer or not model:
-            self.logger.error(
-                f"Tokenizer initialized: {tokenizer is not None}, Model initialized: {model is not None}"
-            )
-            self.logger.warning("Attempting to reload model")
-            if not self.mgr.do_load_model(self.model_name):
-                self.logger.error("Model reload failed")
-                return []
-            tokenizer = self.get_tokenizer()
-            model = self.get_model()
-            if not tokenizer or not model:
-                self.logger.error("Model reload failed again")
-                return []
+        self.mgr.do_load_model(self.model_name)
 
         generated_text = self.engine.do_generate(
             input_text, system_prompt=self.system_prompt

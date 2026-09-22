@@ -55,23 +55,18 @@ class DepthAnythingEngine(PyTorchEngine):
 
         results = []
         for frame in frames:
-            try:
-                pil_img = Image.fromarray(frame.astype(np.uint8))
-                H, W = frame.shape[:2]
-                inputs = self.image_processor(images=pil_img, return_tensors="pt")
-                inputs = {k: v.to(self.device) for k, v in inputs.items()}
-                with torch.no_grad():
-                    outputs = self.model(**inputs)
-                # outputs.predicted_depth: [1, H', W']
-                depth_up = F.interpolate(
-                    outputs.predicted_depth.unsqueeze(0),
-                    size=(H, W),
-                    mode="bicubic",
-                    align_corners=False,
-                ).squeeze()
-                results.append(depth_up.cpu().numpy())
-            except Exception as e:
-                self.logger.error(f"Depth inference error on frame: {e}")
-                results.append(None)
-
+            pil_img = Image.fromarray(frame.astype(np.uint8))
+            H, W = frame.shape[:2]
+            inputs = self.image_processor(images=pil_img, return_tensors="pt")
+            inputs = {k: v.to(self.device) for k, v in inputs.items()}
+            with torch.no_grad():
+                outputs = self.model(**inputs)
+            # outputs.predicted_depth: [1, H', W']
+            depth_up = F.interpolate(
+                outputs.predicted_depth.unsqueeze(0),
+                size=(H, W),
+                mode="bicubic",
+                align_corners=False,
+            ).squeeze()
+            results.append(depth_up.cpu().numpy())
         return results[0] if not is_batch else results

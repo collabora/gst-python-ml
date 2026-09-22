@@ -49,14 +49,9 @@ class MarianTranslate(BaseTranslate):
         from transformers import MarianMTModel, MarianTokenizer
 
         model_name = f"Helsinki-NLP/opus-mt-{self.src}-{self.target}"
-        try:
-            self.tokenizer = MarianTokenizer.from_pretrained(model_name)
-            self.set_model(MarianMTModel.from_pretrained(model_name))
-            self.logger.info(
-                f"Loaded translation model for {self.src} to {self.target}"
-            )
-        except Exception as e:
-            self.logger.error(f"Error loading model: {e}")
+        self.tokenizer = MarianTokenizer.from_pretrained(model_name)
+        self.set_model(MarianMTModel.from_pretrained(model_name))
+        self.logger.info(f"Loaded translation model for {self.src} to {self.target}")
 
     def do_translate_text(self, text):
         """

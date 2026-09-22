@@ -52,77 +52,64 @@ class MLXEngine(MLEngine):
         self.model_name = model_name
         self.kwargs = kwargs
 
-        try:
-            # Local SafeTensors / npz model
-            if os.path.isfile(model_name) and model_name.endswith(
-                (".safetensors", ".npz")
-            ):
-                import mlx.core as mx
-
-                if model_name.endswith(".npz"):
-                    self.model = dict(np.load(model_name))
-                    self.model = {k: mx.array(v) for k, v in self.model.items()}
-                else:
-                    from mlx.utils import load
-
-                    self.model = load(model_name)
-                self.model_type = "custom"
-                self.logger.info(f"MLX model loaded from local path: {model_name}")
-                return True
-
-            from torchvision import models as tv_models
-
-            if hasattr(tv_models, model_name):
-                pt_model = getattr(tv_models, model_name)(pretrained=True)
-                if not isinstance(pt_model, tv_models.ResNet):
-                    self.logger.error(
-                        f"MLX runs the torchvision resnet family, not '{model_name}'."
-                    )
-                    return False
-                from .mlx_resnet import mlx_resnet
-
-                self.model = mlx_resnet(pt_model.eval())
-                self.model_type = "classification"
-                self.logger.info(
-                    f"Pre-trained vision model '{model_name}' loaded with MLX."
-                )
-                return True
-
-            # LLM via mlx-lm
-            try:
-                from mlx_lm import load as mlx_lm_load
-
-                self.model, self.tokenizer = mlx_lm_load(model_name)
-                self.model_type = "llm"
-                self.logger.info(f"LLM model '{model_name}' loaded via mlx-lm.")
-                return True
-            except ImportError:
-                self.logger.info("mlx-lm not available, trying PyTorch conversion.")
-            except Exception as e:
-                self.logger.info(
-                    f"mlx-lm load failed ({e}), trying PyTorch conversion."
-                )
-
-            # Convert from PyTorch/HuggingFace
+        # Local SafeTensors / npz model
+        if os.path.isfile(model_name) and model_name.endswith((".safetensors", ".npz")):
             import mlx.core as mx
-            from transformers import AutoTokenizer, AutoModelForCausalLM
 
-            self.tokenizer = AutoTokenizer.from_pretrained(model_name)
-            pt_model = AutoModelForCausalLM.from_pretrained(model_name)
-            pt_model.eval()
-            state_dict = pt_model.state_dict()
-            self.model = {k: mx.array(v.cpu().numpy()) for k, v in state_dict.items()}
-            self.model_type = "llm_converted"
+            if model_name.endswith(".npz"):
+                self.model = dict(np.load(model_name))
+                self.model = {k: mx.array(v) for k, v in self.model.items()}
+            else:
+                from mlx.utils import load
+
+                self.model = load(model_name)
+            self.model_type = "custom"
+            self.logger.info(f"MLX model loaded from local path: {model_name}")
+            return True
+
+        from torchvision import models as tv_models
+
+        if hasattr(tv_models, model_name):
+            pt_model = getattr(tv_models, model_name)(pretrained=True)
+            if not isinstance(pt_model, tv_models.ResNet):
+                self.logger.error(
+                    f"MLX runs the torchvision resnet family, not '{model_name}'."
+                )
+                return False
+            from .mlx_resnet import mlx_resnet
+
+            self.model = mlx_resnet(pt_model.eval())
+            self.model_type = "classification"
             self.logger.info(
-                f"Model '{model_name}' converted from PyTorch to MLX arrays."
+                f"Pre-trained vision model '{model_name}' loaded with MLX."
             )
             return True
 
+        # LLM via mlx-lm
+        try:
+            from mlx_lm import load as mlx_lm_load
+
+            self.model, self.tokenizer = mlx_lm_load(model_name)
+            self.model_type = "llm"
+            self.logger.info(f"LLM model '{model_name}' loaded via mlx-lm.")
+            return True
+        except ImportError:
+            self.logger.info("mlx-lm not available, trying PyTorch conversion.")
         except Exception as e:
-            self.logger.error(f"Error loading model '{model_name}': {e}")
-            self.model = None
-            self.tokenizer = None
-            return False
+            self.logger.info(f"mlx-lm load failed ({e}), trying PyTorch conversion.")
+
+        # Convert from PyTorch/HuggingFace
+        import mlx.core as mx
+        from transformers import AutoTokenizer, AutoModelForCausalLM
+
+        self.tokenizer = AutoTokenizer.from_pretrained(model_name)
+        pt_model = AutoModelForCausalLM.from_pretrained(model_name)
+        pt_model.eval()
+        state_dict = pt_model.state_dict()
+        self.model = {k: mx.array(v.cpu().numpy()) for k, v in state_dict.items()}
+        self.model_type = "llm_converted"
+        self.logger.info(f"Model '{model_name}' converted from PyTorch to MLX arrays.")
+        return True
 
     def do_forward(self, frames):
         """Execute inference by converting numpy input to MLX arrays."""
@@ -180,9 +167,6 @@ class MLXEngine(MLEngine):
                 return result
             except ImportError:
                 self.logger.error("mlx-lm is not installed for generation.")
-                return None
-            except Exception as e:
-                self.logger.error(f"MLX generation failed: {e}")
                 return None
 
         elif self.model_type == "llm_converted":

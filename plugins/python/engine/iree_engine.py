@@ -113,60 +113,47 @@ class IREEEngine(MLEngine):
         )
         self.function_name = kwargs.get("function_name", default_function)
 
-        try:
-            if model_name.endswith(".vmfb"):
-                # Load pre-compiled module
-                if not os.path.isfile(model_name):
-                    self.logger.error(f"VMFB file not found: {model_name}")
-                    return False
-
-                self.config = ireert.Config(self._driver)
-                self.context = ireert.SystemContext(config=self.config)
-                with open(model_name, "rb") as f:
-                    vmfb_data = f.read()
-                vm_module = ireert.VmModule.copy_buffer(
-                    self.context.instance, vmfb_data
-                )
-                self.context.add_vm_module(vm_module)
-                self.model = self.context
-                self.logger.info(
-                    f"IREE module loaded from {model_name} (driver: {self._driver})"
-                )
-                return True
-
-            elif model_name.endswith(".onnx"):
-                # Compile from ONNX
-                if not os.path.isfile(model_name):
-                    self.logger.error(f"ONNX file not found: {model_name}")
-                    return False
-
-                self.logger.info(
-                    f"Compiling ONNX model {model_name} for {self._driver}..."
-                )
-                compiled = self._compile_onnx(model_name)
-                if compiled is None:
-                    return False
-
-                self.config = ireert.Config(self._driver)
-                self.context = ireert.SystemContext(config=self.config)
-                vm_module = ireert.VmModule.copy_buffer(self.context.instance, compiled)
-                self.context.add_vm_module(vm_module)
-                self.model = self.context
-                self.logger.info(
-                    f"IREE model compiled and loaded from {model_name} "
-                    f"(driver: {self._driver})"
-                )
-                return True
-            else:
-                self.logger.error(
-                    f"IREE requires a .vmfb or .onnx file, got: {model_name}"
-                )
+        if model_name.endswith(".vmfb"):
+            # Load pre-compiled module
+            if not os.path.isfile(model_name):
+                self.logger.error(f"VMFB file not found: {model_name}")
                 return False
 
-        except Exception as e:
-            self.logger.error(f"Error loading IREE model '{model_name}': {e}")
-            self.model = None
-            self.context = None
+            self.config = ireert.Config(self._driver)
+            self.context = ireert.SystemContext(config=self.config)
+            with open(model_name, "rb") as f:
+                vmfb_data = f.read()
+            vm_module = ireert.VmModule.copy_buffer(self.context.instance, vmfb_data)
+            self.context.add_vm_module(vm_module)
+            self.model = self.context
+            self.logger.info(
+                f"IREE module loaded from {model_name} (driver: {self._driver})"
+            )
+            return True
+
+        elif model_name.endswith(".onnx"):
+            # Compile from ONNX
+            if not os.path.isfile(model_name):
+                self.logger.error(f"ONNX file not found: {model_name}")
+                return False
+
+            self.logger.info(f"Compiling ONNX model {model_name} for {self._driver}...")
+            compiled = self._compile_onnx(model_name)
+            if compiled is None:
+                return False
+
+            self.config = ireert.Config(self._driver)
+            self.context = ireert.SystemContext(config=self.config)
+            vm_module = ireert.VmModule.copy_buffer(self.context.instance, compiled)
+            self.context.add_vm_module(vm_module)
+            self.model = self.context
+            self.logger.info(
+                f"IREE model compiled and loaded from {model_name} "
+                f"(driver: {self._driver})"
+            )
+            return True
+        else:
+            self.logger.error(f"IREE requires a .vmfb or .onnx file, got: {model_name}")
             return False
 
     def do_set_device(self, device):
@@ -194,22 +181,17 @@ class IREEEngine(MLEngine):
         img = self._apply_input_format(frames.astype(np.float32) / 255.0, is_batch)
 
         # Find the module and function
-        try:
-            # IREE modules are accessible by name; typically "module" for ONNX imports
-            module_name = (
-                self.kwargs.get("module_name", "module") if self.kwargs else "module"
-            )
-            f = self.context.modules[module_name][self.function_name]
-            result = f(img)
-            raw = (
-                np.asarray(result.to_host())
-                if hasattr(result, "to_host")
-                else np.asarray(result)
-            )
-        except Exception as e:
-            self.logger.error(f"IREE inference failed: {e}")
-            return None
-
+        # IREE modules are accessible by name; typically "module" for ONNX imports
+        module_name = (
+            self.kwargs.get("module_name", "module") if self.kwargs else "module"
+        )
+        f = self.context.modules[module_name][self.function_name]
+        result = f(img)
+        raw = (
+            np.asarray(result.to_host())
+            if hasattr(result, "to_host")
+            else np.asarray(result)
+        )
         return self._apply_post_process(raw, is_batch)
 
     def do_generate(self, input_text, max_length=1000, system_prompt=None):

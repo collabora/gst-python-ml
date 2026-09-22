@@ -51,52 +51,43 @@ class MiGraphXEngine(MLEngine):
         self.kwargs = kwargs
         self.fp16 = kwargs.get("fp16", False)
 
-        try:
-            if not os.path.isfile(model_name):
-                self.logger.error(
-                    f"MiGraphX requires an ONNX model file path, got: {model_name}"
-                )
-                return False
-
-            if not model_name.endswith(".onnx"):
-                self.logger.warning(
-                    f"MiGraphX expects an .onnx file, got: {model_name}"
-                )
-
-            # Parse ONNX model
-            parse_kwargs = {}
-            if "default_dim_value" in kwargs:
-                parse_kwargs["default_dim_value"] = kwargs["default_dim_value"]
-            if "map_input_dims" in kwargs:
-                parse_kwargs["map_input_dims"] = kwargs["map_input_dims"]
-
-            self.program = migraphx.parse_onnx(model_name, **parse_kwargs)
-
-            # Optional fp16 quantization
-            if self.fp16:
-                migraphx.quantize_fp16(self.program)
-
-            # Compile for target
-            target = self.target or migraphx.get_target("gpu")
-            offload_copy = kwargs.get("offload_copy", True)
-            self.program.compile(target, offload_copy=offload_copy)
-
-            # Cache parameter info
-            self.input_names = self.program.get_parameter_names()
-            self.output_shapes = self.program.get_output_shapes()
-            self.model = self.program
-
-            self.logger.info(
-                f"MiGraphX model loaded and compiled: {model_name} "
-                f"(inputs: {self.input_names}, fp16: {self.fp16})"
+        if not os.path.isfile(model_name):
+            self.logger.error(
+                f"MiGraphX requires an ONNX model file path, got: {model_name}"
             )
-            return True
-
-        except Exception as e:
-            self.logger.error(f"Error loading MiGraphX model '{model_name}': {e}")
-            self.program = None
-            self.model = None
             return False
+
+        if not model_name.endswith(".onnx"):
+            self.logger.warning(f"MiGraphX expects an .onnx file, got: {model_name}")
+
+        # Parse ONNX model
+        parse_kwargs = {}
+        if "default_dim_value" in kwargs:
+            parse_kwargs["default_dim_value"] = kwargs["default_dim_value"]
+        if "map_input_dims" in kwargs:
+            parse_kwargs["map_input_dims"] = kwargs["map_input_dims"]
+
+        self.program = migraphx.parse_onnx(model_name, **parse_kwargs)
+
+        # Optional fp16 quantization
+        if self.fp16:
+            migraphx.quantize_fp16(self.program)
+
+        # Compile for target
+        target = self.target or migraphx.get_target("gpu")
+        offload_copy = kwargs.get("offload_copy", True)
+        self.program.compile(target, offload_copy=offload_copy)
+
+        # Cache parameter info
+        self.input_names = self.program.get_parameter_names()
+        self.output_shapes = self.program.get_output_shapes()
+        self.model = self.program
+
+        self.logger.info(
+            f"MiGraphX model loaded and compiled: {model_name} "
+            f"(inputs: {self.input_names}, fp16: {self.fp16})"
+        )
+        return True
 
     def do_set_device(self, device):
         """Set the MiGraphX compilation target."""

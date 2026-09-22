@@ -60,49 +60,46 @@ class AnalyticsUtils:
             self.logger.info("No analytics relation metadata found on buffer")
             return metadata
 
-        try:
-            count = GstAnalytics.relation_get_length(meta)
-            self.logger.info(f"Found {count} analytics relations in metadata")
-            for index in range(count):
-                ret, od_mtd = meta.get_od_mtd(index)
-                if not ret or od_mtd is None:
-                    continue
-                label_quark = od_mtd.get_obj_type()
-                full_label = GLib.quark_to_string(label_quark)
-                self.logger.debug(f"Index {index}: quark={full_label}")
+        count = GstAnalytics.relation_get_length(meta)
+        self.logger.info(f"Found {count} analytics relations in metadata")
+        for index in range(count):
+            ret, od_mtd = meta.get_od_mtd(index)
+            if not ret or od_mtd is None:
+                continue
+            label_quark = od_mtd.get_obj_type()
+            full_label = GLib.quark_to_string(label_quark)
+            self.logger.debug(f"Index {index}: quark={full_label}")
 
-                # CLIP/SigLIP zero-shot classification metadata (clip_<label>)
-                clip_match = re.match(r"clip_(.+)", full_label)
-                if clip_match:
-                    label = clip_match.group(1).replace("_", " ")
-                    location = od_mtd.get_location()
-                    _, _x, _y, _w, _h, confidence = location
-                    metadata.append(
-                        {
-                            "type": "classification",
-                            "label": label,
-                            "confidence": confidence,
-                        }
-                    )
-                    self.logger.debug(f"Added classification entry: {metadata[-1]}")
-                    continue
-
-                # Standard object detection metadata
-                track_id, label = self.extract_id_from_label(full_label)
+            # CLIP/SigLIP zero-shot classification metadata (clip_<label>)
+            clip_match = re.match(r"clip_(.+)", full_label)
+            if clip_match:
+                label = clip_match.group(1).replace("_", " ")
                 location = od_mtd.get_location()
-                presence, x, y, w, h, loc_conf_lvl = location
-                if presence:
-                    metadata.append(
-                        {
-                            "label": label,
-                            "track_id": track_id,
-                            "confidence": loc_conf_lvl,
-                            "box": {"x1": x, "y1": y, "x2": x + w, "y2": y + h},
-                        }
-                    )
-                    self.logger.debug(f"Added detection entry: {metadata[-1]}")
-        except Exception as e:
-            self.logger.error(f"Error while extracting analytics metadata: {e}")
+                _, _x, _y, _w, _h, confidence = location
+                metadata.append(
+                    {
+                        "type": "classification",
+                        "label": label,
+                        "confidence": confidence,
+                    }
+                )
+                self.logger.debug(f"Added classification entry: {metadata[-1]}")
+                continue
+
+            # Standard object detection metadata
+            track_id, label = self.extract_id_from_label(full_label)
+            location = od_mtd.get_location()
+            presence, x, y, w, h, loc_conf_lvl = location
+            if presence:
+                metadata.append(
+                    {
+                        "label": label,
+                        "track_id": track_id,
+                        "confidence": loc_conf_lvl,
+                        "box": {"x1": x, "y1": y, "x2": x + w, "y2": y + h},
+                    }
+                )
+                self.logger.debug(f"Added detection entry: {metadata[-1]}")
         return metadata
 
     def extract_id_from_label(self, full_label):

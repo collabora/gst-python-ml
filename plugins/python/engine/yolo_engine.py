@@ -44,60 +44,55 @@ class YoloEngine(PyTorchEngine):
             self.logger.error("Model is not loaded.")
             return None if not is_batch else [None] * batch_size
 
-        try:
-            start_pre = time.time()
-            img_list = (
-                [
-                    writable_frames[i] if is_batch else writable_frames
-                    for i in range(batch_size)
-                ]
-                if is_batch
-                else [writable_frames]
-            )
-            self.logger.debug(
-                f"Input shape: {writable_frames.shape}, min={writable_frames.min()}, max={writable_frames.max()}"
-            )
-            end_pre = time.time()
+        start_pre = time.time()
+        img_list = (
+            [
+                writable_frames[i] if is_batch else writable_frames
+                for i in range(batch_size)
+            ]
+            if is_batch
+            else [writable_frames]
+        )
+        self.logger.debug(
+            f"Input shape: {writable_frames.shape}, min={writable_frames.min()}, max={writable_frames.max()}"
+        )
+        end_pre = time.time()
 
-            conf = getattr(self, "conf", 0.25)
-            iou = getattr(self, "iou", 0.5)
-            agnostic = getattr(self, "agnostic_nms", True)
-            if self.track:
-                # Ensure tracker persists across batches
-                results = self.execute_with_stream(
-                    lambda: model.track(
-                        source=img_list,
-                        persist=True,
-                        imgsz=640,
-                        conf=conf,
-                        iou=iou,
-                        agnostic_nms=agnostic,
-                        verbose=True,
-                        tracker="botsort.yaml",
-                    )
+        conf = getattr(self, "conf", 0.25)
+        iou = getattr(self, "iou", 0.5)
+        agnostic = getattr(self, "agnostic_nms", True)
+        if self.track:
+            # Ensure tracker persists across batches
+            results = self.execute_with_stream(
+                lambda: model.track(
+                    source=img_list,
+                    persist=True,
+                    imgsz=640,
+                    conf=conf,
+                    iou=iou,
+                    agnostic_nms=agnostic,
+                    verbose=True,
+                    tracker="botsort.yaml",
                 )
-            else:
-                results = self.execute_with_stream(
-                    lambda: model(
-                        img_list,
-                        imgsz=640,
-                        conf=conf,
-                        iou=iou,
-                        agnostic_nms=agnostic,
-                        verbose=True,
-                    )
-                )
-            end_inf = time.time()
-
-            if results is None or (isinstance(results, list) and not results):
-                self.logger.warning("Inference returned None or empty list.")
-                return None if not is_batch else [None] * batch_size
-
-            self.logger.info(
-                f"Preprocessing: {(end_pre - start_pre)*1000:.2f} ms, Inference: {(end_inf - end_pre)*1000:.2f} ms for {batch_size} frames"
             )
-            return results[0] if not is_batch else results
+        else:
+            results = self.execute_with_stream(
+                lambda: model(
+                    img_list,
+                    imgsz=640,
+                    conf=conf,
+                    iou=iou,
+                    agnostic_nms=agnostic,
+                    verbose=True,
+                )
+            )
+        end_inf = time.time()
 
-        except Exception as e:
-            self.logger.error(f"Error during inference: {e}")
+        if results is None or (isinstance(results, list) and not results):
+            self.logger.warning("Inference returned None or empty list.")
             return None if not is_batch else [None] * batch_size
+
+        self.logger.info(
+            f"Preprocessing: {(end_pre - start_pre)*1000:.2f} ms, Inference: {(end_inf - end_pre)*1000:.2f} ms for {batch_size} frames"
+        )
+        return results[0] if not is_batch else results

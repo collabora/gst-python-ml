@@ -77,42 +77,36 @@ class FaceEngine(PyTorchEngine):
 
         results = []
         for frame in frames:
-            try:
-                faces = self.app.get(frame.astype(np.uint8))
-                detections = []
-                for face in faces:
-                    bbox = face.bbox.astype(float).tolist()
-                    score = float(face.det_score)
-                    embedding = face.embedding
+            faces = self.app.get(frame.astype(np.uint8))
+            detections = []
+            for face in faces:
+                bbox = face.bbox.astype(float).tolist()
+                score = float(face.det_score)
+                embedding = face.embedding
 
-                    identity = "unknown"
-                    best_sim = 0.0
-                    if self.gallery and embedding is not None:
-                        for name, gallery_emb in self.gallery.items():
-                            sim = float(
-                                np.dot(embedding, gallery_emb)
-                                / (
-                                    np.linalg.norm(embedding)
-                                    * np.linalg.norm(gallery_emb)
-                                    + 1e-8
-                                )
+                identity = "unknown"
+                best_sim = 0.0
+                if self.gallery and embedding is not None:
+                    for name, gallery_emb in self.gallery.items():
+                        sim = float(
+                            np.dot(embedding, gallery_emb)
+                            / (
+                                np.linalg.norm(embedding) * np.linalg.norm(gallery_emb)
+                                + 1e-8
                             )
-                            if sim > best_sim:
-                                best_sim = sim
-                                if sim >= threshold:
-                                    identity = name
+                        )
+                        if sim > best_sim:
+                            best_sim = sim
+                            if sim >= threshold:
+                                identity = name
 
-                    detections.append(
-                        {
-                            "bbox": bbox,
-                            "score": score,
-                            "identity": identity,
-                            "similarity": best_sim,
-                        }
-                    )
-                results.append(detections)
-            except Exception as e:
-                self.logger.error(f"Face inference error on frame: {e}")
-                results.append([])
-
+                detections.append(
+                    {
+                        "bbox": bbox,
+                        "score": score,
+                        "identity": identity,
+                        "similarity": best_sim,
+                    }
+                )
+            results.append(detections)
         return results[0] if not is_batch else results

@@ -43,68 +43,51 @@ class TVMEngine(MLEngine):
         self.model_name = model_name
         self.kwargs = kwargs
 
-        try:
-            if os.path.isfile(model_name) and model_name.endswith((".so", ".tar")):
-                self._start_vm(tvm.runtime.load_module(model_name))
-                self.model_type = "custom"
-                self.logger.info(
-                    f"TVM compiled model loaded from local path: {model_name}"
-                )
-                return True
+        if os.path.isfile(model_name) and model_name.endswith((".so", ".tar")):
+            self._start_vm(tvm.runtime.load_module(model_name))
+            self.model_type = "custom"
+            self.logger.info(f"TVM compiled model loaded from local path: {model_name}")
+            return True
 
-            from torchvision import models as tv_models
+        from torchvision import models as tv_models
 
-            if hasattr(tv_models, model_name):
-                pt_model = getattr(tv_models, model_name)(pretrained=True)
-                self._compile_pytorch_model(pt_model, CLASSIFIER_INPUT_SHAPE)
-                self.model_type = "classification"
-                self.logger.info(
-                    f"Pre-trained vision model '{model_name}' compiled with TVM."
-                )
-                return True
-
-            if processor_name and tokenizer_name:
-                from transformers import (
-                    AutoTokenizer,
-                    AutoImageProcessor,
-                    AutoModelForVision2Seq,
-                )
-
-                self.image_processor = AutoImageProcessor.from_pretrained(
-                    processor_name
-                )
-                self.tokenizer = AutoTokenizer.from_pretrained(tokenizer_name)
-                pt_model = AutoModelForVision2Seq.from_pretrained(model_name)
-                self.model = pt_model
-                self.frame_stride = (
-                    pt_model.config.encoder.num_frames
-                    if hasattr(pt_model.config, "encoder")
-                    and hasattr(pt_model.config.encoder, "num_frames")
-                    else 1
-                )
-                self.model_type = "vision_text"
-                self.logger.info(
-                    f"Vision-Text model '{model_name}' loaded for TVM engine."
-                )
-                return True
-
-            from transformers import AutoTokenizer, AutoModelForCausalLM
-
-            self.tokenizer = AutoTokenizer.from_pretrained(model_name)
-            self.model = AutoModelForCausalLM.from_pretrained(model_name)
-            self.model_type = "llm"
+        if hasattr(tv_models, model_name):
+            pt_model = getattr(tv_models, model_name)(pretrained=True)
+            self._compile_pytorch_model(pt_model, CLASSIFIER_INPUT_SHAPE)
+            self.model_type = "classification"
             self.logger.info(
-                f"Pre-trained LLM model '{model_name}' loaded for TVM engine."
+                f"Pre-trained vision model '{model_name}' compiled with TVM."
             )
             return True
 
-        except Exception as e:
-            self.logger.error(f"Error loading model '{model_name}': {e}")
-            self.tokenizer = None
-            self.image_processor = None
-            self.model = None
-            self.vm = None
-            return False
+        if processor_name and tokenizer_name:
+            from transformers import (
+                AutoTokenizer,
+                AutoImageProcessor,
+                AutoModelForVision2Seq,
+            )
+
+            self.image_processor = AutoImageProcessor.from_pretrained(processor_name)
+            self.tokenizer = AutoTokenizer.from_pretrained(tokenizer_name)
+            pt_model = AutoModelForVision2Seq.from_pretrained(model_name)
+            self.model = pt_model
+            self.frame_stride = (
+                pt_model.config.encoder.num_frames
+                if hasattr(pt_model.config, "encoder")
+                and hasattr(pt_model.config.encoder, "num_frames")
+                else 1
+            )
+            self.model_type = "vision_text"
+            self.logger.info(f"Vision-Text model '{model_name}' loaded for TVM engine.")
+            return True
+
+        from transformers import AutoTokenizer, AutoModelForCausalLM
+
+        self.tokenizer = AutoTokenizer.from_pretrained(model_name)
+        self.model = AutoModelForCausalLM.from_pretrained(model_name)
+        self.model_type = "llm"
+        self.logger.info(f"Pre-trained LLM model '{model_name}' loaded for TVM engine.")
+        return True
 
     def _compile_pytorch_model(self, pt_model, input_shape):
         import torch
@@ -192,22 +175,15 @@ class TVMEngine(MLEngine):
                 self.frame_buffer.append(frames)
             if len(self.frame_buffer) >= self.batch_size:
                 self.logger.info(f"Processing {self.batch_size} frames")
-                try:
-                    gen_kwargs = {"min_length": 10, "max_length": 20, "num_beams": 8}
-                    pixel_values = self.image_processor(
-                        self.frame_buffer, return_tensors="pt"
-                    ).pixel_values
-                    tokens = self.model.generate(pixel_values, **gen_kwargs)
-                    captions = self.tokenizer.batch_decode(
-                        tokens, skip_special_tokens=True
-                    )
-                    self.logger.info(f"Captions: {captions}")
-                    self.frame_buffer = []
-                    return captions[0]
-                except Exception as e:
-                    self.logger.error(f"Failed to process frames: {e}")
-                    self.frame_buffer = []
-                    return None
+                gen_kwargs = {"min_length": 10, "max_length": 20, "num_beams": 8}
+                pixel_values = self.image_processor(
+                    self.frame_buffer, return_tensors="pt"
+                ).pixel_values
+                tokens = self.model.generate(pixel_values, **gen_kwargs)
+                captions = self.tokenizer.batch_decode(tokens, skip_special_tokens=True)
+                self.logger.info(f"Captions: {captions}")
+                self.frame_buffer = []
+                return captions[0]
             return None
 
         elif self.model_type == "llm":

@@ -29,7 +29,7 @@ try:
     gi.require_version("Gst", "1.0")
     gi.require_version("GstBase", "1.0")
     from gi.repository import Gst, GstBase
-    from backend import GObject
+    from backend import GObject, post_model_load_error
 
     from log.logger_factory import LoggerFactory
 
@@ -123,8 +123,8 @@ class VoiceActivityDetector(GstBase.BaseTransform):
                 f"Silero VAD initialized (chunk_size={self._chunk_size} samples "
                 f"at {VAD_SAMPLE_RATE} Hz)"
             )
-        except Exception as e:
-            self.logger.error(f"Failed to initialize Silero VAD: {e}")
+        except Exception as exception:
+            post_model_load_error(self, "silero vad", exception)
             return False
         return True
 

@@ -80,15 +80,9 @@ class VlmEngine(PyTorchEngine):
         import numpy as np
         from PIL import Image
 
-        try:
-            pil_img = Image.fromarray(frame.astype(np.uint8))
-            text = self.do_generate(
-                pil_img, prompt, system_prompt, max_tokens, temperature
-            )
-            return text
-        except Exception as e:
-            self.logger.error(f"VLM inference error: {e}")
-            return None
+        pil_img = Image.fromarray(frame.astype(np.uint8))
+        text = self.do_generate(pil_img, prompt, system_prompt, max_tokens, temperature)
+        return text
 
     def do_generate(self, image, prompt, system_prompt, max_tokens, temperature):
         """

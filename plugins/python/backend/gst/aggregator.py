@@ -37,6 +37,7 @@ from backend.core import (  # noqa: E402
     PayloadProcessingMixin,
     ml_property_namespace,
 )
+from backend.gst.errors import post_error, post_model_load_error  # noqa: E402
 
 
 class PayloadDriver:
@@ -74,8 +75,8 @@ class PayloadDriver:
 
             return Gst.FlowReturn.OK
 
-        except Exception as e:
-            self.logger.error(f"Error processing buffer: {e}")
+        except Exception as exception:
+            post_error(self, "error processing buffer", exception)
             return Gst.FlowReturn.ERROR
 
     def stamp_payload(self, outbuf, inbuf):
@@ -134,7 +135,11 @@ class BaseAggregator(
     # GStreamer framework virtual: load the model on NULL -> READY.
     def do_change_state(self, transition):
         if transition == Gst.StateChange.NULL_TO_READY:
-            self.do_load_model()
+            try:
+                self.do_load_model()
+            except Exception as exception:
+                post_model_load_error(self, self._model_name, exception)
+                return Gst.StateChangeReturn.FAILURE
         return Gst.Element.do_change_state(self, transition)
 
     def push_segment_if_needed(self):
@@ -161,5 +166,10 @@ class BaseAggregator(
         if len(self.sinkpads) == 0:
             return
         buf = self.sinkpads[0].pop_buffer()
-        if buf:
+        if not buf:
+            return
+        # an element that overrides do_process, so PayloadDriver's handler never runs
+        try:
             self.do_process(buf)
+        except Exception as exception:
+            post_error(self, "error processing buffer", exception)

@@ -87,28 +87,24 @@ class EmbeddingEngine(PyTorchEngine):
         import torch
         from PIL import Image
 
-        try:
-            pil_img = Image.fromarray(frame.astype(np.uint8))
-            inputs = self.processor(images=pil_img, return_tensors="pt")
-            inputs = {k: v.to(self.device) for k, v in inputs.items()}
+        pil_img = Image.fromarray(frame.astype(np.uint8))
+        inputs = self.processor(images=pil_img, return_tensors="pt")
+        inputs = {k: v.to(self.device) for k, v in inputs.items()}
 
-            with torch.no_grad():
-                if self._is_clip:
-                    emb = projected(self.model.get_image_features(**inputs))
-                else:
-                    outputs = self.model(**inputs)
-                    # Use CLS token embedding
-                    emb = outputs.last_hidden_state[:, 0]
+        with torch.no_grad():
+            if self._is_clip:
+                emb = projected(self.model.get_image_features(**inputs))
+            else:
+                outputs = self.model(**inputs)
+                # Use CLS token embedding
+                emb = outputs.last_hidden_state[:, 0]
 
-            emb = emb.squeeze(0).cpu().numpy().astype(np.float32)
-            if normalize:
-                norm = np.linalg.norm(emb)
-                if norm > 0:
-                    emb = emb / norm
-            return emb
-        except Exception as e:
-            self.logger.error(f"Embedding inference error: {e}")
-            return None
+        emb = emb.squeeze(0).cpu().numpy().astype(np.float32)
+        if normalize:
+            norm = np.linalg.norm(emb)
+            if norm > 0:
+                emb = emb / norm
+        return emb
 
     def do_text_embedding(self, text, normalize=True):
         """
@@ -128,17 +124,13 @@ class EmbeddingEngine(PyTorchEngine):
             self.logger.warning("Text embeddings only supported for CLIP models")
             return None
 
-        try:
-            inputs = self.processor(text=[text], return_tensors="pt", padding=True)
-            inputs = {k: v.to(self.device) for k, v in inputs.items()}
-            with torch.no_grad():
-                emb = projected(self.model.get_text_features(**inputs))
-            emb = emb.squeeze(0).cpu().numpy().astype(np.float32)
-            if normalize:
-                norm = np.linalg.norm(emb)
-                if norm > 0:
-                    emb = emb / norm
-            return emb
-        except Exception as e:
-            self.logger.error(f"Text embedding error: {e}")
-            return None
+        inputs = self.processor(text=[text], return_tensors="pt", padding=True)
+        inputs = {k: v.to(self.device) for k, v in inputs.items()}
+        with torch.no_grad():
+            emb = projected(self.model.get_text_features(**inputs))
+        emb = emb.squeeze(0).cpu().numpy().astype(np.float32)
+        if normalize:
+            norm = np.linalg.norm(emb)
+            if norm > 0:
+                emb = emb / norm
+        return emb

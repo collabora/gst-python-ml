@@ -58,63 +58,58 @@ class MuxedBufferProcessor:
         import numpy as np
 
         self.logger.info(f"Extracting frames from buffer: {hex(id(buf))}")
-        try:
-            # Set PTS if not present
-            if buf.pts == Gst.CLOCK_TIME_NONE:
-                buf.pts = Gst.util_uint64_scale(
-                    Gst.util_get_timestamp(),
-                    self.framerate_denom,
-                    self.framerate_num * Gst.SECOND,
+        # Set PTS if not present
+        if buf.pts == Gst.CLOCK_TIME_NONE:
+            buf.pts = Gst.util_uint64_scale(
+                Gst.util_get_timestamp(),
+                self.framerate_denom,
+                self.framerate_num * Gst.SECOND,
+            )
+
+        num_chunks = buf.n_memory()
+        format = self.format_converter.get_video_format(buf, sinkpad)
+        self.logger.info(f"Chunks: {num_chunks}, format: {format}")
+
+        if num_chunks < 1:
+            self.logger.error("Buffer has no memory chunks")
+            return None, None, None, None
+
+        # a blob appended upstream is an extra memory too, only the muxer's trailing metadata means a batch
+        if not self.metadata.present(buf):
+            self.logger.info("Single frame mode (no metadata)")
+            with buf.peek_memory(0).map(Gst.MapFlags.READ) as info:
+                frame = self.format_converter.get_rgb_frame(
+                    info, format, self.height, self.width
                 )
+                if frame is None or not isinstance(frame, np.ndarray):
+                    self.logger.error("Invalid frame")
+                    return None, None, None, None
+                return frame, None, 1, format
 
-            num_chunks = buf.n_memory()
-            format = self.format_converter.get_video_format(buf, sinkpad)
-            self.logger.info(f"Chunks: {num_chunks}, format: {format}")
-
-            if num_chunks < 1:
-                self.logger.error("Buffer has no memory chunks")
-                return None, None, None, None
-
-            # a blob appended upstream is an extra memory too, only the muxer's trailing metadata means a batch
-            if not self.metadata.present(buf):
-                self.logger.info("Single frame mode (no metadata)")
-                with buf.peek_memory(0).map(Gst.MapFlags.READ) as info:
+        # Batch case: last chunk is metadata
+        else:
+            self.logger.info(f"Batch mode with {num_chunks} chunks")
+            num_frames = num_chunks - 1
+            frames = []
+            for i in range(num_frames):
+                with buf.peek_memory(i).map(Gst.MapFlags.READ) as info:
                     frame = self.format_converter.get_rgb_frame(
                         info, format, self.height, self.width
                     )
                     if frame is None or not isinstance(frame, np.ndarray):
-                        self.logger.error("Invalid frame")
+                        self.logger.error(f"Invalid frame at index {i}")
                         return None, None, None, None
-                    return frame, None, 1, format
+                    frames.append(frame)
 
-            # Batch case: last chunk is metadata
-            else:
-                self.logger.info(f"Batch mode with {num_chunks} chunks")
-                num_frames = num_chunks - 1
-                frames = []
-                for i in range(num_frames):
-                    with buf.peek_memory(i).map(Gst.MapFlags.READ) as info:
-                        frame = self.format_converter.get_rgb_frame(
-                            info, format, self.height, self.width
-                        )
-                        if frame is None or not isinstance(frame, np.ndarray):
-                            self.logger.error(f"Invalid frame at index {i}")
-                            return None, None, None, None
-                        frames.append(frame)
+            # Read metadata from the last chunk
+            id_str, num_sources = self.metadata.read(buf)
+            self.logger.info(f"Metadata: ID={id_str}, num_sources={num_sources}")
+            if num_sources != num_frames:
+                self.logger.error(
+                    f"Metadata num_sources ({num_sources}) does not match frame count ({num_frames})"
+                )
+                return None, None, None, None
 
-                # Read metadata from the last chunk
-                id_str, num_sources = self.metadata.read(buf)
-                self.logger.info(f"Metadata: ID={id_str}, num_sources={num_sources}")
-                if num_sources != num_frames:
-                    self.logger.error(
-                        f"Metadata num_sources ({num_sources}) does not match frame count ({num_frames})"
-                    )
-                    return None, None, None, None
-
-                batch_frames = np.stack(frames, axis=0)
-                self.logger.info(f"Extracted batch with shape: {batch_frames.shape}")
-                return batch_frames, id_str, num_sources, format
-
-        except Exception as e:
-            self.logger.error(f"Frame extraction error: {e}")
-            return None, None, None, None
+            batch_frames = np.stack(frames, axis=0)
+            self.logger.info(f"Extracted batch with shape: {batch_frames.shape}")
+            return batch_frames, id_str, num_sources, format

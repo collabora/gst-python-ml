@@ -73,10 +73,6 @@ class ExecuTorchEngine(MLEngine):
                 "executorch is not installed. " "Install with: pip install executorch"
             )
             return False
-        except Exception as e:
-            self.logger.error(f"Error loading ExecuTorch model '{model_name}': {e}")
-            self.model = None
-            return False
 
     def do_forward(self, frames):
         """Execute inference through the ExecuTorch module."""
@@ -99,23 +95,17 @@ class ExecuTorchEngine(MLEngine):
         # the runtime reads the buffer as laid out, a transposed view crashes it
         input_tensor = torch.from_numpy(np.ascontiguousarray(img))
 
-        try:
-            outputs = self.model.execute([input_tensor])
-            if isinstance(outputs, (list, tuple)):
-                raw = (
-                    outputs[0].numpy()
-                    if hasattr(outputs[0], "numpy")
-                    else np.array(outputs[0])
-                )
-            else:
-                raw = (
-                    outputs.numpy() if hasattr(outputs, "numpy") else np.array(outputs)
-                )
+        outputs = self.model.execute([input_tensor])
+        if isinstance(outputs, (list, tuple)):
+            raw = (
+                outputs[0].numpy()
+                if hasattr(outputs[0], "numpy")
+                else np.array(outputs[0])
+            )
+        else:
+            raw = outputs.numpy() if hasattr(outputs, "numpy") else np.array(outputs)
 
-            return self._apply_post_process(raw, is_batch)
-        except Exception as e:
-            self.logger.error(f"ExecuTorch inference failed: {e}")
-            return None
+        return self._apply_post_process(raw, is_batch)
 
     def do_generate(self, input_text, max_length=1000, system_prompt=None):
         """Text generation is not supported by ExecuTorch engine."""

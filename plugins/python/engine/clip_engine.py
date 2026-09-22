@@ -73,25 +73,20 @@ class ClipEngine(PyTorchEngine):
             self.logger.warning("No labels set — set the 'labels' property")
             return None
 
-        try:
-            pil_img = Image.fromarray(frame.astype(np.uint8))
-            inputs = self.image_processor(
-                text=self._labels,
-                images=pil_img,
-                return_tensors="pt",
-                padding=True,
-            )
-            inputs = {k: v.to(self.device) for k, v in inputs.items()}
+        pil_img = Image.fromarray(frame.astype(np.uint8))
+        inputs = self.image_processor(
+            text=self._labels,
+            images=pil_img,
+            return_tensors="pt",
+            padding=True,
+        )
+        inputs = {k: v.to(self.device) for k, v in inputs.items()}
 
-            with torch.no_grad():
-                outputs = self.model(**inputs)
+        with torch.no_grad():
+            outputs = self.model(**inputs)
 
-            # logits_per_image: [1, num_labels]
-            probs = outputs.logits_per_image.softmax(dim=1)[0]
-            results = [(label, prob.item()) for label, prob in zip(self._labels, probs)]
-            results.sort(key=lambda x: x[1], reverse=True)
-            return results
-
-        except Exception as e:
-            self.logger.error(f"CLIP inference error: {e}")
-            return None
+        # logits_per_image: [1, num_labels]
+        probs = outputs.logits_per_image.softmax(dim=1)[0]
+        results = [(label, prob.item()) for label, prob in zip(self._labels, probs)]
+        results.sort(key=lambda x: x[1], reverse=True)
+        return results

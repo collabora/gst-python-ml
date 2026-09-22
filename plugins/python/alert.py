@@ -34,7 +34,7 @@ try:
     from gi.repository import Gst, GstBase  # noqa: E402
 
     from log.logger_factory import LoggerFactory  # noqa: E402
-    from backend import analytics, frameio, GObject  # noqa: E402
+    from backend import analytics, frameio, GObject, post_error  # noqa: E402
 
     # Header prefix for alert buffer metadata
     ALERT_META_HEADER = b"GST-ALERT:"
@@ -274,26 +274,23 @@ class AlertTransform(GstBase.BaseTransform):
 
         if self.width == 0 or self.height == 0:
             return
-        try:
-            success, mapinfo = buf.map(Gst.MapFlags.READ | Gst.MapFlags.WRITE)
-            if not success:
-                return
-            # Interpret as RGBA (4 channels)
-            frame = np.ndarray(
-                (self.height, self.width, 4),
-                buffer=mapinfo.data,
-                dtype=np.uint8,
-            )
-            border = max(2, min(self.width, self.height) // 100)
-            red = [255, 0, 0, 255]
-            # Draw red border
-            frame[:border, :] = red
-            frame[-border:, :] = red
-            frame[:, :border] = red
-            frame[:, -border:] = red
-            buf.unmap(mapinfo)
-        except Exception as e:
-            self.logger.error(f"Failed to draw alert overlay: {e}")
+        success, mapinfo = buf.map(Gst.MapFlags.READ | Gst.MapFlags.WRITE)
+        if not success:
+            return
+        # Interpret as RGBA (4 channels)
+        frame = np.ndarray(
+            (self.height, self.width, 4),
+            buffer=mapinfo.data,
+            dtype=np.uint8,
+        )
+        border = max(2, min(self.width, self.height) // 100)
+        red = [255, 0, 0, 255]
+        # Draw red border
+        frame[:border, :] = red
+        frame[-border:, :] = red
+        frame[:, :border] = red
+        frame[:, -border:] = red
+        buf.unmap(mapinfo)
 
     def do_transform_ip(self, buf):
         try:
@@ -329,8 +326,8 @@ class AlertTransform(GstBase.BaseTransform):
 
             return Gst.FlowReturn.OK
 
-        except Exception as e:
-            self.logger.error(f"Alert transform error: {e}")
+        except Exception as exception:
+            post_error(self, "alert transform error", exception)
             return Gst.FlowReturn.ERROR
 
     def do_stop(self):
