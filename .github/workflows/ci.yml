@@ -255,14 +255,22 @@ jobs:
             ~/.config/Ultralytics
           key: pipelines-${{ hashFiles('PIPELINES.md') }}
 
-      # the build venv lacks what the kept elements import
+      # the build venv lacks what the kept elements import, and the alert pipeline publishes to a local broker
       - name: Run the PIPELINES.md pipelines a headless runner can (Linux)
         if: runner.os == 'Linux'
         run: |
           source .venv/bin/activate
           unset LD_LIBRARY_PATH
-          pip install transformers pillow paho-mqtt lap huggingface_hub
-          HEADLESS_PIPELINES=1 PIPELINE_TIMEOUT=180 GST_DEBUG=2 python -m pytest tests/test_pipelines.py -q
+          sudo apt-get install -y mosquitto
+          pip install transformers sentencepiece pillow paho-mqtt lap huggingface_hub
+          HEADLESS_PIPELINES=1 PIPELINE_TIMEOUT=300 GST_DEBUG=2 python -m pytest tests/test_pipelines.py -q
+
+      - name: Upload the pipeline logs (Linux)
+        if: runner.os == 'Linux' && failure()
+        uses: actions/upload-artifact@v7
+        with:
+          name: pipeline-logs
+          path: tests/logs
 
       - name: ONNX pipeline smoke test (Linux)
         if: runner.os == 'Linux'

@@ -170,15 +170,17 @@ class OverlayGraphicsFactory:
     @staticmethod
     def create(graphics_type, width, height, **kwargs):
         """Factory method to create an OverlayGraphics object based on type."""
-        from .overlay_cairo import CairoOverlayGraphics
-        from .overlay_opengl import OpenGLOverlayGraphics
-        from .overlay_vulkan import VulkanOverlayGraphics
-
         if graphics_type == GraphicsType.CAIRO:
+            from .overlay_cairo import CairoOverlayGraphics
+
             return CairoOverlayGraphics(width, height)
         elif graphics_type == GraphicsType.OPENGL:
+            from .overlay_opengl import OpenGLOverlayGraphics
+
             return OpenGLOverlayGraphics(width, height)
         elif graphics_type == GraphicsType.VULKAN:
+            from .overlay_vulkan import VulkanOverlayGraphics
+
             vk_device = kwargs.get("vk_device")
             vk_queue = kwargs.get("vk_queue")
             return VulkanOverlayGraphics(width, height, vk_device, vk_queue)
