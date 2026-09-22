@@ -915,16 +915,16 @@ python pyml-launch.py filesrc location=data/people.mp4 ! decodebin name=d \
 ```
 python pyml-launch.py filesrc location=data/people.mp4 ! decodebin name=d \
   d. ! queue ! videoconvert ! videoscale ! "video/x-raw,width=320,height=240" \
-  ! pyml_superres model-name=real-esrgan-x2 device=cuda scale-factor=2 \
+  ! pyml_superres model-name=real-esrgan-x2 device=cuda \
   ! videoconvert ! autovideosink sync=false
 ```
 
-#### 4x upscale with tile processing
+#### 4x upscale
 
 ```
 python pyml-launch.py filesrc location=data/people.mp4 ! decodebin name=d \
   d. ! queue ! videoconvert ! videoscale ! "video/x-raw,width=320,height=240" \
-  ! pyml_superres model-name=real-esrgan-x4 device=cuda scale-factor=4 \
+  ! pyml_superres model-name=real-esrgan-x4 device=cuda \
   ! videoconvert ! autovideosink sync=false
 ```
 

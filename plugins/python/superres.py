@@ -54,16 +54,6 @@ class SuperResTransform(VideoTransform, SuperResTask):
         "Aaron Boxer <aaron.boxer@collabora.com>",
     )
 
-    scale_factor = GObject.Property(
-        type=int,
-        default=4,
-        minimum=2,
-        maximum=8,
-        nick="Scale Factor",
-        blurb="Upscaling factor (2 or 4)",
-        flags=GObject.ParamFlags.READWRITE,
-    )
-
     def __init__(self):
         super().__init__()
         self.mgr.engine_name = "pyml_superres_engine"
