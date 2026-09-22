@@ -29,7 +29,6 @@ try:
     gi.require_version("GObject", "2.0")
     from gi.repository import Gst, GstBase  # noqa: E402
     from base_aggregator import BaseAggregator
-    from diffusers import StableDiffusionPipeline  # noqa: F401
 except ImportError as e:
     CAN_REGISTER_ELEMENT = False
     GlobalLogger().warning(

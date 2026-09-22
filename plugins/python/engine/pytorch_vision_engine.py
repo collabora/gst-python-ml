@@ -18,7 +18,6 @@
 
 from abc import abstractmethod
 import numpy as np
-from PIL import Image
 import gc
 
 from engine.pytorch_engine import PyTorchEngine
@@ -33,7 +32,8 @@ class PyTorchVisionEngine(PyTorchEngine):
             self.logger.error(f"Invalid input type for forward: {type(frames)}")
             return None
 
-        # Shared: Convert to PIL
+        from PIL import Image
+
         images = (
             [Image.fromarray(np.uint8(frame)) for frame in frames]
             if is_batch
