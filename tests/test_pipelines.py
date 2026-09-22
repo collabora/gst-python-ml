@@ -1,3 +1,4 @@
+import importlib.util
 import subprocess
 import os
 import signal
@@ -6,6 +7,7 @@ import sys
 import pytest
 from pathlib import Path
 import shutil
+import socket
 import uuid
 import stat
 import time
@@ -119,6 +121,74 @@ def pipewire_has_default_audio_source():
     return DEFAULT_SOURCE_METADATA_KEY in result.stdout
 
 
+EXPORTED_MODEL_SUFFIXES = {
+    ".gguf",
+    ".so",
+    ".vmfb",
+    ".param",
+    ".xml",
+    ".tflite",
+    ".onnx",
+    ".pte",
+    ".safetensors",
+}
+EXPORTED_MODEL_DIR_MARKERS = ("_saved_model", "_openvino_model")
+
+
+# the engine class registers without its runtime, so check the runtime itself
+ENGINE_RUNTIME_MODULES = {
+    "pytorch": "torch",
+    "onnx": "onnxruntime",
+    "openvino": "openvino",
+    "tensorflow": "tensorflow",
+    "tflite": "tensorflow",
+    "ncnn": "ncnn",
+    "executorch": "executorch",
+    "iree": "iree",
+    "llamacpp": "llama_cpp",
+    "tvm": "tvm",
+    "mlx": "mlx",
+    "jax": "jax",
+    "tinygrad": "tinygrad",
+    "candle": "candle",
+    "migraphx": "migraphx",
+}
+
+
+def engine_is_installed(engine_name):
+    module = ENGINE_RUNTIME_MODULES.get(engine_name)
+    return module is None or importlib.util.find_spec(module) is not None
+
+
+# the engines job covers these, a local run only has the engines and exports it made
+def skip_without_engine_or_exported_model(pipeline):
+    engine = re.search(r"\bengine-name=([^\s!]+)", pipeline)
+    if engine and not engine_is_installed(engine.group(1)):
+        pytest.skip(f"engine {engine.group(1)} is not installed")
+    for model in re.findall(r"\bmodel-name=([^\s!]+)", pipeline):
+        candidate = Path(model.strip('"'))
+        exported = candidate.suffix in EXPORTED_MODEL_SUFFIXES or any(
+            marker in candidate.name for marker in EXPORTED_MODEL_DIR_MARKERS
+        )
+        if not candidate.is_absolute():
+            candidate = BASE_DIR / candidate
+        if exported and not candidate.exists():
+            pytest.skip(f"exported model {model} is not present")
+
+
+def skip_without_broker(pipeline):
+    match = re.search(r"\bbroker=([^\s!:]+):(\d+)", pipeline)
+    if not match:
+        return
+    host, port = match.group(1), int(match.group(2))
+    with socket.socket() as probe:
+        probe.settimeout(1)
+        try:
+            probe.connect((host, port))
+        except OSError:
+            pytest.skip(f"nothing listens on {host}:{port}")
+
+
 def skip_without_default_audio_source(pipeline):
     if not BARE_PULSE_SOURCE.search(pipeline):
         return
@@ -219,6 +289,8 @@ def test_pipeline(pipeline, tmp_path):
     LOG_DIR.mkdir(parents=True, exist_ok=True)
     os.sync()
     pipeline = absolutize_project_inputs(pipeline)
+    skip_without_engine_or_exported_model(pipeline)
+    skip_without_broker(pipeline)
     unique_id = uuid.uuid4().hex[:8]
     log_file = LOG_DIR / f"test_{unique_id}.log"
 

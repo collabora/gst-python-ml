@@ -68,8 +68,7 @@ class LlamaCppEngine(MLEngine):
         self.n_ctx = kwargs.get("n_ctx", self.n_ctx)
 
         if not os.path.isfile(model_name):
-            self.logger.error(f"GGUF model file not found: {model_name}")
-            return False
+            raise FileNotFoundError(f"GGUF model file not found: {model_name}")
 
         if not model_name.endswith(".gguf"):
             self.logger.warning(
