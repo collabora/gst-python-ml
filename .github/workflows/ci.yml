@@ -174,7 +174,7 @@ jobs:
           else
             source .venv/bin/activate
           fi
-          pip install -e ".[yolo,mqtt,mcp]"
+          pip install -e ".[yolo,mqtt,mcp,audio]"
 
       - name: Verify core imports
         shell: bash

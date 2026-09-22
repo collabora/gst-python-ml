@@ -27,7 +27,8 @@ try:
     from .gst_logger import GstLogger
 
     GST_LOGGER_AVAILABLE = True
-except ImportError:
+# gi without gstreamer raises ValueError from require_version
+except (ImportError, ValueError):
     GstLogger = None  # Avoid NameError if accessed
     GST_LOGGER_AVAILABLE = False
 

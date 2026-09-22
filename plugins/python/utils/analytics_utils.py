@@ -27,7 +27,7 @@ try:
     from gi.repository import GstAnalytics, GLib  # noqa: E402
 
     from log.logger_factory import LoggerFactory  # noqa: E402
-except ImportError:
+except (ImportError, ValueError):
     ANALYTICS_UTILS_AVAILABLE = False
 
 
