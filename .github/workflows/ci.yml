@@ -84,15 +84,15 @@ jobs:
             ~/.config/Ultralytics
           key: engines-${{ matrix.engine }}-${{ hashFiles('pyproject.toml', '.github/workflows/ci.yml') }}
 
-      # the project's own dependency list needs cairo headers, the extra alone does not
       - name: Install the engine
         env:
           # the cached llama.cpp wheel must run on whichever cpu the next runner has
           CMAKE_ARGS: -DGGML_NATIVE=OFF
         run: |
-          pip install --no-deps -e .
-          python -c "import tomllib; print('\n'.join(tomllib.load(open('pyproject.toml', 'rb'))['project']['optional-dependencies']['${{ matrix.extra }}']))" \
-            | xargs -d '\n' pip install ultralytics transformers opencv-python-headless huggingface_hub pytest
+          # pygobject and pycairo build from source, this job has no gstreamer step to pull their headers in
+          sudo apt-get update
+          sudo apt-get install -y libcairo2-dev libgirepository-2.0-dev libglib2.0-dev pkg-config
+          pip install -e ".[${{ matrix.extra }},yolo]" pytest
 
       - name: Run the engine tests
         env:
@@ -165,6 +165,8 @@ jobs:
 
       - name: Create venv and install CPU dependencies
         shell: bash
+        # pygobject builds from source and only the ubuntu leg installs its headers
+        continue-on-error: ${{ matrix.os != 'ubuntu-latest' }}
         run: |
           ${{ matrix.venv-python || 'python' }} -m venv --system-site-packages .venv
           if [[ "$RUNNER_OS" == "Windows" ]]; then
@@ -172,10 +174,7 @@ jobs:
           else
             source .venv/bin/activate
           fi
-          pip install --no-deps -e .
-          pip install numpy scipy opencv-python-headless ultralytics
-          # pygobject/pycairo from pip need C build deps; install only where available
-          pip install pygobject pycairo || echo "pygobject/pycairo pip install failed (using system packages)"
+          pip install -e ".[yolo,mqtt,mcp]"
 
       - name: Verify core imports
         shell: bash
@@ -236,7 +235,7 @@ jobs:
         if: runner.os == 'Linux'
         run: |
           source .venv/bin/activate
-          pip install pytest mcp
+          pip install pytest
           unset LD_LIBRARY_PATH
           rm -rf ~/.cache/gstreamer-1.0
           # PIPELINES.md pipelines need the GPU and the data dir, the other two load models
@@ -255,14 +254,13 @@ jobs:
             ~/.config/Ultralytics
           key: pipelines-${{ hashFiles('PIPELINES.md') }}
 
-      # the build venv lacks what the kept elements import, and the alert pipeline publishes to a local broker
+      # the alert pipeline publishes to a local broker
       - name: Run the PIPELINES.md pipelines a headless runner can (Linux)
         if: runner.os == 'Linux'
         run: |
           source .venv/bin/activate
           unset LD_LIBRARY_PATH
           sudo apt-get install -y mosquitto
-          pip install transformers sentencepiece protobuf pillow paho-mqtt lap huggingface_hub
           HEADLESS_PIPELINES=1 PIPELINE_TIMEOUT=300 GST_DEBUG=2 python -m pytest tests/test_pipelines.py -q
 
       - name: Upload the pipeline logs (Linux)

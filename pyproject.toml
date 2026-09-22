@@ -18,43 +18,57 @@ classifiers = [
 ]
 dependencies = [
     "pygobject",
+    "pycairo",
+    "numpy",
+    "scipy",
+    "opencv-python>=4.13.0; python_version >= '3.14'",
+    "opencv-python>=4.9.0; python_version < '3.14'",
     "torch>=2.11.0; python_version >= '3.14'",
     "torch>=2.7.0; python_version < '3.14'",
     "torchvision>=0.26.0; python_version >= '3.14'",
     "torchvision>=0.22.0; python_version < '3.14'",
-    "torchaudio>=2.11.0; python_version >= '3.14'",
-    "torchaudio>=2.7.0; python_version < '3.14'",
     "transformers>=5.6.2; python_version >= '3.14'",
     "transformers>=4.44.0; python_version < '3.14'",
-    "qwen-vl-utils[decord]>=0.0.8",
-    "autoawq>=0.2.9",
     "accelerate>=1.13.0",
-    "bitsandbytes>=0.49.2",
-    "opencv-python>=4.13.0; python_version >= '3.14'",
-    "opencv-python>=4.9.0; python_version < '3.14'",
-    "opencv-contrib-python>=4.13.0; python_version >= '3.14'",
-    "opencv-contrib-python>=4.9.0; python_version < '3.14'",
-    "numpy",
-    "scipy",
     "huggingface-hub",
-    "lap",
-    "pycairo",
-    "ultralytics",
-    "confluent_kafka",
-    # "flash-attn",
-    "diffusers",
+    "pillow",
     "sentencepiece",
     "protobuf",
-    "whisperspeech",
-    "webdataset",
-    "easydict",
-    "pyflann-py3",
-    "soundfile",
-    "speechbrain",
     "pyopengl"
+    # "flash-attn",
 ]
 
 [project.optional-dependencies]
+yolo = [
+    "ultralytics",
+    "lap",
+]
+llm = [
+    "bitsandbytes>=0.49.2",
+    "qwen-vl-utils[decord]>=0.0.8",
+]
+# gptqmodel ships an sdist only, so this extra compiles against the installed torch
+awq = [
+    "gptqmodel",
+]
+audio = [
+    "torchaudio>=2.11.0; python_version >= '3.14'",
+    "torchaudio>=2.7.0; python_version < '3.14'",
+    "soundfile",
+    "speechbrain",
+    "whisperspeech",
+    # fastprogress imports IPython.display at module scope
+    "ipython",
+]
+diffusion = [
+    "diffusers",
+]
+kafka = [
+    "confluent_kafka",
+]
+mqtt = [
+    "paho-mqtt",
+]
 onnx = [
     "onnxruntime",
 ]
@@ -121,6 +135,7 @@ mcp = [
 ]
 all = [
     "gst-python-ml[onnx,tinygrad,llamacpp,openvino,tensorflow,litert,vad]",
+    "gst-python-ml[yolo,llm,audio,diffusion,kafka,mqtt]",
 ]
 
 # Optional

@@ -81,7 +81,7 @@ python3 -m venv --system-site-packages .venv
 source .venv/bin/activate
 pip install --upgrade pip
 pip install torch torchvision torchaudio --index-url https://download.pytorch.org/whl/cu128
-pip install -e .
+pip install -e ".[yolo]"
 ```
 
 #### With uv
@@ -92,12 +92,36 @@ Point uv at the system Python, not a downloaded one:
 curl -LsSf https://astral.sh/uv/install.sh | sh
 uv venv --python /usr/bin/python3 --system-site-packages
 source .venv/bin/activate
-uv sync
+uv sync --extra yolo
 ```
 
 Do not pre-install torch from the PyTorch index here. `uv sync` resolves torch from
 `uv.lock`, which on Linux already pulls the CUDA wheels, and replaces whatever was
 installed before.
+
+### Feature extras
+
+The core install covers PyTorch, torchvision, transformers and OpenCV, which is
+what most elements need. Each extra adds the packages for a group of elements:
+
+- `yolo`: `pyml_yolo`, `pyml_yolo_pose`, `demo_soccer`, and the `bytetrack` and `botsort` types of `pyml_tracker`
+- `llm`: `pyml_llm`, `pyml_llmstreamfilter`, `pyml_caption_qwen`, `pyml_caption_phi`
+- `awq`: AWQ quantized models, through gptqmodel, which has no wheel and builds against the installed torch
+- `audio`: `pyml_whisperspeechtts`, `pyml_whisperlive`, `pyml_demucs`, `pyml_sepformer`
+- `diffusion`: `pyml_stablediffusion`
+- `kafka`: `pyml_kafkasink`
+- `mqtt`: `pyml_alert` with `mqtt-broker=` set
+- `mcp`: the MCP server
+- `vad`: `pyml_vad`
+
+```
+uv sync --extra yolo --extra audio
+```
+
+`all` covers `yolo`, `llm`, `audio`, `diffusion`, `kafka`, `mqtt` and `vad`, plus
+the ONNX, tinygrad, llama.cpp, OpenVINO, TensorFlow and LiteRT engines. It leaves
+out `awq`, which has no wheel. TensorFlow has no 3.14 wheel either, so `all`
+resolves on 3.12 and 3.13 only.
 
 ### Engine extras
 

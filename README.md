@@ -63,19 +63,21 @@ sudo apt install -y python3-pip python3-venv \
 ```
 
 Then a venv on the system Python, which is the one GStreamer's plugin loader
-embeds. `uv sync` installs PyTorch, with CUDA on Linux.
+embeds. `uv sync` installs PyTorch, with CUDA on Linux, and the `yolo` extra
+adds the YOLO models the quick start uses.
 
 ```
 curl -LsSf https://astral.sh/uv/install.sh | sh
 git clone https://github.com/collabora/gst-python-ml.git && cd gst-python-ml
 uv venv --python /usr/bin/python3 --system-site-packages
-uv sync
+uv sync --extra yolo
 export GST_PLUGIN_PATH=$PWD/plugins:$GST_PLUGIN_PATH
 gst-inspect-1.0 python
 ```
 
 The last line lists the `pyml_*` elements. [INSTALL.md](INSTALL.md) covers
-Fedora, Windows, Docker, the other engines and custom plugins.
+Fedora, Windows, Docker, the feature extras, the other engines and custom
+plugins.
 
 ## Quick start
 
