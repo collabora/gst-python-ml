@@ -262,7 +262,7 @@ jobs:
           source .venv/bin/activate
           unset LD_LIBRARY_PATH
           sudo apt-get install -y mosquitto
-          pip install transformers sentencepiece pillow paho-mqtt lap huggingface_hub
+          pip install transformers sentencepiece protobuf pillow paho-mqtt lap huggingface_hub
           HEADLESS_PIPELINES=1 PIPELINE_TIMEOUT=300 GST_DEBUG=2 python -m pytest tests/test_pipelines.py -q
 
       - name: Upload the pipeline logs (Linux)
