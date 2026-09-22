@@ -2,11 +2,12 @@
 
 [![CI](https://github.com/collabora/gst-python-ml/actions/workflows/ci.yml/badge.svg)](https://github.com/collabora/gst-python-ml/actions/workflows/ci.yml)
 
-Run any model with ease inside any GStreamer pipeline. Pure Python ML elements
-for upstream GStreamer 1.24 or later: one element per task, or bring your own
-model through the engines and base classes. Write the pipeline in `gst-launch`
-spelling and run it with `pyml-launch`, on GStreamer or on
-[glass2glass](https://gitlab.collabora.com/glass2glass/glass2glass).
+Run any model with ease inside any GStreamer pipeline.
+
+Pure Python ML elements for upstream GStreamer 1.24 or later: one element per task, or bring your own
+model and run it with the base classes and matching engine. 
+
+Write the pipeline in `gst-launch` format and run it with `pyml-launch`, with media backend set to either GStreamer or [glass2glass](https://gitlab.collabora.com/glass2glass/glass2glass).
 
 ## Features
 
@@ -78,7 +79,7 @@ Fedora, Windows, Docker, the other engines and custom plugins.
 
 ## Quick start
 
-Paths are relative to the checkout. Change `device=cuda` to `device=cpu` on a
+Paths are relative to the checkout directory. Change `device=cuda` to `device=cpu` on a
 machine without a GPU.
 
 Track people with YOLO:
@@ -113,8 +114,8 @@ model and no GPU:
 python pyml-launch.py filesrc location=data/people.mp4 ! decodebin ! videoconvert ! videoscale ! video/x-raw,width=640,height=480 ! pyml_metareplay location=data/people.jsonl ! pyml_tracker tracker-type=sort ! pyml_overlay ! videoconvert ! autovideosink sync=false
 ```
 
-[PIPELINES.md](PIPELINES.md) has every pipeline, one or two per element, how to
-run them under glass2glass, and the MCP server.
+[PIPELINES.md](PIPELINES.md) describes every pipeline, one or two per element, how to
+run them under glass2glass, and how to run the MCP server.
 
 ## Blog post
 
