@@ -1558,6 +1558,7 @@ all = [
     { name = "pysilero-vad" },
     { name = "qwen-vl-utils", extra = ["decord"] },
     { name = "soundfile" },
+    { name = "spandrel" },
     { name = "speechbrain" },
     { name = "tensorflow" },
     { name = "tinygrad" },
@@ -1639,6 +1640,9 @@ onnx-gpu = [
 openvino = [
     { name = "openvino" },
 ]
+superres = [
+    { name = "spandrel" },
+]
 tensorflow = [
     { name = "tensorflow" },
 ]
@@ -1681,7 +1685,7 @@ requires-dist = [
     { name = "flax", marker = "extra == 'jax-tpu'" },
     { name = "gptqmodel", marker = "extra == 'awq'" },
     { name = "gst-python-ml", extras = ["onnx", "tinygrad", "llamacpp", "openvino", "tensorflow", "litert", "vad"], marker = "extra == 'all'" },
-    { name = "gst-python-ml", extras = ["yolo", "llm", "audio", "diffusion", "face", "kafka", "mqtt"], marker = "extra == 'all'" },
+    { name = "gst-python-ml", extras = ["yolo", "llm", "audio", "diffusion", "face", "superres", "kafka", "mqtt"], marker = "extra == 'all'" },
     { name = "huggingface-hub" },
     { name = "insightface", marker = "extra == 'face'" },
     { name = "ipython", marker = "extra == 'audio'" },
@@ -1716,6 +1720,7 @@ requires-dist = [
     { name = "scipy" },
     { name = "sentencepiece" },
     { name = "soundfile", marker = "extra == 'audio'" },
+    { name = "spandrel", marker = "extra == 'superres'" },
     { name = "speechbrain", marker = "extra == 'audio'" },
     { name = "tensorflow", marker = "extra == 'tensorflow'", specifier = ">=2.16.0" },
     { name = "tinygrad", marker = "extra == 'tinygrad'" },
@@ -1730,7 +1735,7 @@ requires-dist = [
     { name = "ultralytics", marker = "extra == 'yolo'" },
     { name = "whisperspeech", marker = "extra == 'audio'" },
 ]
-provides-extras = ["yolo", "llm", "awq", "audio", "diffusion", "face", "kafka", "mqtt", "onnx", "onnx-gpu", "tvm", "tinygrad", "mlx", "mlx-cpu", "executorch", "llamacpp", "jax-cpu", "jax-gpu", "jax-tpu", "openvino", "tensorflow", "litert", "ncnn", "iree", "vad", "mcp", "all"]
+provides-extras = ["yolo", "llm", "awq", "audio", "diffusion", "face", "superres", "kafka", "mqtt", "onnx", "onnx-gpu", "tvm", "tinygrad", "mlx", "mlx-cpu", "executorch", "llamacpp", "jax-cpu", "jax-gpu", "jax-tpu", "openvino", "tensorflow", "litert", "ncnn", "iree", "vad", "mcp", "all"]
 
 [package.metadata.requires-dev]
 dev = [{ name = "pytest", specifier = ">=9.0.3" }]
@@ -5497,6 +5502,24 @@ wheels = [
     { url = "https://files.pythonhosted.org/packages/39/e4/80cd9aae0645513db1076d4384e8b2d895faf5009218b4a04348012c54fc/soxr-1.1.0-cp314-cp314t-manylinux_2_26_aarch64.manylinux_2_28_aarch64.whl", hash = "sha256:52c9ca84e3dc656d83acc424574770e20ea8e0704dc3842d4e27b0fe9d3ba449", size = 211405, upload-time = "2026-05-03T00:15:05.395Z" },
     { url = "https://files.pythonhosted.org/packages/a6/d6/cc3c80ac9b2289da4cf46c5d53b05e4327e6f5560a25868d06f9e2213af1/soxr-1.1.0-cp314-cp314t-manylinux_2_27_x86_64.manylinux_2_28_x86_64.whl", hash = "sha256:f4977323ef9c3aa3c2a26ff5fe0191c84b8fd759daf7afb1f25a91a55ad8b730", size = 244617, upload-time = "2026-05-03T00:15:07.134Z" },
     { url = "https://files.pythonhosted.org/packages/d3/9e/f7af5fae841ffe32ed8440234ea2ad6adecca3bd92b6101076268c429000/soxr-1.1.0-cp314-cp314t-win_amd64.whl", hash = "sha256:e17d4ef9b0185214b2c0935605ae63f827ea423bc74964be44763d68d2b6c21e", size = 187253, upload-time = "2026-05-03T00:15:08.813Z" },
+]
+
+[[package]]
+name = "spandrel"
+version = "0.4.2"
+source = { registry = "https://pypi.org/simple" }
+dependencies = [
+    { name = "einops" },
+    { name = "numpy", version = "2.2.6", source = { registry = "https://pypi.org/simple" }, marker = "python_full_version < '3.14'" },
+    { name = "numpy", version = "2.4.4", source = { registry = "https://pypi.org/simple" }, marker = "python_full_version >= '3.14'" },
+    { name = "safetensors" },
+    { name = "torch" },
+    { name = "torchvision" },
+    { name = "typing-extensions" },
+]
+sdist = { url = "https://files.pythonhosted.org/packages/2a/8f/ab4565c23dd67a036ab72101a830cebd7ca026b2fddf5771bbf6284f6228/spandrel-0.4.2.tar.gz", hash = "sha256:fefa4ea966c6a5b7721dcf24f3e2062a5a96a395c8bedcb570fb55971fdcbccb", size = 247544, upload-time = "2026-02-21T01:52:26.342Z" }
+wheels = [
+    { url = "https://files.pythonhosted.org/packages/74/31/411ea965835534c43d4b98d451968354876e0e867ea1fd42669e4cca0732/spandrel-0.4.2-py3-none-any.whl", hash = "sha256:6c93e3ecbeb0e548fd2df45a605472b34c1614287c56b51bb33cdef7ae5235b5", size = 320811, upload-time = "2026-02-21T01:52:25.015Z" },
 ]
 
 [[package]]
