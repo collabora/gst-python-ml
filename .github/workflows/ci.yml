@@ -165,8 +165,8 @@ jobs:
 
       - name: Create venv and install CPU dependencies
         shell: bash
-        # pygobject builds from source and only the ubuntu leg installs its headers
-        continue-on-error: ${{ matrix.os != 'ubuntu-latest' }}
+        # pygobject builds from source and choco gstreamer-devel ships no pkg-config
+        continue-on-error: ${{ matrix.os == 'windows-latest' }}
         run: |
           ${{ matrix.venv-python || 'python' }} -m venv --system-site-packages .venv
           if [[ "$RUNNER_OS" == "Windows" ]]; then
