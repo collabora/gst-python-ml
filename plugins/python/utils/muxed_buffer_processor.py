@@ -110,6 +110,7 @@ class MuxedBufferProcessor:
                 )
                 return None, None, None, None
 
-            batch_frames = np.stack(frames, axis=0)
+            # one source keeps the (H, W, C) shape every element expects
+            batch_frames = frames[0] if num_frames == 1 else np.stack(frames, axis=0)
             self.logger.info(f"Extracted batch with shape: {batch_frames.shape}")
             return batch_frames, id_str, num_sources, format
