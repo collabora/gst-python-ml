@@ -84,19 +84,9 @@ class WhisperSpeechTTS(BaseTts):
             self.logger.error(f"Exception during model initialization: {e}")
 
     def do_generate_speech(self, transcript):
-        import numpy as np
-
         audio_tensor = self.get_model().generate(transcript, lang=self.language)
-        audio_np = (audio_tensor.cpu().numpy() * 32767).astype(
-            np.int16
-        )  # Convert tensor to numpy array, scale, and cast to int16
-        if len(audio_np.shape) == 1:  # Check if the numpy array is 1D
-            audio_np = np.expand_dims(
-                audio_np, axis=0
-            )  # Add a new dimension to make it 2D
-        else:
-            audio_np = audio_np.T  # Transpose the numpy array if it's not 1D
-        return audio_np
+        # the whisperspeech vocoder returns (1, n) on the model device
+        return audio_tensor.float().cpu().numpy().reshape(-1)
 
     def do_get_sample_rate(self):
         return TTS_SAMPLE_RATE

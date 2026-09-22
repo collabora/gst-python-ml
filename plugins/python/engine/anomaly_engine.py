@@ -32,6 +32,12 @@ class AnomalyEngine(PyTorchEngine):
       resnet18
     """
 
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        self.feature_layers = None
+        self.reference_features = None
+        self._transform = None
+
     def do_load_model(self, model_name, **kwargs):
         try:
             import torch
@@ -69,6 +75,8 @@ class AnomalyEngine(PyTorchEngine):
             self.logger.warning(f"Failed to load reference features: {e}")
 
     def _get_transform(self):
+        if self.feature_layers is None:
+            raise ValueError("anomaly backbone is not loaded")
         if self._transform is None:
             from torchvision import transforms
 

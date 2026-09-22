@@ -95,6 +95,7 @@ class BaseTts(BaseAggregator):
     def do_load_model(self):
         pass
 
+    # returns the spoken audio as a 1-D float32 numpy array of mono samples in -1..1
     @abstractmethod
     def do_generate_speech(self, transcript):
         pass

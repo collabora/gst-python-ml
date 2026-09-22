@@ -218,3 +218,11 @@ def test_llamacpp_generates_text():
     assert engine.do_load_model(model_path) is True
     text = engine.do_generate(GENERATION_PROMPT, max_length=GENERATION_TOKENS)
     assert isinstance(text, str) and text.strip()
+
+
+def test_anomaly_transform_without_a_backbone():
+    from engine.anomaly_engine import AnomalyEngine
+
+    engine = AnomalyEngine()
+    with pytest.raises(ValueError, match="anomaly backbone is not loaded"):
+        engine._get_transform()
