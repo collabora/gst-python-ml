@@ -48,6 +48,17 @@ class YOLOTransform(BaseObjectDetector, YoloTask):
         "Aaron Boxer <aaron.boxer@collabora.com>",
     )
 
+    imgsz = GObject.Property(
+        type=int,
+        default=640,
+        minimum=32,
+        maximum=4096,
+        nick="Input Size",
+        blurb="Longest side the frame is scaled to for the network; 1280 finds "
+        "a ball a few pixels wide that 640 misses, at three times the cost",
+        flags=GObject.ParamFlags.READWRITE,
+    )
+
     confidence = GObject.Property(
         type=float,
         default=0.1,
@@ -89,6 +100,7 @@ class YOLOTransform(BaseObjectDetector, YoloTask):
     def do_forward(self, frames):
         # Push NMS/confidence knobs to the engine before it runs the model.
         if self.task_engine:
+            self.task_engine.imgsz = self.imgsz
             self.task_engine.conf = self.confidence
             self.task_engine.iou = self.nms_iou
             self.task_engine.agnostic_nms = self.agnostic_nms

@@ -81,6 +81,7 @@ call as it happens. The model sees five tools: `start_football_demo`,
 |------------|---------|---------|
 | `BACKEND`  | `pt`    | `pt` = PyTorch `pyml_yolo`; `fp16` = ONNX FP16 via `pyml_objectdetector` (CUDA). |
 | `INTERVAL` | `3`     | Run detection every Nth frame; the tracker/overlay still update every frame, so it stays smooth at ~N× less inference cost. The main real-time lever. |
+| `IMGSZ`    | `640`   | Network input size for the `pt` backend. `1280` finds the ball on about half the frames instead of a third, at three times the inference cost. |
 
 ```bash
 BACKEND=fp16 demo/football/run.sh display     # faster inference path

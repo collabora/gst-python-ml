@@ -77,6 +77,10 @@ _PALETTE = [
 
 _REFEREE_RGBA = (255, 215, 0, 255)
 _BALL_RGBA = (0, 230, 0, 255)
+# a hard shot moves under half of this per frame
+_BALL_TRAIL_MAX_STEP = 0.04
+_BALL_TRAIL_MAX_GAP = 25
+_BALL_TRAIL_BRIDGE_GAP = 3
 _PLAYER_RGBA = (0, 200, 255, 255)
 _RED_TEAM_RGBA = (255, 40, 40, 255)
 _BLUE_TEAM_RGBA = (40, 90, 255, 255)
@@ -302,6 +306,8 @@ class FootballOverlay(GstBase.BaseTransform):
         self._order = _FORMAT_ORDER["RGBA"]
         # per-track state, accumulated across frames
         self._trail = {}
+        self._ball_trail = []
+        self._ball_trail_frame = None
         self._last_pt = {}
         self._distance_px = {}
         self._heights = []
@@ -453,6 +459,15 @@ class FootballOverlay(GstBase.BaseTransform):
         # Fall back to the detected ball if no tracked ball this frame.
         if ball_box is None:
             ball_box = det_ball_box
+
+        if ball_box is not None:
+            x1, y1, x2, y2 = ball_box
+            self._extend_ball_trail((int((x1 + x2) / 2), int((y1 + y2) / 2)))
+        elif (
+            self._ball_trail
+            and self._frame - self._ball_trail_frame > _BALL_TRAIL_MAX_GAP
+        ):
+            self._ball_trail = []
 
         # Ball contacts (debounced per player), like football_analyzer.
         if ball_box is not None and players:
@@ -809,6 +824,18 @@ class FootballOverlay(GstBase.BaseTransform):
         self._headshot = np.ascontiguousarray(rgba[:, :, list(self._order)])
         return self._headshot
 
+    def _extend_ball_trail(self, point):
+        if self._ball_trail:
+            last = self._ball_trail[-1]
+            elapsed = max(1, self._frame - self._ball_trail_frame)
+            jump = ((point[0] - last[0]) ** 2 + (point[1] - last[1]) ** 2) ** 0.5
+            too_far = jump > _BALL_TRAIL_MAX_STEP * self.width * elapsed
+            if elapsed > _BALL_TRAIL_BRIDGE_GAP or too_far:
+                self._ball_trail = []
+        self._ball_trail.append(point)
+        del self._ball_trail[: -self.trail_length]
+        self._ball_trail_frame = self._frame
+
     def _draw_trail(self, cv2, np, frame, points, rgba):
         import cv2
         import numpy as np
@@ -1065,6 +1092,8 @@ class FootballOverlay(GstBase.BaseTransform):
                         if rgba is None:
                             continue
                         self._draw_trail(cv2, np, frame, self._trail.get(tid, []), rgba)
+                    if self.show_ball:
+                        self._draw_trail(cv2, np, frame, self._ball_trail, _BALL_RGBA)
 
                 # Which drawn box is the focal (HUD) player? Match the focal
                 # track's box to the nearest drawn box so we can highlight it

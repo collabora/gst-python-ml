@@ -24,6 +24,7 @@ BACKEND="${BACKEND:-pt}"
 python demo/football/fetch_models.py "$BACKEND" >&2
 INTERVAL="${INTERVAL:-3}"   # run detection every Nth frame; tracker/overlay stay per-frame
 CONF="${CONF:-0.1}"        # detector confidence threshold (low = more detections)
+IMGSZ="${IMGSZ:-640}"      # network input size; 1280 sees the ball far more often (pt backend only)
 IOU="${IOU:-0.7}"          # NMS IoU (ultralytics/football_analyzer default)
 NEWTRACK="${NEWTRACK:-0.25}" # min confidence to START a new track (ByteTrack gate; kills ghosts)
 DRAWCONF="${DRAWCONF:-0}"  # min confidence to DRAW a detection (0 = draw all; raise to trim weak boxes)
@@ -43,7 +44,7 @@ if [[ "$BACKEND" == "fp16" ]]; then
   DETECT="pyml_objectdetector name=detector engine-name=onnx model-name=models/football/football_fp16.onnx device=cuda:0 input-format=nchw post-process=anchor_free interval=$INTERVAL"
   IN_FMT="RGB"
 else
-  DETECT="pyml_yolo name=detector model-name=models/football/football device=cuda:0 interval=$INTERVAL confidence=$CONF nms-iou=$IOU"
+  DETECT="pyml_yolo name=detector model-name=models/football/football device=cuda:0 interval=$INTERVAL imgsz=$IMGSZ confidence=$CONF nms-iou=$IOU"
   IN_FMT="RGBA"
 fi
 
@@ -54,12 +55,8 @@ POST_DETECT="$TRACK"
 # pipeline: while inference runs on frame N, the sink renders N-1 and the
 # decoder reads N+1. Nothing is dropped (leaky=no, the default).
 Q="queue max-size-buffers=8 max-size-time=0 max-size-bytes=0"
-# Pre-roll buffer before the display sink: build a head start of processed
-# frames so real-time playback (sync=true) rides out per-frame inference
-# jitter without stuttering. Smooths jitter, not a sustained throughput
-# deficit -- if inference can't keep up on average, playback just lags
-# (still no drops). Lower INTERVAL/raise the head start if it falls behind.
-PREROLL="queue max-size-buffers=600 max-size-time=0 max-size-bytes=0 min-threshold-buffers=30"
+# no min-threshold: it blocks output whenever the level dips below it
+PREROLL="queue max-size-buffers=100 max-size-time=0 max-size-bytes=0"
 
 # detector -> tracker -> overlay, with a thread boundary at each hop.
 CHAIN="$Q ! $DETECT ! $Q ! $POST_DETECT ! $Q ! $OVERLAY"

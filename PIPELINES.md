@@ -1109,7 +1109,14 @@ python pyml-launch.py filesrc location=data/people.mp4 ! decodebin ! videoconver
 
 ### Multi-Object Tracker
 
-`pyml_tracker` tracks the detections of any upstream detector.
+`pyml_tracker` tracks the detections of any upstream detector. A detection
+matches a track by box overlap (`iou-threshold`) or by centre distance within
+`distance-gate` box sizes, so small boxes that move their own width a frame
+keep their id. Before matching, a detection covered by more than
+`merge-overlap` of its area by a higher-scoring one is dropped, and a detection
+overlapping a track that matched this frame by more than
+`new-track-max-overlap` starts no track, since both are second boxes on one
+object that NMS kept. `camera-motion` re-matches leftovers after a pan.
 
 #### YOLO + standalone SORT tracker
 

@@ -43,6 +43,30 @@ except ImportError as e:
     )
 
 
+def covered_fraction(boxes, by):
+    import numpy as np
+
+    if len(boxes) == 0 or len(by) == 0:
+        return np.empty((len(boxes), len(by)))
+    a = np.array(boxes, dtype=float)
+    b = np.array(by, dtype=float)
+    xx1 = np.maximum(a[:, None, 0], b[None, :, 0])
+    yy1 = np.maximum(a[:, None, 1], b[None, :, 1])
+    xx2 = np.minimum(a[:, None, 0] + a[:, None, 2], b[None, :, 0] + b[None, :, 2])
+    yy2 = np.minimum(a[:, None, 1] + a[:, None, 3], b[None, :, 1] + b[None, :, 3])
+    inter = np.maximum(0.0, xx2 - xx1) * np.maximum(0.0, yy2 - yy1)
+    return inter / np.maximum(a[:, 2] * a[:, 3], 1e-7)[:, None]
+
+
+def merge_covered_detections(detections, ratio):
+    kept = []
+    for det in sorted(detections, key=lambda d: -d[4]):
+        if kept and covered_fraction([det[:4]], [k[:4] for k in kept]).max() > ratio:
+            continue
+        kept.append(det)
+    return kept
+
+
 class KalmanBoxTracker:
     """Simple Kalman filter tracker for a single bounding box."""
 
@@ -141,6 +165,9 @@ class SortTracker:
         new_track_conf=0.25,
         camera_motion=True,
         dup_iou=0.8,
+        merge_overlap=0.5,
+        distance_gate=1.0,
+        new_track_max_overlap=0.1,
     ):
         self.max_age = max_age
         self.min_hits = min_hits
@@ -161,6 +188,9 @@ class SortTracker:
         # Two confirmed tracks overlapping more than this IoU are duplicates;
         # the weaker one is dropped (ByteTrack's remove_duplicate_stracks).
         self.dup_iou = dup_iou
+        self.merge_overlap = merge_overlap
+        self.distance_gate = distance_gate
+        self.new_track_max_overlap = new_track_max_overlap
         self.trackers = []
 
     @staticmethod
@@ -219,25 +249,41 @@ class SortTracker:
     def _associate(self, det_bboxes, det_idxs, trk_idxs, trk_boxes, detections):
         """Hungarian-match a subset of detections to a subset of trackers,
         applying updates to matched trackers. Returns list of (det_i, trk_i)."""
+        import numpy as np
         from scipy.optimize import linear_sum_assignment
 
         if not det_idxs or not trk_idxs:
             return []
         dets = [det_bboxes[d] for d in det_idxs]
         trks = [trk_boxes[t] for t in trk_idxs]
-        iou_matrix = iou_batch(dets, trks)
-        if iou_matrix.size == 0:
+        affinity = iou_batch(dets, trks)
+        if affinity.size == 0:
             return []
-        cost = 1.0 - iou_matrix
-        row_ind, col_ind = linear_sum_assignment(cost)
+        if self.distance_gate > 0:
+            affinity = np.maximum(affinity, self._closeness(dets, trks))
+        row_ind, col_ind = linear_sum_assignment(1.0 - affinity)
         matches = []
         for r, c in zip(row_ind, col_ind):
-            if iou_matrix[r, c] >= self.iou_threshold:
+            if affinity[r, c] >= self.iou_threshold:
                 di, ti = det_idxs[r], trk_idxs[c]
                 self.trackers[ti].update(detections[di][:4])
                 self.trackers[ti].label_quark = detections[di][5]
                 matches.append((di, ti))
         return matches
+
+    # 1 at the track's centre, 0 at distance_gate box sizes away
+    def _closeness(self, dets, trks):
+        import numpy as np
+
+        det = np.array(dets, dtype=float)
+        trk = np.array(trks, dtype=float)
+        det_centre = det[:, :2] + det[:, 2:] / 2.0
+        trk_centre = trk[:, :2] + trk[:, 2:] / 2.0
+        distance = np.linalg.norm(
+            det_centre[:, None, :] - trk_centre[None, :, :], axis=2
+        )
+        size = np.maximum(np.maximum(trk[:, 2], trk[:, 3]), 1.0)[None, :]
+        return np.clip(1.0 - distance / (self.distance_gate * size), 0.0, 1.0)
 
     def _suppress_duplicates(self):
         """Drop the weaker of any two confirmed tracks sitting on the same box."""
@@ -263,6 +309,11 @@ class SortTracker:
         if remove:
             self.trackers = [t for k, t in enumerate(self.trackers) if k not in remove]
 
+    def _on_a_matched_track(self, box, matched_boxes):
+        if not matched_boxes or self.new_track_max_overlap >= 1.0:
+            return False
+        return iou_batch([box], matched_boxes).max() > self.new_track_max_overlap
+
     def update(self, detections):
         """
         Update tracks with new detections.
@@ -283,6 +334,8 @@ class SortTracker:
         for i in reversed(to_remove):
             self.trackers.pop(i)
 
+        if self.merge_overlap > 0:
+            detections = merge_covered_detections(detections, self.merge_overlap)
         det_bboxes = [d[:4] for d in detections] if len(detections) > 0 else []
         n_det = len(det_bboxes)
         n_trk = len(self.trackers)
@@ -311,13 +364,17 @@ class SortTracker:
                         det_bboxes, rem_det, rem_trk, shifted, detections
                     )
                     matched_det.update(di for di, _ in m2)
+                    matched_trk.update(ti for _, ti in m2)
 
         # Create new tracks for unmatched detections, but only from confident
         # ones (ByteTrack activation gate) so weak/ghost boxes don't start a
         # phantom track that gets drawn as a stray circle.
+        matched_boxes = [self.trackers[ti].get_bbox() for ti in matched_trk]
         for d_idx in range(n_det):
             if d_idx not in matched_det:
                 if detections[d_idx][4] < self.new_track_conf:
+                    continue
+                if self._on_a_matched_track(det_bboxes[d_idx], matched_boxes):
                     continue
                 trk = KalmanBoxTracker(detections[d_idx][:4])
                 trk.label_quark = detections[d_idx][5]
@@ -404,7 +461,45 @@ class TrackerTransform(GstBase.BaseTransform):
         minimum=0.0,
         maximum=1.0,
         nick="IoU Threshold",
-        blurb="Minimum IoU for detection-to-track assignment",
+        blurb="Minimum match score for detection-to-track assignment: the IoU, "
+        "or the closeness within distance-gate, whichever is higher",
+        flags=GObject.ParamFlags.READWRITE,
+    )
+
+    distance_gate = GObject.Property(
+        type=float,
+        default=1.0,
+        minimum=0.0,
+        maximum=10.0,
+        nick="Distance Gate",
+        blurb="Also match a detection whose centre is within this many box sizes "
+        "of the track's predicted centre, scored 1 at the centre down to 0 at "
+        "the gate, so a small box that moved its own width still matches "
+        "(0 = overlap only)",
+        flags=GObject.ParamFlags.READWRITE,
+    )
+
+    merge_overlap = GObject.Property(
+        type=float,
+        default=0.5,
+        minimum=0.0,
+        maximum=1.0,
+        nick="Merge Overlap",
+        blurb="Drop a detection when a higher-scoring one covers more than this "
+        "fraction of its box, a second box on the same object that NMS kept "
+        "(0 = keep every detection)",
+        flags=GObject.ParamFlags.READWRITE,
+    )
+
+    new_track_max_overlap = GObject.Property(
+        type=float,
+        default=0.1,
+        minimum=0.0,
+        maximum=1.0,
+        nick="New Track Max Overlap",
+        blurb="A detection overlapping a track that matched this frame by more "
+        "than this IoU starts no new track, it is a second box on that object "
+        "(1 = always start one)",
         flags=GObject.ParamFlags.READWRITE,
     )
 
@@ -469,6 +564,9 @@ class TrackerTransform(GstBase.BaseTransform):
                 new_track_conf=self.new_track_confidence,
                 camera_motion=self.camera_motion,
                 dup_iou=self.duplicate_iou,
+                merge_overlap=self.merge_overlap,
+                distance_gate=self.distance_gate,
+                new_track_max_overlap=self.new_track_max_overlap,
             )
         return self._tracker
 
@@ -542,6 +640,12 @@ class TrackerTransform(GstBase.BaseTransform):
             return self.camera_motion
         elif prop.name == "duplicate-iou":
             return self.duplicate_iou
+        elif prop.name == "distance-gate":
+            return self.distance_gate
+        elif prop.name == "merge-overlap":
+            return self.merge_overlap
+        elif prop.name == "new-track-max-overlap":
+            return self.new_track_max_overlap
         else:
             raise AttributeError(f"Unknown property {prop.name}")
 
@@ -569,6 +673,15 @@ class TrackerTransform(GstBase.BaseTransform):
             self._tracker = None
         elif prop.name == "duplicate-iou":
             self.duplicate_iou = value
+            self._tracker = None
+        elif prop.name == "distance-gate":
+            self.distance_gate = value
+            self._tracker = None
+        elif prop.name == "merge-overlap":
+            self.merge_overlap = value
+            self._tracker = None
+        elif prop.name == "new-track-max-overlap":
+            self.new_track_max_overlap = value
             self._tracker = None
         else:
             raise AttributeError(f"Unknown property {prop.name}")

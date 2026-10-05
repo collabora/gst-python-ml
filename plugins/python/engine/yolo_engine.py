@@ -157,13 +157,14 @@ class YoloEngine(PyTorchEngine):
         conf = getattr(self, "conf", 0.25)
         iou = getattr(self, "iou", 0.5)
         agnostic = getattr(self, "agnostic_nms", True)
+        imgsz = getattr(self, "imgsz", 640)
         if self.track:
             # Ensure tracker persists across batches
             results = self.execute_with_stream(
                 lambda: model.track(
                     source=img_list,
                     persist=True,
-                    imgsz=640,
+                    imgsz=imgsz,
                     conf=conf,
                     iou=iou,
                     agnostic_nms=agnostic,
@@ -175,7 +176,7 @@ class YoloEngine(PyTorchEngine):
             results = self.execute_with_stream(
                 lambda: model(
                     img_list,
-                    imgsz=640,
+                    imgsz=imgsz,
                     conf=conf,
                     iou=iou,
                     agnostic_nms=agnostic,
