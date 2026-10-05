@@ -50,8 +50,6 @@ class BaseObjectDetector(VideoTransform, ObjectDetectorTask):
     @GObject.Property(type=bool, default=False)
     def track(self):
         "Enable or disable tracking mode"
-        if self.engine:
-            return self.engine.track
         return self.__track
 
     @track.setter
