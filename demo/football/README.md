@@ -80,13 +80,16 @@ call as it happens. The model sees five tools: `start_football_demo`,
 | Var        | Default | Meaning |
 |------------|---------|---------|
 | `BACKEND`  | `pt`    | `pt` = PyTorch `pyml_yolo`; `fp16` = ONNX FP16 via `pyml_objectdetector` (CUDA). |
-| `INTERVAL` | `3`     | Run detection every Nth frame; the tracker/overlay still update every frame, so it stays smooth at ~N× less inference cost. The main real-time lever. |
+| `INTERVAL` | `1`     | Run detection every Nth frame; the tracker/overlay still update every frame, so it stays smooth at ~N× less inference cost. The main real-time lever. The ball trail needs 1. |
 | `IMGSZ`    | `640`   | Network input size for the `pt` backend. `1280` finds the ball on about half the frames instead of a third, at three times the inference cost. |
+| `TRAILS`   | `false` | Draw motion trails behind the players and the ball. |
+| `SHOW_BALL` | `false` | Draw the ball marker. |
 
 ```bash
 BACKEND=fp16 demo/football/run.sh display     # faster inference path
 INTERVAL=5   demo/football/run.sh display     # detect every 5th frame
-INTERVAL=1   demo/football/run.sh             # detect every frame (max accuracy)
+INTERVAL=3   demo/football/run.sh             # detect every 3rd frame (cheaper, sparse ball trail)
+TRAILS=true SHOW_BALL=true demo/football/run.sh display data/soccer_tracking.mp4
 ```
 
 

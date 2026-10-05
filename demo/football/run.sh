@@ -30,13 +30,15 @@ NEWTRACK="${NEWTRACK:-0.25}" # min confidence to START a new track (ByteTrack ga
 DRAWCONF="${DRAWCONF:-0}"  # min confidence to DRAW a detection (0 = draw all; raise to trim weak boxes)
 MERGE="${MERGE:-0.5}"      # collapse overlapping boxes (lower=merge more; 0 disables) so one player=one circle
 SMOOTH="${SMOOTH:-0.6}"    # temporal EMA on circle positions (0=off, higher=smoother but more lag)
+TRAILS="${TRAILS:-false}"  # draw motion trails behind players and the ball
+SHOW_BALL="${SHOW_BALL:-false}" # draw the ball marker
 CLASSES="ball,goalkeeper,player,referee"
 TRACK="pyml_tracker tracker-type=bytetrack new-track-confidence=$NEWTRACK"
 # Detection-based overlay: circles sit on the raw per-frame detections (no
 # tracking drift/phantoms/doubles); merge collapses overlaps and
 # position-smoothing low-passes the positions. DRAWCONF defaults 0 so no
 # detection is hidden; the tracker still runs so the HUD keeps its stats.
-OVERLAY="pyml_football_overlay name=overlay class-names=$CLASSES team-colors=true trails=false show-ids=false show-labels=false draw-from-detections=true min-confidence=$DRAWCONF merge-iou=$MERGE position-smoothing=$SMOOTH highlight-focal=false"
+OVERLAY="pyml_football_overlay name=overlay class-names=$CLASSES team-colors=true trails=$TRAILS show-ball=$SHOW_BALL show-ids=false show-labels=false draw-from-detections=true min-confidence=$DRAWCONF merge-iou=$MERGE position-smoothing=$SMOOTH highlight-focal=false"
 
 if [[ "$BACKEND" == "fp16" ]]; then
   # nvidia is a namespace package (no __file__), so walk __path__ for the pip CUDA libs.
