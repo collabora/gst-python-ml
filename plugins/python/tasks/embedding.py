@@ -39,7 +39,7 @@ class EmbeddingTask:
     """Inference + payload serialization, independent of any framework."""
 
     def forward(self, frame):
-        return self.engine.do_forward(frame, normalize=self.normalize)
+        return self.task_engine.do_forward(frame, normalize=self.normalize)
 
     def decode(self, emb):
         """Serialize an embedding into ``(None, payload_bytes)``.

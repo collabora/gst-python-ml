@@ -36,8 +36,8 @@ class AnomalyTask:
     """Inference + frame/metadata production, independent of any framework."""
 
     def forward(self, frame):
-        if self.engine:
-            return self.engine.do_forward(frame, threshold=self.threshold)
+        if self.task_engine:
+            return self.task_engine.do_forward(frame, threshold=self.threshold)
         return None
 
     def decode(self, frame, result, fmt):

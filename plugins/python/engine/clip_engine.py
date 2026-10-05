@@ -16,7 +16,81 @@
 # Free Software Foundation, Inc., 51 Franklin Street, Fifth Floor,
 # Boston, MA 02110-1301, USA.
 
-from .pytorch_engine import PyTorchEngine
+from .onnx_export import (
+    cached_onnx_export,
+    model_input_frames,
+    model_input_shape,
+    pixel_normalizer,
+)
+from .pytorch_engine import PyTorchEngine, projected
+
+
+class ExportedClip:
+    def __init__(self, model_name):
+        from transformers import AutoModel, AutoProcessor
+
+        self.processor = AutoProcessor.from_pretrained(model_name)
+        self.model = AutoModel.from_pretrained(model_name).eval()
+        self.logit_scale = float(self.model.logit_scale.exp())
+        self.text_embeddings_by_labels = {}
+        self.clip_labels = []
+        self.engine = None
+        self.path = cached_onnx_export(
+            f"{model_name.replace('/', '--')}-image-encoder", self._build_image_encoder
+        )
+
+    def _build_image_encoder(self):
+        import torch
+
+        model = self.model
+        image_processor = self.processor.image_processor
+        normalize = pixel_normalizer(
+            image_processor.image_mean, image_processor.image_std
+        )
+
+        class ClipImageEncoder(torch.nn.Module):
+            def __init__(self):
+                super().__init__()
+                self.model = model
+
+            def forward(self, image):
+                features = projected(
+                    self.model.get_image_features(pixel_values=normalize(image))
+                )
+                return torch.nn.functional.normalize(features, dim=-1)
+
+        height, width, channels = model_input_shape(image_processor)
+        return ClipImageEncoder(), torch.rand(1, channels, height, width)
+
+    def _model_input(self, frame):
+        return model_input_frames(self.processor.image_processor, frame)
+
+    def _text_embeddings(self, labels):
+        import torch
+
+        key = tuple(labels)
+        if key not in self.text_embeddings_by_labels:
+            tokens = self.processor(text=labels, return_tensors="pt", padding=True)
+            with torch.no_grad():
+                features = projected(self.model.get_text_features(**tokens))
+            embeddings = torch.nn.functional.normalize(features, dim=-1)
+            self.text_embeddings_by_labels[key] = embeddings.numpy()
+        return self.text_embeddings_by_labels[key]
+
+    def do_forward(self, frame):
+        import numpy as np
+
+        labels = self.clip_labels
+        if not labels:
+            return None
+        embedding = self.engine.do_forward(self._model_input(frame))
+        image_embedding = np.asarray(embedding).reshape(-1)
+        logits = self.logit_scale * self._text_embeddings(labels) @ image_embedding
+        probabilities = np.exp(logits - logits.max())
+        probabilities /= probabilities.sum()
+        results = list(zip(labels, probabilities.tolist()))
+        results.sort(key=lambda result: result[1], reverse=True)
+        return results
 
 
 class ClipEngine(PyTorchEngine):

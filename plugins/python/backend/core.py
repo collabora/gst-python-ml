@@ -49,6 +49,9 @@ ENGINE_TUNABLES = (
 # the input-format and post-process value that leaves the choice to the engine
 ENGINE_CHOOSES = "auto"
 
+EXPORTED_INPUT_FORMAT = "nchw"
+EXPORTED_POST_PROCESS = "none"
+
 ENGINE_NAME_BLURB = (
     f"Machine Learning Engine to use: {', '.join(EngineFactory.BUILTIN_ENGINES)}, "
     "or a custom engine name"
@@ -110,6 +113,9 @@ def ml_property_namespace(gobject):
 
     @engine_name.setter
     def engine_name(self, value):
+        # a task element runs pytorch through its own engine
+        if value == EngineFactory.PYTORCH_ENGINE and self.task_engine_name:
+            value = self.task_engine_name
         # device= already built an engine under the old name
         if value != self.mgr.engine_name:
             self.mgr.engine = None
@@ -278,6 +284,8 @@ class MLEngineMixin:
         """Initialise shared ML state. Call this from the element's __init__."""
         self.logger = LoggerFactory.get(LoggerFactory.LOGGER_TYPE_GST)
         self.mgr = EngineManager(self.logger)
+        self.task_engine_name = None
+        self.exported_model = None
         self.kwargs = {}
         self._batch_size = 1
         self._frame_stride = 1
@@ -294,6 +302,17 @@ class MLEngineMixin:
     def engine(self):
         return self.mgr.engine
 
+    @property
+    def runs_exported_model(self):
+        return (
+            self.task_engine_name is not None
+            and self.mgr.engine_name != self.task_engine_name
+        )
+
+    @property
+    def task_engine(self):
+        return self.exported_model if self.runs_exported_model else self.engine
+
     # Engine / model lifecycle. None of this touches the framework, so every
     # backend reuses it verbatim.
     def initialize_engine(self):
@@ -308,6 +327,9 @@ class MLEngineMixin:
                 self.engine.input_format = self._input_format
             if self._post_process != ENGINE_CHOOSES:
                 self.engine.post_process = self._post_process
+            if self.runs_exported_model:
+                self.engine.input_format = EXPORTED_INPUT_FORMAT
+                self.engine.post_process = EXPORTED_POST_PROCESS
         if not self.engine:
             self.logger.error(f"Unsupported ML engine: {self.mgr.engine_name}")
 
@@ -321,7 +343,13 @@ class MLEngineMixin:
         if self._model_name is None:
             self.logger.warning("Cannot load model as model name is not set")
             return
-        self.mgr.do_load_model(self._model_name, **self.kwargs)
+        model_name = self._model_name
+        if self.runs_exported_model:
+            if self.exported_model is None:
+                self.exported_model = self.export_model(model_name)
+            self.exported_model.engine = self.engine
+            model_name = self.exported_model.path
+        self.mgr.do_load_model(model_name, **self.kwargs)
 
     def get_model(self):
         """Gets the model from the engine."""

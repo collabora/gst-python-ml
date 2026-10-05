@@ -16,7 +16,83 @@
 # Free Software Foundation, Inc., 51 Franklin Street, Fifth Floor,
 # Boston, MA 02110-1301, USA.
 
+from .ml_engine import TORCHVISION_WEIGHTS
+from .onnx_export import cached_onnx_export, pixel_normalizer
 from .pytorch_engine import PyTorchEngine
+
+COLOR_CHANNELS = 3
+BACKBONE_INPUT_SIZE = 224
+IMAGENET_MEAN = [0.485, 0.456, 0.406]
+IMAGENET_STD = [0.229, 0.224, 0.225]
+# the layers after these pool the feature map away
+POOLING_LAYER_COUNT = 2
+HEATMAP_EPSILON = 1e-8
+
+
+def anomaly_result(feature_map, reference_features, threshold):
+    import numpy as np
+
+    feature_vector = feature_map.mean(axis=(1, 2))
+    anomaly_score = 0.0
+    if reference_features is not None:
+        distances = np.linalg.norm(reference_features - feature_vector, axis=-1)
+        anomaly_score = float(distances.min())
+    heatmap = np.linalg.norm(feature_map, axis=0)
+    heatmap = (heatmap - heatmap.min()) / (
+        heatmap.max() - heatmap.min() + HEATMAP_EPSILON
+    )
+    return {
+        "score": anomaly_score,
+        "is_anomaly": anomaly_score >= threshold,
+        "heatmap": heatmap,
+    }
+
+
+class ExportedAnomaly:
+    def __init__(self, model_name):
+        self.engine = None
+        self.reference_features = None
+        self.path = cached_onnx_export(
+            f"{model_name}-anomaly-features", lambda: self._build_graph(model_name)
+        )
+
+    def _build_graph(self, model_name):
+        import torch
+        import torchvision.models as models
+
+        backbone = models.get_model(model_name, weights=TORCHVISION_WEIGHTS)
+        feature_layers = torch.nn.Sequential(
+            *list(backbone.children())[:-POOLING_LAYER_COUNT]
+        )
+        normalize = pixel_normalizer(IMAGENET_MEAN, IMAGENET_STD)
+
+        class AnomalyFeatures(torch.nn.Module):
+            def __init__(self):
+                super().__init__()
+                self.feature_layers = feature_layers
+
+            def forward(self, image):
+                return self.feature_layers(normalize(image))
+
+        example_input = torch.rand(
+            1, COLOR_CHANNELS, BACKBONE_INPUT_SIZE, BACKBONE_INPUT_SIZE
+        )
+        return AnomalyFeatures(), example_input
+
+    def load_reference(self, reference_path):
+        import numpy as np
+
+        self.reference_features = np.load(reference_path)
+
+    def do_forward(self, frame, threshold=0.5):
+        import numpy as np
+        from PIL import Image
+
+        model_size = (BACKBONE_INPUT_SIZE, BACKBONE_INPUT_SIZE)
+        resized = Image.fromarray(frame).resize(model_size, Image.BILINEAR)
+        model_input = np.asarray(resized)
+        feature_map = np.asarray(self.engine.do_forward(model_input))[0]
+        return anomaly_result(feature_map, self.reference_features, threshold)
 
 
 class AnomalyEngine(PyTorchEngine):
@@ -110,32 +186,9 @@ class AnomalyEngine(PyTorchEngine):
                 with torch.no_grad():
                     features = self.feature_layers(tensor)
 
-                # Global average pool to get a feature vector
-                feat_vec = features.mean(dim=[2, 3]).squeeze(0).cpu().numpy()
-
-                # Compute anomaly score against reference distribution
-                anomaly_score = 0.0
-                if self.reference_features is not None:
-                    distances = np.linalg.norm(
-                        self.reference_features - feat_vec, axis=-1
-                    )
-                    anomaly_score = float(distances.min())
-
-                # Generate a spatial anomaly heatmap from feature map distances
-                feat_map = features.squeeze(0).cpu().numpy()
-                heatmap = np.linalg.norm(feat_map, axis=0)
-                heatmap = (heatmap - heatmap.min()) / (
-                    heatmap.max() - heatmap.min() + 1e-8
-                )
-
-                is_anomaly = anomaly_score >= threshold
-
+                feature_map = features.squeeze(0).cpu().numpy()
                 results.append(
-                    {
-                        "score": anomaly_score,
-                        "is_anomaly": is_anomaly,
-                        "heatmap": heatmap,
-                    }
+                    anomaly_result(feature_map, self.reference_features, threshold)
                 )
             except Exception as e:
                 self.logger.error(f"Anomaly inference error on frame: {e}")

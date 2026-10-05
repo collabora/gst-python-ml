@@ -25,7 +25,7 @@ try:
 
     from video_transform import VideoTransform
     from utils.format_converter import FormatConverter
-    from engine.action_engine import ActionEngine
+    from engine.action_engine import ActionEngine, ExportedAction
     from engine.engine_factory import EngineFactory
     from backend import frameio, GObject
     from tasks.action import ActionTask
@@ -79,20 +79,14 @@ class ActionTransform(VideoTransform, ActionTask):
 
     def __init__(self):
         super().__init__()
-        self.mgr.engine_name = "pyml_action_engine"
+        self.task_engine_name = self.mgr.engine_name = "pyml_action_engine"
         EngineFactory.register(self.mgr.engine_name, ActionEngine)
         self.format_converter = FormatConverter()
         self._frame_buffer = deque(maxlen=16)
         self._last_result = None
 
-    @GObject.Property(type=str)
-    def engine_name(self):
-        """Machine Learning Engine (read-only for this element)."""
-        return self.mgr.engine_name
-
-    @engine_name.setter
-    def engine_name(self, value):
-        raise ValueError("'engine_name' is read-only for pyml_action")
+    def export_model(self, model_name):
+        return ExportedAction(model_name)
 
     def process_frames(self, frames, num_sources, fmt, target):
         """Accumulate a frame window, classify when it is full, decode the

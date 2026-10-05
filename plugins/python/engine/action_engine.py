@@ -16,7 +16,76 @@
 # Free Software Foundation, Inc., 51 Franklin Street, Fifth Floor,
 # Boston, MA 02110-1301, USA.
 
+from .onnx_export import (
+    cached_onnx_export,
+    model_input_frames,
+    model_input_shape,
+    pixel_normalizer,
+)
 from .pytorch_engine import PyTorchEngine
+
+TOP_ACTION_COUNT = 5
+
+
+def action_result(logits, id2label):
+    import numpy as np
+
+    probabilities = np.exp(logits - logits.max())
+    probabilities /= probabilities.sum()
+    top_indices = np.argsort(probabilities)[::-1][:TOP_ACTION_COUNT]
+    top5 = [
+        {
+            "label": id2label.get(int(index), f"class_{index}"),
+            "score": float(probabilities[index]),
+        }
+        for index in top_indices
+    ]
+    return {"label": top5[0]["label"], "score": top5[0]["score"], "top5": top5}
+
+
+class ExportedAction:
+    def __init__(self, model_name):
+        from transformers import AutoConfig, AutoImageProcessor
+
+        self.engine = None
+        self.image_processor = AutoImageProcessor.from_pretrained(model_name)
+        self.config = AutoConfig.from_pretrained(model_name)
+        self.path = cached_onnx_export(
+            f"{model_name.replace('/', '--')}-{self.config.num_frames}-frames",
+            lambda: self._build_graph(model_name),
+        )
+
+    def _build_graph(self, model_name):
+        import torch
+        from transformers import VideoMAEForVideoClassification
+
+        model = VideoMAEForVideoClassification.from_pretrained(model_name)
+        normalize = pixel_normalizer(
+            self.image_processor.image_mean, self.image_processor.image_std
+        )
+
+        # a builtin engine feeds the window of frames as one batch of images
+        class ActionGraph(torch.nn.Module):
+            def __init__(self):
+                super().__init__()
+                self.model = model
+
+            def forward(self, frames):
+                return self.model(pixel_values=normalize(frames).unsqueeze(0)).logits
+
+        frame_count, height, width, channels = model_input_shape(
+            self.image_processor, self.config.num_frames
+        )
+        return ActionGraph(), torch.rand(frame_count, channels, height, width)
+
+    def _model_input(self, frame_buffer):
+        return model_input_frames(self.image_processor, list(frame_buffer))
+
+    def do_forward(self, frame_buffer):
+        import numpy as np
+
+        logits = self.engine.do_forward(self._model_input(frame_buffer))
+        return action_result(np.asarray(logits).reshape(-1), self.config.id2label)
 
 
 class ActionEngine(PyTorchEngine):
@@ -63,18 +132,5 @@ class ActionEngine(PyTorchEngine):
         with torch.no_grad():
             outputs = self.model(**inputs)
 
-        logits = outputs.logits[0]
-        probs = torch.softmax(logits, dim=-1)
-        top5_indices = probs.topk(5).indices.cpu().numpy()
-        top5_scores = probs.topk(5).values.cpu().numpy()
-
-        top1_idx = top5_indices[0]
-        label = self.model.config.id2label.get(int(top1_idx), f"class_{top1_idx}")
-        score = float(top5_scores[0])
-
-        top5 = []
-        for idx, s in zip(top5_indices, top5_scores):
-            name = self.model.config.id2label.get(int(idx), f"class_{idx}")
-            top5.append({"label": name, "score": float(s)})
-
-        return {"label": label, "score": score, "top5": top5}
+        logits = outputs.logits[0].cpu().numpy()
+        return action_result(logits, self.model.config.id2label)

@@ -22,7 +22,7 @@ import backend
 CAN_REGISTER_ELEMENT = True
 try:
     from video_transform import VideoTransform
-    from engine.embedding_engine import EmbeddingEngine
+    from engine.embedding_engine import EmbeddingEngine, ExportedEmbedding
     from engine.engine_factory import EngineFactory
     from backend import frameio, GObject
     from tasks.embedding import EmbeddingTask
@@ -86,26 +86,20 @@ class EmbeddingTransform(VideoTransform, EmbeddingTask):
 
     def __init__(self):
         super().__init__()
-        self.mgr.engine_name = "pyml_embedding_engine"
+        self.task_engine_name = self.mgr.engine_name = "pyml_embedding_engine"
         EngineFactory.register(self.mgr.engine_name, EmbeddingEngine)
         self._frame_count = 0
         self._text_embedding = None
         self._cached_text = None
 
-    @GObject.Property(type=str)
-    def engine_name(self):
-        """Machine Learning Engine (read-only for this element)."""
-        return self.mgr.engine_name
-
-    @engine_name.setter
-    def engine_name(self, value):
-        raise ValueError("'engine_name' is read-only for pyml_embedding")
+    def export_model(self, model_name):
+        return ExportedEmbedding(model_name)
 
     @GObject.Property(type=int, default=0)
     def output_dim(self):
         """Embedding dimensionality (read-only, set after model load)."""
-        if self.engine:
-            return self.engine.output_dim
+        if self.task_engine:
+            return self.task_engine.output_dim
         return 0
 
     @output_dim.setter
@@ -117,7 +111,7 @@ class EmbeddingTransform(VideoTransform, EmbeddingTask):
         if self.engine is None:
             return
         if self.text and self.text != self._cached_text:
-            self._text_embedding = self.engine.do_text_embedding(
+            self._text_embedding = self.task_engine.do_text_embedding(
                 self.text, normalize=self.normalize
             )
             self._cached_text = self.text

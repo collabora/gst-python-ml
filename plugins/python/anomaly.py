@@ -23,7 +23,7 @@ CAN_REGISTER_ELEMENT = True
 try:
     from video_transform import VideoTransform
     from utils.format_converter import FormatConverter
-    from engine.anomaly_engine import AnomalyEngine
+    from engine.anomaly_engine import AnomalyEngine, ExportedAnomaly
     from engine.engine_factory import EngineFactory
     from backend import frameio, GObject
     from tasks.anomaly import AnomalyTask
@@ -90,25 +90,19 @@ class AnomalyTransform(VideoTransform, AnomalyTask):
 
     def __init__(self):
         super().__init__()
-        self.mgr.engine_name = "pyml_anomaly_engine"
+        self.task_engine_name = self.mgr.engine_name = "pyml_anomaly_engine"
         EngineFactory.register(self.mgr.engine_name, AnomalyEngine)
         self.model_name = DEFAULT_BACKBONE
         self.format_converter = FormatConverter()
         self._reference_loaded = False
 
-    @GObject.Property(type=str)
-    def engine_name(self):
-        """Machine Learning Engine (read-only for this element)."""
-        return self.mgr.engine_name
-
-    @engine_name.setter
-    def engine_name(self, value):
-        raise ValueError("'engine_name' is read-only for pyml_anomaly")
+    def export_model(self, model_name):
+        return ExportedAnomaly(model_name)
 
     def process_frames(self, frames, num_sources, fmt, target):
         """Score the primary frame against the reference features."""
-        if not self._reference_loaded and self.reference_path and self.engine:
-            self.engine.load_reference(self.reference_path)
+        if not self._reference_loaded and self.reference_path and self.task_engine:
+            self.task_engine.load_reference(self.reference_path)
             self._reference_loaded = True
 
         frame = frames[0] if frames.ndim == 4 else frames

@@ -16,7 +16,65 @@
 # Free Software Foundation, Inc., 51 Franklin Street, Fifth Floor,
 # Boston, MA 02110-1301, USA.
 
+from .ml_engine import TORCHVISION_WEIGHTS
+from .onnx_export import cached_onnx_export, pixel_normalizer
 from .pytorch_engine import PyTorchEngine
+
+SMALL_MODEL_NAME = "raft_small"
+# RAFT wants both sides a multiple of 8
+EXPORTED_HEIGHT = 360
+EXPORTED_WIDTH = 640
+COLOR_CHANNELS = 3
+RAFT_PIXEL_MEAN = [0.5, 0.5, 0.5]
+RAFT_PIXEL_STD = [0.5, 0.5, 0.5]
+
+
+class ExportedOpticalFlow:
+    def __init__(self, model_name):
+        self.engine = None
+        self.path = cached_onnx_export(
+            f"{model_name}-{EXPORTED_HEIGHT}x{EXPORTED_WIDTH}",
+            lambda: self._build_graph(model_name),
+        )
+
+    def _build_graph(self, model_name):
+        import torch
+        from torchvision.models import optical_flow
+
+        build = (
+            optical_flow.raft_small
+            if model_name == SMALL_MODEL_NAME
+            else optical_flow.raft_large
+        )
+        model = build(weights=TORCHVISION_WEIGHTS)
+        normalize = pixel_normalizer(RAFT_PIXEL_MEAN, RAFT_PIXEL_STD)
+
+        # a builtin engine feeds the previous and the current frame as one batch
+        class FlowGraph(torch.nn.Module):
+            def __init__(self):
+                super().__init__()
+                self.model = model
+
+            def forward(self, image):
+                frame_pair = normalize(image)
+                return self.model(frame_pair[0:1], frame_pair[1:2])[-1]
+
+        example_input = torch.rand(2, COLOR_CHANNELS, EXPORTED_HEIGHT, EXPORTED_WIDTH)
+        return FlowGraph(), example_input
+
+    def do_forward(self, prev_frame, curr_frame):
+        import cv2
+        import numpy as np
+
+        height, width = curr_frame.shape[:2]
+        model_size = (EXPORTED_WIDTH, EXPORTED_HEIGHT)
+        frame_pair = np.stack(
+            [cv2.resize(frame, model_size) for frame in (prev_frame, curr_frame)]
+        )
+        flow = np.asarray(self.engine.do_forward(frame_pair), dtype=np.float32)
+        flow = cv2.resize(flow[0].transpose(1, 2, 0), (width, height))
+        # the vectors are in pixels of the frame the model saw
+        return flow * (width / EXPORTED_WIDTH, height / EXPORTED_HEIGHT)
 
 
 class OpticalFlowEngine(PyTorchEngine):

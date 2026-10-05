@@ -23,7 +23,7 @@ CAN_REGISTER_ELEMENT = True
 try:
     from video_transform import VideoTransform
     from utils.format_converter import FormatConverter
-    from engine.optical_flow_engine import OpticalFlowEngine
+    from engine.optical_flow_engine import ExportedOpticalFlow, OpticalFlowEngine
     from engine.engine_factory import EngineFactory
     from backend import frameio, GObject
     from tasks.optical_flow import OpticalFlowTask
@@ -79,19 +79,13 @@ class OpticalFlowTransform(VideoTransform, OpticalFlowTask):
 
     def __init__(self):
         super().__init__()
-        self.mgr.engine_name = "pyml_optical_flow_engine"
+        self.task_engine_name = self.mgr.engine_name = "pyml_optical_flow_engine"
         EngineFactory.register(self.mgr.engine_name, OpticalFlowEngine)
         self.format_converter = FormatConverter()
         self._prev_frame = None
 
-    @GObject.Property(type=str)
-    def engine_name(self):
-        """Machine Learning Engine (read-only for this element)."""
-        return self.mgr.engine_name
-
-    @engine_name.setter
-    def engine_name(self, value):
-        raise ValueError("'engine_name' is read-only for pyml_optical_flow")
+    def export_model(self, model_name):
+        return ExportedOpticalFlow(model_name)
 
     def process_frames(self, frames, num_sources, fmt, target):
         """Pair this frame with the previous one and draw the flow overlay."""

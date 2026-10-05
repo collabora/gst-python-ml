@@ -16,7 +16,72 @@
 # Free Software Foundation, Inc., 51 Franklin Street, Fifth Floor,
 # Boston, MA 02110-1301, USA.
 
+from .onnx_export import (
+    cached_onnx_export,
+    model_input_frames,
+    model_input_shape,
+    pixel_normalizer,
+)
 from .pytorch_engine import PyTorchEngine, projected
+
+TEXT_ENCODER_DEVICE = "cpu"
+
+
+class ExportedEmbedding:
+    def __init__(self, model_name):
+        self.engine = None
+        # the text side and the image processor stay on pytorch
+        self.torch_engine = EmbeddingEngine()
+        self.torch_engine.do_set_device(TEXT_ENCODER_DEVICE)
+        self.torch_engine.do_load_model(model_name)
+        self.output_dim = self.torch_engine.output_dim
+        self.path = cached_onnx_export(
+            f"{model_name.replace('/', '--')}-image-embedding", self._build_graph
+        )
+
+    @property
+    def _image_processor(self):
+        processor = self.torch_engine.processor
+        return getattr(processor, "image_processor", processor)
+
+    def _build_graph(self):
+        import torch
+
+        model = self.torch_engine.model
+        is_clip = self.torch_engine._is_clip
+        normalize = pixel_normalizer(
+            self._image_processor.image_mean, self._image_processor.image_std
+        )
+
+        class ImageEmbedding(torch.nn.Module):
+            def __init__(self):
+                super().__init__()
+                self.model = model
+
+            def forward(self, image):
+                pixel_values = normalize(image)
+                if is_clip:
+                    return projected(
+                        self.model.get_image_features(pixel_values=pixel_values)
+                    )
+                return self.model(pixel_values=pixel_values).last_hidden_state[:, 0]
+
+        height, width, channels = model_input_shape(self._image_processor)
+        return ImageEmbedding(), torch.rand(1, channels, height, width)
+
+    def do_forward(self, frame, normalize=True):
+        import numpy as np
+
+        model_input = model_input_frames(self._image_processor, frame)
+        embedding = np.asarray(self.engine.do_forward(model_input), dtype=np.float32)
+        embedding = embedding.reshape(-1)
+        norm = np.linalg.norm(embedding)
+        if normalize and norm > 0:
+            embedding = embedding / norm
+        return embedding
+
+    def do_text_embedding(self, text, normalize=True):
+        return self.torch_engine.do_text_embedding(text, normalize=normalize)
 
 
 class EmbeddingEngine(PyTorchEngine):

@@ -36,8 +36,8 @@ class SuperResTask:
     """Inference + frame production, independent of any framework."""
 
     def forward(self, frame):
-        if self.engine:
-            return self.engine.do_forward(frame)
+        if self.task_engine:
+            return self.task_engine.do_forward(frame)
         return None
 
     def decode(self, upscaled, fmt):

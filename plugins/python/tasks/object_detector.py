@@ -44,9 +44,9 @@ class ObjectDetectorTask:
         self.logger.info(
             f"Forward called with frames shape: {frames.shape if frames is not None else 'None'}"
         )
-        if self.engine:
-            self.engine.track = self.track
-            result = self.engine.do_forward(frames)
+        if self.task_engine:
+            self.task_engine.track = self.track
+            result = self.task_engine.do_forward(frames)
             self.logger.debug(f"Forward result: {result} (type: {type(result)})")
             return result
         return None

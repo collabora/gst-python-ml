@@ -24,7 +24,7 @@ try:
     import threading
 
     from video_transform import VideoTransform
-    from engine.clip_engine import ClipEngine
+    from engine.clip_engine import ClipEngine, ExportedClip
     from engine.engine_factory import EngineFactory
     from backend import GObject
     from tasks.clip import ClipTask
@@ -85,7 +85,7 @@ class CLIPTransform(VideoTransform, ClipTask):
 
     def __init__(self):
         super().__init__()
-        self.mgr.engine_name = "pyml_clip_engine"
+        self.task_engine_name = self.mgr.engine_name = "pyml_clip_engine"
         EngineFactory.register(self.mgr.engine_name, ClipEngine)
         self._labels_str = ""
         self._labels_list = []
@@ -114,23 +114,17 @@ class CLIPTransform(VideoTransform, ClipTask):
         self._labels_list = [
             label.strip() for label in value.split(",") if label.strip()
         ]
-        if self.engine:
-            self.engine.clip_labels = self._labels_list
+        if self.task_engine:
+            self.task_engine.clip_labels = self._labels_list
         self.logger.info(f"Labels set to: {self._labels_list}")
 
-    @GObject.Property(type=str)
-    def engine_name(self):
-        """Machine Learning Engine (read-only for this element)."""
-        return self.mgr.engine_name
-
-    @engine_name.setter
-    def engine_name(self, value):
-        raise ValueError("'engine_name' is read-only for pyml_clip")
+    def export_model(self, model_name):
+        return ExportedClip(model_name)
 
     def on_start(self):
         # Push labels into the engine after it has been initialised
-        if self.engine and self._labels_list:
-            self.engine.clip_labels = self._labels_list
+        if self.task_engine and self._labels_list:
+            self.task_engine.clip_labels = self._labels_list
         # Start background inference thread
         self._running = True
         self._infer_thread = threading.Thread(
@@ -156,7 +150,7 @@ class CLIPTransform(VideoTransform, ClipTask):
                 self._pending_frame = None
             if frame is None or not self.engine:
                 continue
-            results = self.engine.do_forward(frame)
+            results = self.task_engine.do_forward(frame)
             if results is not None:
                 with self._infer_lock:
                     self._last_results = results
@@ -166,8 +160,8 @@ class CLIPTransform(VideoTransform, ClipTask):
         # Use first frame for classification (batch not typical for CLIP)
         frame = frames[0] if num_sources > 1 else frames
 
-        if self.engine:
-            self.engine.clip_labels = self._labels_list
+        if self.task_engine:
+            self.task_engine.clip_labels = self._labels_list
 
         # Post frame to background thread; never block the streaming thread
         with self._infer_lock:

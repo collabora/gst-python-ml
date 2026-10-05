@@ -34,8 +34,8 @@ class OpticalFlowTask:
     """Inference + flow visualization, independent of any framework."""
 
     def forward(self, prev_frame, curr_frame):
-        if self.engine:
-            return self.engine.do_forward(prev_frame, curr_frame)
+        if self.task_engine:
+            return self.task_engine.do_forward(prev_frame, curr_frame)
         return None
 
     def decode(self, flow, frame, fmt):

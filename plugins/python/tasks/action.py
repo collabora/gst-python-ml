@@ -37,8 +37,8 @@ class ActionTask:
     """Inference + frame/metadata production, independent of any framework."""
 
     def forward(self, frame_buffer):
-        if self.engine:
-            return self.engine.do_forward(frame_buffer)
+        if self.task_engine:
+            return self.task_engine.do_forward(frame_buffer)
         return None
 
     def decode(self, frame, result, fmt):

@@ -16,7 +16,59 @@
 # Free Software Foundation, Inc., 51 Franklin Street, Fifth Floor,
 # Boston, MA 02110-1301, USA.
 
+from .onnx_export import cached_onnx_export, pixel_normalizer
 from .pytorch_engine import PyTorchEngine
+
+COLOR_CHANNELS = 3
+# the size the model was trained at
+EXPORTED_INPUT_SIZE = 518
+BATCH_DIMENSIONS = 4
+
+
+class ExportedDepthAnything:
+    def __init__(self, model_name):
+        self.engine = None
+        self.path = cached_onnx_export(
+            f"{model_name.replace('/', '--')}-{EXPORTED_INPUT_SIZE}",
+            lambda: self._build_graph(model_name),
+        )
+
+    def _build_graph(self, model_name):
+        import torch
+        from transformers import AutoImageProcessor, AutoModelForDepthEstimation
+
+        processor = AutoImageProcessor.from_pretrained(model_name)
+        model = AutoModelForDepthEstimation.from_pretrained(model_name)
+        normalize = pixel_normalizer(processor.image_mean, processor.image_std)
+
+        class DepthAnythingGraph(torch.nn.Module):
+            def __init__(self):
+                super().__init__()
+                self.model = model
+
+            def forward(self, image):
+                return self.model(pixel_values=normalize(image)).predicted_depth
+
+        example_input = torch.rand(
+            1, COLOR_CHANNELS, EXPORTED_INPUT_SIZE, EXPORTED_INPUT_SIZE
+        )
+        return DepthAnythingGraph(), example_input
+
+    def do_forward(self, frames):
+        if frames.ndim == BATCH_DIMENSIONS:
+            return [self._depth_map(frame) for frame in frames]
+        return self._depth_map(frames)
+
+    def _depth_map(self, frame):
+        import cv2
+        import numpy as np
+
+        height, width = frame.shape[:2]
+        model_size = (EXPORTED_INPUT_SIZE, EXPORTED_INPUT_SIZE)
+        model_input = cv2.resize(frame, model_size, interpolation=cv2.INTER_CUBIC)
+        depth_map = np.asarray(self.engine.do_forward(model_input), dtype=np.float32)
+        depth_map = depth_map.reshape(model_size)
+        return cv2.resize(depth_map, (width, height), interpolation=cv2.INTER_CUBIC)
 
 
 class DepthAnythingEngine(PyTorchEngine):

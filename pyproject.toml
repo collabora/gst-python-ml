@@ -77,9 +77,11 @@ mqtt = [
 ]
 onnx = [
     "onnxruntime",
+    "onnxscript",
 ]
 onnx-gpu = [
     "onnxruntime-gpu",
+    "onnxscript",
 ]
 tvm = [
     "apache-tvm",

@@ -45,8 +45,8 @@ class DepthTask:
     """Inference + frame/metadata production, independent of any framework."""
 
     def forward(self, frames):
-        if self.engine:
-            return self.engine.do_forward(frames)
+        if self.task_engine:
+            return self.task_engine.do_forward(frames)
         return None
 
     def decode(self, frame, depth_map, fmt):

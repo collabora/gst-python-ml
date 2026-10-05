@@ -23,9 +23,9 @@ CAN_REGISTER_ELEMENT = True
 try:
     from video_transform import VideoTransform
     from utils.format_converter import FormatConverter
-    from engine.super_res_engine import SuperResEngine
+    from engine.super_res_engine import ExportedSuperRes, SuperResEngine
     from engine.engine_factory import EngineFactory
-    from backend import frameio, GObject
+    from backend import frameio
     from tasks.superres import SuperResTask
 
 except ImportError as e:
@@ -56,19 +56,13 @@ class SuperResTransform(VideoTransform, SuperResTask):
 
     def __init__(self):
         super().__init__()
-        self.mgr.engine_name = "pyml_superres_engine"
+        self.task_engine_name = self.mgr.engine_name = "pyml_superres_engine"
         EngineFactory.register(self.mgr.engine_name, SuperResEngine)
         self.format_converter = FormatConverter()
         self.model_name = DEFAULT_MODEL_NAME
 
-    @GObject.Property(type=str)
-    def engine_name(self):
-        """Machine Learning Engine (read-only for this element)."""
-        return self.mgr.engine_name
-
-    @engine_name.setter
-    def engine_name(self, value):
-        raise ValueError("'engine_name' is read-only for pyml_superres")
+    def export_model(self, model_name):
+        return ExportedSuperRes(model_name)
 
     def process_frames(self, frames, num_sources, fmt, target):
         """Upscale the primary frame and write it back at the original size."""
