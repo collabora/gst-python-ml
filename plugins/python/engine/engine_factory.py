@@ -16,16 +16,10 @@
 # Free Software Foundation, Inc., 51 Franklin Street, Fifth Floor,
 # Boston, MA 02110-1301, USA.
 
+from importlib import import_module
 from typing import Type, Dict
 
 _engine_registry: Dict[str, Type] = {}
-
-
-def _try_register(name: str, cls: Type) -> None:
-    try:
-        _engine_registry[name] = cls
-    except Exception:
-        pass
 
 
 class EngineFactory:
@@ -39,128 +33,29 @@ class EngineFactory:
     MLX_ENGINE = "mlx"
     EXECUTORCH_ENGINE = "executorch"
     LLAMACPP_ENGINE = "llamacpp"
-    CANDLE_ENGINE = "candle"
     JAX_ENGINE = "jax"
     MIGRAPHX_ENGINE = "migraphx"
     IREE_ENGINE = "iree"
     NCNN_ENGINE = "ncnn"
     DRPAI_ENGINE = "drpai"
 
-    _builtins_registered: bool = False  # Class-level flag for singleton-like lazy init
-
-    @classmethod
-    def _register_builtins(cls) -> None:
-        try:
-            from .pytorch_engine import PyTorchEngine
-
-            _try_register(cls.PYTORCH_ENGINE, PyTorchEngine)
-        except ImportError:
-            pass
-
-        try:
-            from .litert_engine import LiteRTEngine
-
-            _try_register(cls.TFLITE_ENGINE, LiteRTEngine)
-        except ImportError:
-            pass
-
-        try:
-            from .tensorflow_engine import TensorFlowEngine
-
-            _try_register(cls.TENSORFLOW_ENGINE, TensorFlowEngine)
-        except ImportError:
-            pass
-
-        try:
-            from .onnx_engine import ONNXEngine
-
-            _try_register(cls.ONNX_ENGINE, ONNXEngine)
-        except ImportError:
-            pass
-
-        try:
-            from .openvino_engine import OpenVinoEngine
-
-            _try_register(cls.OPENVINO_ENGINE, OpenVinoEngine)
-        except ImportError:
-            pass
-
-        try:
-            from .tvm_engine import TVMEngine
-
-            _try_register(cls.TVM_ENGINE, TVMEngine)
-        except ImportError:
-            pass
-
-        try:
-            from .tinygrad_engine import TinyGradEngine
-
-            _try_register(cls.TINYGRAD_ENGINE, TinyGradEngine)
-        except ImportError:
-            pass
-
-        try:
-            from .mlx_engine import MLXEngine
-
-            _try_register(cls.MLX_ENGINE, MLXEngine)
-        except ImportError:
-            pass
-
-        try:
-            from .executorch_engine import ExecuTorchEngine
-
-            _try_register(cls.EXECUTORCH_ENGINE, ExecuTorchEngine)
-        except ImportError:
-            pass
-
-        try:
-            from .llamacpp_engine import LlamaCppEngine
-
-            _try_register(cls.LLAMACPP_ENGINE, LlamaCppEngine)
-        except ImportError:
-            pass
-
-        try:
-            from .candle_engine import CandleEngine
-
-            _try_register(cls.CANDLE_ENGINE, CandleEngine)
-        except ImportError:
-            pass
-
-        try:
-            from .jax_engine import JAXEngine
-
-            _try_register(cls.JAX_ENGINE, JAXEngine)
-        except ImportError:
-            pass
-
-        try:
-            from .migraphx_engine import MiGraphXEngine
-
-            _try_register(cls.MIGRAPHX_ENGINE, MiGraphXEngine)
-        except ImportError:
-            pass
-
-        try:
-            from .iree_engine import IREEEngine
-
-            _try_register(cls.IREE_ENGINE, IREEEngine)
-        except ImportError:
-            pass
-
-        try:
-            from .ncnn_engine import NCNNEngine
-
-            _try_register(cls.NCNN_ENGINE, NCNNEngine)
-        except ImportError:
-            pass
-
-        try:
-            from .drpai_engine import DRPAIEngine
-
-            _try_register(cls.DRPAI_ENGINE, DRPAIEngine)
-        except ImportError:
-            pass
+    BUILTIN_ENGINES = {
+        PYTORCH_ENGINE: ("pytorch_engine", "PyTorchEngine"),
+        TFLITE_ENGINE: ("litert_engine", "LiteRTEngine"),
+        TENSORFLOW_ENGINE: ("tensorflow_engine", "TensorFlowEngine"),
+        ONNX_ENGINE: ("onnx_engine", "ONNXEngine"),
+        OPENVINO_ENGINE: ("openvino_engine", "OpenVinoEngine"),
+        TVM_ENGINE: ("tvm_engine", "TVMEngine"),
+        TINYGRAD_ENGINE: ("tinygrad_engine", "TinyGradEngine"),
+        MLX_ENGINE: ("mlx_engine", "MLXEngine"),
+        EXECUTORCH_ENGINE: ("executorch_engine", "ExecuTorchEngine"),
+        LLAMACPP_ENGINE: ("llamacpp_engine", "LlamaCppEngine"),
+        JAX_ENGINE: ("jax_engine", "JAXEngine"),
+        MIGRAPHX_ENGINE: ("migraphx_engine", "MiGraphXEngine"),
+        IREE_ENGINE: ("iree_engine", "IREEEngine"),
+        NCNN_ENGINE: ("ncnn_engine", "NCNNEngine"),
+        DRPAI_ENGINE: ("drpai_engine", "DRPAIEngine"),
+    }
 
     @staticmethod
     def register(engine_type: str, engine_class: Type) -> None:
@@ -170,13 +65,10 @@ class EngineFactory:
     def create(engine_type: str):
         if not engine_type:
             raise ValueError("Engine type not set")
-        # Singleton-like: register builtins only once
-        if not EngineFactory._builtins_registered:
-            EngineFactory._register_builtins()
-            EngineFactory._builtins_registered = True
-
-        try:
-            cls = _engine_registry[engine_type]
-            return cls()
-        except KeyError:
+        if engine_type in _engine_registry:
+            return _engine_registry[engine_type]()
+        if engine_type not in EngineFactory.BUILTIN_ENGINES:
             raise ValueError(f"Unsupported engine type: {engine_type}")
+        module_name, class_name = EngineFactory.BUILTIN_ENGINES[engine_type]
+        module = import_module(f".{module_name}", __package__)
+        return getattr(module, class_name)()

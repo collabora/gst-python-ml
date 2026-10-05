@@ -31,7 +31,6 @@ class PyTorchEngine(MLEngine):
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
         self.is_executorch = False
-        self.is_tensorrt = False  # Flag to track if TensorRT is used
 
     def do_load_model(self, model_name, **kwargs):
         """Load a pre-trained model by name from TorchVision, Transformers, or a local path (including .pte for ExecuTorch)."""
@@ -49,21 +48,10 @@ class PyTorchEngine(MLEngine):
             import executorch.pybindings as et
         except ImportError:
             et = None
-        try:
-            import torch_tensorrt
-        except ImportError:
-            torch_tensorrt = None
 
         processor_name = kwargs.get("processor_name")
         tokenizer_name = kwargs.get("tokenizer_name")
         compile_model = kwargs.get("compile", False)
-        use_tensorrt = kwargs.get("use_tensorrt", False)  # Kwarg to enable TensorRT
-        trt_precision = kwargs.get(
-            "trt_precision", "fp16"
-        )  # Optional: fp16, int8, etc.
-        trt_input_shapes = kwargs.get(
-            "trt_input_shapes", None
-        )  # User-provided shapes, e.g., [(batch, channels, height, width)]
 
         if os.path.isfile(model_name):
             if model_name.endswith(".pte") and et is not None:
@@ -119,54 +107,7 @@ class PyTorchEngine(MLEngine):
                 self.execute_with_stream(lambda: self.model.to(self.device))
                 self.logger.info(f"Model moved to {self.device}")
 
-            # Compile with TensorRT if enabled and available
-            if use_tensorrt and torch_tensorrt is not None and "cuda" in self.device:
-                if not torch.cuda.is_available():
-                    self.logger.warning("TensorRT requires CUDA; skipping.")
-                else:
-                    # Require input shapes; fail if not provided
-                    if trt_input_shapes is None:
-                        raise ValueError(
-                            "trt_input_shapes must be provided when using TensorRT. "
-                            "Example: [(1, 3, 224, 224)] for fixed shape or dict for dynamic."
-                        )
-
-                    # Convert shapes to torch_tensorrt.Input objects (supports fixed or dynamic)
-                    trt_inputs = []
-                    for shape in trt_input_shapes:
-                        if isinstance(shape, tuple):  # Fixed shape
-                            trt_inputs.append(torch_tensorrt.Input(shape))
-                        elif isinstance(
-                            shape, dict
-                        ):  # Dynamic: {'min': (1,3,224,224), 'opt': ..., 'max': ...}
-                            trt_inputs.append(torch_tensorrt.Input(**shape))
-                        else:
-                            raise ValueError(f"Invalid trt_input_shape format: {shape}")
-
-                    try:
-                        self.model = torch_tensorrt.compile(
-                            self.model,
-                            inputs=trt_inputs,
-                            enabled_precisions={
-                                torch.half if trt_precision == "fp16" else torch.float
-                            },  # FP16 for speed
-                            workspace_size=1 << 32,  # 4GB workspace; adjust as needed
-                        )
-                        self.is_tensorrt = True
-                        self.logger.info(
-                            f"Model compiled with TensorRT ({trt_precision} precision) using provided shapes"
-                        )
-                    except Exception as e:
-                        self.logger.error(f"Failed to compile with TensorRT: {e}")
-                        self.logger.warning("Falling back to standard PyTorch")
-            elif use_tensorrt:
-                self.logger.warning(
-                    "torch-tensorrt not installed; install with 'pip install torch-tensorrt'"
-                )
-
-            if (
-                compile_model and not self.is_tensorrt
-            ):  # Standard torch.compile if not using TRT
+            if compile_model:
                 self.model = torch.compile(self.model)
                 self.logger.info("Model compiled with torch.compile")
 
@@ -176,51 +117,24 @@ class PyTorchEngine(MLEngine):
         """Set PyTorch device for the model (ExecuTorch handles devices via export/backends)."""
         import torch
 
-        self.device = device
-        self.logger.info(f"Setting device to {device}")
-
         if "cuda" in device:
             if not torch.cuda.is_available():
-                self.logger.warning("CUDA is not available, falling back to CPU")
-                self.device = "cpu"
-                if self.model and not self.is_executorch and hasattr(self.model, "to"):
-                    try:
-                        self.model = self.model.cpu()
-                        self.logger.info("Model moved to CPU due to unavailable CUDA")
-                    except Exception as e:
-                        self.logger.error(f"Failed to move model to CPU: {e}")
-                return
+                raise RuntimeError(f"torch sees no CUDA device for device={device}")
+            # Extract device index (e.g., "cuda:0" -> "0")
+            self.device_index = device.split(":")[-1] if ":" in device else "0"
+            torch.cuda.set_device(int(self.device_index))
+            self.logger.info(f"CUDA device set to cuda:{self.device_index}")
 
-            try:
-                # Extract device index (e.g., "cuda:0" -> "0")
-                self.device_index = device.split(":")[-1] if ":" in device else "0"
-                torch.cuda.set_device(int(self.device_index))
-                self.logger.info(f"CUDA device set to cuda:{self.device_index}")
-
-                # Model placement is handled by device_map="auto" in do_load_model
-                # Only move model if it exists and is not already on the correct device
-                if self.model and not self.is_executorch and hasattr(self.model, "to"):
-                    current_devices = {
-                        param.device for param in self.model.parameters()
-                    }
-                    if any(d.type != "cuda" for d in current_devices):
-                        self.logger.warning(
-                            f"Model tensors found on {current_devices}, moving to {device}"
-                        )
-                        try:
-                            self.model = self.model.to(device)
-                            self.logger.info(f"Model moved to {device}")
-                        except Exception as e:
-                            self.logger.error(f"Failed to move model to {device}: {e}")
-                            self.logger.warning("Falling back to CPU")
-                            self.device = "cpu"
-                            self.model = self.model.cpu()
-            except Exception as e:
-                self.logger.error(f"Failed to set CUDA device: {e}")
-                self.logger.warning("Falling back to CPU")
-                self.device = "cpu"
-                if self.model and not self.is_executorch and hasattr(self.model, "to"):
-                    self.model = self.model.cpu()
+            # Model placement is handled by device_map="auto" in do_load_model
+            # Only move model if it exists and is not already on the correct device
+            if self.model and not self.is_executorch and hasattr(self.model, "to"):
+                current_devices = {param.device for param in self.model.parameters()}
+                if any(d.type != "cuda" for d in current_devices):
+                    self.logger.warning(
+                        f"Model tensors found on {current_devices}, moving to {device}"
+                    )
+                    self.model = self.model.to(device)
+                    self.logger.info(f"Model moved to {device}")
 
         elif device == "cpu":
             if self.model and not self.is_executorch and hasattr(self.model, "to"):
@@ -236,10 +150,9 @@ class PyTorchEngine(MLEngine):
                     self.logger.error(f"Error moving model to CPU: {e}")
 
         else:
-            self.logger.error(f"Invalid device specified: {device}")
-            self.device = "cpu"
-            if self.model and not self.is_executorch and hasattr(self.model, "to"):
-                self.model = self.model.cpu()
+            raise ValueError(f"Invalid device specified: {device}")
+        self.device = device
+        self.logger.info(f"Setting device to {device}")
 
     def _forward_classification(self, frames):
         """Handle inference for classification models like ResNet (non-ExecuTorch only)."""
@@ -350,9 +263,7 @@ class PyTorchEngine(MLEngine):
             img_tensor = img_tensor.to(self.device)
 
             with torch.inference_mode():
-                results = self.model(
-                    img_tensor
-                )  # Batch inference (works with TRT-compiled model)
+                results = self.model(img_tensor)
 
             # Convert results to NumPy for consistency
             output_np = [

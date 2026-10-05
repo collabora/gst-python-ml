@@ -18,8 +18,7 @@
 
 import os
 import numpy as np
-import tensorflow as tf
-from tensorflow import keras
+from ai_edge_litert.interpreter import Interpreter, load_delegate
 
 from .ml_engine import MLEngine
 
@@ -35,62 +34,30 @@ class LiteRTEngine(MLEngine):
         self.kwargs = None
         self.model_type = None
 
-    def _create_delegate(self, delegate_path):
-        try:
-            delegate = tf.lite.experimental.load_delegate(delegate_path)
-            self.logger.info(f"Delegate loaded successfully from '{delegate_path}'")
-            return delegate
-        except Exception as e:
-            self.logger.error(f"Failed to load delegate from '{delegate_path}': {e}")
-            return None
-
     def do_load_model(self, model_name, **kwargs):
         """Load a pre-trained model and convert to TFLite if necessary."""
-        processor_name = kwargs.get("processor_name")
-        tokenizer_name = kwargs.get("tokenizer_name")
         self.model_name = model_name
         self.kwargs = kwargs
 
         if os.path.isfile(model_name) and model_name.endswith(".tflite"):
-            self.interpreter = tf.lite.Interpreter(
+            self.interpreter = Interpreter(
                 model_path=model_name,
                 experimental_delegates=[self.delegate] if self.delegate else None,
             )
             self.model_type = "custom"
             self.logger.info(f"TFLite model loaded from local path: {model_name}")
         else:
+            # only converting a model needs tensorflow
+            import tensorflow as tf
+            from tensorflow import keras
+
             if hasattr(keras.applications, model_name):
                 model = getattr(keras.applications, model_name)(weights="imagenet")
                 self.model_type = "classification"
-            elif processor_name and tokenizer_name:
-                from transformers import (
-                    AutoImageProcessor,
-                    AutoTokenizer,
-                    TFVisionEncoderDecoderModel,
-                )
-
-                self.image_processor = AutoImageProcessor.from_pretrained(
-                    processor_name
-                )
-                self.tokenizer = AutoTokenizer.from_pretrained(tokenizer_name)
-                model = TFVisionEncoderDecoderModel.from_pretrained(model_name)
-                self.frame_stride = (
-                    model.config.encoder.num_frames
-                    if hasattr(model.config.encoder, "num_frames")
-                    else 1
-                )
-                self.model_type = "vision_text"
-                self.logger.warning(
-                    "Vision-text models in TFLite may require custom generation loops."
-                )
             else:
-                from transformers import AutoTokenizer, TFAutoModelForCausalLM
-
-                self.tokenizer = AutoTokenizer.from_pretrained(model_name)
-                model = TFAutoModelForCausalLM.from_pretrained(model_name)
-                self.model_type = "llm"
-                self.logger.warning(
-                    "LLM models in TFLite require manual generation loops for inference."
+                raise FileNotFoundError(
+                    "LiteRT takes a .tflite file or a keras.applications name, "
+                    f"got: {model_name}"
                 )
 
             converter = tf.lite.TFLiteConverter.from_keras_model(model)
@@ -101,7 +68,7 @@ class LiteRTEngine(MLEngine):
             ]
             tflite_model = converter.convert()
 
-            self.interpreter = tf.lite.Interpreter(
+            self.interpreter = Interpreter(
                 model_content=tflite_model,
                 experimental_delegates=[self.delegate] if self.delegate else None,
             )
@@ -115,21 +82,18 @@ class LiteRTEngine(MLEngine):
 
     def do_set_device(self, device):
         """Set the device/delegate for TFLite."""
-        self.device = device
-        self.logger.info(f"Setting device to {device}")
-
         if "cpu" in device:
             self.delegate = None
         elif "cuda" in device.lower() or device.lower() == "gpu":
-            # TFLite has no CUDA delegate on desktop — fall back to CPU
-            self.logger.warning(
-                "TFLite has no CUDA/GPU delegate on desktop, falling back to CPU"
+            raise ValueError(
+                f"LiteRT has no desktop GPU delegate for device={device}, "
+                "use cpu or the path to a delegate library"
             )
-            self.device = "cpu"
-            self.delegate = None
         else:
             # Treat value as a path to a delegate .so
-            self.delegate = self._create_delegate(device)
+            self.delegate = load_delegate(device)
+        self.device = device
+        self.logger.info(f"Setting device to {device}")
 
         # Reload the model with the new delegate
         if self.model_name:
@@ -167,51 +131,11 @@ class LiteRTEngine(MLEngine):
     def do_forward(self, frames):
         """Handle inference for different types of models, supporting single frames or batches."""
         is_batch = isinstance(frames, np.ndarray) and frames.ndim == 4
-        if not isinstance(frames, (np.ndarray, str)):
+        if not isinstance(frames, np.ndarray):
             self.logger.error(f"Invalid input type for forward: {type(frames)}")
             return None
 
-        if self.model_type == "vision_text":
-            # Basic support; may need custom loop for generation
-            if is_batch:
-                self.logger.error(
-                    "Batch processing not supported for vision-text models."
-                )
-                return None
-            if not hasattr(self, "counter"):
-                self.counter = 0
-                self.frame_buffer = []
-            self.counter += 1
-            if self.counter % self.frame_stride == 0:
-                self.frame_buffer.append(frames)
-            if len(self.frame_buffer) >= self.batch_size:
-                pixel_values = self.image_processor(
-                    self.frame_buffer, return_tensors="tf"
-                ).pixel_values
-                # Assuming model exported for single forward pass; adjust if needed
-                input_shape = self.input_details[0]["shape"]
-                if pixel_values.shape != tuple(input_shape):
-                    self.logger.error("Input shape mismatch for vision-text model.")
-                    return None
-                self.interpreter.set_tensor(
-                    self.input_details[0]["index"], pixel_values.numpy()
-                )
-                self.interpreter.invoke()
-                tokens = self.interpreter.get_tensor(self.output_details[0]["index"])
-                captions = self.tokenizer.batch_decode(tokens, skip_special_tokens=True)
-                self.frame_buffer = []
-                return captions[0]
-            return None
-
-        elif self.model_type == "llm":
-            if is_batch:
-                self.logger.error("Batch processing not supported for LLM models.")
-                return None
-            # For LLMs, forward might not be directly applicable; use generate instead
-            self.logger.warning("Use generate method for LLM inference.")
-            return None
-
-        elif self.model_type == "classification":
+        if self.model_type == "classification":
             return self._forward_classification(frames)
 
         else:  # Assume detection or custom
@@ -271,25 +195,7 @@ class LiteRTEngine(MLEngine):
         return results
 
     def do_generate(self, input_text, max_length=1000, system_prompt=None):
-        if self.model_type != "llm":
-            raise ValueError("Generate is only supported for LLM models.")
-        # Basic greedy generation loop; assumes model exported as single-step autoregressive
-        input_ids = self.tokenizer(input_text, return_tensors="np")["input_ids"]
-        generated_ids = input_ids.copy()
-
-        for _ in range(max_length):
-            self.interpreter.set_tensor(
-                self.input_details[0]["index"], generated_ids[:, -1:]
-            )  # Last token
-            self.interpreter.invoke()
-            logits = self.interpreter.get_tensor(self.output_details[0]["index"])
-            next_token = np.argmax(logits[:, -1, :], axis=-1)
-            generated_ids = np.concatenate((generated_ids, next_token[:, None]), axis=1)
-            if next_token[0] == self.tokenizer.eos_token_id:
-                break
-
-        generated_text = self.tokenizer.decode(
-            generated_ids[0], skip_special_tokens=True
+        raise NotImplementedError(
+            "LiteRT does not support text generation. "
+            "Use PyTorch or llama.cpp for LLM workloads."
         )
-        self.logger.info(f"Generated text: {generated_text}")
-        return generated_text

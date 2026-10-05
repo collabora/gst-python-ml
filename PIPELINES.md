@@ -239,8 +239,20 @@ python pyml-launch.py filesrc location=data/people.mp4 ! decodebin name=d \
 
 #### tinygrad Engine
 
-tinygrad runs the torchvision resnet family (resnet, resnext, wide_resnet) from
-torchvision weights.
+tinygrad runs `.onnx` files, and the torchvision resnet family (resnet, resnext,
+wide_resnet) from torchvision weights.
+
+##### YOLO11m ONNX object detection with tinygrad
+
+```
+python pyml-launch.py filesrc location=data/people.mp4 ! decodebin name=d \
+  d. ! queue ! videoconvert ! videoscale \
+  ! "video/x-raw,format=RGB,width=640,height=640" \
+  ! pyml_objectdetector engine-name=tinygrad model-name=yolo11m.onnx device=cuda \
+              post-process=anchor_free \
+  ! videoconvert ! "video/x-raw,format=RGBA" \
+  ! pyml_overlay ! videoconvert ! autovideosink
+```
 
 ##### ResNet18 classification with tinygrad on GPU
 
@@ -318,18 +330,6 @@ llama.cpp runs `.gguf` files.
 ```
 python pyml-launch.py filesrc location=data/prompt_for_llm.txt \
   ! pyml_llm engine-name=llamacpp model-name=model.gguf device=cpu \
-  ! fakesink
-```
-
-#### Candle Engine
-
-Candle takes SafeTensors files.
-
-```
-python pyml-launch.py filesrc location=data/people.mp4 ! decodebin name=d \
-  d. ! queue ! videoconvert ! videoscale \
-  ! "video/x-raw,format=RGB,width=224,height=224" \
-  ! pyml_inference engine-name=candle model-name=model.safetensors device=cpu \
   ! fakesink
 ```
 

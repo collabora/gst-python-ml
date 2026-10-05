@@ -45,7 +45,7 @@ Write the pipeline in `gst-launch` format and run it with `pyml-launch`, with me
 - Engines
   - PyTorch by default
   - ONNX Runtime, OpenVINO, LiteRT, TensorFlow
-  - Apache TVM, tinygrad, Apple MLX, ExecuTorch, llama.cpp, Candle, JAX
+  - Apache TVM, tinygrad, Apple MLX, ExecuTorch, llama.cpp, JAX
   - MiGraphX, IREE, NCNN, Renesas DRP-AI
   - CI runs every engine that installs from PyPI on the CPU and checks its
     output against PyTorch

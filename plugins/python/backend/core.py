@@ -33,6 +33,7 @@ This module imports no `gi`; keep it that way so the same mixin can load under a
 non-GStreamer backend.
 """
 
+from engine.engine_factory import EngineFactory
 from engine.engine_manager import EngineManager
 from log.logger_factory import LoggerFactory
 
@@ -42,6 +43,12 @@ ENGINE_TUNABLES = (
     ("batch_size", int, 1, "Number of items to process in a batch"),
     ("frame_stride", int, 1, "How often to process a frame"),
     ("device_queue_id", int, 1, "ID of the DeviceQueue from the pool to use"),
+)
+
+
+ENGINE_NAME_BLURB = (
+    f"Machine Learning Engine to use: {', '.join(EngineFactory.BUILTIN_ENGINES)}, "
+    "or a custom engine name"
 )
 
 
@@ -94,9 +101,8 @@ def ml_property_namespace(gobject):
     def model_name(self, value):
         self._model_name = value
 
-    @gobject.Property(type=str)
+    @gobject.Property(type=str, blurb=ENGINE_NAME_BLURB)
     def engine_name(self):
-        "Machine Learning Engine to use : pytorch, tflite, tensorflow, onnx, openvino, tvm, tinygrad, mlx, executorch, llamacpp, candle, jax, or custom engine name"
         return self.mgr.engine_name
 
     @engine_name.setter

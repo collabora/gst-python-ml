@@ -53,7 +53,7 @@ class IREEEngine(MLEngine):
             return "cuda"
         elif "metal" in device:
             return "metal"
-        return "local-task"
+        raise ValueError(f"Invalid device specified: {device}")
 
     def _target_backend_for_driver(self, driver):
         """Map IREE driver to compilation target backend."""
@@ -91,8 +91,7 @@ class IREEEngine(MLEngine):
                 text=True,
             )
             if result.returncode != 0:
-                self.logger.error(f"iree-import-onnx failed: {result.stderr}")
-                return None
+                raise RuntimeError(f"iree-import-onnx failed: {result.stderr}")
 
             # Step 2: Compile MLIR to vmfb
             compiled = ireec.tools.compile_file(
@@ -116,8 +115,7 @@ class IREEEngine(MLEngine):
         if model_name.endswith(".vmfb"):
             # Load pre-compiled module
             if not os.path.isfile(model_name):
-                self.logger.error(f"VMFB file not found: {model_name}")
-                return False
+                raise FileNotFoundError(f"VMFB file not found: {model_name}")
 
             self.config = ireert.Config(self._driver)
             self.context = ireert.SystemContext(config=self.config)
@@ -134,13 +132,10 @@ class IREEEngine(MLEngine):
         elif model_name.endswith(".onnx"):
             # Compile from ONNX
             if not os.path.isfile(model_name):
-                self.logger.error(f"ONNX file not found: {model_name}")
-                return False
+                raise FileNotFoundError(f"ONNX file not found: {model_name}")
 
             self.logger.info(f"Compiling ONNX model {model_name} for {self._driver}...")
             compiled = self._compile_onnx(model_name)
-            if compiled is None:
-                return False
 
             self.config = ireert.Config(self._driver)
             self.context = ireert.SystemContext(config=self.config)
@@ -153,13 +148,12 @@ class IREEEngine(MLEngine):
             )
             return True
         else:
-            self.logger.error(f"IREE requires a .vmfb or .onnx file, got: {model_name}")
-            return False
+            raise ValueError(f"IREE requires a .vmfb or .onnx file, got: {model_name}")
 
     def do_set_device(self, device):
         """Set the IREE runtime driver/device."""
-        self.device = device
         self._driver = self._driver_for_device(device)
+        self.device = device
         self.logger.info(f"IREE driver set to {self._driver}")
 
         # Reload model if already loaded

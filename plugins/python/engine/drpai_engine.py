@@ -61,25 +61,22 @@ class DRPAIEngine(MLEngine):
         try:
             import drpai_runtime
         except ImportError as e:
-            self.logger.error(
+            raise ImportError(
                 "drpai_runtime module not found. Build the pybind11 binding in "
                 "extern/rzv2h/ inside the RZ/V2H DRP-AI TVM SDK and put it on PYTHONPATH "
-                f"(see extern/rzv2h/README.md). Import error: {e}"
-            )
-            return False
+                "(see extern/rzv2h/README.md)."
+            ) from e
 
         if not os.path.isdir(model_name):
-            self.logger.error(
+            raise FileNotFoundError(
                 f"DRP-AI model directory not found: {model_name!r} "
                 "(expected a folder with deploy.so/json/params)"
             )
-            return False
 
-        self.runtime = drpai_runtime.Runtime()
-        if not self.runtime.load(model_name):
-            self.logger.error(f"DRP-AI failed to load model from {model_name}")
-            self.runtime = None
-            return False
+        runtime = drpai_runtime.Runtime()
+        if not runtime.load(model_name):
+            raise RuntimeError(f"DRP-AI failed to load model from {model_name}")
+        self.runtime = runtime
         self.logger.info(f"DRP-AI model loaded from {model_name} (imgsz={self.imgsz})")
         return True
 

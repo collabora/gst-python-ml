@@ -33,36 +33,16 @@ class JAXEngine(MLEngine):
 
     def do_set_device(self, device):
         """Set JAX default device (cpu, gpu, tpu)."""
-        try:
-            import jax
-        except ImportError:
-            self.logger.error("jax is not installed. Install with: pip install jax")
-            return
+        import jax
 
-        self.device = device
         device_lower = (device or "cpu").lower()
-
-        if device_lower in ("gpu", "cuda"):
-            devices = jax.devices("gpu")
-            if devices:
-                jax.default_device = devices[0]
-                self.logger.info(f"JAX device set to GPU: {devices[0]}")
-            else:
-                self.logger.warning("No GPU available, falling back to CPU")
-                self.device = "cpu"
-                jax.default_device = jax.devices("cpu")[0]
-        elif device_lower == "tpu":
-            devices = jax.devices("tpu")
-            if devices:
-                jax.default_device = devices[0]
-                self.logger.info(f"JAX device set to TPU: {devices[0]}")
-            else:
-                self.logger.warning("No TPU available, falling back to CPU")
-                self.device = "cpu"
-                jax.default_device = jax.devices("cpu")[0]
-        else:
-            jax.default_device = jax.devices("cpu")[0]
-            self.logger.info("JAX device set to CPU")
+        platform = "gpu" if device_lower == "cuda" else device_lower
+        if platform not in ("cpu", "gpu", "tpu"):
+            raise ValueError(f"Invalid device specified: {device}")
+        # raises when jax has no backend for the platform
+        jax.default_device = jax.devices(platform)[0]
+        self.device = device
+        self.logger.info(f"JAX device set to {jax.default_device}")
 
     def do_load_model(self, model_name, **kwargs):
         """Load a Flax model from HuggingFace or local checkpoint."""
@@ -83,10 +63,9 @@ class JAXEngine(MLEngine):
         if hasattr(tv_models, model_name):
             pt_model = getattr(tv_models, model_name)(pretrained=True)
             if not isinstance(pt_model, tv_models.ResNet):
-                self.logger.error(
+                raise ValueError(
                     f"JAX runs the torchvision resnet family, not '{model_name}'."
                 )
-                return False
             from .jax_resnet import jax_resnet
 
             self.model = jax_resnet(pt_model.eval())
@@ -101,17 +80,9 @@ class JAXEngine(MLEngine):
 
     def _load_local_checkpoint(self, model_dir):
         """Load Flax params from a local checkpoint directory."""
-        try:
-            from flax.serialization import from_bytes
-        except ImportError:
-            self.logger.error("flax is not installed. Install with: pip install flax")
-            return False
+        from flax.serialization import from_bytes
 
         msgpack_path = os.path.join(model_dir, "flax_model.msgpack")
-        if not os.path.isfile(msgpack_path):
-            self.logger.error(f"No flax_model.msgpack found in {model_dir}")
-            return False
-
         with open(msgpack_path, "rb") as f:
             self.params = from_bytes(None, f.read())
         self.model_type = "custom"
@@ -120,11 +91,7 @@ class JAXEngine(MLEngine):
 
     def _load_msgpack(self, path):
         """Load Flax params from a .msgpack file."""
-        try:
-            from flax.serialization import from_bytes
-        except ImportError:
-            self.logger.error("flax is not installed.")
-            return False
+        from flax.serialization import from_bytes
 
         with open(path, "rb") as f:
             self.params = from_bytes(None, f.read())
@@ -134,18 +101,11 @@ class JAXEngine(MLEngine):
 
     def _load_from_huggingface(self, model_name, tokenizer_name):
         """Load a Flax model from HuggingFace Transformers."""
-        try:
-            from transformers import (
-                AutoTokenizer,
-                FlaxAutoModelForCausalLM,
-                FlaxAutoModel,
-            )
-        except ImportError:
-            self.logger.error(
-                "transformers with Flax support is not installed. "
-                "Install with: pip install transformers[flax]"
-            )
-            return False
+        from transformers import (
+            AutoTokenizer,
+            FlaxAutoModelForCausalLM,
+            FlaxAutoModel,
+        )
 
         tok_name = tokenizer_name or model_name
         self.tokenizer = AutoTokenizer.from_pretrained(tok_name)

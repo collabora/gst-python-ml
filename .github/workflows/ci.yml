@@ -47,8 +47,9 @@ jobs:
             extra: openvino
           - engine: tensorflow
             extra: tensorflow
+          # the yolo export needs tensorflow
           - engine: tflite
-            extra: tensorflow
+            extra: tensorflow,litert
           - engine: ncnn
             extra: ncnn
           - engine: executorch

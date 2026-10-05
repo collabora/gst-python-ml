@@ -32,21 +32,16 @@ class ExecuTorchEngine(MLEngine):
 
     def do_set_device(self, device):
         """Set ExecuTorch device/backend (cpu, xnnpack)."""
-        self.device = device
         device_lower = (device or "cpu").lower()
 
-        if device_lower in ("xnnpack", "qnn", "coreml", "mps"):
-            self.backend = device_lower
-            self.logger.info(f"ExecuTorch backend set to {device_lower}")
-        elif device_lower in ("cuda", "gpu"):
-            self.logger.warning(
-                "ExecuTorch does not support CUDA directly. Falling back to CPU."
+        if device_lower not in ("cpu", "xnnpack", "qnn", "coreml", "mps"):
+            raise ValueError(
+                f"ExecuTorch has no backend for device={device}, "
+                "use cpu, xnnpack, qnn, coreml or mps"
             )
-            self.backend = "cpu"
-            self.device = "cpu"
-        else:
-            self.backend = "cpu"
-            self.logger.info("ExecuTorch backend set to CPU")
+        self.backend = device_lower
+        self.device = device
+        self.logger.info(f"ExecuTorch backend set to {device_lower}")
 
     def do_load_model(self, model_name, **kwargs):
         """Load an ExecuTorch .pte model file."""
@@ -54,25 +49,18 @@ class ExecuTorchEngine(MLEngine):
         self.kwargs = kwargs
 
         if not os.path.isfile(model_name) or not model_name.endswith(".pte"):
-            self.logger.error(
+            raise FileNotFoundError(
                 f"ExecuTorch requires a .pte model file, got: {model_name}"
             )
-            return False
 
-        try:
-            from executorch.runtime import Runtime
+        from executorch.runtime import Runtime
 
-            runtime = Runtime.get()
-            program = runtime.load_program(model_name)
-            self.model = program.load_method("forward")
-            self.model_type = "pte"
-            self.logger.info(f"ExecuTorch model loaded from: {model_name}")
-            return True
-        except ImportError:
-            self.logger.error(
-                "executorch is not installed. " "Install with: pip install executorch"
-            )
-            return False
+        runtime = Runtime.get()
+        program = runtime.load_program(model_name)
+        self.model = program.load_method("forward")
+        self.model_type = "pte"
+        self.logger.info(f"ExecuTorch model loaded from: {model_name}")
+        return True
 
     def do_forward(self, frames):
         """Execute inference through the ExecuTorch module."""

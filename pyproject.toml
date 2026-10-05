@@ -101,7 +101,6 @@ executorch = [
 llamacpp = [
     "llama-cpp-python",
 ]
-# candle: install manually (not on PyPI) - see README
 jax-cpu = [
     "jax[cpu]",
     "flax",

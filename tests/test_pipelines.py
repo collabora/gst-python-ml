@@ -141,7 +141,7 @@ ENGINE_RUNTIME_MODULES = {
     "onnx": "onnxruntime",
     "openvino": "openvino",
     "tensorflow": "tensorflow",
-    "tflite": "tensorflow",
+    "tflite": "ai_edge_litert",
     "ncnn": "ncnn",
     "executorch": "executorch",
     "iree": "iree",
@@ -150,7 +150,6 @@ ENGINE_RUNTIME_MODULES = {
     "mlx": "mlx",
     "jax": "jax",
     "tinygrad": "tinygrad",
-    "candle": "candle",
     "migraphx": "migraphx",
 }
 
@@ -174,6 +173,26 @@ def skip_without_engine_or_exported_model(pipeline):
             candidate = BASE_DIR / candidate
         if exported and not candidate.exists():
             pytest.skip(f"exported model {model} is not present")
+
+
+# device=rocm and device=npu need an onnxruntime built for that hardware
+def skip_without_onnx_provider(pipeline):
+    device = re.search(r"\bdevice=([^\s!]+)", pipeline)
+    if "engine-name=onnx" not in pipeline or device is None:
+        return
+    import onnxruntime
+    from engine.onnx_engine import DEVICE_PROVIDERS
+
+    wanted = next(
+        (
+            providers
+            for keyword, providers in DEVICE_PROVIDERS.items()
+            if keyword in device.group(1)
+        ),
+        (),
+    )
+    if wanted and not set(wanted) & set(onnxruntime.get_available_providers()):
+        pytest.skip(f"onnxruntime has no provider for device={device.group(1)}")
 
 
 def skip_without_server(pipeline):
@@ -290,6 +309,7 @@ def test_pipeline(pipeline, tmp_path):
     os.sync()
     pipeline = absolutize_project_inputs(pipeline)
     skip_without_engine_or_exported_model(pipeline)
+    skip_without_onnx_provider(pipeline)
     skip_without_server(pipeline)
     unique_id = uuid.uuid4().hex[:8]
     log_file = LOG_DIR / f"test_{unique_id}.log"

@@ -31,21 +31,19 @@ class MLXEngine(MLEngine):
 
     def do_set_device(self, device):
         """Set MLX device (gpu or cpu)."""
-        try:
-            import mlx.core as mx
-        except ImportError:
-            self.logger.error("mlx is not installed. Install with: pip install mlx")
-            return
+        import mlx.core as mx
 
-        self.device = device
         device_lower = (device or "gpu").lower()
 
         if device_lower in ("gpu", "cuda", "metal"):
             mx.set_default_device(mx.gpu)
             self.logger.info("MLX device set to GPU (Metal)")
-        else:
+        elif device_lower == "cpu":
             mx.set_default_device(mx.cpu)
             self.logger.info("MLX device set to CPU")
+        else:
+            raise ValueError(f"Invalid device specified: {device}")
+        self.device = device
 
     def do_load_model(self, model_name, **kwargs):
         """Load a model via MLX from local files, HuggingFace via mlx-lm, or PyTorch conversion."""
@@ -72,10 +70,9 @@ class MLXEngine(MLEngine):
         if hasattr(tv_models, model_name):
             pt_model = getattr(tv_models, model_name)(pretrained=True)
             if not isinstance(pt_model, tv_models.ResNet):
-                self.logger.error(
+                raise ValueError(
                     f"MLX runs the torchvision resnet family, not '{model_name}'."
                 )
-                return False
             from .mlx_resnet import mlx_resnet
 
             self.model = mlx_resnet(pt_model.eval())
@@ -86,45 +83,23 @@ class MLXEngine(MLEngine):
             return True
 
         # LLM via mlx-lm
-        try:
-            from mlx_lm import load as mlx_lm_load
+        from mlx_lm import load as mlx_lm_load
 
-            self.model, self.tokenizer = mlx_lm_load(model_name)
-            self.model_type = "llm"
-            self.logger.info(f"LLM model '{model_name}' loaded via mlx-lm.")
-            return True
-        except ImportError:
-            self.logger.info("mlx-lm not available, trying PyTorch conversion.")
-        except Exception as e:
-            self.logger.info(f"mlx-lm load failed ({e}), trying PyTorch conversion.")
-
-        # Convert from PyTorch/HuggingFace
-        import mlx.core as mx
-        from transformers import AutoTokenizer, AutoModelForCausalLM
-
-        self.tokenizer = AutoTokenizer.from_pretrained(model_name)
-        pt_model = AutoModelForCausalLM.from_pretrained(model_name)
-        pt_model.eval()
-        state_dict = pt_model.state_dict()
-        self.model = {k: mx.array(v.cpu().numpy()) for k, v in state_dict.items()}
-        self.model_type = "llm_converted"
-        self.logger.info(f"Model '{model_name}' converted from PyTorch to MLX arrays.")
+        self.model, self.tokenizer = mlx_lm_load(model_name)
+        self.model_type = "llm"
+        self.logger.info(f"LLM model '{model_name}' loaded via mlx-lm.")
         return True
 
     def do_forward(self, frames):
         """Execute inference by converting numpy input to MLX arrays."""
-        try:
-            import mlx.core as mx
-        except ImportError:
-            self.logger.error("mlx is not installed.")
-            return None
+        import mlx.core as mx
 
         is_batch = isinstance(frames, np.ndarray) and frames.ndim == 4
         if not isinstance(frames, np.ndarray):
             self.logger.error(f"Invalid input type for forward: {type(frames)}")
             return None
 
-        if self.model_type == "llm" or self.model_type == "llm_converted":
+        if self.model_type == "llm":
             self.logger.warning(
                 "do_forward is not applicable for LLM models. Use do_generate instead."
             )
@@ -149,31 +124,20 @@ class MLXEngine(MLEngine):
 
     def do_generate(self, input_text, max_length=1000, system_prompt=None):
         """Generate text using mlx-lm for LLM models."""
-        if self.model_type == "llm":
-            try:
-                from mlx_lm import generate
+        if self.model_type != "llm":
+            raise ValueError("Generate is only supported for LLM models.")
 
-                prompt = input_text
-                if system_prompt:
-                    prompt = f"{system_prompt}\n\n{input_text}"
+        from mlx_lm import generate
 
-                result = generate(
-                    self.model,
-                    self.tokenizer,
-                    prompt=prompt,
-                    max_tokens=max_length,
-                )
-                self.logger.info(f"Generated text: {result[:100]}...")
-                return result
-            except ImportError:
-                self.logger.error("mlx-lm is not installed for generation.")
-                return None
+        prompt = input_text
+        if system_prompt:
+            prompt = f"{system_prompt}\n\n{input_text}"
 
-        elif self.model_type == "llm_converted":
-            self.logger.error(
-                "Text generation for converted PyTorch models requires mlx-lm. "
-                "Load the model directly via mlx-lm instead."
-            )
-            return None
-
-        raise ValueError("Generate is only supported for LLM models.")
+        result = generate(
+            self.model,
+            self.tokenizer,
+            prompt=prompt,
+            max_tokens=max_length,
+        )
+        self.logger.info(f"Generated text: {result[:100]}...")
+        return result

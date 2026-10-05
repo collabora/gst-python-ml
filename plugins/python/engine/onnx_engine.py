@@ -23,6 +23,16 @@ import onnxruntime as ort
 
 from .ml_engine import MLEngine
 
+# providers are tried in the order listed
+DEVICE_PROVIDERS = {
+    "cuda": ("CUDAExecutionProvider",),
+    "rocm": ("MIGraphXExecutionProvider", "ROCMExecutionProvider"),
+    "hip": ("MIGraphXExecutionProvider", "ROCMExecutionProvider"),
+    "npu": ("VitisAIExecutionProvider",),
+    "ryzenai": ("VitisAIExecutionProvider",),
+}
+PROVIDERS_WITHOUT_DEVICE_ID = ("VitisAIExecutionProvider",)
+
 
 class ONNXEngine(MLEngine):
     def __init__(self):
@@ -41,6 +51,16 @@ class ONNXEngine(MLEngine):
         if self.provider == "CPUExecutionProvider":
             return ["CPUExecutionProvider"]
         return [self.provider, "CPUExecutionProvider"]
+
+    def _create_session(self, model_path):
+        session = ort.InferenceSession(model_path, providers=self._providers())
+        provider = self.provider if isinstance(self.provider, str) else self.provider[0]
+        # onnxruntime drops a provider whose libraries fail to load
+        if provider not in session.get_providers():
+            raise RuntimeError(
+                f"onnxruntime could not start {provider} for device={self.device}"
+            )
+        return session
 
     def _input_is_nchw(self):
         """Auto-detect whether the model's first input expects NCHW layout."""
@@ -106,14 +126,11 @@ class ONNXEngine(MLEngine):
             res["boxes"] = b
 
     def do_load_model(self, model_name, **kwargs):
-        """Load a pre-trained model by name from TorchVision, Transformers (via Optimum ONNX), or a local ONNX path."""
-        processor_name = kwargs.get("processor_name")
-        tokenizer_name = kwargs.get("tokenizer_name")
         self.model_name = model_name
         self.kwargs = kwargs
 
         if os.path.isfile(model_name) and model_name.endswith(".onnx"):
-            self.session = ort.InferenceSession(model_name, providers=self._providers())
+            self.session = self._create_session(model_name)
             self.model = self.session
             self.model_type = "custom"
             self.input_names = [inp.name for inp in self.session.get_inputs()]
@@ -132,40 +149,10 @@ class ONNXEngine(MLEngine):
             elif hasattr(tv_models.detection, model_name):
                 pt_model = getattr(tv_models.detection, model_name)(pretrained=True)
                 self.model_type = "detection"
-            elif processor_name and tokenizer_name:
-                from transformers import AutoTokenizer, AutoImageProcessor
-                from optimum.onnxruntime import ORTModelForVision2Seq
-
-                self.image_processor = AutoImageProcessor.from_pretrained(
-                    processor_name
-                )
-                self.tokenizer = AutoTokenizer.from_pretrained(tokenizer_name)
-                self.model = ORTModelForVision2Seq.from_pretrained(
-                    model_name, export=True, provider=self.provider
-                )
-                self.frame_stride = (
-                    self.model.config.encoder.num_frames
-                    if hasattr(self.model.config.encoder, "num_frames")
-                    else 1
-                )
-                self.model_type = "vision_text"
-                self.logger.info(
-                    f"Vision-Text model '{model_name}' loaded with processor and tokenizer via Optimum ONNX."
-                )
-                return True
             else:
-                from transformers import AutoTokenizer
-                from optimum.onnxruntime import ORTModelForCausalLM
-
-                self.tokenizer = AutoTokenizer.from_pretrained(model_name)
-                self.model = ORTModelForCausalLM.from_pretrained(
-                    model_name, export=True, provider=self.provider
+                raise FileNotFoundError(
+                    f"ONNX takes a .onnx file or a torchvision model name, got: {model_name}"
                 )
-                self.model_type = "llm"
-                self.logger.info(
-                    f"Pre-trained LLM model '{model_name}' loaded via Optimum ONNX."
-                )
-                return True
 
             # For TorchVision models, export to ONNX
             import torch
@@ -190,9 +177,7 @@ class ONNXEngine(MLEngine):
                         else None
                     ),
                 )
-                self.session = ort.InferenceSession(
-                    tmp_file.name, providers=self._providers()
-                )
+                self.session = self._create_session(tmp_file.name)
             os.unlink(tmp_file.name)
             self.model = self.session
             self.input_names = [inp.name for inp in self.session.get_inputs()]
@@ -205,84 +190,38 @@ class ONNXEngine(MLEngine):
 
     def do_set_device(self, device):
         """Set ONNX device for the model."""
+        self.provider = self._provider_for(device)
         self.device = device
         self.logger.info(f"Setting device to {device}")
-
-        if "cuda" in device:
-            if "CUDAExecutionProvider" not in ort.get_available_providers():
-                self.logger.warning(
-                    "CUDAExecutionProvider not available, falling back to CPU"
-                )
-                self.device = "cpu"
-                self.provider = "CPUExecutionProvider"
-            else:
-                try:
-                    index = int(device.split(":")[-1]) if ":" in device else 0
-                    self.provider = ("CUDAExecutionProvider", {"device_id": index})
-                    self.logger.info(f"GPU device set to cuda:{index}")
-                except Exception as e:
-                    self.logger.error(f"Failed to set GPU device: {e}")
-                    self.logger.warning("Falling back to CPU")
-                    self.device = "cpu"
-                    self.provider = "CPUExecutionProvider"
-        elif "rocm" in device or "hip" in device:
-            available = ort.get_available_providers()
-            if "MIGraphXExecutionProvider" in available:
-                try:
-                    index = int(device.split(":")[-1]) if ":" in device else 0
-                    self.provider = (
-                        "MIGraphXExecutionProvider",
-                        {"device_id": index},
-                    )
-                    self.logger.info(
-                        f"AMD GPU device set via MIGraphXExecutionProvider (device:{index})"
-                    )
-                except Exception as e:
-                    self.logger.error(f"Failed to set MIGraphX provider: {e}")
-                    self.device = "cpu"
-                    self.provider = "CPUExecutionProvider"
-            elif "ROCMExecutionProvider" in available:
-                try:
-                    index = int(device.split(":")[-1]) if ":" in device else 0
-                    self.provider = (
-                        "ROCMExecutionProvider",
-                        {"device_id": index},
-                    )
-                    self.logger.info(
-                        f"AMD GPU device set via ROCMExecutionProvider (device:{index})"
-                    )
-                except Exception as e:
-                    self.logger.error(f"Failed to set ROCm provider: {e}")
-                    self.device = "cpu"
-                    self.provider = "CPUExecutionProvider"
-            else:
-                self.logger.warning(
-                    "No AMD GPU provider available (MIGraphX/ROCm), falling back to CPU"
-                )
-                self.device = "cpu"
-                self.provider = "CPUExecutionProvider"
-        elif "npu" in device or "ryzenai" in device:
-            available = ort.get_available_providers()
-            if "VitisAIExecutionProvider" in available:
-                self.provider = "VitisAIExecutionProvider"
-                self.logger.info("AMD Ryzen AI NPU set via VitisAIExecutionProvider")
-            else:
-                self.logger.warning(
-                    "VitisAIExecutionProvider not available, falling back to CPU. "
-                    "Install the Ryzen AI SDK: https://ryzenai.docs.amd.com/"
-                )
-                self.device = "cpu"
-                self.provider = "CPUExecutionProvider"
-        elif device == "cpu":
-            self.provider = "CPUExecutionProvider"
-        else:
-            self.logger.error(f"Invalid device specified: {device}")
-            self.device = "cpu"
-            self.provider = "CPUExecutionProvider"
 
         # Reload model if already loaded
         if self.model_name:
             self.do_load_model(self.model_name, **self.kwargs)
+
+    def _provider_for(self, device):
+        if device == "cpu":
+            return "CPUExecutionProvider"
+        wanted = next(
+            (
+                providers
+                for keyword, providers in DEVICE_PROVIDERS.items()
+                if keyword in device
+            ),
+            None,
+        )
+        if wanted is None:
+            raise ValueError(f"Invalid device specified: {device}")
+        available = ort.get_available_providers()
+        provider = next((name for name in wanted if name in available), None)
+        if provider is None:
+            raise RuntimeError(
+                f"device={device} needs {' or '.join(wanted)}, "
+                f"this onnxruntime has {', '.join(available)}"
+            )
+        if provider in PROVIDERS_WITHOUT_DEVICE_ID:
+            return provider
+        index = int(device.split(":")[-1]) if ":" in device else 0
+        return (provider, {"device_id": index})
 
     def _forward_classification(self, frames):
         """Handle inference for classification models."""
@@ -310,48 +249,11 @@ class ONNXEngine(MLEngine):
     def do_forward(self, frames):
         """Handle inference for different types of models, supporting single frames or batches."""
         is_batch = isinstance(frames, np.ndarray) and frames.ndim == 4
-        if not isinstance(frames, (np.ndarray, str)):
+        if not isinstance(frames, np.ndarray):
             self.logger.error(f"Invalid input type for forward: {type(frames)}")
             return None
 
-        if self.model_type == "vision_text":
-            if is_batch:
-                self.logger.error(
-                    "Batch processing not supported for vision-text models with frame buffering."
-                )
-                return None
-            if not hasattr(self, "counter"):
-                self.counter = 0
-                self.frame_buffer = []
-            self.counter += 1
-            if self.counter % self.frame_stride == 0:
-                self.frame_buffer.append(frames)
-            if len(self.frame_buffer) >= self.batch_size:
-                self.logger.info(f"Processing {self.batch_size} frames")
-                gen_kwargs = {"min_length": 10, "max_length": 20, "num_beams": 8}
-                pixel_values = self.image_processor(
-                    self.frame_buffer, return_tensors="pt"
-                ).pixel_values
-                tokens = self.model.generate(pixel_values, **gen_kwargs)
-                captions = self.tokenizer.batch_decode(tokens, skip_special_tokens=True)
-                self.logger.info(f"Captions: {captions}")
-                self.frame_buffer = []
-                return captions[0]
-            return None
-
-        elif self.model_type == "llm":
-            if is_batch:
-                self.logger.error("Batch processing not supported for LLM-only models.")
-                return None
-            inputs = self.tokenizer(frames, return_tensors="pt")
-            generated_tokens = self.model.generate(**inputs)
-            generated_text = self.tokenizer.batch_decode(
-                generated_tokens, skip_special_tokens=True
-            )
-            self.logger.info(f"Generated text: {generated_text}")
-            return generated_text
-
-        elif self.model_type == "classification":
+        if self.model_type == "classification":
             return self._forward_classification(frames)
 
         elif self.model_type == "detection":
@@ -425,10 +327,7 @@ class ONNXEngine(MLEngine):
             raise ValueError("Unsupported model type.")
 
     def do_generate(self, input_text, max_length=1000, system_prompt=None):
-        if self.model_type != "llm":
-            raise ValueError("Generate is only supported for LLM models.")
-        inputs = self.tokenizer(input_text, return_tensors="pt")
-        outputs = self.model.generate(**inputs, max_length=max_length)
-        generated_text = self.tokenizer.decode(outputs[0], skip_special_tokens=True)
-        self.logger.info(f"Generated text: {generated_text}")
-        return generated_text
+        raise NotImplementedError(
+            "ONNX does not support text generation. "
+            "Use PyTorch or llama.cpp for LLM workloads."
+        )

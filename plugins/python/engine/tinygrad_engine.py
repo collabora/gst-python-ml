@@ -16,9 +16,17 @@
 # Free Software Foundation, Inc., 51 Franklin Street, Fifth Floor,
 # Boston, MA 02110-1301, USA.
 
+import ctypes
+import os
+from pathlib import Path
+
 import numpy as np
 
 from .ml_engine import MLEngine
+
+# tinygrad loads the nvrtc library this names
+NVRTC_PATH_VARIABLE = "NVRTC_PATH"
+LIBRARY_PATH_VARIABLE = "LD_LIBRARY_PATH"
 
 
 class TinyGradEngine(MLEngine):
@@ -29,12 +37,24 @@ class TinyGradEngine(MLEngine):
         self.kwargs = None
 
     def do_load_model(self, model_name, **kwargs):
-        """Load a torchvision resnet into TinyGrad, or a Transformers model."""
-
-        processor_name = kwargs.get("processor_name")
-        tokenizer_name = kwargs.get("tokenizer_name")
         self.model_name = model_name
         self.kwargs = kwargs
+
+        if os.path.isfile(model_name) and model_name.endswith(".onnx"):
+            from tinygrad import TinyJit
+            from tinygrad.nn.onnx import OnnxRunner
+
+            runner = OnnxRunner(model_name)
+            self.model = runner
+            # every frame takes about a second without the jit
+            self.run_onnx = TinyJit(
+                lambda **inputs: [
+                    output.realize() for output in runner(inputs).values()
+                ]
+            )
+            self.model_type = "custom"
+            self.logger.info(f"ONNX model loaded with TinyGrad: {model_name}")
+            return True
 
         # TorchVision models
         from torchvision import models as tv_models
@@ -42,10 +62,9 @@ class TinyGradEngine(MLEngine):
         if hasattr(tv_models, model_name):
             pt_model = getattr(tv_models, model_name)(pretrained=True)
             if not isinstance(pt_model, tv_models.ResNet):
-                self.logger.error(
+                raise ValueError(
                     f"TinyGrad runs the torchvision resnet family, not '{model_name}'."
                 )
-                return False
             from .tinygrad_resnet import tinygrad_resnet
 
             self.model = tinygrad_resnet(pt_model.eval())
@@ -55,59 +74,51 @@ class TinyGradEngine(MLEngine):
             )
             return True
 
-        # Vision-text models via Transformers
-        if processor_name and tokenizer_name:
-            from transformers import (
-                AutoTokenizer,
-                AutoImageProcessor,
-                AutoModelForVision2Seq,
-            )
-
-            self.image_processor = AutoImageProcessor.from_pretrained(processor_name)
-            self.tokenizer = AutoTokenizer.from_pretrained(tokenizer_name)
-            pt_model = AutoModelForVision2Seq.from_pretrained(model_name)
-            self.model = pt_model
-            self.frame_stride = (
-                pt_model.config.encoder.num_frames
-                if hasattr(pt_model.config, "encoder")
-                and hasattr(pt_model.config.encoder, "num_frames")
-                else 1
-            )
-            self.model_type = "vision_text"
-            self.logger.info(
-                f"Vision-Text model '{model_name}' loaded for TinyGrad engine."
-            )
-            return True
-
-        # LLM models via Transformers
-        from transformers import AutoTokenizer, AutoModelForCausalLM
-
-        self.tokenizer = AutoTokenizer.from_pretrained(model_name)
-        self.model = AutoModelForCausalLM.from_pretrained(model_name)
-        self.model_type = "llm"
-        self.logger.info(
-            f"Pre-trained LLM model '{model_name}' loaded for TinyGrad engine."
+        raise FileNotFoundError(
+            f"TinyGrad takes a .onnx file or a torchvision resnet name, got: {model_name}"
         )
-        return True
 
     def do_set_device(self, device):
         """Set TinyGrad device for the model."""
         from tinygrad import Device
         from tinygrad.helpers import DEV
 
+        device_upper = device.upper() if device else "CPU"
+        if device_upper == "CUDA":
+            self._use_the_nvrtc_torch_ships()
+        # raises when tinygrad cannot open the device
+        Device[device_upper]
+        DEV.value = device_upper
         self.device = device
         self.logger.info(f"Setting device to {device}")
 
-        device_upper = device.upper() if device else "CPU"
-        try:
-            Device[device_upper]
-            DEV.value = device_upper
-        except Exception:
-            self.logger.warning(
-                f"Device '{device}' not available in TinyGrad, falling back to CPU"
-            )
-            self.device = "cpu"
-            DEV.value = "CPU"
+    # a system nvrtc newer than the driver fails with CUDA_ERROR_UNSUPPORTED_PTX_VERSION
+    def _use_the_nvrtc_torch_ships(self):
+        if os.environ.get(NVRTC_PATH_VARIABLE):
+            return
+        import nvidia
+        import torch
+
+        if torch.version.cuda is None:
+            return
+        cuda_major = torch.version.cuda.split(".")[0]
+        libraries = [
+            library
+            for package_path in nvidia.__path__
+            for library in Path(package_path).glob(f"*/lib/libnvrtc.so.{cuda_major}")
+        ]
+        if not libraries:
+            return
+        nvrtc = libraries[0]
+        # nvrtc does not look for its builtins beside itself
+        for builtins in nvrtc.parent.glob("libnvrtc-builtins.so.*"):
+            ctypes.CDLL(str(builtins), mode=ctypes.RTLD_GLOBAL)
+        # tinygrad's compile workers only inherit the environment
+        os.environ[LIBRARY_PATH_VARIABLE] = os.pathsep.join(
+            filter(None, [str(nvrtc.parent), os.environ.get(LIBRARY_PATH_VARIABLE)])
+        )
+        os.environ[NVRTC_PATH_VARIABLE] = str(nvrtc)
+        self.logger.info(f"TinyGrad compiles its CUDA kernels with {nvrtc}")
 
     def _forward_classification(self, frames):
         """Handle inference for classification models."""
@@ -135,56 +146,36 @@ class TinyGradEngine(MLEngine):
     def do_forward(self, frames):
         """Execute inference on a single frame or batch of frames."""
         is_batch = isinstance(frames, np.ndarray) and frames.ndim == 4
-        if not isinstance(frames, (np.ndarray, str)):
+        if not isinstance(frames, np.ndarray):
             self.logger.error(f"Invalid input type for forward: {type(frames)}")
             return None
 
-        if self.model_type == "vision_text":
-            if is_batch:
-                self.logger.error(
-                    "Batch processing not supported for vision-text models with frame buffering."
-                )
-                return None
-            self.counter += 1
-            if self.counter % self.frame_stride == 0:
-                self.frame_buffer.append(frames)
-            if len(self.frame_buffer) >= self.batch_size:
-                self.logger.info(f"Processing {self.batch_size} frames")
-                gen_kwargs = {"min_length": 10, "max_length": 20, "num_beams": 8}
-                pixel_values = self.image_processor(
-                    self.frame_buffer, return_tensors="pt"
-                ).pixel_values
-                tokens = self.model.generate(pixel_values, **gen_kwargs)
-                captions = self.tokenizer.batch_decode(tokens, skip_special_tokens=True)
-                self.logger.info(f"Captions: {captions}")
-                self.frame_buffer = []
-                return captions[0]
-            return None
-
-        elif self.model_type == "llm":
-            if is_batch:
-                self.logger.error("Batch processing not supported for LLM-only models.")
-                return None
-            inputs = self.tokenizer(frames, return_tensors="pt")
-            generated_tokens = self.model.generate(**inputs)
-            generated_text = self.tokenizer.batch_decode(
-                generated_tokens, skip_special_tokens=True
-            )
-            self.logger.info(f"Generated text: {generated_text}")
-            return generated_text
-
-        elif self.model_type == "classification":
+        if self.model_type == "classification":
             return self._forward_classification(frames)
+
+        elif self.model_type == "custom":
+            return self._forward_onnx(frames, is_batch)
 
         else:
             raise ValueError("Unsupported model type.")
 
-    def do_generate(self, input_text, max_length=1000, system_prompt=None):
-        if self.model_type != "llm":
-            raise ValueError("Generate is only supported for LLM models.")
+    def _forward_onnx(self, frames, is_batch):
+        from tinygrad import Tensor
 
-        inputs = self.tokenizer(input_text, return_tensors="pt")
-        outputs = self.model.generate(**inputs, max_length=max_length)
-        generated_text = self.tokenizer.decode(outputs[0], skip_special_tokens=True)
-        self.logger.info(f"Generated text: {generated_text}")
-        return generated_text
+        input_name, input_value = next(iter(self.model.graph_inputs.items()))
+        input_shape = input_value.shape
+        if self.input_format == "auto" and len(input_shape) == 4:
+            self.input_format = "nchw" if input_shape[1] in (1, 3, 4) else "nhwc"
+        img = self._apply_input_format(frames.astype(np.float32) / 255.0, is_batch)
+        outputs = self.run_onnx(
+            **{input_name: Tensor(np.ascontiguousarray(img)).realize()}
+        )
+        arrays = [output.numpy() for output in outputs]
+        raw = arrays if len(arrays) > 1 else arrays[0]
+        return self._apply_post_process(raw, is_batch)
+
+    def do_generate(self, input_text, max_length=1000, system_prompt=None):
+        raise NotImplementedError(
+            "TinyGrad does not support text generation. "
+            "Use PyTorch or llama.cpp for LLM workloads."
+        )

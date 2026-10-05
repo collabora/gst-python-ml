@@ -26,6 +26,9 @@ LOAD_FAILURE = "no weights at does-not-exist.pt"
 FAILING_ENGINE = "test_failing_engine"
 WORKING_ENGINE = "test_working_engine"
 LOADABLE_MODEL_NAME = "loads-fine.pt"
+DEVICE_REFUSING_ENGINE = "test_device_refusing_engine"
+REFUSED_DEVICE = "cuda"
+DEVICE_REFUSAL = "no cuda device here"
 PIPELINE_TIMEOUT = 10 * Gst.SECOND
 
 
@@ -145,3 +148,60 @@ def test_a_model_that_loads_leaves_the_pipeline_running():
     assert message is not None and message.type == Gst.MessageType.EOS
     assert element.processed == 5
     assert element.engine.model == LOADABLE_MODEL_NAME
+
+
+class DeviceRefusingEngine(WorkingEngine):
+    def do_set_device(self, device):
+        if device == REFUSED_DEVICE:
+            raise RuntimeError(DEVICE_REFUSAL)
+        self.device = device
+
+
+class DeviceRefused(VideoTransform):
+    __gstmetadata__ = (
+        "Device Refused",
+        "Transform",
+        "an element whose engine refuses the device",
+        "test",
+    )
+    __gsttemplates__ = VideoTransform.__gsttemplates__
+
+    def __init__(self):
+        super().__init__()
+        EngineFactory.register(DEVICE_REFUSING_ENGINE, DeviceRefusingEngine)
+        self.mgr.engine_name = DEVICE_REFUSING_ENGINE
+
+    def process_frames(self, frames, num_sources, fmt, target):
+        raise AssertionError("a frame was processed on a device the engine refused")
+
+
+GObject.type_register(DeviceRefused)
+Gst.Element.register(None, "devicerefused", Gst.Rank.NONE, DeviceRefused)
+
+
+@pytest.mark.parametrize(
+    "properties",
+    [
+        f"device={REFUSED_DEVICE} model-name={LOADABLE_MODEL_NAME}",
+        f"device=cpu model-name={LOADABLE_MODEL_NAME} device={REFUSED_DEVICE}",
+    ],
+    ids=["first device", "device changed on a live engine"],
+)
+def test_a_device_the_engine_refuses_fails_the_pipeline_with_the_cause(properties):
+    pipeline = Gst.parse_launch(
+        "videotestsrc num-buffers=5 "
+        "! video/x-raw,width=64,height=48,format=RGB "
+        f"! devicerefused {properties} "
+        "! fakesink"
+    )
+
+    assert pipeline.set_state(Gst.State.PLAYING) != Gst.StateChangeReturn.SUCCESS
+    message = pipeline.get_bus().timed_pop_filtered(
+        PIPELINE_TIMEOUT, Gst.MessageType.EOS | Gst.MessageType.ERROR
+    )
+    pipeline.set_state(Gst.State.NULL)
+
+    assert message is not None, "the pipeline neither errored nor finished"
+    assert message.type == Gst.MessageType.ERROR, "the pipeline ran on another device"
+    error, _ = message.parse_error()
+    assert DEVICE_REFUSAL in error.message

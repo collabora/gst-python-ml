@@ -52,10 +52,9 @@ class MiGraphXEngine(MLEngine):
         self.fp16 = kwargs.get("fp16", False)
 
         if not os.path.isfile(model_name):
-            self.logger.error(
+            raise FileNotFoundError(
                 f"MiGraphX requires an ONNX model file path, got: {model_name}"
             )
-            return False
 
         if not model_name.endswith(".onnx"):
             self.logger.warning(f"MiGraphX expects an .onnx file, got: {model_name}")
@@ -91,8 +90,6 @@ class MiGraphXEngine(MLEngine):
 
     def do_set_device(self, device):
         """Set the MiGraphX compilation target."""
-        self.device = device
-
         if device == "cpu":
             self.target = migraphx.get_target("ref")
             self.logger.info("MiGraphX target set to CPU (ref)")
@@ -100,10 +97,8 @@ class MiGraphXEngine(MLEngine):
             self.target = migraphx.get_target("gpu")
             self.logger.info("MiGraphX target set to GPU")
         else:
-            self.logger.warning(
-                f"Unknown device '{device}' for MiGraphX, defaulting to GPU"
-            )
-            self.target = migraphx.get_target("gpu")
+            raise ValueError(f"Invalid device specified: {device}")
+        self.device = device
 
         # Reload model if already loaded
         if self.model_name:

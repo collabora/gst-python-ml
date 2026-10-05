@@ -46,16 +46,15 @@ class LlamaCppEngine(MLEngine):
             self.logger.info("llama.cpp set to CPU-only inference")
         else:
             # Treat as integer number of GPU layers
-            try:
-                self.n_gpu_layers = int(device_lower)
-                self.logger.info(
-                    f"llama.cpp will offload {self.n_gpu_layers} layers to GPU"
+            if not device_lower.isdigit():
+                raise ValueError(
+                    f"Invalid device specified: {device}, "
+                    "use cpu, cuda, metal or a number of GPU layers"
                 )
-            except ValueError:
-                self.logger.warning(
-                    f"Unrecognized device '{device}', defaulting to CPU"
-                )
-                self.n_gpu_layers = 0
+            self.n_gpu_layers = int(device_lower)
+            self.logger.info(
+                f"llama.cpp will offload {self.n_gpu_layers} layers to GPU"
+            )
 
         # Reload model with new GPU layer config if already loaded
         if self.model is not None and self.model_name:
@@ -75,14 +74,7 @@ class LlamaCppEngine(MLEngine):
                 f"Expected .gguf file, got: {model_name}. Attempting to load anyway."
             )
 
-        try:
-            from llama_cpp import Llama
-        except ImportError:
-            self.logger.error(
-                "llama-cpp-python is not installed. "
-                "Install with: pip install llama-cpp-python"
-            )
-            return False
+        from llama_cpp import Llama
 
         self.model = Llama(
             model_path=model_name,

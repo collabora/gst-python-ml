@@ -57,11 +57,9 @@ class NCNNEngine(MLEngine):
             bin_path = model_name + ".bin"
 
         if not os.path.isfile(param_path):
-            self.logger.error(f"NCNN param file not found: {param_path}")
-            return False
+            raise FileNotFoundError(f"NCNN param file not found: {param_path}")
         if not os.path.isfile(bin_path):
-            self.logger.error(f"NCNN bin file not found: {bin_path}")
-            return False
+            raise FileNotFoundError(f"NCNN bin file not found: {bin_path}")
 
         self.net = ncnn.Net()
         self.net.opt.use_vulkan_compute = self._use_vulkan
@@ -82,27 +80,19 @@ class NCNNEngine(MLEngine):
 
     def do_set_device(self, device):
         """Set NCNN compute device."""
-        self.device = device
-
         if "vulkan" in device or "gpu" in device:
-            if ncnn.get_gpu_count() > 0:
-                self._use_vulkan = True
-                self.logger.info(
-                    f"NCNN Vulkan GPU enabled ({ncnn.get_gpu_count()} device(s))"
-                )
-            else:
-                self.logger.warning("No Vulkan GPU available, falling back to CPU")
-                self._use_vulkan = False
-                self.device = "cpu"
+            if ncnn.get_gpu_count() == 0:
+                raise RuntimeError(f"NCNN sees no Vulkan GPU for device={device}")
+            self._use_vulkan = True
+            self.logger.info(
+                f"NCNN Vulkan GPU enabled ({ncnn.get_gpu_count()} device(s))"
+            )
         elif device == "cpu":
             self._use_vulkan = False
             self.logger.info("NCNN device set to CPU")
         else:
-            self.logger.warning(
-                f"Unknown device '{device}' for NCNN, defaulting to CPU"
-            )
-            self._use_vulkan = False
-            self.device = "cpu"
+            raise ValueError(f"Invalid device specified: {device}")
+        self.device = device
 
         # Reload model if already loaded
         if self.model_name:

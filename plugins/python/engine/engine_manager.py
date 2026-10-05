@@ -31,15 +31,19 @@ class EngineManager:
 
     def initialize_engine(self):
         if not self.engine and self.engine_name:
-            self.engine = EngineFactory.create(self.engine_name)
-            self.engine.do_set_device(self.device)
+            engine = EngineFactory.create(self.engine_name)
+            engine.do_set_device(self.device)
+            self.engine = engine
         if not self.engine:
             self.logger.error(f"Unable to load ML engine: {self.engine_name}")
 
     def set_device(self, device):
         self.device = device
         if self.engine:
-            self.engine.do_set_device(device)
+            # pygobject swallows a raise in a property setter
+            engine, self.engine = self.engine, None
+            engine.do_set_device(device)
+            self.engine = engine
 
     def do_load_model(self, model_name, **kwargs):
         self.initialize_engine()

@@ -38,8 +38,6 @@ class TVMEngine(MLEngine):
         self.tvm_device = None
 
     def do_load_model(self, model_name, **kwargs):
-        processor_name = kwargs.get("processor_name")
-        tokenizer_name = kwargs.get("tokenizer_name")
         self.model_name = model_name
         self.kwargs = kwargs
 
@@ -60,34 +58,9 @@ class TVMEngine(MLEngine):
             )
             return True
 
-        if processor_name and tokenizer_name:
-            from transformers import (
-                AutoTokenizer,
-                AutoImageProcessor,
-                AutoModelForVision2Seq,
-            )
-
-            self.image_processor = AutoImageProcessor.from_pretrained(processor_name)
-            self.tokenizer = AutoTokenizer.from_pretrained(tokenizer_name)
-            pt_model = AutoModelForVision2Seq.from_pretrained(model_name)
-            self.model = pt_model
-            self.frame_stride = (
-                pt_model.config.encoder.num_frames
-                if hasattr(pt_model.config, "encoder")
-                and hasattr(pt_model.config.encoder, "num_frames")
-                else 1
-            )
-            self.model_type = "vision_text"
-            self.logger.info(f"Vision-Text model '{model_name}' loaded for TVM engine.")
-            return True
-
-        from transformers import AutoTokenizer, AutoModelForCausalLM
-
-        self.tokenizer = AutoTokenizer.from_pretrained(model_name)
-        self.model = AutoModelForCausalLM.from_pretrained(model_name)
-        self.model_type = "llm"
-        self.logger.info(f"Pre-trained LLM model '{model_name}' loaded for TVM engine.")
-        return True
+        raise FileNotFoundError(
+            f"TVM takes a compiled .so or .tar or a torchvision model name, got: {model_name}"
+        )
 
     def _compile_pytorch_model(self, pt_model, input_shape):
         import torch
@@ -126,15 +99,10 @@ class TVMEngine(MLEngine):
         return tvm.cpu(0)
 
     def do_set_device(self, device):
+        if "cuda" in device and not tvm.cuda(0).exist:
+            raise RuntimeError(f"TVM sees no CUDA device for device={device}")
         self.device = device
         self.logger.info(f"Setting device to {device}")
-
-        if "cuda" in device:
-            if not tvm.cuda(0).exist:
-                self.logger.warning(
-                    "CUDA device not available in TVM, falling back to CPU"
-                )
-                self.device = "cpu"
 
         if self.model_name:
             self.do_load_model(self.model_name, **self.kwargs)
@@ -160,45 +128,11 @@ class TVMEngine(MLEngine):
 
     def do_forward(self, frames):
         is_batch = isinstance(frames, np.ndarray) and frames.ndim == 4
-        if not isinstance(frames, (np.ndarray, str)):
+        if not isinstance(frames, np.ndarray):
             self.logger.error(f"Invalid input type for forward: {type(frames)}")
             return None
 
-        if self.model_type == "vision_text":
-            if is_batch:
-                self.logger.error(
-                    "Batch processing not supported for vision-text models with frame buffering."
-                )
-                return None
-            self.counter += 1
-            if self.counter % self.frame_stride == 0:
-                self.frame_buffer.append(frames)
-            if len(self.frame_buffer) >= self.batch_size:
-                self.logger.info(f"Processing {self.batch_size} frames")
-                gen_kwargs = {"min_length": 10, "max_length": 20, "num_beams": 8}
-                pixel_values = self.image_processor(
-                    self.frame_buffer, return_tensors="pt"
-                ).pixel_values
-                tokens = self.model.generate(pixel_values, **gen_kwargs)
-                captions = self.tokenizer.batch_decode(tokens, skip_special_tokens=True)
-                self.logger.info(f"Captions: {captions}")
-                self.frame_buffer = []
-                return captions[0]
-            return None
-
-        elif self.model_type == "llm":
-            if is_batch:
-                self.logger.error("Batch processing not supported for LLM-only models.")
-                return None
-            inputs = self.tokenizer(frames, return_tensors="pt")
-            generated_tokens = self.model.generate(**inputs)
-            generated_text = self.tokenizer.batch_decode(
-                generated_tokens, skip_special_tokens=True
-            )
-            self.logger.info(f"Generated text: {generated_text}")
-            return generated_text
-
-        elif self.model_type == "classification":
+        if self.model_type == "classification":
             return self._forward_classification(frames)
 
         elif self.model_type == "custom":
@@ -211,10 +145,7 @@ class TVMEngine(MLEngine):
             raise ValueError("Unsupported model type.")
 
     def do_generate(self, input_text, max_length=1000, system_prompt=None):
-        if self.model_type != "llm":
-            raise ValueError("Generate is only supported for LLM models.")
-        inputs = self.tokenizer(input_text, return_tensors="pt")
-        outputs = self.model.generate(**inputs, max_length=max_length)
-        generated_text = self.tokenizer.decode(outputs[0], skip_special_tokens=True)
-        self.logger.info(f"Generated text: {generated_text}")
-        return generated_text
+        raise NotImplementedError(
+            "TVM does not support text generation. "
+            "Use PyTorch or llama.cpp for LLM workloads."
+        )

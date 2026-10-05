@@ -39,10 +39,11 @@ DETECTION_ENGINES = [
     ("onnx", "onnxruntime", "onnx", ".onnx", "nchw"),
     ("openvino", "openvino", "openvino", ".xml", "nchw"),
     ("tensorflow", "tensorflow", "saved_model", None, "auto"),
-    ("tflite", "tensorflow", "tflite", "_float32.tflite", "auto"),
+    ("tflite", "ai_edge_litert", "tflite", "_float32.tflite", "auto"),
     ("ncnn", "ncnn", "ncnn", ".param", "nchw"),
     ("executorch", "executorch", "executorch", ".pte", "nchw"),
     ("iree", "iree.runtime", "onnx", ".onnx", "nchw"),
+    ("tinygrad", "tinygrad", "onnx", ".onnx", "auto"),
 ]
 
 CLASSIFICATION_ENGINES = [
@@ -218,6 +219,27 @@ def test_llamacpp_generates_text():
     assert engine.do_load_model(model_path) is True
     text = engine.do_generate(GENERATION_PROMPT, max_length=GENERATION_TOKENS)
     assert isinstance(text, str) and text.strip()
+
+
+def test_onnx_refuses_a_model_path_that_does_not_exist():
+    engine = engine_on_cpu("onnx", "onnxruntime")
+    with pytest.raises(FileNotFoundError, match="yolo11m.onxx"):
+        engine.do_load_model("yolo11m.onxx")
+
+
+def test_a_builtin_engine_whose_package_is_missing_raises_the_import_error(monkeypatch):
+    monkeypatch.setitem(
+        EngineFactory.BUILTIN_ENGINES,
+        "engine_without_its_package",
+        ("module_that_is_not_installed", "MissingEngine"),
+    )
+    with pytest.raises(ImportError, match="module_that_is_not_installed"):
+        EngineFactory.create("engine_without_its_package")
+
+
+def test_an_unknown_engine_name_is_refused():
+    with pytest.raises(ValueError, match="Unsupported engine type: no_such_engine"):
+        EngineFactory.create("no_such_engine")
 
 
 def test_anomaly_transform_without_a_backbone():

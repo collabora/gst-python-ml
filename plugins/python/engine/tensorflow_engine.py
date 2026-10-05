@@ -26,9 +26,6 @@ from .ml_engine import MLEngine
 
 class TensorFlowEngine(MLEngine):
     def do_load_model(self, model_name, **kwargs):
-        """Load a pre-trained model by name from keras.applications, Transformers, or a local path."""
-        processor_name = kwargs.get("processor_name")
-        tokenizer_name = kwargs.get("tokenizer_name")
         self.model_type = None
 
         if os.path.isdir(model_name):
@@ -47,39 +44,10 @@ class TensorFlowEngine(MLEngine):
                 self.logger.info(
                     f"Pre-trained vision model '{model_name}' loaded from keras.applications"
                 )
-            elif processor_name and tokenizer_name:
-                from transformers import (
-                    AutoImageProcessor,
-                    AutoTokenizer,
-                    TFVisionEncoderDecoderModel,
-                )
-
-                self.image_processor = AutoImageProcessor.from_pretrained(
-                    processor_name
-                )
-                self.tokenizer = AutoTokenizer.from_pretrained(tokenizer_name)
-                self.model = TFVisionEncoderDecoderModel.from_pretrained(model_name)
-                self.frame_stride = (
-                    self.model.config.encoder.num_frames
-                    if hasattr(self.model.config.encoder, "num_frames")
-                    else 1
-                )
-                self.model_type = "vision_text"
-                self.logger.info(
-                    f"Vision-Text model '{model_name}' loaded with processor and tokenizer."
-                )
             else:
-                from transformers import AutoTokenizer, TFAutoModelForCausalLM
-
-                self.logger.info(f"Loading tokenizer for language model {model_name}")
-                self.tokenizer = AutoTokenizer.from_pretrained(model_name)
-                self.logger.info(f"Loading language model {model_name}")
-                self.model = TFAutoModelForCausalLM.from_pretrained(
-                    model_name,
-                )
-                self.model_type = "llm"
-                self.logger.info(
-                    f"Pre-trained LLM model '{model_name}' loaded from Transformers."
+                raise FileNotFoundError(
+                    "TensorFlow takes a SavedModel directory, a Keras file or a "
+                    f"keras.applications name, got: {model_name}"
                 )
 
         if hasattr(self.model, "trainable"):
@@ -91,33 +59,17 @@ class TensorFlowEngine(MLEngine):
         self.device = device
         self.logger.info(f"Setting device to {device}")
 
-        if "cuda" in device:
+        if device == "cpu":
+            self.device = "/cpu:0"
+            tf.config.set_visible_devices([], "GPU")
+        elif "cuda" in device:
             gpus = tf.config.list_physical_devices("GPU")
             if not gpus:
-                self.logger.warning("GPU is not available, falling back to CPU")
-                self.device = "/cpu:0"
-                tf.config.set_visible_devices([], "GPU")
-                return
-
-            try:
-                index = int(device.split(":")[-1]) if ":" in device else 0
-                tf.config.set_visible_devices(gpus[index], "GPU")
-                self.logger.info(f"GPU device set to GPU:{index}")
-            except Exception as e:
-                self.logger.error(f"Failed to set GPU device: {e}")
-                self.logger.warning("Falling back to CPU")
-                self.device = "/cpu:0"
-                tf.config.set_visible_devices([], "GPU")
-
-        elif device == "cpu":
-            self.device = "/cpu:0"
-            tf.config.set_visible_devices([], "GPU")
-            self.logger.info("Device set to CPU")
-
+                raise RuntimeError(f"TensorFlow sees no GPU for device={device}")
+            index = int(device.split(":")[-1]) if ":" in device else 0
+            tf.config.set_visible_devices(gpus[index], "GPU")
         else:
-            self.logger.error(f"Invalid device specified: {device}")
-            self.device = "/cpu:0"
-            tf.config.set_visible_devices([], "GPU")
+            raise ValueError(f"Invalid device specified: {device}")
 
     def _forward_classification(self, frames):
         """Handle inference for classification models like ResNet."""
@@ -134,50 +86,11 @@ class TensorFlowEngine(MLEngine):
     def do_forward(self, frames):
         """Handle inference for different types of models, supporting single frames or batches."""
         is_batch = isinstance(frames, np.ndarray) and frames.ndim == 4  # (B, H, W, C)
-        if not isinstance(frames, (np.ndarray, str)):
+        if not isinstance(frames, np.ndarray):
             self.logger.error(f"Invalid input type for forward: {type(frames)}")
             return None
 
-        if self.model_type == "vision_text":
-            if is_batch:
-                self.logger.error(
-                    "Batch processing not supported for vision-text models with frame buffering."
-                )
-                return None
-            if not hasattr(self, "counter"):
-                self.counter = 0
-                self.frame_buffer = []
-            self.counter += 1
-            if self.counter % self.frame_stride == 0:
-                self.frame_buffer.append(frames)
-            if len(self.frame_buffer) >= self.batch_size:
-                self.logger.info(f"Processing {self.batch_size} frames")
-                gen_kwargs = {"min_length": 10, "max_length": 20, "num_beams": 8}
-                pixel_values = self.image_processor(
-                    self.frame_buffer, return_tensors="tf"
-                ).pixel_values
-                with tf.device(self.device):
-                    tokens = self.model.generate(pixel_values, **gen_kwargs)
-                captions = self.tokenizer.batch_decode(tokens, skip_special_tokens=True)
-                self.logger.info(f"Captions: {captions}")
-                self.frame_buffer = []
-                return captions[0]
-            return None
-
-        elif self.model_type == "llm":
-            if is_batch:
-                self.logger.error("Batch processing not supported for LLM-only models.")
-                return None
-            inputs = self.tokenizer(frames, return_tensors="tf")
-            with tf.device(self.device):
-                generated_tokens = self.model.generate(**inputs)
-            generated_text = self.tokenizer.batch_decode(
-                generated_tokens, skip_special_tokens=True
-            )
-            self.logger.info(f"Generated text: {generated_text}")
-            return generated_text
-
-        elif self.model_type == "classification":
+        if self.model_type == "classification":
             preds = self._forward_classification(frames)
             preds = preds.numpy() if isinstance(preds, tf.Tensor) else preds
             if not is_batch:
@@ -227,9 +140,7 @@ class TensorFlowEngine(MLEngine):
             return self._apply_post_process(output_np, is_batch)
 
     def do_generate(self, input_text, max_length=1000, system_prompt=None):
-        inputs = self.tokenizer(input_text, return_tensors="tf")
-        with tf.device(self.device):
-            outputs = self.model.generate(**inputs, max_length=max_length)
-        generated_text = self.tokenizer.decode(outputs[0], skip_special_tokens=True)
-        self.logger.info(f"Generated text: {generated_text}")
-        return generated_text
+        raise NotImplementedError(
+            "TensorFlow does not support text generation. "
+            "Use PyTorch or llama.cpp for LLM workloads."
+        )

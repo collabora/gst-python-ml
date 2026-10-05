@@ -35,9 +35,6 @@ class OpenVinoEngine(MLEngine):
         self.detection_threshold = 0.5
 
     def do_load_model(self, model_name, **kwargs):
-        """Load a pre-trained model by name from TorchVision, Transformers (via Optimum OpenVINO), or a local IR path."""
-        processor_name = kwargs.get("processor_name")
-        tokenizer_name = kwargs.get("tokenizer_name")
         self.model_name = model_name
         self.kwargs = kwargs
 
@@ -68,40 +65,11 @@ class OpenVinoEngine(MLEngine):
                 self.logger.info(
                     f"Pre-trained detection model '{model_name}' converted to OpenVINO."
                 )
-            elif processor_name and tokenizer_name:
-                from transformers import AutoTokenizer, AutoImageProcessor
-                from optimum.intel import OVModelForVision2Seq
-
-                self.image_processor = AutoImageProcessor.from_pretrained(
-                    processor_name
-                )
-                self.tokenizer = AutoTokenizer.from_pretrained(tokenizer_name)
-                self.compiled_model = OVModelForVision2Seq.from_pretrained(
-                    model_name, export=True
-                )
-                self.frame_stride = (
-                    self.compiled_model.config.encoder.num_frames
-                    if hasattr(self.compiled_model.config.encoder, "num_frames")
-                    else 1
-                )
-                self.model_type = "vision_text"
-                self.logger.info(
-                    f"Vision-Text model '{model_name}' loaded via Optimum OpenVINO."
-                )
-                return True
             else:
-                from transformers import AutoTokenizer
-                from optimum.intel import OVModelForCausalLM
-
-                self.tokenizer = AutoTokenizer.from_pretrained(model_name)
-                self.compiled_model = OVModelForCausalLM.from_pretrained(
-                    model_name, export=True
+                raise FileNotFoundError(
+                    "OpenVINO takes an IR .xml with its .bin or a torchvision model name, "
+                    f"got: {model_name}"
                 )
-                self.model_type = "llm"
-                self.logger.info(
-                    f"Pre-trained LLM model '{model_name}' loaded via Optimum OpenVINO."
-                )
-                return True
 
         self.compiled_model = self.core.compile_model(self.ov_model, self.device)
         self.logger.info(f"Model compiled on {self.device}")
@@ -122,10 +90,10 @@ class OpenVinoEngine(MLEngine):
             if "GPU" in self.device and any("GPU" in d for d in available_devices):
                 self.device = "GPU"
             else:
-                self.logger.warning(
-                    f"Device {self.device} not available, falling back to CPU"
+                raise RuntimeError(
+                    f"OpenVINO has no device {self.device}, "
+                    f"it has {', '.join(available_devices)}"
                 )
-                self.device = "CPU"
 
         # Recompile model if already loaded
         if self.model_name:
@@ -158,48 +126,11 @@ class OpenVinoEngine(MLEngine):
     def do_forward(self, frames):
         """Handle inference for different types of models, supporting single frames or batches."""
         is_batch = isinstance(frames, np.ndarray) and frames.ndim == 4
-        if not isinstance(frames, (np.ndarray, str)):
+        if not isinstance(frames, np.ndarray):
             self.logger.error(f"Invalid input type for forward: {type(frames)}")
             return None
 
-        if self.model_type == "vision_text":
-            if is_batch:
-                self.logger.error(
-                    "Batch processing not supported for vision-text models with frame buffering."
-                )
-                return None
-            if not hasattr(self, "counter"):
-                self.counter = 0
-                self.frame_buffer = []
-            self.counter += 1
-            if self.counter % self.frame_stride == 0:
-                self.frame_buffer.append(frames)
-            if len(self.frame_buffer) >= self.batch_size:
-                self.logger.info(f"Processing {self.batch_size} frames")
-                gen_kwargs = {"min_length": 10, "max_length": 20, "num_beams": 8}
-                pixel_values = self.image_processor(
-                    self.frame_buffer, return_tensors="np"
-                ).pixel_values
-                tokens = self.compiled_model.generate(pixel_values, **gen_kwargs)
-                captions = self.tokenizer.batch_decode(tokens, skip_special_tokens=True)
-                self.logger.info(f"Captions: {captions}")
-                self.frame_buffer = []
-                return captions[0]
-            return None
-
-        elif self.model_type == "llm":
-            if is_batch:
-                self.logger.error("Batch processing not supported for LLM-only models.")
-                return None
-            inputs = self.tokenizer(frames, return_tensors="np")
-            generated_tokens = self.compiled_model.generate(**inputs)
-            generated_text = self.tokenizer.batch_decode(
-                generated_tokens, skip_special_tokens=True
-            )
-            self.logger.info(f"Generated text: {generated_text}")
-            return generated_text
-
-        elif self.model_type == "classification":
+        if self.model_type == "classification":
             return self._forward_classification(frames)
 
         elif self.model_type == "detection":
@@ -252,10 +183,7 @@ class OpenVinoEngine(MLEngine):
             raise ValueError("Unsupported model type.")
 
     def do_generate(self, input_text, max_length=1000, system_prompt=None):
-        if self.model_type != "llm":
-            raise ValueError("Generate is only supported for LLM models.")
-        inputs = self.tokenizer(input_text, return_tensors="np")
-        outputs = self.compiled_model.generate(**inputs, max_length=max_length)
-        generated_text = self.tokenizer.decode(outputs[0], skip_special_tokens=True)
-        self.logger.info(f"Generated text: {generated_text}")
-        return generated_text
+        raise NotImplementedError(
+            "OpenVINO does not support text generation. "
+            "Use PyTorch or llama.cpp for LLM workloads."
+        )
