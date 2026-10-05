@@ -16,18 +16,24 @@
 # Free Software Foundation, Inc., 51 Franklin Street, Fifth Floor,
 # Boston, MA 02110-1301, USA.
 
+import hashlib
 import os
+from pathlib import Path
+
 import numpy as np
 import migraphx
 
 from .ml_engine import MLEngine, fixed_height_width
+
+COMPILED_PROGRAM_CACHE = Path.home() / ".cache" / "gst-python-ml" / "migraphx"
+PARTIAL_SAVE_SUFFIX = ".partial"
 
 
 class MiGraphXEngine(MLEngine):
     def __init__(self):
         super().__init__()
         self.program = None
-        self.target = None
+        self.target_name = "gpu"
         self.input_names = None
         self.output_shapes = None
         self.model_name = None
@@ -112,35 +118,61 @@ class MiGraphXEngine(MLEngine):
             if key in self.kwargs
         }
 
+    def _compiled_program_path(self, parse_kwargs, offload_copy):
+        model_path = Path(self.model_name).resolve()
+        model_stat = model_path.stat()
+        key = repr(
+            (
+                str(model_path),
+                model_stat.st_size,
+                model_stat.st_mtime_ns,
+                self.target_name,
+                self.fp16,
+                offload_copy,
+                sorted(parse_kwargs.items()),
+            )
+        )
+        digest = hashlib.sha256(key.encode()).hexdigest()
+        return COMPILED_PROGRAM_CACHE / f"{digest}.mxr"
+
     def _parse_and_compile(self, parse_kwargs):
-        self.program = migraphx.parse_onnx(self.model_name, **parse_kwargs)
-
-        # Optional fp16 quantization
-        if self.fp16:
-            migraphx.quantize_fp16(self.program)
-
-        # Compile for target
-        target = self.target or migraphx.get_target("gpu")
         offload_copy = self.kwargs.get("offload_copy", True)
-        self.program.compile(target, offload_copy=offload_copy)
+        program_path = self._compiled_program_path(parse_kwargs, offload_copy)
+        loaded_from_cache = program_path.is_file()
+        if loaded_from_cache:
+            self.program = migraphx.load(str(program_path))
+        else:
+            self.program = migraphx.parse_onnx(self.model_name, **parse_kwargs)
+            if self.fp16:
+                migraphx.quantize_fp16(self.program)
+            self.program.compile(
+                migraphx.get_target(self.target_name), offload_copy=offload_copy
+            )
+            COMPILED_PROGRAM_CACHE.mkdir(parents=True, exist_ok=True)
+            partial_path = program_path.with_suffix(PARTIAL_SAVE_SUFFIX)
+            migraphx.save(self.program, str(partial_path))
+            partial_path.rename(program_path)
 
         # Cache parameter info
         self.input_names = self.program.get_parameter_names()
         self.output_shapes = self.program.get_output_shapes()
         self.model = self.program
 
+        program_source = (
+            f"loaded from cache {program_path}" if loaded_from_cache else "compiled"
+        )
         self.logger.info(
-            f"MiGraphX model loaded and compiled: {self.model_name} "
+            f"MiGraphX model {program_source}: {self.model_name} "
             f"(inputs: {self.input_names}, fp16: {self.fp16})"
         )
 
     def do_set_device(self, device):
         """Set the MiGraphX compilation target."""
         if device == "cpu":
-            self.target = migraphx.get_target("ref")
+            self.target_name = "ref"
             self.logger.info("MiGraphX target set to CPU (ref)")
         elif "rocm" in device or "gpu" in device or "hip" in device:
-            self.target = migraphx.get_target("gpu")
+            self.target_name = "gpu"
             self.logger.info("MiGraphX target set to GPU")
         else:
             raise ValueError(f"Invalid device specified: {device}")
