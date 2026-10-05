@@ -57,8 +57,8 @@ class OpticalFlowEngine(PyTorchEngine):
         H, W = curr_frame.shape[:2]
 
         # Convert HWC uint8 -> CHW float tensor
-        prev_t = torch.from_numpy(prev_frame).permute(2, 0, 1).float()
-        curr_t = torch.from_numpy(curr_frame).permute(2, 0, 1).float()
+        prev_t = torch.from_numpy(prev_frame).permute(2, 0, 1)
+        curr_t = torch.from_numpy(curr_frame).permute(2, 0, 1)
 
         # RAFT requires dimensions divisible by 8
         pad_h = (8 - H % 8) % 8
