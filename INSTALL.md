@@ -111,6 +111,7 @@ what most elements need. Each extra adds the packages for a group of elements:
 - `diffusion`: `pyml_stablediffusion`
 - `face`: `pyml_face`
 - `superres`: `pyml_superres`
+- `skia`: the `renderer=skia` option of `pyml_overlay`
 - `kafka`: `pyml_kafkasink`
 - `mqtt`: `pyml_alert` with `mqtt-broker=` set
 - `mcp`: the MCP server

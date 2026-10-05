@@ -38,6 +38,11 @@ try:
 
     TRAIL_COLOR = Color(1.0, 1.0, 0.0, 1.0)
     TRAIL_LINE_WIDTH = 3
+    DEFAULT_RENDERER = "cairo"
+    GRAPHICS_TYPE_BY_RENDERER = {
+        "cairo": GraphicsType.CAIRO,
+        "skia": GraphicsType.SKIA,
+    }
     import gi
 
     gi.require_version("Gst", "1.0")
@@ -106,14 +111,33 @@ class Overlay(GstBase.BaseTransform):
         flags=GObject.ParamFlags.READWRITE,
     )
 
+    @GObject.Property(
+        type=str,
+        default=DEFAULT_RENDERER,
+        nick="Renderer",
+        blurb=f"Renderer for system memory frames: {', '.join(GRAPHICS_TYPE_BY_RENDERER)}",
+    )
+    def renderer(self):
+        return self.selected_renderer
+
+    @renderer.setter
+    def renderer(self, value):
+        if value not in GRAPHICS_TYPE_BY_RENDERER:
+            raise ValueError(
+                f"Unknown renderer {value}, allowed: {', '.join(GRAPHICS_TYPE_BY_RENDERER)}"
+            )
+        self.selected_renderer = value
+
     def __init__(self):
         super().__init__()
+        self.selected_renderer = DEFAULT_RENDERER
         self.logger = LoggerFactory.get(LoggerFactory.LOGGER_TYPE_GST)
         self.extracted_metadata = {}
         self.from_file = False
         self.frame_counter = 0
         self.tracking_display = TrackingDisplay()
         self.do_set_dims(0, 0)
+        self.video_format = None
         self.overlay_graphics = None
         self.graphics_type = None
         self.gl_context = None
@@ -125,23 +149,6 @@ class Overlay(GstBase.BaseTransform):
         self.context_set = False
         self.created_context = False
         self.context_received = False
-
-    def do_get_property(self, prop: GObject.ParamSpec):
-        if prop.name == "meta-path":
-            return self.meta_path
-        elif prop.name == "tracking":
-            return self.tracking
-        else:
-            raise AttributeError(f"Unknown property {prop.name}")
-
-    def do_set_property(self, prop: GObject.ParamSpec, value):
-        if prop.name == "meta-path":
-            self.meta_path = value
-        elif prop.name == "tracking":
-            self.tracking = value
-            self.logger.info(f"Tracking set to: {self.tracking}")
-        else:
-            raise AttributeError(f"Unknown property {prop.name}")
 
     def on_message(self, bus, message):
         self.logger.info(f"Received bus message: {message.type}")
@@ -250,6 +257,7 @@ class Overlay(GstBase.BaseTransform):
     def do_set_caps(self, incaps, outcaps):
         video_info = GstVideo.VideoInfo.new_from_caps(incaps)
         self.do_set_dims(video_info.width, video_info.height)
+        self.video_format = video_info.finfo.name
         self.logger.info(f"Video caps set: width={self.width}, height={self.height}")
 
         # Check if the input caps are using GLMemory or VulkanMemory
@@ -369,14 +377,18 @@ class Overlay(GstBase.BaseTransform):
                         self.use_opengl = False
                         self.graphics_type = GraphicsType.CAIRO
             else:
-                self.logger.info("Using Cairo rendering (no Vulkan or OpenGL buffer)")
-                self.graphics_type = GraphicsType.CAIRO
+                self.graphics_type = GRAPHICS_TYPE_BY_RENDERER[self.selected_renderer]
+                self.logger.info(
+                    f"Using {self.selected_renderer} rendering (no Vulkan or OpenGL buffer)"
+                )
 
             # Create the graphics backend
             kwargs = {}
             if self.graphics_type == GraphicsType.VULKAN:
                 kwargs["vk_device"] = self.vk_device
                 kwargs["vk_queue"] = self.vk_queue
+            elif self.graphics_type == GraphicsType.SKIA:
+                kwargs["video_format"] = self.video_format
             self.overlay_graphics = OverlayGraphicsFactory.create(
                 self.graphics_type, self.width, self.height, **kwargs
             )
@@ -422,7 +434,7 @@ class Overlay(GstBase.BaseTransform):
             finally:
                 self.gl_context.make_current(False)
 
-        else:  # Cairo rendering
+        else:  # Cairo or Skia rendering on system memory
             video_meta = GstVideo.buffer_get_video_meta(buf)
             if not video_meta:
                 self.logger.error(

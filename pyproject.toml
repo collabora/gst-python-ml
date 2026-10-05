@@ -69,6 +69,9 @@ face = [
 superres = [
     "spandrel",
 ]
+skia = [
+    "skia-python",
+]
 kafka = [
     "confluent_kafka",
 ]
@@ -148,7 +151,7 @@ mcp = [
 ]
 all = [
     "gst-python-ml[onnx,tinygrad,llamacpp,openvino,tensorflow,litert,vad]",
-    "gst-python-ml[yolo,llm,audio,diffusion,face,superres,kafka,mqtt]",
+    "gst-python-ml[yolo,llm,audio,diffusion,face,superres,skia,kafka,mqtt]",
 ]
 
 # Optional

@@ -174,6 +174,10 @@ class OverlayGraphicsFactory:
             from .overlay_cairo import CairoOverlayGraphics
 
             return CairoOverlayGraphics(width, height)
+        elif graphics_type == GraphicsType.SKIA:
+            from .overlay_skia import SkiaOverlayGraphics
+
+            return SkiaOverlayGraphics(width, height, kwargs["video_format"])
         elif graphics_type == GraphicsType.OPENGL:
             from .overlay_opengl import OpenGLOverlayGraphics
 
