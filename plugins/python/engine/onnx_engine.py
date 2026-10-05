@@ -16,15 +16,20 @@
 # Free Software Foundation, Inc., 51 Franklin Street, Fifth Floor,
 # Boston, MA 02110-1301, USA.
 
+import ctypes
+import importlib.util
 import os
 import tempfile
+from pathlib import Path
 import numpy as np
 import onnxruntime as ort
 
 from .ml_engine import MLEngine
 
+TENSORRT_PROVIDER = "TensorrtExecutionProvider"
 # providers are tried in the order listed
 DEVICE_PROVIDERS = {
+    "tensorrt": (TENSORRT_PROVIDER,),
     "cuda": ("CUDAExecutionProvider",),
     "rocm": ("MIGraphXExecutionProvider", "ROCMExecutionProvider"),
     "hip": ("MIGraphXExecutionProvider", "ROCMExecutionProvider"),
@@ -32,6 +37,17 @@ DEVICE_PROVIDERS = {
     "ryzenai": ("VitisAIExecutionProvider",),
 }
 PROVIDERS_WITHOUT_DEVICE_ID = ("VitisAIExecutionProvider",)
+PROVIDERS_ON_NVIDIA_LIBRARIES = (TENSORRT_PROVIDER, "CUDAExecutionProvider")
+# an uncached engine takes minutes to build on every start
+TENSORRT_ENGINE_CACHE = Path.home() / ".cache" / "gst-python-ml" / "tensorrt"
+# device=tensorrt-fp16 builds a half precision engine
+TENSORRT_HALF_PRECISION_SUFFIX = "fp16"
+TENSORRT_LIBRARIES_PACKAGE = "tensorrt_libs"
+TENSORRT_LIBRARY_PATTERNS = (
+    "libnvinfer.so.*",
+    "libnvinfer_plugin.so.*",
+    "libnvonnxparser.so.*",
+)
 
 
 class ONNXEngine(MLEngine):
@@ -220,8 +236,27 @@ class ONNXEngine(MLEngine):
             )
         if provider in PROVIDERS_WITHOUT_DEVICE_ID:
             return provider
-        index = int(device.split(":")[-1]) if ":" in device else 0
-        return (provider, {"device_id": index})
+        if provider in PROVIDERS_ON_NVIDIA_LIBRARIES:
+            # cuda and cudnn come in pip wheels the loader does not search
+            ort.preload_dlls()
+        options = {"device_id": int(device.split(":")[-1]) if ":" in device else 0}
+        if provider == TENSORRT_PROVIDER:
+            self._preload_tensorrt_libraries()
+            TENSORRT_ENGINE_CACHE.mkdir(parents=True, exist_ok=True)
+            options["trt_engine_cache_enable"] = True
+            options["trt_engine_cache_path"] = str(TENSORRT_ENGINE_CACHE)
+            options["trt_fp16_enable"] = TENSORRT_HALF_PRECISION_SUFFIX in device
+        return (provider, options)
+
+    # the pip wheel's tensorrt is not on the library path
+    def _preload_tensorrt_libraries(self):
+        package = importlib.util.find_spec(TENSORRT_LIBRARIES_PACKAGE)
+        if package is None:
+            return
+        directory = Path(package.submodule_search_locations[0])
+        for pattern in TENSORRT_LIBRARY_PATTERNS:
+            for library in directory.glob(pattern):
+                ctypes.CDLL(str(library), mode=ctypes.RTLD_GLOBAL)
 
     def _forward_classification(self, frames):
         """Handle inference for classification models."""

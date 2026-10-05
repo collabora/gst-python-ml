@@ -30,6 +30,7 @@ class MLEngine(ABC):
         self.device = None
         self.device_index = 0
         self.model = None
+        self.model_name = None
         self.tokenizer = None
         self.image_processor = None
         self.batch_size = 1  # Default batch size

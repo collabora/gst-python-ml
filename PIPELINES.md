@@ -431,6 +431,23 @@ python pyml-launch.py filesrc location=data/people.mp4 ! decodebin name=d \
   ! fakesink
 ```
 
+#### ONNX Runtime with TensorRT
+
+`device=tensorrt` runs the model through TensorRT, and `device=tensorrt-fp16`
+in half precision. The first start builds the TensorRT engine, which takes about
+ten minutes for YOLO11m on a laptop GPU. It is cached under
+`~/.cache/gst-python-ml/tensorrt`, so later starts take a second.
+
+```
+python pyml-launch.py filesrc location=data/people.mp4 ! decodebin name=d \
+  d. ! queue ! videoconvert ! videoscale \
+  ! "video/x-raw,format=RGB,width=640,height=640" \
+  ! pyml_objectdetector engine-name=onnx model-name=yolo11m.onnx device=tensorrt-fp16 \
+              input-format=nchw post-process=anchor_free \
+  ! videoconvert ! "video/x-raw,format=RGBA" \
+  ! pyml_overlay ! videoconvert ! autovideosink
+```
+
 #### ONNX Runtime on AMD GPUs (ROCm)
 
 `device=rocm` picks the MIGraphX execution provider, falling back to ROCm's.

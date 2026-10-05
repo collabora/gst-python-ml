@@ -50,17 +50,22 @@ FRAME_HEIGHT = 480
 IOU_THRESHOLD = 0.5
 REFERENCE_ENGINE = "pytorch"
 PIPELINE_TIMEOUT = 600 * Gst.SECOND
+# the first frames pay for a jit or a lazy cuda start
+WARMUP_FRAMES = 10
 # pts of the same decoded frame is identical across runs, rounding only guards float text
 PTS_DECIMALS = 6
 
-PYTORCH_DETECTOR = "pyml_yolo model-name={model} device={device}"
+# the two elements default to different thresholds
+THRESHOLDS = "confidence=0.25 nms-iou=0.45"
+PYTORCH_DETECTOR = f"pyml_yolo model-name={{model}} device={{device}} {THRESHOLDS}"
 CONVERTED_MODEL_DETECTOR = (
     "pyml_objectdetector engine-name={engine} model-name={model} device={device} "
-    "input-format=nchw post-process=anchor_free"
+    f"input-format=nchw post-process=anchor_free {THRESHOLDS}"
 )
 
 COLUMN_HEADINGS = [
     "engine",
+    "device",
     "model",
     "frames",
     "fps",
@@ -89,31 +94,33 @@ def run_pipeline(detector, frames, records_path):
         f"! identity name=limiter eos-after={frames} "
         f"! {detector} ! pyml_metasink location={records_path}"
     )
-    counted = []
+    arrivals = []
 
     # identity pushes a few buffers past eos-after
     def count_frame(pad, info):
-        if len(counted) >= frames:
+        if len(arrivals) >= frames:
             return Gst.PadProbeReturn.DROP
-        counted.append(info.get_buffer().pts)
+        arrivals.append(time.perf_counter())
         return Gst.PadProbeReturn.OK
 
     limiter = pipeline.get_by_name("limiter")
     limiter.get_static_pad("src").add_probe(Gst.PadProbeType.BUFFER, count_frame)
 
-    started = time.perf_counter()
     pipeline.set_state(Gst.State.PLAYING)
     message = pipeline.get_bus().timed_pop_filtered(
         PIPELINE_TIMEOUT, Gst.MessageType.EOS | Gst.MessageType.ERROR
     )
-    elapsed = time.perf_counter() - started
+    finished = time.perf_counter()
     pipeline.set_state(Gst.State.NULL)
     if message is None:
         raise RuntimeError("the pipeline did not finish")
     if message.type == Gst.MessageType.ERROR:
         error, debug = message.parse_error()
         raise RuntimeError(f"{error.message}\n{debug}")
-    return elapsed, len(counted)
+    if len(arrivals) <= WARMUP_FRAMES:
+        raise RuntimeError(f"only {len(arrivals)} frames reached the detector")
+    timed_frames = len(arrivals) - WARMUP_FRAMES
+    return timed_frames / (finished - arrivals[WARMUP_FRAMES]), len(arrivals)
 
 
 def boxes_by_time(records_path):
@@ -130,15 +137,16 @@ def boxes_by_time(records_path):
 def measure(engine, model, device, frames, records_path):
     detector = detector_description(engine, model_argument(model), device)
     print(f"running {detector}", file=sys.stderr)
-    elapsed, frames_seen = run_pipeline(detector, frames, records_path)
+    frames_per_second, frames_seen = run_pipeline(detector, frames, records_path)
     boxes = boxes_by_time(records_path)
     detections = [box for frame_boxes in boxes.values() for box in frame_boxes]
     scores = [box["score"] for box in detections]
     return {
         "engine": engine,
+        "device": device,
         "model": model,
         "frames": frames_seen,
-        "fps": frames_seen / elapsed,
+        "fps": frames_per_second,
         "detections_per_frame": len(detections) / frames_seen if frames_seen else 0.0,
         "mean_score": sum(scores) / len(scores) if scores else 0.0,
         "boxes": boxes,
@@ -153,9 +161,10 @@ def markdown_table(rows):
     for row in rows:
         matched = row["matched"]
         lines.append(
-            "| {engine} | {model} | {frames} | {fps:.1f} | {detections:.2f} "
+            "| {engine} | {device} | {model} | {frames} | {fps:.1f} | {detections:.2f} "
             "| {score:.3f} | {matched} |".format(
                 engine=row["engine"],
+                device=row["device"],
                 model=row["model"],
                 frames=row["frames"],
                 fps=row["fps"],
@@ -171,26 +180,33 @@ def main():
     parser = argparse.ArgumentParser(
         description="Run the same detection over every engine and print a table"
     )
-    parser.add_argument("engine_models", nargs="*", metavar="engine=model")
+    parser.add_argument("engine_models", nargs="*", metavar="engine=model[@device]")
     parser.add_argument("--frames", type=int, default=DEFAULT_FRAMES)
     parser.add_argument("--device", default=DEFAULT_DEVICE)
     arguments = parser.parse_args()
 
     rows = []
     with tempfile.TemporaryDirectory() as directory:
-        for pair in arguments.engine_models or DEFAULT_ENGINE_MODELS:
-            engine, _, model = pair.partition("=")
+        pairs = arguments.engine_models or DEFAULT_ENGINE_MODELS
+        for index, pair in enumerate(pairs):
+            engine, _, model_and_device = pair.partition("=")
+            model, _, device = model_and_device.partition("@")
             if not engine or not model:
                 parser.error(f"{pair!r} is not an engine=model pair")
+            records_path = Path(directory) / f"{index}-{engine}.jsonl"
             try:
                 EngineFactory.create(engine)
+                rows.append(
+                    measure(
+                        engine,
+                        model,
+                        device or arguments.device,
+                        arguments.frames,
+                        records_path,
+                    )
+                )
             except Exception as error:
-                print(f"skipping {engine}: {error}", file=sys.stderr)
-                continue
-            records_path = Path(directory) / f"{engine}.jsonl"
-            rows.append(
-                measure(engine, model, arguments.device, arguments.frames, records_path)
-            )
+                print(f"skipping {pair}: {error}", file=sys.stderr)
 
     reference = next(
         (row["boxes"] for row in rows if row["engine"] == REFERENCE_ENGINE), None

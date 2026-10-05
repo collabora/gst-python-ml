@@ -46,6 +46,9 @@ ENGINE_TUNABLES = (
 )
 
 
+# the input-format and post-process value that leaves the choice to the engine
+ENGINE_CHOOSES = "auto"
+
 ENGINE_NAME_BLURB = (
     f"Machine Learning Engine to use: {', '.join(EngineFactory.BUILTIN_ENGINES)}, "
     "or a custom engine name"
@@ -115,20 +118,22 @@ def ml_property_namespace(gobject):
     @gobject.Property(type=str, default="auto")
     def input_format(self):
         "Input tensor layout: auto, nhwc, or nchw"
-        return self.engine.input_format if self.engine else "auto"
+        return self.engine.input_format if self.engine else self._input_format
 
     @input_format.setter
     def input_format(self, value):
+        self._input_format = value
         if self.engine:
             self.engine.input_format = value
 
     @gobject.Property(type=str, default="auto")
     def post_process(self):
         "Post-processing format for raw engine output (auto, none, or a key from detection_decoder)"
-        return self.engine.post_process if self.engine else "auto"
+        return self.engine.post_process if self.engine else self._post_process
 
     @post_process.setter
     def post_process(self, value):
+        self._post_process = value
         if self.engine:
             self.engine.post_process = value
 
@@ -282,6 +287,8 @@ class MLEngineMixin:
         self._prompt = None
         self._compile = False
         self._only_on = ""
+        self._input_format = ENGINE_CHOOSES
+        self._post_process = ENGINE_CHOOSES
 
     @property
     def engine(self):
@@ -296,6 +303,11 @@ class MLEngineMixin:
             self.engine.frame_stride = self._frame_stride
             if self._device_queue_id:
                 self.engine.device_queue_id = self._device_queue_id
+            # an engine like drpai starts with a layout of its own
+            if self._input_format != ENGINE_CHOOSES:
+                self.engine.input_format = self._input_format
+            if self._post_process != ENGINE_CHOOSES:
+                self.engine.post_process = self._post_process
         if not self.engine:
             self.logger.error(f"Unsupported ML engine: {self.mgr.engine_name}")
 

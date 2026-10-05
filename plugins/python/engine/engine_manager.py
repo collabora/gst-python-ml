@@ -71,6 +71,8 @@ class EngineManager:
         except Exception:
             self.engine.tokenizer = None
             self.engine.model = None
+            # an engine reloads the model it names when its device changes
+            self.engine.model_name = None
             raise
 
     def get_model(self):

@@ -69,8 +69,10 @@ docker run --gpus all -it --rm --network=host deepstream-7.1-custom
 `engine_parity.py` runs `data/people.mp4` through one detector per
 `engine=model` pair and prints a markdown table of frames per second, mean
 detections per frame, mean score, and the fraction of the pytorch run's boxes
-matched at IoU 0.5 on the same pts. An engine whose `EngineFactory.create`
-fails is skipped. To add an engine, pass another `engine=model` pair: every
+matched at IoU 0.5 on the same pts. Frames per second leave out the model load
+and the first 10 frames, and include the decode. `engine=model@device` runs
+that pair on its own device, for example `onnx=yolo11m-384x640.onnx@tensorrt`.
+A pair that fails to load or run is skipped. To add an engine, pass another `engine=model` pair: every
 engine but `pytorch` runs through `pyml_objectdetector engine-name=<engine>`,
 so it needs a model file that engine can load, with the path taken relative to
 the repository root.

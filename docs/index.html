@@ -989,6 +989,11 @@
         </div>
         <div class="engines-extra fade-in">
             <div class="engine-card">
+                <div class="engine-icon">&#128640;</div>
+                <h3>TensorRT</h3>
+                <p>NVIDIA TensorRT through ONNX Runtime. Set <code style="background: var(--bg-tertiary); padding: 2px 6px; border-radius: 4px; font-size: 0.8rem; font-family: 'JetBrains Mono', monospace; color: var(--green);">engine-name=onnx</code> and <code style="background: var(--bg-tertiary); padding: 2px 6px; border-radius: 4px; font-size: 0.8rem; font-family: 'JetBrains Mono', monospace; color: var(--green);">device=tensorrt-fp16</code>. The engine is built once and cached.</p>
+            </div>
+            <div class="engine-card">
                 <div class="engine-icon">&#128225;</div>
                 <h3>LiteRT (TFLite)</h3>
                 <p>Lightweight inference for edge and mobile. Set <code style="background: var(--bg-tertiary); padding: 2px 6px; border-radius: 4px; font-size: 0.8rem; font-family: 'JetBrains Mono', monospace; color: var(--green);">engine-name=tflite</code> and point to a <code style="background: var(--bg-tertiary); padding: 2px 6px; border-radius: 4px; font-size: 0.8rem; font-family: 'JetBrains Mono', monospace; color: var(--green);">.tflite</code> model. NHWC input by default &mdash; no format flags needed.</p>

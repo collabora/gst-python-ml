@@ -34,6 +34,7 @@ PIPELINE_TIMEOUT = 10 * Gst.SECOND
 
 class FailingEngine(MLEngine):
     def do_load_model(self, model_name, **kwargs):
+        self.model_name = model_name
         raise FileNotFoundError(LOAD_FAILURE)
 
     def do_set_device(self, device):
@@ -104,6 +105,7 @@ def test_the_engine_keeps_no_model_after_a_failed_load():
         element.do_load_model()
 
     assert element.engine.model is None
+    assert element.engine.model_name is None
     assert element.engine.tokenizer is None
 
 
@@ -180,6 +182,20 @@ def test_an_engine_name_set_after_the_device_replaces_the_engine():
 
     assert type(element.engine) is WorkingEngine
     assert element.engine.device == "cpu"
+
+
+def test_a_layout_set_before_the_device_reaches_the_engine():
+    EngineFactory.register(WORKING_ENGINE, WorkingEngine)
+    element = EngineNamedOnThePipeline()
+    element.set_property("engine-name", WORKING_ENGINE)
+    element.set_property("input-format", "nchw")
+    element.set_property("post-process", "anchor_free")
+    assert element.engine is None
+
+    element.set_property("device", "cpu")
+
+    assert element.engine.input_format == "nchw"
+    assert element.engine.post_process == "anchor_free"
 
 
 class DeviceRefusingEngine(WorkingEngine):

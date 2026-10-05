@@ -44,7 +44,7 @@ Write the pipeline in `gst-launch` format and run it with `pyml-launch`, with me
   - [MCP server](PIPELINES.md#mcp-server) for agents
 - Engines
   - PyTorch by default
-  - ONNX Runtime, OpenVINO, LiteRT, TensorFlow
+  - ONNX Runtime, TensorRT through ONNX Runtime, OpenVINO, LiteRT, TensorFlow
   - Apache TVM, tinygrad, Apple MLX, ExecuTorch, llama.cpp, JAX
   - MiGraphX, IREE, NCNN, Renesas DRP-AI
   - CI runs every engine that installs from PyPI on the CPU and checks its

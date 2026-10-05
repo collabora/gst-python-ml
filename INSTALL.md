@@ -136,6 +136,8 @@ uv sync --extra onnx
 ```
 
 - ExecuTorch has no Python 3.14 wheel.
+- TensorRT is `device=tensorrt` on the ONNX engine. It needs the `onnx-gpu` extra and the TensorRT 10 libraries:
+  `uv pip install tensorrt-cu13-libs==10.16.1.11`, a 4 GB install. Tested with onnxruntime-gpu 1.30.
 - LiteRT runs a `.tflite` file with the `litert` extra alone. Exporting one, or loading a Keras model by name, needs `tensorflow` too.
 - llama.cpp builds a CPU wheel. For CUDA: `CMAKE_ARGS="-DGGML_CUDA=on" pip install llama-cpp-python`.
 - MLX runs on Apple Silicon. On Linux use the `mlx-cpu` extra.
