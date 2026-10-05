@@ -25,7 +25,10 @@ try:
     from base_objectdetector import BaseObjectDetector
     from tasks.zero_shot_detector import ZeroShotDetectorTask
 
-    from engine.zero_shot_detector_engine import ZeroShotDetectorEngine
+    from engine.zero_shot_detector_engine import (
+        ExportedZeroShotDetector,
+        ZeroShotDetectorEngine,
+    )
     from engine.engine_factory import EngineFactory
 
 except ImportError as e:
@@ -59,7 +62,7 @@ class ZeroShotDetector(BaseObjectDetector, ZeroShotDetectorTask):
 
     def __init__(self):
         super().__init__()
-        self.mgr.engine_name = "pyml_zero_shot_detector_engine"
+        self.task_engine_name = self.mgr.engine_name = "pyml_zero_shot_detector_engine"
         EngineFactory.register(self.mgr.engine_name, ZeroShotDetectorEngine)
         self._model_name = DEFAULT_MODEL_NAME
         self._labels_text = ""
@@ -84,19 +87,13 @@ class ZeroShotDetector(BaseObjectDetector, ZeroShotDetectorTask):
         ]
         self.logger.info(f"Labels set to: {self._labels_list}")
 
-    @GObject.Property(type=str)
-    def engine_name(self):
-        """Machine Learning Engine (read-only for this element)."""
-        return self.mgr.engine_name
-
-    @engine_name.setter
-    def engine_name(self, value):
-        raise ValueError("'engine_name' is read-only for pyml_zeroshotdetector")
+    def export_model(self, model_name):
+        return ExportedZeroShotDetector(model_name)
 
     def do_forward(self, frames):
-        if self.engine:
-            self.engine.labels = self._labels_list
-            self.engine.confidence = self.confidence
+        if self.task_engine:
+            self.task_engine.labels = self._labels_list
+            self.task_engine.confidence = self.confidence
         return super().do_forward(frames)
 
 

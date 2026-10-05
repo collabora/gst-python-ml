@@ -23,6 +23,7 @@ PARTIAL_EXPORT_SUFFIX = ".partial"
 GRAPH_INPUT_NAME = "image"
 GRAPH_OUTPUT_NAME = "output"
 ANY_FRAME_SHAPE = (480, 640, 3)
+UINT8_MAX = 255
 
 
 # a builtin engine feeds the frame scaled to 0..1
@@ -39,10 +40,11 @@ def pixel_normalizer(image_mean, image_std):
 def model_input_frames(image_processor, frames):
     import numpy as np
 
-    pixel_values = image_processor(
-        frames, do_rescale=False, do_normalize=False, return_tensors="np"
-    )["pixel_values"][0]
-    return np.ascontiguousarray(np.moveaxis(pixel_values, -3, -1)).astype(np.uint8)
+    pixel_values = image_processor(frames, do_normalize=False, return_tensors="np")[
+        "pixel_values"
+    ][0]
+    # a builtin engine divides by 255 again
+    return np.ascontiguousarray(np.moveaxis(pixel_values, -3, -1)) * UINT8_MAX
 
 
 def model_input_shape(image_processor, frame_count=None):

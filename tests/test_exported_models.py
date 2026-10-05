@@ -51,6 +51,12 @@ YOLO_CONFIDENCE = 0.25
 YOLO_TOLERANCE_PIXELS = 12.0
 # an off-frame keypoint has a guessed position
 VISIBLE_KEYPOINT_CONFIDENCE = 0.5
+OWL_MODEL = "google/owlv2-base-patch16-ensemble"
+# its image encoder takes the text
+GROUNDING_MODEL = "IDEA-Research/grounding-dino-tiny"
+ZERO_SHOT_LABELS = "a face, a blue chair, a dog"
+ZERO_SHOT_SCORE_TOLERANCE = 0.001
+ZERO_SHOT_BOX_TOLERANCE_PIXELS = 1
 # the task engine first
 ENGINE_NAMES = ("pytorch", "onnx")
 
@@ -276,3 +282,35 @@ def test_tracking_on_an_exported_yolo_names_the_pytorch_engine(portrait_rgb):
 
     with pytest.raises(ValueError, match="pytorch"):
         element.do_forward(portrait_rgb)
+
+
+def zero_shot_detector(model_name, engine_name):
+    from zeroshotdetector import ZeroShotDetector
+
+    element = ZeroShotDetector()
+    element.set_property("labels", ZERO_SHOT_LABELS)
+    element.set_property("model-name", model_name)
+    element.set_property("engine-name", engine_name)
+    element.do_load_model()
+    return element
+
+
+def test_zero_shot_on_onnx_matches_zero_shot_on_pytorch(portrait_rgb):
+    reference, exported = (
+        zero_shot_detector(OWL_MODEL, engine_name).do_forward(portrait_rgb)
+        for engine_name in ENGINE_NAMES
+    )
+
+    assert reference["boxes"]
+    assert len(exported["boxes"]) == len(reference["boxes"])
+    assert exported["labels"] == reference["labels"]
+    assert exported["scores"] == pytest.approx(
+        reference["scores"], abs=ZERO_SHOT_SCORE_TOLERANCE
+    )
+    box_difference = np.abs(np.array(exported["boxes"]) - np.array(reference["boxes"]))
+    assert box_difference.max() < ZERO_SHOT_BOX_TOLERANCE_PIXELS
+
+
+def test_a_model_with_text_in_its_image_encoder_does_not_export():
+    with pytest.raises(ValueError, match="pytorch engine"):
+        zero_shot_detector(GROUNDING_MODEL, ENGINE_NAMES[1])

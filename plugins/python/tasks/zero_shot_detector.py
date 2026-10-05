@@ -22,7 +22,7 @@ from tasks.object_detector import ObjectDetectorTask
 
 class ZeroShotDetectorTask(ObjectDetectorTask):
     def do_decode(self, buf, output, stream_idx=0):
-        label_texts = self.engine.labels if self.engine else []
+        label_texts = self.task_engine.labels if self.task_engine else []
         boxes = output["boxes"]
         if not boxes:
             self.logger.debug(f"Stream {stream_idx} - no detections")
