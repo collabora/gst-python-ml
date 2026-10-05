@@ -28,6 +28,10 @@ UINT8_MAX = 255
 CONSTANT_FOLDING_INPUT_SIZE_LIMIT = 1 << 20
 RESIZE_POLICY_ATTRIBUTE = "keep_aspect_ratio_policy"
 DEFAULT_RESIZE_POLICY = "stretch"
+BILINEAR_RESIZE_MODE = b"linear"
+ALIGN_CORNERS_TRANSFORM = b"align_corners"
+RESIZE_SIZES_INPUT = 3
+IMAGE_RANK = 4
 
 
 # a builtin engine feeds the frame scaled to 0..1
@@ -65,6 +69,111 @@ def remove_default_resize_policy(model):
         policy = node.attributes.get(RESIZE_POLICY_ATTRIBUTE)
         if policy is not None and policy.value == DEFAULT_RESIZE_POLICY:
             del node.attributes[RESIZE_POLICY_ATTRIBUTE]
+
+
+def interpolation_matrix(source, destination):
+    import numpy as np
+
+    matrix = np.zeros((destination, source), np.float32)
+    for index in range(destination):
+        position = index * (source - 1) / (destination - 1)
+        low = int(np.floor(position))
+        weight = position - low
+        matrix[index, low] += 1 - weight
+        if low + 1 < source:
+            matrix[index, low + 1] += weight
+    return matrix
+
+
+def static_float_shapes(graph):
+    import onnx
+
+    shapes = {}
+    for info in [*graph.input, *graph.value_info]:
+        tensor_type = info.type.tensor_type
+        dims = tensor_type.shape.dim
+        is_static = all(dim.HasField("dim_value") for dim in dims)
+        if tensor_type.elem_type == onnx.TensorProto.FLOAT and is_static:
+            shapes[info.name] = [dim.dim_value for dim in dims]
+    return shapes
+
+
+def bilinear_resize_as_matmuls(node, float_shapes, initializers):
+    import onnx
+    from onnx import numpy_helper
+
+    if node.op_type != "Resize" or len(node.input) <= RESIZE_SIZES_INPUT:
+        return None
+    attributes = {
+        attribute.name: onnx.helper.get_attribute_value(attribute)
+        for attribute in node.attribute
+    }
+    is_bilinear_align_corners = (
+        attributes.get("mode") == BILINEAR_RESIZE_MODE
+        and attributes.get("coordinate_transformation_mode") == ALIGN_CORNERS_TRANSFORM
+        and not attributes.get("antialias")
+        and "axes" not in attributes
+    )
+    sizes = initializers.get(node.input[RESIZE_SIZES_INPUT])
+    source = float_shapes.get(node.input[0])
+    if not is_bilinear_align_corners or sizes is None or source is None:
+        return None
+    destination = numpy_helper.to_array(sizes).tolist()
+    if len(source) != IMAGE_RANK or destination[:2] != source[:2]:
+        return None
+    if 1 in destination[2:]:
+        return None
+    output = node.output[0]
+    rows_name = f"{output}_rows_interpolation"
+    columns_name = f"{output}_columns_interpolation"
+    rows_resized = f"{output}_rows_resized"
+    matrices = [
+        numpy_helper.from_array(
+            interpolation_matrix(source[2], destination[2]), rows_name
+        ),
+        numpy_helper.from_array(
+            interpolation_matrix(source[3], destination[3]).T.copy(), columns_name
+        ),
+    ]
+    matmuls = [
+        onnx.helper.make_node("MatMul", [rows_name, node.input[0]], [rows_resized]),
+        onnx.helper.make_node("MatMul", [rows_resized, columns_name], [output]),
+    ]
+    return matmuls, matrices
+
+
+# the migraphx gpu target returns garbage for this resize inside a large graph
+def resize_align_corners_as_matmuls(path):
+    import onnx
+
+    model = onnx.load(path)
+    graph = model.graph
+    float_shapes = static_float_shapes(onnx.shape_inference.infer_shapes(model).graph)
+    initializers = {initializer.name: initializer for initializer in graph.initializer}
+    nodes = []
+    replaced_sizes = set()
+    for node in graph.node:
+        replacement = bilinear_resize_as_matmuls(node, float_shapes, initializers)
+        if replacement is None:
+            nodes.append(node)
+            continue
+        matmuls, matrices = replacement
+        nodes.extend(matmuls)
+        graph.initializer.extend(matrices)
+        replaced_sizes.add(node.input[RESIZE_SIZES_INPUT])
+    if not replaced_sizes:
+        return
+    used_inputs = {name for node in nodes for name in node.input}
+    kept_initializers = [
+        initializer
+        for initializer in graph.initializer
+        if initializer.name not in replaced_sizes or initializer.name in used_inputs
+    ]
+    graph.ClearField("node")
+    graph.node.extend(nodes)
+    graph.ClearField("initializer")
+    graph.initializer.extend(kept_initializers)
+    onnx.save(model, path)
 
 
 def patch_conv_as_matmul(conv):
@@ -141,5 +250,6 @@ def cached_onnx_export(file_stem, build_graph, **export_options):
     partial_path = path.with_suffix(PARTIAL_EXPORT_SUFFIX)
     # a weights file beside the model would keep the partial file's name
     program.save(str(partial_path), external_data=False)
+    resize_align_corners_as_matmuls(partial_path)
     partial_path.rename(path)
     return str(path)
