@@ -24,7 +24,7 @@ from pathlib import Path
 import numpy as np
 import onnxruntime as ort
 
-from .ml_engine import MLEngine, TORCHVISION_WEIGHTS
+from .ml_engine import MLEngine, TORCHVISION_WEIGHTS, fixed_height_width
 
 TENSORRT_PROVIDER = "TensorrtExecutionProvider"
 # providers are tried in the order listed
@@ -89,57 +89,7 @@ class ONNXEngine(MLEngine):
         """(H, W) the model's input expects, or None if dynamic/unknown."""
         if self.session is None:
             return None
-        shape = self.session.get_inputs()[0].shape
-        if len(shape) != 4:
-            return None
-        h, w = shape[2], shape[3]
-        if isinstance(h, int) and isinstance(w, int) and h > 0 and w > 0:
-            return (h, w)
-        return None
-
-    def _letterbox(self, frames, is_batch):
-        """Resize frame(s) to the model input size, preserving aspect ratio with
-        grey padding (YOLO-style). Returns (processed, transform); transform =
-        (ratio, pad_x, pad_y, orig_w, orig_h) maps model coords back to the
-        original frame. Returns (frames, None) when no resize is needed (already
-        model-sized, or dynamic input) -- so pre-sized callers are unaffected."""
-        import numpy as np
-        import cv2
-
-        mhw = self._model_input_hw()
-        if mhw is None:
-            return frames, None
-        mh, mw = mhw
-        imgs = frames if is_batch else frames[None]
-        h, w = int(imgs.shape[1]), int(imgs.shape[2])
-        if (h, w) == (mh, mw):
-            return frames, None
-        r = min(mh / h, mw / w)
-        nh, nw = int(round(h * r)), int(round(w * r))
-        pad_x, pad_y = (mw - nw) // 2, (mh - nh) // 2
-        out = np.full((imgs.shape[0], mh, mw, imgs.shape[3]), 114, dtype=imgs.dtype)
-        for i in range(imgs.shape[0]):
-            out[i, pad_y : pad_y + nh, pad_x : pad_x + nw] = cv2.resize(
-                imgs[i], (nw, nh), interpolation=cv2.INTER_LINEAR
-            )
-        proc = out if is_batch else out[0]
-        return proc, (r, float(pad_x), float(pad_y), w, h)
-
-    def _unletterbox(self, results, transform):
-        """Map detection boxes from model coords back to original-frame coords."""
-        import numpy as np
-
-        r, pad_x, pad_y, ow, oh = transform
-        for res in results if isinstance(results, list) else [results]:
-            if not isinstance(res, dict):
-                continue
-            b = res.get("boxes")
-            if b is None or len(b) == 0:
-                continue
-            b = np.asarray(b, dtype=np.float32).copy()
-            b[:, [0, 2]] = ((b[:, [0, 2]] - pad_x) / r).clip(0, ow)
-            b[:, [1, 3]] = ((b[:, [1, 3]] - pad_y) / r).clip(0, oh)
-            res["boxes"] = b
+        return fixed_height_width(self.session.get_inputs()[0].shape)
 
     def do_load_model(self, model_name, **kwargs):
         self.model_name = model_name

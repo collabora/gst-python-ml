@@ -22,7 +22,12 @@ from pathlib import Path
 
 import numpy as np
 
-from .ml_engine import MLEngine, TORCHVISION_WEIGHTS, is_torchvision_resnet
+from .ml_engine import (
+    MLEngine,
+    TORCHVISION_WEIGHTS,
+    fixed_height_width,
+    is_torchvision_resnet,
+)
 
 # tinygrad loads the nvrtc library this names
 NVRTC_PATH_VARIABLE = "NVRTC_PATH"
@@ -152,6 +157,12 @@ class TinyGradEngine(MLEngine):
         else:
             raise ValueError("Unsupported model type.")
 
+    def _model_input_hw(self):
+        if self.model_type != "custom":
+            return None
+        input_value = next(iter(self.model.graph_inputs.values()))
+        return fixed_height_width(input_value.shape)
+
     def _forward_onnx(self, frames, is_batch):
         from tinygrad import Tensor
 
@@ -159,13 +170,17 @@ class TinyGradEngine(MLEngine):
         input_shape = input_value.shape
         if self.input_format == "auto" and len(input_shape) == 4:
             self.input_format = "nchw" if input_shape[1] in (1, 3, 4) else "nhwc"
-        img = self._apply_input_format(frames.astype(np.float32) / 255.0, is_batch)
+        resized, transform = self._letterbox(frames, is_batch)
+        img = self._apply_input_format(resized.astype(np.float32) / 255.0, is_batch)
         outputs = self.run_onnx(
             **{input_name: Tensor(np.ascontiguousarray(img)).realize()}
         )
         arrays = [output.numpy() for output in outputs]
         raw = arrays if len(arrays) > 1 else arrays[0]
-        return self._apply_post_process(raw, is_batch)
+        results = self._apply_post_process(raw, is_batch)
+        if transform is not None:
+            self._unletterbox(results, transform)
+        return results
 
     def do_generate(self, input_text, max_length=1000, system_prompt=None):
         raise NotImplementedError(

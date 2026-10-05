@@ -20,7 +20,7 @@ import os
 import numpy as np
 import migraphx
 
-from .ml_engine import MLEngine
+from .ml_engine import MLEngine, fixed_height_width
 
 
 class MiGraphXEngine(MLEngine):
@@ -44,6 +44,12 @@ class MiGraphXEngine(MLEngine):
         first_shape = next(iter(param_shapes.values()))
         lens = first_shape.lens()
         return len(lens) == 4 and lens[1] in (1, 3, 4)
+
+    def _model_input_hw(self):
+        if self.program is None:
+            return None
+        shapes = self.program.get_parameter_shapes()
+        return fixed_height_width(shapes[self.input_names[0]].lens())
 
     def do_load_model(self, model_name, **kwargs):
         """Load an ONNX model via MiGraphX and compile it for the target device."""
@@ -116,7 +122,8 @@ class MiGraphXEngine(MLEngine):
         fmt = self.input_format
         if fmt == "auto" and self._input_is_nchw():
             self.input_format = "nchw"
-        img = self._apply_input_format(frames.astype(np.float32) / 255.0, is_batch)
+        resized, transform = self._letterbox(frames, is_batch)
+        img = self._apply_input_format(resized.astype(np.float32) / 255.0, is_batch)
 
         # Build parameter dict — map first input name to the data
         # migraphx reads the array without keeping it alive
@@ -130,7 +137,10 @@ class MiGraphXEngine(MLEngine):
         outputs = [np.array(r) for r in results]
         raw = outputs if len(outputs) > 1 else outputs[0]
 
-        return self._apply_post_process(raw, is_batch)
+        results = self._apply_post_process(raw, is_batch)
+        if transform is not None:
+            self._unletterbox(results, transform)
+        return results
 
     def do_generate(self, input_text, max_length=1000, system_prompt=None):
         """MiGraphX does not support text generation."""
