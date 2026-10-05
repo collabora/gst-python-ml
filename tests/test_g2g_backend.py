@@ -328,6 +328,21 @@ def test_class_names_are_resent_for_each_frames_sink():
     assert second.staged_class_names[second.staged[staged][1]] == "person"
 
 
+def test_own_labels_extend_the_upstream_name_table():
+    upstream = ["player", "referee", "ball"]
+    sink = StubMetaSink(upstream_class_names=upstream)
+    analytics.bind(sink)
+    meta = analytics.add_relation_meta(bytearray(4))
+    tracked = analytics.add_object(meta, "player_id_0", 0, 0, 10, 10, 1.0)
+    same_class = analytics.add_object(meta, "ball", 0, 0, 10, 10, 1.0)
+
+    names = sink.staged_class_names
+    assert names[:3] == upstream, "upstream's names keep their ids"
+    assert sink.staged[same_class][1] == 2, "an upstream name keeps upstream's id"
+    assert sink.staged[tracked][1] >= 3, "a new name takes an id after upstream's"
+    assert names[sink.staged[tracked][1]] == "player_id_0"
+
+
 def test_tracking_relates_to_its_detection():
     sink = StubMetaSink()
     analytics.bind(sink)
@@ -427,6 +442,47 @@ def test_video_transform_g2g_process_end_to_end():
     assert len(sink.staged_objects) == 1
     assert sink.staged_objects[0][5] == 0.99
     assert elem.width == width and elem.height == height
+
+
+def test_tracker_gives_a_box_seen_twice_one_id():
+    from tracker import TrackerTransform
+
+    tracker = TrackerTransform()
+    tracker.min_hits = 1
+    width, height = 64, 48
+    box = {"label": "player", "x": 10, "y": 10, "w": 8, "h": 16, "score": 0.9}
+    sinks = [StubMetaSink(upstream_objects=[box]) for _ in range(2)]
+    for sink in sinks:
+        tracker.g2g_process(bytearray(width * height * 4), width, height, "RGBA", sink)
+
+    labels = [sink.staged_class_names[sink.staged_objects[0][0]] for sink in sinks]
+    assert labels[0] == labels[1]
+    assert labels[0].startswith("player_id_")
+    assert sinks[1].staged_objects[0][1:5] == (10.0, 10.0, 8.0, 16.0)
+
+
+def test_football_overlay_draws_a_tracked_player_in_place():
+    from football_overlay import FootballOverlay
+
+    overlay = FootballOverlay()
+    overlay.team_colors = False
+    width, height = 1280, 720
+    frame = bytearray(width * height * 4)
+    player = {
+        "label": "player_id_3",
+        "x": 600,
+        "y": 300,
+        "w": 40,
+        "h": 120,
+        "score": 1.0,
+    }
+    overlay.g2g_process(
+        frame, width, height, "RGBA", StubMetaSink(upstream_objects=[player])
+    )
+
+    pixels = np.frombuffer(frame, dtype=np.uint8).reshape(height, width, 4)
+    assert pixels[405:435, 580:660].any(), "the ellipse at the player's feet was drawn"
+    assert not pixels[550:700, 900:1200].any(), "nothing drawn on the empty pitch"
 
 
 def test_aggregator_drives_the_same_hook_a_transform_fills_in():

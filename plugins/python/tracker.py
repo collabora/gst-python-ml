@@ -16,31 +16,8 @@
 # Free Software Foundation, Inc., 51 Franklin Street, Fifth Floor,
 # Boston, MA 02110-1301, USA.
 
-from log.global_logger import GlobalLogger
 import backend
-
-CAN_REGISTER_ELEMENT = True
-try:
-    import gi
-
-    gi.require_version("Gst", "1.0")
-    gi.require_version("GstBase", "1.0")
-    gi.require_version("GstVideo", "1.0")
-    from gi.repository import Gst, GstBase  # noqa: E402
-
-    from log.logger_factory import LoggerFactory  # noqa: E402
-    from backend import analytics, GObject, post_error  # noqa: E402
-
-    # Building a Gst object needs Gst.init, which only the gst backend calls.
-    if backend.BACKEND == "gst":
-        VIDEO_SRC_CAPS = Gst.Caps.from_string("video/x-raw")
-        VIDEO_SINK_CAPS = Gst.Caps.from_string("video/x-raw")
-
-except ImportError as e:
-    CAN_REGISTER_ELEMENT = False
-    GlobalLogger().warning(
-        f"The 'pyml_tracker' element will not be available. Error: {e}"
-    )
+from backend import analytics, GObject, InPlaceVideoTransform
 
 
 def covered_fraction(boxes, by):
@@ -395,15 +372,7 @@ class SortTracker:
         return results
 
 
-class TrackerTransform(GstBase.BaseTransform):
-    """
-    GStreamer element for multi-object tracking.
-
-    Reads upstream GstAnalytics od_mtd (object detection metadata) from buffers,
-    runs a SORT/ByteTrack tracking algorithm to assign consistent IDs across frames,
-    and attaches tracking_mtd linked to od_mtd via RELATE_TO.
-    """
-
+class TrackerTransform(InPlaceVideoTransform):
     __gstmetadata__ = (
         "Multi-Object Tracker",
         "Transform",
@@ -411,21 +380,7 @@ class TrackerTransform(GstBase.BaseTransform):
         "Aaron Boxer <aaron.boxer@collabora.com>",
     )
 
-    if backend.BACKEND == "gst":
-        src_template = Gst.PadTemplate.new(
-            "src",
-            Gst.PadDirection.SRC,
-            Gst.PadPresence.ALWAYS,
-            VIDEO_SRC_CAPS.copy(),
-        )
-
-        sink_template = Gst.PadTemplate.new(
-            "sink",
-            Gst.PadDirection.SINK,
-            Gst.PadPresence.ALWAYS,
-            VIDEO_SINK_CAPS.copy(),
-        )
-        __gsttemplates__ = (src_template, sink_template)
+    READS_PIXELS = False
 
     tracker_type = GObject.Property(
         type=str,
@@ -549,9 +504,6 @@ class TrackerTransform(GstBase.BaseTransform):
 
     def __init__(self):
         super().__init__()
-        self.logger = LoggerFactory.get(LoggerFactory.LOGGER_TYPE_GST)
-        self.set_passthrough(True)
-        self.set_in_place(True)
         self._tracker = None
 
     def _ensure_tracker(self):
@@ -583,115 +535,27 @@ class TrackerTransform(GstBase.BaseTransform):
             )
         return detections
 
-    def do_transform_ip(self, buf):
-        try:
-            tracker = self._ensure_tracker()
-            detections = self._read_detections(buf)
-
-            if len(detections) == 0:
-                # Still run update so trackers age out
-                tracker.update([])
-                return Gst.FlowReturn.OK
-
-            tracked = tracker.update(detections)
-
-            # Attach tracking results as new analytics metadata
-            meta = analytics.add_relation_meta(buf)
-            if not meta:
-                self.logger.error(
-                    "Failed to add analytics relation metadata for tracking"
-                )
-                return Gst.FlowReturn.ERROR
-
-            for track_id, bbox, label_str in tracked:
-                track_label = f"{label_str}_id_{track_id}"
-                x, y, w, h = bbox
-                od_mtd = analytics.add_object(
-                    meta, track_label, int(x), int(y), int(w), int(h), 1.0
-                )
-                if od_mtd is None:
-                    self.logger.error(
-                        f"Failed to add tracking od_mtd for track {track_id}"
-                    )
-
-            self.logger.info(
-                f"Tracker: {len(detections)} detections -> {len(tracked)} confirmed tracks"
+    def process_in_place(self, frame, fmt, buf):
+        tracker = self._ensure_tracker()
+        detections = self._read_detections(buf)
+        # an empty frame still ages the tracks
+        tracked = tracker.update(detections)
+        if not tracked:
+            return
+        meta = analytics.add_relation_meta(buf)
+        if not meta:
+            raise RuntimeError("failed to add analytics relation metadata")
+        for track_id, bbox, label in tracked:
+            x, y, w, h = bbox
+            analytics.add_object(
+                meta, f"{label}_id_{track_id}", int(x), int(y), int(w), int(h), 1.0
             )
-            return Gst.FlowReturn.OK
-
-        except Exception as exception:
-            post_error(self, "tracker transform error", exception)
-            return Gst.FlowReturn.ERROR
-
-    def do_get_property(self, prop):
-        if prop.name == "tracker-type":
-            return self.tracker_type
-        elif prop.name == "max-age":
-            return self.max_age
-        elif prop.name == "min-hits":
-            return self.min_hits
-        elif prop.name == "iou-threshold":
-            return self.iou_threshold
-        elif prop.name == "keep-alive":
-            return self.keep_alive
-        elif prop.name == "new-track-confidence":
-            return self.new_track_confidence
-        elif prop.name == "camera-motion":
-            return self.camera_motion
-        elif prop.name == "duplicate-iou":
-            return self.duplicate_iou
-        elif prop.name == "distance-gate":
-            return self.distance_gate
-        elif prop.name == "merge-overlap":
-            return self.merge_overlap
-        elif prop.name == "new-track-max-overlap":
-            return self.new_track_max_overlap
-        else:
-            raise AttributeError(f"Unknown property {prop.name}")
-
-    def do_set_property(self, prop, value):
-        if prop.name == "tracker-type":
-            self.tracker_type = value
-            self._tracker = None
-        elif prop.name == "max-age":
-            self.max_age = value
-            self._tracker = None
-        elif prop.name == "min-hits":
-            self.min_hits = value
-            self._tracker = None
-        elif prop.name == "iou-threshold":
-            self.iou_threshold = value
-            self._tracker = None
-        elif prop.name == "keep-alive":
-            self.keep_alive = value
-            self._tracker = None
-        elif prop.name == "new-track-confidence":
-            self.new_track_confidence = value
-            self._tracker = None
-        elif prop.name == "camera-motion":
-            self.camera_motion = value
-            self._tracker = None
-        elif prop.name == "duplicate-iou":
-            self.duplicate_iou = value
-            self._tracker = None
-        elif prop.name == "distance-gate":
-            self.distance_gate = value
-            self._tracker = None
-        elif prop.name == "merge-overlap":
-            self.merge_overlap = value
-            self._tracker = None
-        elif prop.name == "new-track-max-overlap":
-            self.new_track_max_overlap = value
-            self._tracker = None
-        else:
-            raise AttributeError(f"Unknown property {prop.name}")
+        self.logger.info(
+            f"Tracker: {len(detections)} detections -> {len(tracked)} confirmed tracks"
+        )
 
 
-if CAN_REGISTER_ELEMENT and backend.BACKEND == "gst":
+if backend.BACKEND == "gst":
     __gstelementfactory__ = backend.register_gst_element(
         "pyml_tracker", TrackerTransform
-    )
-elif not CAN_REGISTER_ELEMENT:
-    GlobalLogger().warning(
-        "The 'pyml_tracker' element will not be registered because required modules are missing."
     )

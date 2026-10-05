@@ -46,9 +46,11 @@ class _Bound:
     def __init__(self):
         self.sink = None
         self.meta = None
-        self.labels = {}  # str -> u32 id
-        self.next_id = 0
-        self.published_names = -1
+        self.upstream_names = []
+        self.upstream_ids = {}
+        self.own_names = []
+        self.own_ids = {}
+        self.published = False
 
 
 class G2gAnalyticsBackend(AnalyticsBackend):
@@ -73,8 +75,10 @@ class G2gAnalyticsBackend(AnalyticsBackend):
         bound = self._bound
         bound.sink = sink
         bound.meta = None
-        # Each frame gets its own sink, so the names have to be sent again.
-        bound.published_names = -1
+        # the frame carries one name table for every element
+        bound.upstream_names = list(sink.class_names()) if sink is not None else []
+        bound.upstream_ids = {name: i for i, name in enumerate(bound.upstream_names)}
+        bound.published = False
 
     def quark(self, label):
         """Intern a string label into the `u32` id space the sink expects; ints
@@ -82,24 +86,23 @@ class G2gAnalyticsBackend(AnalyticsBackend):
         if isinstance(label, int):
             return label
         bound = self._bound
-        qid = bound.labels.get(label)
-        if qid is None:
-            qid = bound.next_id
-            bound.labels[label] = qid
-            bound.next_id += 1
-        return qid
+        qid = bound.upstream_ids.get(label)
+        if qid is not None:
+            return qid
+        own = bound.own_ids.get(label)
+        if own is None:
+            own = len(bound.own_names)
+            bound.own_names.append(label)
+            bound.own_ids[label] = own
+            bound.published = False
+        return len(bound.upstream_names) + own
 
     def _publish_class_names(self):
-        """Send the interned label names to the sink, so a consumer can show a
-        name instead of an id. Re-sent when a new label is interned mid-frame."""
         bound = self._bound
-        if bound.sink is None or bound.next_id == bound.published_names:
+        if bound.sink is None or bound.published:
             return
-        names = [""] * bound.next_id
-        for name, qid in bound.labels.items():
-            names[qid] = name
-        bound.sink.set_class_names(names)
-        bound.published_names = bound.next_id
+        bound.sink.set_class_names(bound.upstream_names + bound.own_names)
+        bound.published = True
 
     def add_relation_meta(self, buf):
         bound = self._bound

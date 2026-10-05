@@ -125,6 +125,17 @@ class Property:
         return self._type(value)
 
 
+def declared_property_names(cls):
+    return sorted(
+        {
+            name
+            for klass in cls.__mro__
+            for name, value in vars(klass).items()
+            if isinstance(value, Property)
+        }
+    )
+
+
 class _GObjectShim:
     """The ``GObject`` namespace leaves import from the backend."""
 

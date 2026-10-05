@@ -24,7 +24,7 @@ subclasses this, gets it too: a single-chain text or audio element is hosted
 """
 
 from backend.core import MLEngineMixin, PayloadProcessingMixin, ml_property_namespace
-from backend.g2g.shims import GObject
+from backend.g2g.shims import GObject, declared_property_names
 
 
 class BaseTransform(MLEngineMixin, PayloadProcessingMixin):
@@ -36,20 +36,7 @@ class BaseTransform(MLEngineMixin, PayloadProcessingMixin):
         self._ml_init()
 
     def g2g_properties(self):
-        """Every property this element declares, for the host to check a pipeline
-        line against before it runs.
-
-        Without this the host has no way to tell a knob this element has from a
-        typo, and would set the typo as an attribute nothing ever reads.
-        """
-        return sorted(
-            {
-                name
-                for klass in type(self).__mro__
-                for name, value in vars(klass).items()
-                if isinstance(value, GObject.Property)
-            }
-        )
+        return declared_property_names(type(self))
 
     def _ensure_model(self):
         """Load the model on first use (the g2g host has no start hook).

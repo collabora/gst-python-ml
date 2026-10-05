@@ -17,41 +17,16 @@
 # Boston, MA 02110-1301, USA.
 
 import os
+import re
 
-from log.global_logger import GlobalLogger
 import backend
+from backend import analytics, GObject, InPlaceVideoTransform
 
-CAN_REGISTER_ELEMENT = True
-try:
-    import re
-    import gi
+if backend.BACKEND == "gst":
+    from backend.gst import Gst
 
-    gi.require_version("Gst", "1.0")
-    gi.require_version("GstBase", "1.0")
-    gi.require_version("GstVideo", "1.0")
-    gi.require_version("GstAnalytics", "1.0")
-    gi.require_version("GLib", "2.0")
-    from gi.repository import (
-        Gst,
-        GstBase,
-        GstVideo,
-        GstAnalytics,
-        GLib,
-    )  # noqa: E402
-    from backend import GObject, post_error  # noqa: E402
-
-    from log.logger_factory import LoggerFactory  # noqa: E402
-
-    # Building a Gst object needs Gst.init, which only the gst backend calls.
-    if backend.BACKEND == "gst":
-        OVERLAY_CAPS = Gst.Caps.from_string(
-            "video/x-raw, format=(string){ RGBA, ARGB, BGRA, ABGR }"
-        )
-
-except ImportError as e:
-    CAN_REGISTER_ELEMENT = False
-    GlobalLogger().warning(
-        f"The 'pyml_football_overlay' element will not be available. Error: {e}"
+    OVERLAY_CAPS = Gst.Caps.from_string(
+        "video/x-raw, format=(string){ RGBA, ARGB, BGRA, ABGR }"
     )
 
 
@@ -101,7 +76,7 @@ def _is_referee(label):
     return "referee" in label or label == "ref"
 
 
-class FootballOverlay(GstBase.BaseTransform):
+class FootballOverlay(InPlaceVideoTransform):
     """
     Metadata-driven broadcast overlay (football_analysis style), streaming.
 
@@ -301,10 +276,7 @@ class FootballOverlay(GstBase.BaseTransform):
 
     def __init__(self):
         super().__init__()
-        self.logger = LoggerFactory.get(LoggerFactory.LOGGER_TYPE_GST)
-        self.set_in_place(True)
-        self.width = 0
-        self.height = 0
+        self._format_seen = None
         self._order = _FORMAT_ORDER["RGBA"]
         # per-track state, accumulated across frames
         self._trail = {}
@@ -332,18 +304,13 @@ class FootballOverlay(GstBase.BaseTransform):
         # and matched by proximity, so the drawn ellipse can be low-passed.
         self._smooth_slots = []
 
-    def do_set_caps(self, incaps, outcaps):
-        info = GstVideo.VideoInfo.new_from_caps(incaps)
-        self.width = info.width
-        self.height = info.height
-        fmt = info.finfo.name if info.finfo else "RGBA"
+    def _use_format(self, fmt):
         self._order = _FORMAT_ORDER.get(fmt, _FORMAT_ORDER["RGBA"])
         # buffer channel j holds logical[self._order[j]]; invert so we can pull
         # logical R,G,B out of the buffer for jersey colour classification.
         self._inv_order = [self._order.index(c) for c in range(4)]
         self._headshot_loaded = False  # re-load in the new channel order
-        self.logger.info(f"FootballOverlay caps: {fmt} {self.width}x{self.height}")
-        return True
+        self._format_seen = fmt
 
     def _map_label(self, label):
         if self.class_names:
@@ -370,23 +337,17 @@ class FootballOverlay(GstBase.BaseTransform):
 
     def _read_metadata(self, buf):
         entries = []
-        meta = GstAnalytics.buffer_get_analytics_relation_meta(buf)
+        meta = analytics.get_relation_meta(buf)
         if not meta:
             return entries
-        for index in range(GstAnalytics.relation_get_length(meta)):
-            ret, od_mtd = meta.get_od_mtd(index)
-            if not ret or od_mtd is None:
-                continue
-            full_label = GLib.quark_to_string(od_mtd.get_obj_type())
-            presence, x, y, w, h, score = od_mtd.get_location()
-            if not presence:
-                continue
-            label, track_id = self._parse_label(full_label)
+        for obj in analytics.read_objects(meta):
+            label, track_id = self._parse_label(obj["label"])
+            x, y, w, h = obj["x"], obj["y"], obj["w"], obj["h"]
             entries.append(
                 {
                     "label": label.lower(),
                     "track_id": track_id,
-                    "confidence": score,
+                    "confidence": obj["score"],
                     "box": (x, y, x + w, y + h),
                 }
             )
@@ -1040,198 +1001,171 @@ class FootballOverlay(GstBase.BaseTransform):
             cv2.LINE_AA,
         )
 
-    def do_transform_ip(self, buf):
+    def process_in_place(self, frame, fmt, buf):
+        import cv2
         import numpy as np
 
-        try:
-            import numpy as np
+        if fmt != self._format_seen:
+            self._use_format(fmt)
+        all_entries = self._read_metadata(buf)
+        # The buffer carries both the detector's boxes (track_id None) and
+        # the tracker's boxes (track_id set). Tracking state/HUD always use
+        # the tracked entries; what we *draw* depends on draw_from_detections.
+        track_entries = [e for e in all_entries if e["track_id"] is not None]
+        det_entries = [e for e in all_entries if e["track_id"] is None]
 
-            all_entries = self._read_metadata(buf)
-            # The buffer carries both the detector's boxes (track_id None) and
-            # the tracker's boxes (track_id set). Tracking state/HUD always use
-            # the tracked entries; what we *draw* depends on draw_from_detections.
-            track_entries = [e for e in all_entries if e["track_id"] is not None]
-            det_entries = [e for e in all_entries if e["track_id"] is None]
+        # Ball position for contact counting: prefer a tracked ball, else
+        # fall back to the strongest ball *detection* (the ball is small and
+        # fast, so it often isn't tracked) -- so contacts still get counted.
+        det_ball_box = None
+        best_ball = -1.0
+        for e in det_entries:
+            if _is_ball(e["label"]) and e["confidence"] > best_ball:
+                best_ball, det_ball_box = e["confidence"], e["box"]
 
-            # Ball position for contact counting: prefer a tracked ball, else
-            # fall back to the strongest ball *detection* (the ball is small and
-            # fast, so it often isn't tracked) -- so contacts still get counted.
-            det_ball_box = None
-            best_ball = -1.0
-            for e in det_entries:
-                if _is_ball(e["label"]) and e["confidence"] > best_ball:
-                    best_ball, det_ball_box = e["confidence"], e["box"]
+        # Per-track state (votes, contacts, distance, focal) from the tracker.
+        active = self._update_tracks(
+            track_entries if track_entries else all_entries, det_ball_box
+        )
 
-            # Per-track state (votes, contacts, distance, focal) from the tracker.
-            active = self._update_tracks(
-                track_entries if track_entries else all_entries, det_ball_box
-            )
-
-            if self.draw_from_detections:
-                draw_entries = list(det_entries)
-                # Bridge missed detections: the detector occasionally drops a
-                # player for a frame, which would flicker the circle. The tracker
-                # is still coasting that player (Kalman keep-alive), so draw any
-                # confirmed track that has no detection this frame -- detections
-                # still drive everything they cover; tracks only fill the gaps.
-                if track_entries:
-                    covered = set()
-                    for d in det_entries:
-                        if _is_ball(d["label"]):
+        if self.draw_from_detections:
+            draw_entries = list(det_entries)
+            # Bridge missed detections: the detector occasionally drops a
+            # player for a frame, which would flicker the circle. The tracker
+            # is still coasting that player (Kalman keep-alive), so draw any
+            # confirmed track that has no detection this frame -- detections
+            # still drive everything they cover; tracks only fill the gaps.
+            if track_entries:
+                covered = set()
+                for d in det_entries:
+                    if _is_ball(d["label"]):
+                        continue
+                    for t in track_entries:
+                        if t["track_id"] in covered or _is_ball(t["label"]):
                             continue
-                        for t in track_entries:
-                            if t["track_id"] in covered or _is_ball(t["label"]):
-                                continue
-                            if self._overlap(d["box"], t["box"]) >= 0.3:
-                                covered.add(t["track_id"])
-                    draw_entries += [
-                        t
-                        for t in track_entries
-                        if not _is_ball(t["label"]) and t["track_id"] not in covered
-                    ]
-            else:
-                draw_entries = track_entries if track_entries else det_entries
-            # min-confidence gates only what we *draw* (tracks carry conf 1.0, so
-            # they're unaffected); the contact math above used the raw detections.
-            if self.min_confidence > 0.0:
-                draw_entries = [
-                    e for e in draw_entries if e["confidence"] >= self.min_confidence
+                        if self._overlap(d["box"], t["box"]) >= 0.3:
+                            covered.add(t["track_id"])
+                draw_entries += [
+                    t
+                    for t in track_entries
+                    if not _is_ball(t["label"]) and t["track_id"] not in covered
                 ]
-            # Collapse overlapping boxes so one player isn't circled twice,
-            # then low-pass the positions so the circle glides.
-            draw_entries = self._merge_overlaps(draw_entries)
-            draw_entries = self._smooth_boxes(np, draw_entries)
-            if not all_entries:
-                return Gst.FlowReturn.OK
+        else:
+            draw_entries = track_entries if track_entries else det_entries
+        # min-confidence gates only what we *draw* (tracks carry conf 1.0, so
+        # they're unaffected); the contact math above used the raw detections.
+        if self.min_confidence > 0.0:
+            draw_entries = [
+                e for e in draw_entries if e["confidence"] >= self.min_confidence
+            ]
+        # Collapse overlapping boxes so one player isn't circled twice,
+        # then low-pass the positions so the circle glides.
+        draw_entries = self._merge_overlaps(draw_entries)
+        draw_entries = self._smooth_boxes(np, draw_entries)
+        if not all_entries:
+            return
 
-            import cv2
+        # Jersey team voting first, so trails/ellipses use this frame's
+        # vote (track mode; detection mode classifies per box at draw).
+        # Referees are voted on too -- their colour comes from the jersey
+        # (gold only as the fallback), not the class label.
+        if self.team_colors:
+            for e in track_entries:
+                tid = e["track_id"]
+                lab = self._stable_label(tid, e["label"])
+                if _is_ball(lab):
+                    continue
+                vote = self._classify_jersey(cv2, np, frame, e["box"])
+                if vote:
+                    tv = self._team_votes.setdefault(
+                        tid, {"red": 0, "blue": 0, "ref": 0}
+                    )
+                    tv[vote] = tv.get(vote, 0) + 1
 
-            ok, mapinfo = buf.map(Gst.MapFlags.WRITE)
-            if not ok:
-                self.logger.error("Failed to map buffer for writing")
-                return Gst.FlowReturn.ERROR
-            try:
-                frame = np.frombuffer(
-                    mapinfo.data, dtype=np.uint8, count=self.height * self.width * 4
-                ).reshape(self.height, self.width, 4)
+        if self.trails:
+            for tid in active:
+                rgba = self._color_for(self._track_label.get(tid, ""), tid)
+                if rgba is None:
+                    continue
+                self._draw_trail(cv2, np, frame, self._trail.get(tid, []), rgba)
+            if self.show_ball:
+                self._draw_trail(cv2, np, frame, self._ball_trail, _BALL_RGBA)
 
-                # Jersey team voting first, so trails/ellipses use this frame's
-                # vote (track mode; detection mode classifies per box at draw).
-                # Referees are voted on too -- their colour comes from the jersey
-                # (gold only as the fallback), not the class label.
-                if self.team_colors:
-                    for e in track_entries:
-                        tid = e["track_id"]
-                        lab = self._stable_label(tid, e["label"])
-                        if _is_ball(lab):
-                            continue
-                        vote = self._classify_jersey(cv2, np, frame, e["box"])
-                        if vote:
-                            tv = self._team_votes.setdefault(
-                                tid, {"red": 0, "blue": 0, "ref": 0}
-                            )
-                            tv[vote] = tv.get(vote, 0) + 1
-
-                if self.trails:
-                    for tid in active:
-                        rgba = self._color_for(self._track_label.get(tid, ""), tid)
-                        if rgba is None:
-                            continue
-                        self._draw_trail(cv2, np, frame, self._trail.get(tid, []), rgba)
-                    if self.show_ball:
-                        self._draw_trail(cv2, np, frame, self._ball_trail, _BALL_RGBA)
-
-                # Which drawn box is the focal (HUD) player? Match the focal
-                # track's box to the nearest drawn box so we can highlight it
-                # even when drawing from detections (no track id on the box).
-                focal_idx = None
-                if self.highlight_focal:
-                    focal_tid = self._focal_track()
-                    focal_box = None
-                    if focal_tid is not None:
-                        for t in track_entries:
-                            if t["track_id"] == focal_tid:
-                                focal_box = t["box"]
-                                break
-                    if focal_box is not None:
-                        best = 0.0
-                        for i, e in enumerate(draw_entries):
-                            if _is_ball(e["label"]):
-                                continue
-                            ov = self._overlap(e["box"], focal_box)
-                            if ov > best:
-                                best, focal_idx = ov, i
-
-                # Stable track id per drawn box (detection boxes borrow the id of
-                # the track they overlap) -- used for the id badge and to look up
-                # the track's accumulated colour.
-                draw_ids = self._assign_track_ids(draw_entries, track_entries)
-
+        # Which drawn box is the focal (HUD) player? Match the focal
+        # track's box to the nearest drawn box so we can highlight it
+        # even when drawing from detections (no track id on the box).
+        focal_idx = None
+        if self.highlight_focal:
+            focal_tid = self._focal_track()
+            focal_box = None
+            if focal_tid is not None:
+                for t in track_entries:
+                    if t["track_id"] == focal_tid:
+                        focal_box = t["box"]
+                        break
+            if focal_box is not None:
+                best = 0.0
                 for i, e in enumerate(draw_entries):
-                    box = e["box"]
-                    badge_id = draw_ids[i]
-                    # Use the track's stable identity (class + accumulated team
-                    # votes) for colour whenever the box maps to a track -- in
-                    # detection mode that's the box's matched track id. This
-                    # makes colour robust to per-frame label/jersey noise. Only
-                    # an unmatched detection falls back to this frame's guess.
-                    color_tid = e["track_id"] if e["track_id"] is not None else badge_id
-                    if color_tid is not None:
-                        label = self._stable_label(color_tid, e["label"])
-                    else:
-                        label = e["label"]
-                    if _is_ball(label):
-                        if self.show_ball:
-                            self._draw_triangle(cv2, np, frame, box, _BALL_RGBA)
+                    if _is_ball(e["label"]):
                         continue
-                    if color_tid is not None:
-                        rgba = self._color_for(label, color_tid)
-                    else:
-                        rgba = self._detection_color(cv2, np, frame, label, box)
-                    if rgba is None:
-                        continue
-                    self._draw_ellipse(cv2, frame, box, rgba, badge_id)
-                    if i == focal_idx:
-                        self._draw_focal_marker(cv2, np, frame, box)
-                    if self.show_labels:
-                        self._draw_label(cv2, frame, box, label, rgba)
+                    ov = self._overlap(e["box"], focal_box)
+                    if ov > best:
+                        best, focal_idx = ov, i
 
-                if self.show_hud:
-                    focal = self._focal_track()
-                    if focal is not None:
-                        ppm = self._px_per_meter()
-                        dist_m = (
-                            (self._distance_px.get(focal, 0.0) / ppm) if ppm else 0.0
-                        )
-                        hud_rgba = (
-                            self._color_for(self._track_label.get(focal, ""), focal)
-                            or _DEFAULT_RGBA
-                        )
-                        self._draw_hud(
-                            cv2,
-                            frame,
-                            self._contacts.get(focal, 0),
-                            dist_m,
-                            hud_rgba,
-                            self._load_headshot(cv2, np),
-                        )
-            finally:
-                buf.unmap(mapinfo)
+        # Stable track id per drawn box (detection boxes borrow the id of
+        # the track they overlap) -- used for the id badge and to look up
+        # the track's accumulated colour.
+        draw_ids = self._assign_track_ids(draw_entries, track_entries)
 
-            return Gst.FlowReturn.OK
+        for i, e in enumerate(draw_entries):
+            box = e["box"]
+            badge_id = draw_ids[i]
+            # Use the track's stable identity (class + accumulated team
+            # votes) for colour whenever the box maps to a track -- in
+            # detection mode that's the box's matched track id. This
+            # makes colour robust to per-frame label/jersey noise. Only
+            # an unmatched detection falls back to this frame's guess.
+            color_tid = e["track_id"] if e["track_id"] is not None else badge_id
+            if color_tid is not None:
+                label = self._stable_label(color_tid, e["label"])
+            else:
+                label = e["label"]
+            if _is_ball(label):
+                if self.show_ball:
+                    self._draw_triangle(cv2, np, frame, box, _BALL_RGBA)
+                continue
+            if color_tid is not None:
+                rgba = self._color_for(label, color_tid)
+            else:
+                rgba = self._detection_color(cv2, np, frame, label, box)
+            if rgba is None:
+                continue
+            self._draw_ellipse(cv2, frame, box, rgba, badge_id)
+            if i == focal_idx:
+                self._draw_focal_marker(cv2, np, frame, box)
+            if self.show_labels:
+                self._draw_label(cv2, frame, box, label, rgba)
 
-        except Exception as exception:
-            post_error(self, "football overlay transform error", exception)
-            return Gst.FlowReturn.ERROR
+        if self.show_hud:
+            focal = self._focal_track()
+            if focal is not None:
+                ppm = self._px_per_meter()
+                dist_m = (self._distance_px.get(focal, 0.0) / ppm) if ppm else 0.0
+                hud_rgba = (
+                    self._color_for(self._track_label.get(focal, ""), focal)
+                    or _DEFAULT_RGBA
+                )
+                self._draw_hud(
+                    cv2,
+                    frame,
+                    self._contacts.get(focal, 0),
+                    dist_m,
+                    hud_rgba,
+                    self._load_headshot(cv2, np),
+                )
 
 
-# GStreamer factory registration runs only under the gst backend.
-if CAN_REGISTER_ELEMENT and backend.BACKEND == "gst":
+if backend.BACKEND == "gst":
     __gstelementfactory__ = backend.register_gst_element(
         "pyml_football_overlay", FootballOverlay
-    )
-elif not CAN_REGISTER_ELEMENT:
-    GlobalLogger().warning(
-        "The 'pyml_football_overlay' element will not be registered because "
-        "required modules are missing."
     )
