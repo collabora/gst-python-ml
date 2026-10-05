@@ -16,16 +16,21 @@
 # Free Software Foundation, Inc., 51 Franklin Street, Fifth Floor,
 # Boston, MA 02110-1301, USA.
 
+import time
+
 import gi
 
 gi.require_version("Gst", "1.0")
 gi.require_version("GstBase", "1.0")
 gi.require_version("GstVideo", "1.0")
-from gi.repository import Gst  # noqa: E402
+from gi.repository import Gst, GstBase  # noqa: E402
 
 from backend.core import FrameProcessingMixin  # noqa: E402
 from backend.gst.errors import post_error  # noqa: E402
 from backend.gst.transform import BaseTransform  # noqa: E402
+
+# GST_BASE_TRANSFORM_FLOW_DROPPED, which pygobject does not expose
+FLOW_DROPPED = Gst.FlowReturn.CUSTOM_SUCCESS
 
 
 class VideoTransform(BaseTransform, FrameProcessingMixin):
@@ -47,6 +52,37 @@ class VideoTransform(BaseTransform, FrameProcessingMixin):
         ),
     )
 
+    def __init__(self):
+        super().__init__()
+        self.set_qos_enabled(True)
+        self._sink_running_time_ns = None
+        self._sink_clock_then_ns = None
+        self._last_run_ns = 0
+
+    def do_src_event(self, event):
+        if event.type == Gst.EventType.QOS:
+            _, _, diff, timestamp = event.parse_qos()
+            clock = self.get_clock()
+            if diff > 0 and clock is not None:
+                self._sink_running_time_ns = timestamp + diff
+                self._sink_clock_then_ns = clock.get_time()
+        return GstBase.BaseTransform.do_src_event(self, event)
+
+    def do_sink_event(self, event):
+        if event.type == Gst.EventType.FLUSH_STOP:
+            self._sink_running_time_ns = None
+        return GstBase.BaseTransform.do_sink_event(self, event)
+
+    def would_reach_the_sink_late(self, buf):
+        if self._sink_running_time_ns is None or buf.pts == Gst.CLOCK_TIME_NONE:
+            return False
+        running_time = self.segment.to_running_time(Gst.Format.TIME, buf.pts)
+        if running_time == Gst.CLOCK_TIME_NONE:
+            return False
+        elapsed_ns = self.get_clock().get_time() - self._sink_clock_then_ns
+        due_by = self._sink_running_time_ns + elapsed_ns + self._last_run_ns
+        return running_time < due_by
+
     def do_set_caps(self, incaps, outcaps):
         struct = incaps.get_structure(0)
         self.width = struct.get_int("width").value
@@ -64,6 +100,8 @@ class VideoTransform(BaseTransform, FrameProcessingMixin):
 
         if self._only_on and not self.carries_only_on(buf):
             return Gst.FlowReturn.OK
+        if self.is_qos_enabled() and self.would_reach_the_sink_late(buf):
+            return FLOW_DROPPED
         try:
             frames, num_sources, fmt = frameio.read_frames(
                 buf,
@@ -78,7 +116,9 @@ class VideoTransform(BaseTransform, FrameProcessingMixin):
             if frames is None:
                 self.logger.error("Failed to extract frames")
                 return Gst.FlowReturn.ERROR
+            started = time.monotonic_ns()
             self.process_frames(frames, num_sources, fmt, buf)
+            self._last_run_ns = time.monotonic_ns() - started
             return Gst.FlowReturn.OK
         except Exception as exception:
             post_error(self, "transform error", exception)
