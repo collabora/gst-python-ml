@@ -33,20 +33,25 @@ class MiGraphXEngine(MLEngine):
         self.model_name = None
         self.kwargs = None
         self.fp16 = False
+        self.dynamic_input_name = None
+        self.dynamic_input_dims = None
+        self.compiled_input_shape = None
 
     def _input_is_nchw(self):
         """Auto-detect whether the model's first input expects NCHW layout."""
-        if self.program is None:
+        if self.dynamic_input_dims is not None:
+            lens = self.dynamic_input_dims
+        elif self.program is None:
             return False
-        param_shapes = self.program.get_parameter_shapes()
-        if not param_shapes:
-            return False
-        first_shape = next(iter(param_shapes.values()))
-        lens = first_shape.lens()
+        else:
+            param_shapes = self.program.get_parameter_shapes()
+            if not param_shapes:
+                return False
+            lens = next(iter(param_shapes.values())).lens()
         return len(lens) == 4 and lens[1] in (1, 3, 4)
 
     def _model_input_hw(self):
-        if self.program is None:
+        if self.program is None or self.dynamic_input_name is not None:
             return None
         shapes = self.program.get_parameter_shapes()
         return fixed_height_width(shapes[self.input_names[0]].lens())
@@ -65,14 +70,50 @@ class MiGraphXEngine(MLEngine):
         if not model_name.endswith(".onnx"):
             self.logger.warning(f"MiGraphX expects an .onnx file, got: {model_name}")
 
-        # Parse ONNX model
-        parse_kwargs = {}
-        if "default_dim_value" in kwargs:
-            parse_kwargs["default_dim_value"] = kwargs["default_dim_value"]
-        if "map_input_dims" in kwargs:
-            parse_kwargs["map_input_dims"] = kwargs["map_input_dims"]
+        self.program = None
+        self.compiled_input_shape = None
+        self.dynamic_input_name = None
+        self.dynamic_input_dims = None
+        input_name, input_dims = self._first_input(model_name)
+        height_or_width_is_dynamic = len(input_dims) == 4 and None in input_dims[2:]
+        # migraphx parses a dynamic height or width at a default size that can divide by zero
+        if height_or_width_is_dynamic and "map_input_dims" not in kwargs:
+            self.dynamic_input_name = input_name
+            self.dynamic_input_dims = input_dims
+            self.logger.info(
+                f"MiGraphX model {model_name} has a dynamic input size, "
+                "compiling on the first frame"
+            )
+            return True
 
-        self.program = migraphx.parse_onnx(model_name, **parse_kwargs)
+        self._parse_and_compile(self._parse_kwargs())
+        return True
+
+    def _first_input(self, model_name):
+        import onnx
+
+        graph = onnx.load(model_name, load_external_data=False).graph
+        initializer_names = {initializer.name for initializer in graph.initializer}
+        first_input = next(
+            graph_input
+            for graph_input in graph.input
+            if graph_input.name not in initializer_names
+        )
+        dims = [
+            None if dim.dim_param or dim.dim_value == 0 else dim.dim_value
+            for dim in first_input.type.tensor_type.shape.dim
+        ]
+        return first_input.name, dims
+
+    def _parse_kwargs(self):
+        return {
+            key: self.kwargs[key]
+            for key in ("default_dim_value", "map_input_dims")
+            if key in self.kwargs
+        }
+
+    def _parse_and_compile(self, parse_kwargs):
+        self.program = migraphx.parse_onnx(self.model_name, **parse_kwargs)
 
         # Optional fp16 quantization
         if self.fp16:
@@ -80,7 +121,7 @@ class MiGraphXEngine(MLEngine):
 
         # Compile for target
         target = self.target or migraphx.get_target("gpu")
-        offload_copy = kwargs.get("offload_copy", True)
+        offload_copy = self.kwargs.get("offload_copy", True)
         self.program.compile(target, offload_copy=offload_copy)
 
         # Cache parameter info
@@ -89,10 +130,9 @@ class MiGraphXEngine(MLEngine):
         self.model = self.program
 
         self.logger.info(
-            f"MiGraphX model loaded and compiled: {model_name} "
+            f"MiGraphX model loaded and compiled: {self.model_name} "
             f"(inputs: {self.input_names}, fp16: {self.fp16})"
         )
-        return True
 
     def do_set_device(self, device):
         """Set the MiGraphX compilation target."""
@@ -112,7 +152,7 @@ class MiGraphXEngine(MLEngine):
 
     def do_forward(self, frames):
         """Run inference on a single frame or batch of frames."""
-        if self.program is None:
+        if self.program is None and self.dynamic_input_name is None:
             self.logger.error("No model loaded")
             return None
 
@@ -128,6 +168,16 @@ class MiGraphXEngine(MLEngine):
         # Build parameter dict — map first input name to the data
         # migraphx reads the array without keeping it alive
         model_input = np.ascontiguousarray(img)
+        if (
+            self.dynamic_input_name is not None
+            and model_input.shape != self.compiled_input_shape
+        ):
+            parse_kwargs = self._parse_kwargs()
+            parse_kwargs["map_input_dims"] = {
+                self.dynamic_input_name: list(model_input.shape)
+            }
+            self._parse_and_compile(parse_kwargs)
+            self.compiled_input_shape = model_input.shape
         params = {self.input_names[0]: migraphx.argument(model_input)}
 
         # Run inference
