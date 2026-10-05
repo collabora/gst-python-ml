@@ -22,7 +22,7 @@ export PYTHONPATH="$REPO/plugins/python:$VENV_SITE:${PYTHONPATH:-}"
 BACKEND="${BACKEND:-pt}"
 # The weights live on the Hugging Face Hub; this is a no-op once cached.
 python demo/football/fetch_models.py "$BACKEND" >&2
-INTERVAL="${INTERVAL:-3}"   # run detection every Nth frame; tracker/overlay stay per-frame
+INTERVAL="${INTERVAL:-1}"   # run detection every Nth frame; the ball trail needs every frame
 CONF="${CONF:-0.1}"        # detector confidence threshold (low = more detections)
 IMGSZ="${IMGSZ:-640}"      # network input size; 1280 sees the ball far more often (pt backend only)
 IOU="${IOU:-0.7}"          # NMS IoU (ultralytics/football_analyzer default)

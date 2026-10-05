@@ -79,8 +79,10 @@ _REFEREE_RGBA = (255, 215, 0, 255)
 _BALL_RGBA = (0, 230, 0, 255)
 # a hard shot moves under half of this per frame
 _BALL_TRAIL_MAX_STEP = 0.04
+# a ball hidden behind a player comes back within this many steps
+_BALL_TRAIL_MAX_STEPS_PER_GAP = 4
 _BALL_TRAIL_MAX_GAP = 25
-_BALL_TRAIL_BRIDGE_GAP = 3
+_CAMERA_SHIFT_MIN_TRACKS = 3
 _PLAYER_RGBA = (0, 200, 255, 255)
 _RED_TEAM_RGBA = (255, 40, 40, 255)
 _BLUE_TEAM_RGBA = (40, 90, 255, 255)
@@ -308,7 +310,9 @@ class FootballOverlay(GstBase.BaseTransform):
         self._trail = {}
         self._ball_trail = []
         self._ball_trail_frame = None
+        self._ball_trail_pending = None
         self._last_pt = {}
+        self._last_centre = {}
         self._distance_px = {}
         self._heights = []
         self._widths = []
@@ -425,6 +429,8 @@ class FootballOverlay(GstBase.BaseTransform):
                 continue
             v = self._class_votes.setdefault(tid, {})
             v[e["label"]] = v.get(e["label"], 0) + 1
+        self._follow_camera(entries)
+        smoothing = float(self.position_smoothing)
         for e in entries:
             tid = e["track_id"]
             if tid is None:
@@ -438,13 +444,19 @@ class FootballOverlay(GstBase.BaseTransform):
             self._track_label[tid] = label
             self._frames_seen[tid] = self._frames_seen.get(tid, 0) + 1
             x1, y1, x2, y2 = e["box"]
-            foot = (int((x1 + x2) / 2), int(y2))
+            self._last_centre[tid] = ((x1 + x2) / 2, (y1 + y2) / 2)
+            foot = ((x1 + x2) / 2, y2)
+            prev = self._last_pt.get(tid)
+            if prev is not None:
+                foot = (
+                    smoothing * prev[0] + (1 - smoothing) * foot[0],
+                    smoothing * prev[1] + (1 - smoothing) * foot[1],
+                )
             if y2 - y1 > 0:
                 self._heights.append(y2 - y1)
                 if len(self._heights) > 600:
                     self._heights = self._heights[-600:]
             self._update_ellipse_width(tid, x2 - x1)
-            prev = self._last_pt.get(tid)
             if prev is not None:
                 self._distance_px[tid] = (
                     self._distance_px.get(tid, 0.0)
@@ -482,8 +494,31 @@ class FootballOverlay(GstBase.BaseTransform):
             if tid not in active:
                 del self._trail[tid]
                 self._last_pt.pop(tid, None)
+                self._last_centre.pop(tid, None)
                 self._ell_w.pop(tid, None)
         return active
+
+    def _follow_camera(self, entries):
+        # a pan moves the pitch under the trails
+        moves = []
+        for e in entries:
+            prev = self._last_centre.get(e["track_id"])
+            if prev is None or _is_ball(e["label"]):
+                continue
+            x1, y1, x2, y2 = e["box"]
+            moves.append(((x1 + x2) / 2 - prev[0], (y1 + y2) / 2 - prev[1]))
+        if len(moves) < _CAMERA_SHIFT_MIN_TRACKS:
+            return
+        dx = sorted(m[0] for m in moves)[len(moves) // 2]
+        dy = sorted(m[1] for m in moves)[len(moves) // 2]
+        for trail in self._trail.values():
+            trail[:] = [(x + dx, y + dy) for x, y in trail]
+        self._ball_trail = [(x + dx, y + dy) for x, y in self._ball_trail]
+        if self._ball_trail_pending is not None:
+            (x, y), frame = self._ball_trail_pending
+            self._ball_trail_pending = ((x + dx, y + dy), frame)
+        for tid, (x, y) in self._last_pt.items():
+            self._last_pt[tid] = (x + dx, y + dy)
 
     def _update_ellipse_width(self, track_id, raw_w):
         # Smooth (and outlier-reject) the per-track ellipse width so a single
@@ -825,16 +860,27 @@ class FootballOverlay(GstBase.BaseTransform):
         return self._headshot
 
     def _extend_ball_trail(self, point):
-        if self._ball_trail:
-            last = self._ball_trail[-1]
-            elapsed = max(1, self._frame - self._ball_trail_frame)
-            jump = ((point[0] - last[0]) ** 2 + (point[1] - last[1]) ** 2) ** 0.5
-            too_far = jump > _BALL_TRAIL_MAX_STEP * self.width * elapsed
-            if elapsed > _BALL_TRAIL_BRIDGE_GAP or too_far:
-                self._ball_trail = []
+        if self._ball_trail and not self._ball_could_move(
+            self._ball_trail[-1], self._ball_trail_frame, point
+        ):
+            # a stray box must not wipe the trail
+            pending = self._ball_trail_pending
+            if pending is None or not self._ball_could_move(*pending, point):
+                self._ball_trail_pending = (point, self._frame)
+                return
+            self._ball_trail = [pending[0]]
+        self._ball_trail_pending = None
         self._ball_trail.append(point)
         del self._ball_trail[: -self.trail_length]
         self._ball_trail_frame = self._frame
+
+    def _ball_could_move(self, start, start_frame, end):
+        elapsed = max(1, self._frame - start_frame)
+        if elapsed > _BALL_TRAIL_MAX_GAP:
+            return False
+        jump = ((end[0] - start[0]) ** 2 + (end[1] - start[1]) ** 2) ** 0.5
+        steps = min(elapsed, _BALL_TRAIL_MAX_STEPS_PER_GAP)
+        return jump <= _BALL_TRAIL_MAX_STEP * self.width * steps
 
     def _draw_trail(self, cv2, np, frame, points, rgba):
         import cv2
