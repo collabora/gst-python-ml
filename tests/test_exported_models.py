@@ -40,6 +40,10 @@ FLOW_MODEL = "raft_small"
 FLOW_FRAME_SIZE = (640, 360)
 FLOW_SHIFT_PIXELS = 8
 FLOW_TOLERANCE_PIXELS = 0.5
+SAM_MODEL = "facebook/sam2-hiera-tiny"
+SAM_SCORE_TOLERANCE = 1e-3
+# a handful of pixels on mask edges flip
+SAM_MASK_AGREEMENT_FLOOR = 0.9999
 # the task engine first
 ENGINE_NAMES = ("pytorch", "onnx")
 
@@ -176,3 +180,21 @@ def test_optical_flow_on_onnx_matches_optical_flow_on_pytorch(portrait_rgb):
         FLOW_SHIFT_PIXELS, abs=FLOW_TOLERANCE_PIXELS
     )
     assert np.abs(exported - reference).mean() < FLOW_TOLERANCE_PIXELS
+
+
+def test_sam_on_onnx_matches_sam_on_pytorch(portrait_rgb):
+    from sam import SamTransform
+
+    reference, exported = (
+        loaded_element(SamTransform, SAM_MODEL, engine_name).forward(portrait_rgb)
+        for engine_name in ENGINE_NAMES
+    )
+
+    assert len(exported["masks"]) == len(reference["masks"])
+    for exported_mask, reference_mask in zip(exported["masks"], reference["masks"]):
+        assert exported_mask["score"] == pytest.approx(
+            reference_mask["score"], abs=SAM_SCORE_TOLERANCE
+        )
+    assert exported["raw_masks"].shape == reference["raw_masks"].shape
+    agreement = (exported["raw_masks"] == reference["raw_masks"]).mean()
+    assert agreement > SAM_MASK_AGREEMENT_FLOOR

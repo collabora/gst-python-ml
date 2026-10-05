@@ -52,8 +52,8 @@ class SamTask:
     """Inference + frame/metadata production, independent of any framework."""
 
     def forward(self, frames):
-        if self.engine:
-            return self.engine.do_forward(frames, max_masks=self.max_masks)
+        if self.task_engine:
+            return self.task_engine.do_forward(frames, max_masks=self.max_masks)
         return None
 
     def decode(self, frame, result, fmt):
