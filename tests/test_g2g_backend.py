@@ -445,6 +445,7 @@ def test_video_transform_g2g_process_end_to_end():
 
 
 def test_tracker_gives_a_box_seen_twice_one_id():
+    pytest.importorskip("scipy")
     from tracker import TrackerTransform
 
     tracker = TrackerTransform()
@@ -462,6 +463,7 @@ def test_tracker_gives_a_box_seen_twice_one_id():
 
 
 def test_football_overlay_draws_a_tracked_player_in_place():
+    pytest.importorskip("cv2")
     from football_overlay import FootballOverlay
 
     overlay = FootballOverlay()
