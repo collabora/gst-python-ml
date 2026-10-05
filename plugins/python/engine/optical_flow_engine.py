@@ -27,6 +27,35 @@ EXPORTED_WIDTH = 640
 COLOR_CHANNELS = 3
 RAFT_PIXEL_MEAN = [0.5, 0.5, 0.5]
 RAFT_PIXEL_STD = [0.5, 0.5, 0.5]
+BILINEAR_CORNER_OFFSETS = ((0, 0), (1, 0), (0, 1), (1, 1))
+
+
+# tinygrad has no GridSample
+def bilinear_sample_by_gather(image, absolute_grid, mode, align_corners):
+    batch, channels, height, width = image.shape
+    flat_image = image.reshape(batch, channels, height * width)
+    x, y = absolute_grid.unbind(-1)
+    left, top = x.floor(), y.floor()
+    sampled = 0
+    for offset_x, offset_y in BILINEAR_CORNER_OFFSETS:
+        corner_x, corner_y = left + offset_x, top + offset_y
+        weight = (1 - (x - corner_x).abs()) * (1 - (y - corner_y).abs())
+        inside = (
+            (corner_x >= 0)
+            & (corner_x <= width - 1)
+            & (corner_y >= 0)
+            & (corner_y <= height - 1)
+        )
+        flat_index = (
+            corner_y.clamp(0, height - 1) * width + corner_x.clamp(0, width - 1)
+        ).long()
+        values = flat_image.gather(
+            2, flat_index.reshape(batch, 1, -1).expand(-1, channels, -1)
+        )
+        sampled = sampled + values.reshape(batch, channels, *x.shape[1:]) * (
+            weight * inside
+        ).unsqueeze(1)
+    return sampled
 
 
 class ExportedOpticalFlow:
@@ -38,8 +67,11 @@ class ExportedOpticalFlow:
         )
 
     def _build_graph(self, model_name):
+        from unittest import mock
+
         import torch
         from torchvision.models import optical_flow
+        from torchvision.models.optical_flow import raft
 
         build = (
             optical_flow.raft_small
@@ -57,7 +89,8 @@ class ExportedOpticalFlow:
 
             def forward(self, image):
                 frame_pair = normalize(image)
-                return self.model(frame_pair[0:1], frame_pair[1:2])[-1]
+                with mock.patch.object(raft, "grid_sample", bilinear_sample_by_gather):
+                    return self.model(frame_pair[0:1], frame_pair[1:2])[-1]
 
         example_input = torch.rand(2, COLOR_CHANNELS, EXPORTED_HEIGHT, EXPORTED_WIDTH)
         return FlowGraph(), example_input
