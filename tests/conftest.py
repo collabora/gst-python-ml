@@ -1,5 +1,14 @@
 from pathlib import Path
 
+# on ubuntu, numpy loaded before libgstreamer makes a c++ exception thrown by onnx abort the process
+try:
+    import gi
+
+    gi.require_version("Gst", "1.0")
+    from gi.repository import Gst  # noqa: F401
+except (ImportError, ValueError):
+    pass
+
 G2G_ONLY_FILE = "test_g2g_backend.py"
 
 

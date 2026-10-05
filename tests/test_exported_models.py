@@ -176,6 +176,7 @@ def test_action_on_onnx_matches_action_on_pytorch(portrait_rgb):
 
 
 def test_superres_on_onnx_matches_superres_on_pytorch(portrait_rgb):
+    pytest.importorskip("spandrel")
     import cv2
     from superres import SuperResTransform
 
