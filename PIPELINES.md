@@ -13,6 +13,9 @@ python pyml-launch.py filesrc location=data/people.mp4 ! decodebin ! videoconver
   ! pyml_overlay ! videoconvert ! autovideosink
 ```
 
+`pyml_overlay` draws with Cairo. `pyml_overlay renderer=skia` draws with Skia
+instead, from the `skia` extra.
+
 ### Choosing the backend
 
 The ML elements run under GStreamer or under
@@ -129,8 +132,12 @@ python pyml-launch.py   filesrc location=data/soccer_tracking.mp4 ! decodebin ! 
 ```
 
 ```
-python pyml-launch.py filesrc location=data/soccer_tracking.mp4 ! decodebin ! videoconvertscale ! video/x-raw,width=640,height=480 ! demo_soccer model-name=yolo11m device=cuda:0 ! pyml_overlay ! videoconvert ! autovideosink
+python pyml-launch.py filesrc location=data/soccer_tracking.mp4 ! decodebin ! videoconvertscale ! video/x-raw,width=640,height=480 ! demo_soccer model-name=yolo11m device=cuda:0 imgsz=640 hires-fallback=false ! pyml_overlay ! videoconvert ! autovideosink
 ```
+
+`imgsz` defaults to 1280 and `hires-fallback` runs a second 1536 pixel pass for the
+ball, which together triple the time per frame. On a 640x480 input neither finds
+more than `imgsz=640` does.
 
 
 #### ONNX Engine

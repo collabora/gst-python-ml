@@ -12,10 +12,9 @@ Python-element host are tracked in that repo's `design/TODO.md`, under
   Only the error categories count as gaps. `pipeline error: Hardware(Other)` is
   how g2g reports a hosted element raising, so each needs its log in
   `tests/logs` read to name the cause. Known so far: `pyml_kafkasink` calls
-  `Gst.Pad` APIs directly and dies on `Gst.init`, `demo_soccer`'s engine raises
-  `TypeError: MLEngine.__init__() got an unexpected keyword argument 'device'`,
-  and `pyml_streammux` is refused with `pyelement: more than one input links
-  here, but it is not a registered muxer`. The suite wants the GPU for about 20
+  `Gst.Pad` APIs directly and dies on `Gst.init`, and `pyml_streammux` is
+  refused with `pyelement: more than one input links here, but it is not a
+  registered muxer`. The suite wants the GPU for about 20
   minutes per backend, so run one backend at a time on a 6 GB card and leave the
   machine otherwise idle, including between backends: a model still resident
   from the previous run fails the next one at preroll.
