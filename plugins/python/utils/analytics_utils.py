@@ -16,6 +16,9 @@
 # Free Software Foundation, Inc., 51 Franklin Street, Fifth Floor,
 # Boston, MA 02110-1301, USA.
 
+# zero-size objects sharing one such label are the points of a polyline, oldest first
+TRAIL_LABEL_SUFFIX = "_trail"
+
 ANALYTICS_UTILS_AVAILABLE = True
 try:
     import re
@@ -44,6 +47,7 @@ class AnalyticsUtils:
     - Advanced ball tracking: 'stream_<idx>_ball_id_<id>' → label='ball', track_id=<id>
     - Simpler tracking: 'stream_<idx>_id_<id>' → label='id_<id>', track_id=<id>
     - Class name (no tracking): 'stream_<idx>_<class_name>' → label='<class_name>', track_id=None
+    - Trail point: 'stream_<idx>_<name>_trail' → label='<name>_trail', track_id=None
     - Fallback: Any other format → label='<full_label>', track_id=None
 
     The extracted metadata includes labels, track IDs, confidence scores, and bounding box coordinates.

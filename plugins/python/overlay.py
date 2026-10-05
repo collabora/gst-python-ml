@@ -19,7 +19,7 @@
 from log.global_logger import GlobalLogger
 import backend
 
-from utils.analytics_utils import ANALYTICS_UTILS_AVAILABLE
+from utils.analytics_utils import ANALYTICS_UTILS_AVAILABLE, TRAIL_LABEL_SUFFIX
 
 if ANALYTICS_UTILS_AVAILABLE:
     from utils.analytics_utils import AnalyticsUtils
@@ -30,10 +30,14 @@ try:
         load_metadata,
     )
     from overlay_helper.overlay_utils_interface import (
+        Color,
         TrackingDisplay,
         GraphicsType,
         OverlayGraphicsFactory,
     )
+
+    TRAIL_COLOR = Color(1.0, 1.0, 0.0, 1.0)
+    TRAIL_LINE_WIDTH = 3
     import gi
 
     gi.require_version("Gst", "1.0")
@@ -442,11 +446,30 @@ class Overlay(GstBase.BaseTransform):
         return Gst.FlowReturn.OK
 
     def do_post_process(self, frame_metadata):
+        trails = {}
+        boxes = []
+        for entry in frame_metadata:
+            label = entry.get("label", "")
+            if label.endswith(TRAIL_LABEL_SUFFIX):
+                trails.setdefault(label, []).append(entry["box"])
+            else:
+                boxes.append(entry)
+        for points in trails.values():
+            self.draw_trail(points)
         self.overlay_graphics.draw_metadata(
-            frame_metadata, self.tracking_display if self.tracking else None
+            boxes, self.tracking_display if self.tracking else None
         )
         if self.tracking:
             self.tracking_display.fade_history()
+
+    def draw_trail(self, points):
+        for start, end in zip(points, points[1:]):
+            self.overlay_graphics.draw_line(
+                {"x": start["x1"], "y": start["y1"]},
+                {"x": end["x1"], "y": end["y1"]},
+                TRAIL_COLOR,
+                TRAIL_LINE_WIDTH,
+            )
 
 
 if CAN_REGISTER_ELEMENT and backend.BACKEND == "gst":

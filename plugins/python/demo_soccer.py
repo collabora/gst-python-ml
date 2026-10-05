@@ -27,6 +27,7 @@ try:
     gi.require_version("GstBase", "1.0")
     gi.require_version("GstVideo", "1.0")
     from backend import analytics, GObject  # noqa: E402
+    from utils.analytics_utils import TRAIL_LABEL_SUFFIX
     from base_objectdetector import BaseObjectDetector
 
     import os
@@ -795,6 +796,10 @@ class DemoSoccer(BaseObjectDetector):
                 self.logger.debug(
                     f"Stream {stream_idx} - Linked ball od_mtd {od_mtd} to tracking_mtd {tracking_mtd}"
                 )
+
+        ball_trail_label = f"stream_{stream_idx}_ball{TRAIL_LABEL_SUFFIX}"
+        for x, y, _frame_index in ball_trail:
+            analytics.add_object(meta, ball_trail_label, x, y, 0, 0, 1.0)
 
         # Fallback to original boxes if needed (unchanged)
         if boxes is not None and len(boxes) > 0:
