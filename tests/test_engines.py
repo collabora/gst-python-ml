@@ -1,4 +1,5 @@
 import os
+import shutil
 import sys
 from pathlib import Path
 
@@ -46,6 +47,11 @@ DETECTION_ENGINES = [
     ("tinygrad", "tinygrad", "onnx", ".onnx", "auto"),
 ]
 
+# what the ultralytics export of a format needs beyond the engine
+EXPORT_MODULES = {"tflite": "tensorflow"}
+
+DRPAI_EMULATION_DIR = BASE_DIR / "extern" / "rzv2h" / "emulation"
+
 CLASSIFICATION_ENGINES = [
     pytest.param("pytorch", "torch", id="pytorch"),
     pytest.param("tvm", "tvm", id="tvm"),
@@ -55,13 +61,19 @@ CLASSIFICATION_ENGINES = [
 ]
 
 
-def engine_on_cpu(name, module_name):
+def require_module(engine_name, module_name):
     try:
         __import__(module_name)
     except ImportError:
-        if REQUIRED_ENGINE == name:
-            pytest.fail(f"{module_name} is not importable but {name} is required")
+        if REQUIRED_ENGINE == engine_name:
+            pytest.fail(
+                f"{module_name} is not importable but {engine_name} is required"
+            )
         pytest.skip(f"{module_name} not installed")
+
+
+def engine_on_cpu(name, module_name):
+    require_module(name, module_name)
     engine = EngineFactory.create(name)
     engine.do_set_device("cpu")
     return engine
@@ -164,10 +176,32 @@ def test_detections_match_reference(
     people_frames_rgb,
 ):
     engine = engine_on_cpu(engine_name, module_name)
+    if export_format in EXPORT_MODULES:
+        require_module(engine_name, EXPORT_MODULES[export_format])
     model_path = artifact_path(exported_detector(export_format), suffix)
     engine.input_format = input_format
     engine.post_process = "anchor_free"
     assert engine.do_load_model(str(model_path)) is True
+
+    candidate_boxes = {
+        index: detections_as_boxes(engine.do_forward(frame))
+        for index, frame in enumerate(people_frames_rgb)
+    }
+    fraction = matched_box_fraction(
+        reference_boxes, candidate_boxes, MATCH_IOU_THRESHOLD
+    )
+    assert fraction is not None, "the reference run found no people"
+    assert fraction >= MINIMUM_MATCHED_FRACTION, f"matched {fraction:.2f}"
+
+
+def test_drpai_detections_match_reference_on_the_emulated_runtime(
+    monkeypatch, tmp_path, exported_detector, reference_boxes, people_frames_rgb
+):
+    # the stand-in runs the onnx file in the model directory with onnxruntime
+    monkeypatch.syspath_prepend(str(DRPAI_EMULATION_DIR))
+    engine = engine_on_cpu("drpai", "onnxruntime")
+    shutil.copy(exported_detector("onnx"), tmp_path)
+    assert engine.do_load_model(str(tmp_path), imgsz=DETECTOR_INPUT_SIZE) is True
 
     candidate_boxes = {
         index: detections_as_boxes(engine.do_forward(frame))

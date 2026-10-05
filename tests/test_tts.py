@@ -51,6 +51,10 @@ def element(request, monkeypatch):
     monkeypatch.setitem(sys.modules, "whisperspeech", package)
     monkeypatch.setitem(sys.modules, "whisperspeech.pipeline", pipeline_module)
 
+    # a ci runner has no cuda
+    monkeypatch.setattr(torch.cuda, "is_available", lambda: True)
+    monkeypatch.setattr(torch.cuda, "set_device", lambda index: None)
+
     from whisperspeechtts import WhisperSpeechTTS
 
     element = WhisperSpeechTTS()

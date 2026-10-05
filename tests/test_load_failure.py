@@ -150,6 +150,38 @@ def test_a_model_that_loads_leaves_the_pipeline_running():
     assert element.engine.model == LOADABLE_MODEL_NAME
 
 
+class EngineNamedOnThePipeline(VideoTransform):
+    __gstmetadata__ = (
+        "Engine Named On The Pipeline",
+        "Transform",
+        "an element that takes its engine from the engine-name property",
+        "test",
+    )
+    __gsttemplates__ = VideoTransform.__gsttemplates__
+
+    def process_frames(self, frames, num_sources, fmt, target):
+        pass
+
+
+GObject.type_register(EngineNamedOnThePipeline)
+
+
+def test_an_engine_name_set_after_the_device_replaces_the_engine():
+    EngineFactory.register(FAILING_ENGINE, FailingEngine)
+    EngineFactory.register(WORKING_ENGINE, WorkingEngine)
+    element = EngineNamedOnThePipeline()
+    element.set_property("engine-name", FAILING_ENGINE)
+    element.set_property("device", "cpu")
+    assert type(element.engine) is FailingEngine
+
+    element.set_property("engine-name", WORKING_ENGINE)
+    element.set_property("model-name", LOADABLE_MODEL_NAME)
+    element.do_load_model()
+
+    assert type(element.engine) is WorkingEngine
+    assert element.engine.device == "cpu"
+
+
 class DeviceRefusingEngine(WorkingEngine):
     def do_set_device(self, device):
         if device == REFUSED_DEVICE:

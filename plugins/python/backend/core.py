@@ -107,6 +107,9 @@ def ml_property_namespace(gobject):
 
     @engine_name.setter
     def engine_name(self, value):
+        # device= already built an engine under the old name
+        if value != self.mgr.engine_name:
+            self.mgr.engine = None
         self.mgr.engine_name = value
 
     @gobject.Property(type=str, default="auto")

@@ -68,6 +68,9 @@ jobs:
             extra: jax-cpu
           - engine: tinygrad
             extra: tinygrad
+          # runs on the onnxruntime stand-in for the board's runtime
+          - engine: drpai
+            extra: onnx
     steps:
       - uses: actions/checkout@v6
 
