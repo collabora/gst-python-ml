@@ -713,10 +713,10 @@ class YoloAdvancedEngine(PyTorchEngine):
         import numpy as np
 
         is_batch = isinstance(frames, np.ndarray) and frames.ndim == 4
-        if is_batch:
-            frame_bgr = frames[0]  # Assume single for stateful; extend if needed
-        else:
-            frame_bgr = np.array(frames, copy=True)
+        # Assume single for stateful; extend if needed
+        frame_rgb = frames[0] if is_batch else frames
+        # opencv and ultralytics read a numpy frame as bgr
+        frame_bgr = np.ascontiguousarray(frame_rgb[..., ::-1])
         gray = cv2.cvtColor(frame_bgr, cv2.COLOR_BGR2GRAY)
         Hh, Ww = frame_bgr.shape[:2]
 
