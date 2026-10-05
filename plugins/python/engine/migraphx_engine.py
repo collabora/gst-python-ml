@@ -119,7 +119,9 @@ class MiGraphXEngine(MLEngine):
         img = self._apply_input_format(frames.astype(np.float32) / 255.0, is_batch)
 
         # Build parameter dict — map first input name to the data
-        params = {self.input_names[0]: migraphx.argument(np.ascontiguousarray(img))}
+        # migraphx reads the array without keeping it alive
+        model_input = np.ascontiguousarray(img)
+        params = {self.input_names[0]: migraphx.argument(model_input)}
 
         # Run inference
         results = self.program.run(params)
