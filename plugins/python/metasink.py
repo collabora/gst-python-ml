@@ -54,18 +54,14 @@ def buffer_record(buffer, media_type):
             record["text"] = bytes(info.data).decode("utf-8", errors="replace")
         return record
     meta = analytics.get_relation_meta(buffer)
-    detections = analytics.read_objects(meta) if meta else []
-    # a pooled buffer keeps an emptied relation meta from an earlier frame
-    if detections:
-        record["detections"] = detections
+    # an empty list tells a frame with no detections from a dropped frame
+    record["detections"] = analytics.read_objects(meta) if meta else []
     for name, payload in read_blobs(buffer).items():
         # embedding blobs are binary, not json
         try:
             record[name] = json.loads(payload)
         except ValueError:
             continue
-    if len(record) <= 1:
-        return None
     return record
 
 
@@ -119,8 +115,6 @@ class MetaSink(GstBase.BaseSink):
 
     def do_render(self, buffer):
         record = buffer_record(buffer, self._media_type)
-        if record is None:
-            return Gst.FlowReturn.OK
         line = json.dumps(record)
         self._output.write(line + "\n")
         self._output.flush()

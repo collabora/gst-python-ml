@@ -87,8 +87,7 @@ def test_replayed_records_alert_at_the_recorded_timestamp(tmp_path):
             f"! pyml_metasink location={records}"
         )
     )
-    # videotestsrc recycles pooled buffers, so the empty relation meta is recorded too
-    recorded = [line for line in read_lines(records) if line.get("detections")]
+    recorded = [line for line in read_lines(records) if line["detections"]]
     assert len(recorded) == 1
     assert recorded[0]["pts"] == pytest.approx(TAGGED_FRAME / FRAMERATE)
 
@@ -100,7 +99,7 @@ def test_replayed_records_alert_at_the_recorded_timestamp(tmp_path):
             f"! pyml_metasink location={replayed}"
         )
     )
-    lines = read_lines(replayed)
+    lines = [line for line in read_lines(replayed) if line["detections"]]
     assert len(lines) == 1
     assert lines[0]["pts"] == pytest.approx(recorded[0]["pts"])
     assert lines[0]["detections"] == recorded[0]["detections"]
@@ -122,6 +121,6 @@ def test_a_blob_record_comes_back_as_the_same_blob(tmp_path):
             f"! pyml_metasink location={replayed}"
         )
     )
-    lines = read_lines(replayed)
+    lines = [line for line in read_lines(replayed) if "caption" in line]
     assert len(lines) == 1
     assert lines[0]["caption"] == payload

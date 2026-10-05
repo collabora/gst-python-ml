@@ -120,7 +120,7 @@ def test_a_text_buffer_becomes_a_text_record():
     assert buffer_record(buffer, "text/x-raw") == {"pts": 2.0, "text": "hello"}
 
 
-def test_a_frame_with_nothing_attached_gives_no_record():
+def test_a_frame_with_nothing_attached_gives_an_empty_record():
     buffer = Gst.Buffer.new_wrapped(bytes(16))
     buffer.pts = 0
-    assert buffer_record(buffer, "video/x-raw") is None
+    assert buffer_record(buffer, "video/x-raw") == {"pts": 0.0, "detections": []}
