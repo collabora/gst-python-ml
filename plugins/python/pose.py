@@ -34,7 +34,7 @@ try:
     from backend import analytics, GObject
     from base_objectdetector import BaseObjectDetector
     from utils.format_converter import FormatConverter
-    from engine.yolo_pose_engine import YoloPoseEngine
+    from engine.yolo_pose_engine import ExportedYoloPose, YoloPoseEngine
     from engine.engine_factory import EngineFactory
 
 except ImportError as e:
@@ -118,17 +118,11 @@ class YOLOPoseTransform(BaseObjectDetector):
 
     def __init__(self):
         super().__init__()
-        self.mgr.engine_name = "pyml_yolo_pose_engine"
+        self.task_engine_name = self.mgr.engine_name = "pyml_yolo_pose_engine"
         EngineFactory.register(self.mgr.engine_name, YoloPoseEngine)
 
-    @GObject.Property(type=str)
-    def engine_name(self):
-        """Machine Learning Engine (read-only for this element)."""
-        return self.mgr.engine_name
-
-    @engine_name.setter
-    def engine_name(self, value):
-        raise ValueError("'engine_name' is read-only for pyml_yolo_pose")
+    def export_model(self, model_name):
+        return ExportedYoloPose(model_name)
 
     def do_decode(self, buf, result, stream_idx=0):
         boxes = result.boxes

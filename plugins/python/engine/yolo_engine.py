@@ -16,9 +16,102 @@
 # Free Software Foundation, Inc., 51 Franklin Street, Fifth Floor,
 # Boston, MA 02110-1301, USA.
 
+import ast
 import time
+from pathlib import Path
 
+from .engine_factory import EngineFactory
+from .onnx_export import ONNX_EXPORT_CACHE
 from .pytorch_engine import PyTorchEngine
+
+EXPORTED_INPUT_SIZE = 640
+EXPORTED_INPUT_SHAPE = (EXPORTED_INPUT_SIZE, EXPORTED_INPUT_SIZE)
+# an interrupted export must not reach the cache
+EXPORT_WORK_DIRECTORY = ONNX_EXPORT_CACHE / "ultralytics"
+BATCH_DIMENSIONS = 4
+# the ultralytics defaults the pytorch pose engine runs with
+DEFAULT_CONFIDENCE = 0.25
+DEFAULT_IOU = 0.7
+MAXIMUM_DETECTIONS = 300
+BOX_COLUMNS = 4
+BOX_AND_CLASS_COLUMNS = 6
+# a pipeline frame has no file behind it
+FRAME_PATH = ""
+
+
+def exported_yolo_path(model_name):
+    from ultralytics import YOLO
+
+    path = ONNX_EXPORT_CACHE / f"{model_name}.onnx"
+    if path.exists():
+        return str(path)
+    EXPORT_WORK_DIRECTORY.mkdir(parents=True, exist_ok=True)
+    weights = YOLO(str(EXPORT_WORK_DIRECTORY / f"{model_name}.pt"))
+    exported_path = weights.export(format="onnx", imgsz=EXPORTED_INPUT_SIZE)
+    Path(exported_path).rename(path)
+    return str(path)
+
+
+def exported_yolo_metadata(path):
+    import onnx
+
+    return {entry.key: entry.value for entry in onnx.load(path).metadata_props}
+
+
+class ExportedYolo:
+    def __init__(self, model_name):
+        self.engine = None
+        self.track = False
+        self.conf = DEFAULT_CONFIDENCE
+        self.iou = DEFAULT_IOU
+        self.agnostic_nms = False
+        self.path = exported_yolo_path(model_name)
+        self.metadata = exported_yolo_metadata(self.path)
+        self.names = ast.literal_eval(self.metadata["names"])
+        self.end2end = ast.literal_eval(self.metadata["end2end"])
+
+    def do_forward(self, frames):
+        if self.track:
+            raise ValueError(
+                f"tracking runs only on the {EngineFactory.PYTORCH_ENGINE} engine"
+            )
+        if frames.ndim == BATCH_DIMENSIONS:
+            return [self._result(frame) for frame in frames]
+        return self._result(frames)
+
+    def _result(self, frame):
+        import numpy as np
+        import torch
+        from ultralytics.data.augment import LetterBox
+        from ultralytics.utils import nms, ops
+
+        model_input = LetterBox(EXPORTED_INPUT_SHAPE, auto=False)(image=frame)
+        # ultralytics treats a numpy frame as bgr and flips it
+        model_input = np.ascontiguousarray(model_input[..., ::-1])
+        output = np.asarray(self.engine.do_forward(model_input), dtype=np.float32)
+        detections = nms.non_max_suppression(
+            torch.from_numpy(output),
+            self.conf,
+            self.iou,
+            agnostic=self.agnostic_nms,
+            max_det=MAXIMUM_DETECTIONS,
+            nc=len(self.names),
+            end2end=self.end2end,
+        )[0]
+        detections[:, :BOX_COLUMNS] = ops.scale_boxes(
+            EXPORTED_INPUT_SHAPE, detections[:, :BOX_COLUMNS], frame.shape
+        )
+        return self._results(frame, detections)
+
+    def _results(self, frame, detections):
+        from ultralytics.engine.results import Results
+
+        return Results(
+            frame,
+            path=FRAME_PATH,
+            names=self.names,
+            boxes=detections[:, :BOX_AND_CLASS_COLUMNS],
+        )
 
 
 class YoloEngine(PyTorchEngine):

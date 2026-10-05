@@ -23,8 +23,7 @@
 the analytics facade and the engine result. It inherits `do_forward` from
 `ObjectDetectorTask`. A backend element shell combines this mixin with its
 framework element base (the gst backend uses `BaseObjectDetector`); the shell
-supplies the engine wiring, the read-only `engine_name` property, and element
-registration.
+supplies the engine wiring and element registration.
 
 See `ObjectDetectorTask` for the host-element contract (self.engine, self.logger,
 self.track). `do_decode`'s `buf` is the opaque metadata target.
@@ -126,7 +125,7 @@ class YoloTask(ObjectDetectorTask):
         )
         boxes = result.boxes
         masks = None
-        if not self.engine.track:
+        if not self.task_engine.track:
             masks = result.masks
 
         if boxes is None or len(boxes) == 0:
@@ -153,7 +152,7 @@ class YoloTask(ObjectDetectorTask):
             class_name = names.get(label_num, f"unknown_{label_num}")
 
             # Use class name for detection, track_id for tracking
-            if self.engine.track and hasattr(boxes, "id") and boxes.id is not None:
+            if self.task_engine.track and hasattr(boxes, "id") and boxes.id is not None:
                 track_id = boxes.id[i]
                 track_id_int = int(track_id.item())
                 qk_string = f"stream_{stream_idx}_id_{track_id_int}"
@@ -181,7 +180,7 @@ class YoloTask(ObjectDetectorTask):
             )
 
             # Tracking metadata only when track=True
-            if self.engine.track and hasattr(boxes, "id") and boxes.id is not None:
+            if self.task_engine.track and hasattr(boxes, "id") and boxes.id is not None:
                 tracking_mtd = analytics.add_tracking(meta, track_id_int)
                 if tracking_mtd is None:
                     self.logger.error(

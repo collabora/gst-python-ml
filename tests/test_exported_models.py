@@ -44,6 +44,13 @@ SAM_MODEL = "facebook/sam2-hiera-tiny"
 SAM_SCORE_TOLERANCE = 1e-3
 # a handful of pixels on mask edges flip
 SAM_MASK_AGREEMENT_FLOOR = 0.9999
+YOLO_MODEL = "yolo11n"
+YOLO_POSE_MODEL = "yolo11n-pose"
+YOLO_CONFIDENCE = 0.25
+# pytorch letterboxes the portrait to 640x480, the exported graph to 640x640
+YOLO_TOLERANCE_PIXELS = 12.0
+# an off-frame keypoint has a guessed position
+VISIBLE_KEYPOINT_CONFIDENCE = 0.5
 # the task engine first
 ENGINE_NAMES = ("pytorch", "onnx")
 
@@ -198,3 +205,74 @@ def test_sam_on_onnx_matches_sam_on_pytorch(portrait_rgb):
     assert exported["raw_masks"].shape == reference["raw_masks"].shape
     agreement = (exported["raw_masks"] == reference["raw_masks"]).mean()
     assert agreement > SAM_MASK_AGREEMENT_FLOOR
+
+
+def detection_results(frame):
+    pytest.importorskip("ultralytics")
+    from yolo import YOLOTransform
+
+    for engine_name in ENGINE_NAMES:
+        element = loaded_element(YOLOTransform, YOLO_MODEL, engine_name)
+        element.set_property("confidence", YOLO_CONFIDENCE)
+        yield element.do_forward(frame)
+
+
+def pose_results(frame):
+    pytest.importorskip("ultralytics")
+    from pose import YOLOPoseTransform
+
+    for engine_name in ENGINE_NAMES:
+        element = loaded_element(YOLOPoseTransform, YOLO_POSE_MODEL, engine_name)
+        yield element.do_forward(frame)
+
+
+def assert_same_boxes(exported, reference):
+    import torch
+
+    assert len(reference.boxes) > 0
+    assert len(exported.boxes) == len(reference.boxes)
+    reference_order = torch.argsort(reference.boxes.conf, descending=True)
+    exported_order = torch.argsort(exported.boxes.conf, descending=True)
+    assert torch.equal(
+        exported.boxes.cls[exported_order], reference.boxes.cls[reference_order]
+    )
+    box_difference = (
+        exported.boxes.xyxy[exported_order] - reference.boxes.xyxy[reference_order]
+    )
+    assert box_difference.abs().max() < YOLO_TOLERANCE_PIXELS
+    return exported_order, reference_order
+
+
+def test_yolo_on_onnx_matches_yolo_on_pytorch(portrait_rgb):
+    reference, exported = detection_results(portrait_rgb)
+
+    assert_same_boxes(exported, reference)
+    assert exported.names == reference.names
+    assert exported.masks is None
+
+
+def test_yolo_pose_on_onnx_matches_yolo_pose_on_pytorch(portrait_rgb):
+    reference, exported = pose_results(portrait_rgb)
+
+    exported_order, reference_order = assert_same_boxes(exported, reference)
+    reference_keypoints = reference.keypoints[reference_order]
+    visible = reference_keypoints.conf > VISIBLE_KEYPOINT_CONFIDENCE
+    assert visible.any()
+    keypoint_difference = (
+        exported.keypoints[exported_order].xy[visible] - reference_keypoints.xy[visible]
+    )
+    assert keypoint_difference.abs().max() < YOLO_TOLERANCE_PIXELS
+
+
+def test_tracking_on_an_exported_yolo_names_the_pytorch_engine(portrait_rgb):
+    pytest.importorskip("ultralytics")
+    from yolo import YOLOTransform
+
+    element = YOLOTransform()
+    element.set_property("track", True)
+    element.set_property("model-name", YOLO_MODEL)
+    element.set_property("engine-name", ENGINE_NAMES[1])
+    element.do_load_model()
+
+    with pytest.raises(ValueError, match="pytorch"):
+        element.do_forward(portrait_rgb)

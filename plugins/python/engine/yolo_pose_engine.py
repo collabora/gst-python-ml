@@ -16,7 +16,28 @@
 # Free Software Foundation, Inc., 51 Franklin Street, Fifth Floor,
 # Boston, MA 02110-1301, USA.
 
+import ast
+
 from .pytorch_engine import PyTorchEngine
+from .yolo_engine import EXPORTED_INPUT_SHAPE, BOX_AND_CLASS_COLUMNS, ExportedYolo
+
+
+class ExportedYoloPose(ExportedYolo):
+    def __init__(self, model_name):
+        super().__init__(model_name)
+        self.keypoint_shape = ast.literal_eval(self.metadata["kpt_shape"])
+
+    def _results(self, frame, detections):
+        from ultralytics.utils import ops
+
+        results = super()._results(frame, detections)
+        keypoints = detections[:, BOX_AND_CLASS_COLUMNS:].view(
+            len(detections), *self.keypoint_shape
+        )
+        results.update(
+            keypoints=ops.scale_coords(EXPORTED_INPUT_SHAPE, keypoints, frame.shape)
+        )
+        return results
 
 
 class YoloPoseEngine(PyTorchEngine):

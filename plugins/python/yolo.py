@@ -25,7 +25,7 @@ try:
     from base_objectdetector import BaseObjectDetector
     from tasks.yolo import YoloTask
 
-    from engine.yolo_engine import YoloEngine
+    from engine.yolo_engine import ExportedYolo, YoloEngine
     from engine.engine_factory import EngineFactory
 
 except ImportError as e:
@@ -38,7 +38,7 @@ class YOLOTransform(BaseObjectDetector, YoloTask):
     GStreamer element shell for YOLO model inference on video frames
     (detection, segmentation, and tracking). The result handling (do_decode)
     is inherited from the backend-agnostic YoloTask; this class supplies the
-    engine wiring, the read-only engine_name property, and registration.
+    engine wiring and registration.
     """
 
     __gstmetadata__ = (
@@ -80,27 +80,18 @@ class YOLOTransform(BaseObjectDetector, YoloTask):
 
     def __init__(self):
         super().__init__()
-        self.mgr.engine_name = "pyml_yolo_engine"
+        self.task_engine_name = self.mgr.engine_name = "pyml_yolo_engine"
         EngineFactory.register(self.mgr.engine_name, YoloEngine)
 
-    # make engine_name read only
-    @GObject.Property(type=str)
-    def engine_name(self):
-        """Machine Learning Engine (read-only in this class)."""
-        return self.mgr.engine_name
-
-    @engine_name.setter
-    def engine_name(self, value):
-        raise ValueError(
-            "The 'engine_name' property cannot be set in this derived class."
-        )
+    def export_model(self, model_name):
+        return ExportedYolo(model_name)
 
     def do_forward(self, frames):
         # Push NMS/confidence knobs to the engine before it runs the model.
-        if self.engine:
-            self.engine.conf = self.confidence
-            self.engine.iou = self.nms_iou
-            self.engine.agnostic_nms = self.agnostic_nms
+        if self.task_engine:
+            self.task_engine.conf = self.confidence
+            self.task_engine.iou = self.nms_iou
+            self.task_engine.agnostic_nms = self.agnostic_nms
         return super().do_forward(frames)
 
 
