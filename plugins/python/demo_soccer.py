@@ -26,8 +26,7 @@ try:
     gi.require_version("Gst", "1.0")
     gi.require_version("GstBase", "1.0")
     gi.require_version("GstVideo", "1.0")
-    from gi.repository import Gst  # noqa: E402
-    from backend import analytics, GObject, post_model_load_error  # noqa: E402
+    from backend import analytics, GObject  # noqa: E402
     from base_objectdetector import BaseObjectDetector
 
     import os
@@ -38,6 +37,7 @@ try:
         BoTSORTWrapper,
         ByteTrackWrapper,
         tlbr_of,
+        track_id_of,
     )
 
 except ImportError as e:
@@ -83,6 +83,55 @@ COCO_CLASSES = {
 }
 
 
+# properties the engine reads under the same name
+ENGINE_SETTINGS = (
+    "imgsz",
+    "conf",
+    "iou",
+    "person_conf_keep",
+    "ball_conf_keep",
+    "ball_mode",
+    "hires_fallback",
+    "hires_imgsz",
+    "fallback_every",
+    "fallback_tiles",
+    "tile_size",
+    "tile_overlap",
+    "fallback_budget_ms",
+    "ball_roi_boost",
+    "roi_scale",
+    "roi_min",
+    "roi_max",
+    "tracker_people",
+    "tracker_ball",
+    "people_reid",
+    "trail",
+    "gmc",
+    "gmc_scale",
+    "gft_max_corners",
+    "gft_quality",
+    "gft_min_dist",
+    "lk_win",
+    "lk_levels",
+    "ransac_thresh",
+    "ball_gate_rel",
+    "ball_gate_min",
+    "ball_gate_use_pred",
+    "ball_min_iou",
+    "ball_max_jump_rel",
+    "ball_speed_mult",
+    "ball_smooth_ema",
+    "det_override_conf",
+    "det_override_after",
+    "reacquire_frames",
+    "ball_coast",
+    "coast_max",
+    "coast_decay",
+    "verbose",
+    "frame_rate",
+)
+
+
 class DemoSoccer(BaseObjectDetector):
     """
     GStreamer element for advanced YOLO inference focused on person and ball tracking with fallback and gating.
@@ -118,8 +167,6 @@ class DemoSoccer(BaseObjectDetector):
             )
 
         # Defaults (all params)
-        self.__model = "yolo11x"
-        self.__device = "auto"
         self.__imgsz = 1280
         self.__conf = 0.25
         self.__iou = 0.45
@@ -177,29 +224,6 @@ class DemoSoccer(BaseObjectDetector):
         )
 
     # Properties - all of them
-    @GObject.Property(type=str, default="yolo11x")
-    def model(self):
-        return self.__model
-
-    @model.setter
-    def model(self, value):
-        self.__model = value
-        if self.engine:
-            try:
-                self.engine.do_load_model(value)
-            except Exception as exception:
-                post_model_load_error(self, value, exception)
-
-    @GObject.Property(type=str, default="auto")
-    def device(self):
-        return self.__device
-
-    @device.setter
-    def device(self, value):
-        self.__device = value
-        if self.engine:
-            self.engine.device_str = value
-
     @GObject.Property(type=int, default=1280)
     def imgsz(self):
         return self.__imgsz
@@ -656,63 +680,15 @@ class DemoSoccer(BaseObjectDetector):
         if self.engine:
             self.engine.frame_rate = value
 
-    def set_model(self):
-        """Override: Create engine first, then load with all properties as kwargs."""
-        if self.engine is None:
-            self.initialize_engine()
-        if self.engine is None:
-            self.logger.error("Cannot load model: engine not initialized")
-            return False
-        # Sync all properties to kwargs for engine load
-        kwargs = {
-            "classes": self.classes,
-            "imgsz": self.imgsz,
-            "conf": self.conf,
-            "iou": self.iou,
-            "person_conf_keep": self.person_conf_keep,
-            "ball_conf_keep": self.ball_conf_keep,
-            "ball_mode": self.ball_mode,
-            "hires_fallback": self.hires_fallback,
-            "hires_imgsz": self.hires_imgsz,
-            "fallback_every": self.fallback_every,
-            "fallback_tiles": self.fallback_tiles,
-            "tile_size": self.tile_size,
-            "tile_overlap": self.tile_overlap,
-            "fallback_budget_ms": self.fallback_budget_ms,
-            "ball_roi_boost": self.ball_roi_boost,
-            "roi_scale": self.roi_scale,
-            "roi_min": self.roi_min,
-            "roi_max": self.roi_max,
-            "tracker_people": self.tracker_people,
-            "tracker_ball": self.tracker_ball,
-            "people_reid": self.people_reid,
-            "trail": self.trail,
-            "gmc": self.gmc,
-            "gmc_scale": self.gmc_scale,
-            "gft_max_corners": self.gft_max_corners,
-            "gft_quality": self.gft_quality,
-            "gft_min_dist": self.gft_min_dist,
-            "lk_win": self.lk_win,
-            "lk_levels": self.lk_levels,
-            "ransac_thresh": self.ransac_thresh,
-            "ball_gate_rel": self.ball_gate_rel,
-            "ball_gate_min": self.ball_gate_min,
-            "ball_gate_use_pred": self.ball_gate_use_pred,
-            "ball_min_iou": self.ball_min_iou,
-            "ball_max_jump_rel": self.ball_max_jump_rel,
-            "ball_speed_mult": self.ball_speed_mult,
-            "ball_smooth_ema": self.ball_smooth_ema,
-            "det_override_conf": self.det_override_conf,
-            "det_override_after": self.det_override_after,
-            "reacquire_frames": self.reacquire_frames,
-            "ball_coast": self.ball_coast,
-            "coast_max": self.coast_max,
-            "coast_decay": self.coast_decay,
-            "verbose": self.verbose,
-            "frame_rate": self.frame_rate,
-        }
-        # Call engine's do_load_model with current model name + synced kwargs
-        return self.engine.do_load_model(self.model, **kwargs)
+    def initialize_engine(self):
+        had_engine = self.engine is not None
+        super().initialize_engine()
+        if had_engine or self.engine is None:
+            return
+        for name in ENGINE_SETTINGS:
+            setattr(self.engine, name, getattr(self, name))
+        self.engine.classes = self.__classes
+        self.engine.single_ball_trail = deque(maxlen=self.trail)
 
     def do_decode(self, buf, result, stream_idx=0):
         self.logger.debug(
@@ -741,7 +717,7 @@ class DemoSoccer(BaseObjectDetector):
                 continue
             x1, y1, x2, y2 = box
             score = 1.0  # Track confidence
-            track_id = getattr(tr, "track_id", 0)
+            track_id = track_id_of(tr)
             qk_string = f"stream_{stream_idx}_person_id_{track_id}"
             od_mtd = analytics.add_object(
                 meta,
@@ -784,7 +760,7 @@ class DemoSoccer(BaseObjectDetector):
                 continue
             x1, y1, x2, y2 = box
             score = 1.0
-            track_id = getattr(tr, "track_id", 0)
+            track_id = track_id_of(tr)
             qk_string = f"stream_{stream_idx}_ball_id_{track_id}"
             od_mtd = analytics.add_object(
                 meta,
@@ -818,39 +794,6 @@ class DemoSoccer(BaseObjectDetector):
             else:
                 self.logger.debug(
                     f"Stream {stream_idx} - Linked ball od_mtd {od_mtd} to tracking_mtd {tracking_mtd}"
-                )
-
-        # Ball trail - attach as custom GstStructure meta (fixed API, uncommented)
-        if ball_trail:
-            structure = Gst.Structure.new_empty("ball-trail")
-            trail_data = [(int(x), int(y), int(k)) for x, y, k in ball_trail]
-            structure.set_value("points", trail_data)
-            structure.set_value("length", len(ball_trail))
-
-            # Correct API: Use Gst.Buffer.add_meta with GstMeta for structure
-            try:
-                # Get generic meta API (GstMeta for any custom data)
-                meta_api = Gst.Meta.get_api(
-                    Gst.StructureMeta
-                )  # Or Gst.Meta.api_type_get_tag(Gst.StructureMeta) if available
-                if meta_api:
-                    # Create custom meta with structure
-                    meta = Gst.Meta.new(buf, meta_api, structure)
-                    if meta:
-                        Gst.Buffer.add_meta(buf, meta_api, meta)
-                        self.logger.debug(
-                            f"Stream {stream_idx} - Added ball trail meta with {len(ball_trail)} points"
-                        )
-                    else:
-                        raise ValueError("Failed to create meta")
-                else:
-                    raise AttributeError("Meta API not available")
-            except (AttributeError, ValueError, TypeError) as e:
-                self.logger.warning(
-                    f"Ball trail meta attachment failed ({e}); logging instead"
-                )
-                self.logger.info(
-                    f"Ball trail for stream {stream_idx}: {trail_data[:5]}... (length {len(ball_trail)})"
                 )
 
         # Fallback to original boxes if needed (unchanged)

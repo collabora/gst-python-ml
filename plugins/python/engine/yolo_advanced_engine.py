@@ -200,8 +200,8 @@ def dets_to_boxes(dets_xyxy_conf_cls, frame_shape):
     return Boxes(data, frame_shape)
 
 
-def clamp_imgsz_for_device(imgsz, device_str):
-    if device_str in ("cpu", "auto"):
+def clamp_imgsz_for_device(imgsz, device):
+    if device == "cpu":
         return min(imgsz, 1280)
     return imgsz
 
@@ -348,29 +348,17 @@ class BoTSORTWrapper:
         return self.tracker.update(boxes, frame)
 
 
-def _callable_or_attr(obj, name):
-    v = getattr(obj, name, None)
-    if v is None:
-        return None
-    return v() if callable(v) else v
+# an ultralytics tracker returns one row per track: x1, y1, x2, y2, track id, ...
+TRACK_ROW_BOX = slice(0, 4)
+TRACK_ROW_ID = 4
 
 
-def tlbr_of(tr):
-    a = _callable_or_attr(tr, "tlbr")
-    if a is not None:
-        a = a.tolist() if hasattr(a, "tolist") else a
-        if len(a) == 4:
-            return a
-    a = _callable_or_attr(tr, "tlwh")
-    if a is not None:
-        a = a.tolist() if hasattr(a, "tolist") else a
-        if len(a) == 4:
-            x, y, w, h = a
-            return [x, y, x + w, y + h]
-    if hasattr(tr, "bbox"):
-        b = tr.bbox
-        return b.tolist() if hasattr(b, "tolist") else list(b)
-    return None
+def tlbr_of(track_row):
+    return track_row[TRACK_ROW_BOX].tolist()
+
+
+def track_id_of(track_row):
+    return int(track_row[TRACK_ROW_ID])
 
 
 class BallState:
@@ -625,7 +613,6 @@ class YoloAdvancedEngine(PyTorchEngine):
         self.frame_idx = 0
         self.frame_rate = kwargs.get("frame_rate", 30.0)
         # Set all params from kwargs
-        self.device_str = kwargs.get("device", "auto")
         self.imgsz = kwargs.get("imgsz", 1280)
         self.conf = kwargs.get("conf", 0.25)
         self.iou = kwargs.get("iou", 0.45)
@@ -748,7 +735,7 @@ class YoloAdvancedEngine(PyTorchEngine):
                 conf=self.conf,
                 iou=self.iou,
                 classes=self.classes,
-                device=self.device_str if self.device_str != "auto" else None,
+                device=self.device,
                 verbose=False,
             )[0]
         )
@@ -775,7 +762,7 @@ class YoloAdvancedEngine(PyTorchEngine):
             and dets_b.shape[0] == 0
             and self.frame_idx % max(1, self.fallback_every) == 0
         ):
-            clamp_imgsz = clamp_imgsz_for_device(self.hires_imgsz, self.device_str)
+            clamp_imgsz = clamp_imgsz_for_device(self.hires_imgsz, self.device)
             collected = []
 
             if (
@@ -799,7 +786,7 @@ class YoloAdvancedEngine(PyTorchEngine):
                         conf=max(self.ball_conf_keep, 0.02),
                         iou=max(self.iou, 0.50),
                         classes=[32],
-                        device=self.device_str if self.device_str != "auto" else None,
+                        device=self.device,
                         verbose=False,
                     )[0]
                 )
@@ -824,7 +811,7 @@ class YoloAdvancedEngine(PyTorchEngine):
                         conf=max(self.ball_conf_keep, 0.02),
                         iou=max(self.iou, 0.50),
                         classes=[32],
-                        device=self.device_str if self.device_str != "auto" else None,
+                        device=self.device,
                         verbose=False,
                     )[0]
                 )
