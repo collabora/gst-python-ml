@@ -67,6 +67,55 @@ def remove_default_resize_policy(model):
             del node.attributes[RESIZE_POLICY_ATTRIBUTE]
 
 
+def patch_conv_as_matmul(conv):
+    import torch
+
+    class PatchConvAsMatmul(torch.nn.Module):
+        def __init__(self):
+            super().__init__()
+            out_channels = conv.weight.shape[0]
+            self.patch_height, self.patch_width = conv.kernel_size
+            self.weight = torch.nn.Parameter(
+                conv.weight.detach().reshape(out_channels, -1).t().contiguous()
+            )
+            self.bias = None if conv.bias is None else conv.bias
+
+        def forward(self, image):
+            batch, channels, height, width = image.shape
+            rows, columns = height // self.patch_height, width // self.patch_width
+            patches = (
+                image.reshape(
+                    batch, channels, rows, self.patch_height, columns, self.patch_width
+                )
+                .permute(0, 2, 4, 1, 3, 5)
+                .reshape(batch, rows * columns, -1)
+            )
+            embedded = patches @ self.weight
+            if self.bias is not None:
+                embedded = embedded + self.bias
+            return embedded.reshape(batch, rows, columns, -1).permute(0, 3, 1, 2)
+
+    return PatchConvAsMatmul()
+
+
+# miopen divides by zero on a conv whose stride equals its kernel
+def replace_patch_convs(module):
+    import torch
+
+    for name, child in module.named_children():
+        is_patch_conv = (
+            isinstance(child, torch.nn.Conv2d)
+            and child.kernel_size == child.stride
+            and child.kernel_size != (1, 1)
+            and child.padding in ((0, 0), "valid")
+            and child.groups == 1
+        )
+        if is_patch_conv:
+            setattr(module, name, patch_conv_as_matmul(child))
+        else:
+            replace_patch_convs(child)
+
+
 def cached_onnx_export(file_stem, build_graph, **export_options):
     import onnxscript.optimizer
     import torch
@@ -76,6 +125,7 @@ def cached_onnx_export(file_stem, build_graph, **export_options):
         return str(path)
     ONNX_EXPORT_CACHE.mkdir(parents=True, exist_ok=True)
     graph, example_input = build_graph()
+    replace_patch_convs(graph)
     program = torch.onnx.export(
         graph.eval(),
         (example_input,),
