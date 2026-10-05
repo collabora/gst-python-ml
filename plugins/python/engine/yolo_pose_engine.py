@@ -57,7 +57,8 @@ class YoloPoseEngine(PyTorchEngine):
         import numpy as np
 
         is_batch = isinstance(frames, np.ndarray) and frames.ndim == 4
-        writable = np.array(frames, copy=True)
+        # ultralytics reads a numpy frame as bgr
+        writable = np.ascontiguousarray(frames[..., ::-1])
         batch_size = writable.shape[0] if is_batch else 1
 
         model = self.get_model()

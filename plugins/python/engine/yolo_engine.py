@@ -86,8 +86,6 @@ class ExportedYolo:
         from ultralytics.utils import nms, ops
 
         model_input = LetterBox(EXPORTED_INPUT_SHAPE, auto=False)(image=frame)
-        # ultralytics treats a numpy frame as bgr and flips it
-        model_input = np.ascontiguousarray(model_input[..., ::-1])
         output = np.asarray(self.engine.do_forward(model_input), dtype=np.float32)
         detections = nms.non_max_suppression(
             torch.from_numpy(output),
@@ -129,7 +127,8 @@ class YoloEngine(PyTorchEngine):
         import numpy as np
 
         is_batch = isinstance(frames, np.ndarray) and frames.ndim == 4
-        writable_frames = np.array(frames, copy=True)
+        # ultralytics reads a numpy frame as bgr
+        writable_frames = np.ascontiguousarray(frames[..., ::-1])
         batch_size = writable_frames.shape[0] if is_batch else 1
 
         model = self.get_model()
