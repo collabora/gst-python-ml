@@ -26,6 +26,7 @@ try:
     from engine.depth_anything_engine import (
         DepthAnythingEngine,
         ExportedDepthAnything,
+        KerasHubDepthAnything,
     )
     from engine.engine_factory import EngineFactory
     from backend import GObject
@@ -93,6 +94,8 @@ class DepthTransform(VideoTransform, DepthTask):
         self.format_converter = FormatConverter()
 
     def export_model(self, model_name):
+        if self.mgr.engine_name == EngineFactory.JAX_ENGINE:
+            return KerasHubDepthAnything(model_name)
         return ExportedDepthAnything(model_name)
 
 

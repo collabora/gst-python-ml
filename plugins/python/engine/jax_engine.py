@@ -16,10 +16,39 @@
 # Free Software Foundation, Inc., 51 Franklin Street, Fifth Floor,
 # Boston, MA 02110-1301, USA.
 
+import importlib.util
 import os
 import numpy as np
 
 from .ml_engine import MLEngine, TORCHVISION_WEIGHTS, is_torchvision_resnet
+
+KERAS_BACKEND = "jax"
+KERAS_HUB_MODEL_TYPE = "keras_hub"
+HUGGING_FACE_SUFFIX = "-hf"
+
+
+# keras-hub names a converted checkpoint after the hugging face repository
+def keras_hub_preset(model_name):
+    return (
+        model_name.split("/")[-1]
+        .removesuffix(HUGGING_FACE_SUFFIX)
+        .lower()
+        .replace("-", "_")
+    )
+
+
+def keras_hub_on_jax():
+    os.environ["KERAS_BACKEND"] = KERAS_BACKEND
+    import keras
+    import keras_hub
+
+    # keras picks its backend once per process
+    if keras.backend.backend() != KERAS_BACKEND:
+        raise RuntimeError(
+            f"keras is already running on {keras.backend.backend()}, "
+            f"keras-hub models need it on {KERAS_BACKEND}"
+        )
+    return keras_hub
 
 
 class JAXEngine(MLEngine):
@@ -40,9 +69,10 @@ class JAXEngine(MLEngine):
         if platform not in ("cpu", "gpu", "tpu"):
             raise ValueError(f"Invalid device specified: {device}")
         # raises when jax has no backend for the platform
-        jax.default_device = jax.devices(platform)[0]
+        jax_device = jax.devices(platform)[0]
+        jax.config.update("jax_default_device", jax_device)
         self.device = device
-        self.logger.info(f"JAX device set to {jax.default_device}")
+        self.logger.info(f"JAX device set to {jax_device}")
 
     def do_load_model(self, model_name, **kwargs):
         """Load a Flax model from HuggingFace or local checkpoint."""
@@ -75,8 +105,24 @@ class JAXEngine(MLEngine):
             )
             return True
 
+        if (
+            importlib.util.find_spec("keras_hub")
+            and model_name in keras_hub_on_jax().models.Backbone.presets
+        ):
+            return self._load_keras_hub_preset(model_name)
+
         # HuggingFace Flax model
         return self._load_from_huggingface(model_name, tokenizer_name)
+
+    def _load_keras_hub_preset(self, preset):
+        keras_hub = keras_hub_on_jax()
+        self.model = keras_hub.models.Backbone.from_preset(preset)
+        self.image_converter = keras_hub.layers.ImageConverter.from_preset(preset)
+        # a text and image backbone embeds the image on its own
+        self.image_model = getattr(self.model, "get_vision_embeddings", self.model)
+        self.model_type = KERAS_HUB_MODEL_TYPE
+        self.logger.info(f"keras-hub preset '{preset}' loaded on JAX.")
+        return True
 
     def _load_local_checkpoint(self, model_dir):
         """Load Flax params from a local checkpoint directory."""
@@ -145,6 +191,9 @@ class JAXEngine(MLEngine):
             self.logger.error("jax is not installed.")
             return None
 
+        if self.model_type == KERAS_HUB_MODEL_TYPE:
+            return self._forward_keras_hub(frames, is_batch)
+
         img = self._apply_input_format(frames.astype(np.float32) / 255.0, is_batch)
         jax_input = jnp.array(img)
         if self.model_type == "classification":
@@ -160,6 +209,14 @@ class JAXEngine(MLEngine):
             outputs.logits if hasattr(outputs, "logits") else outputs.last_hidden_state
         )
         return self._apply_post_process(raw, is_batch)
+
+    # the preset's image converter scales 0..255 pixels itself
+    def _forward_keras_hub(self, frames, is_batch):
+        images = frames.astype(np.float32)
+        if not is_batch:
+            images = images[np.newaxis]
+        outputs = np.asarray(self.image_model(self.image_converter(images)))
+        return outputs if is_batch else outputs[0]
 
     def do_generate(self, input_text, max_length=1000, system_prompt=None):
         """Generate text using Flax model's generate method."""

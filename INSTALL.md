@@ -141,6 +141,9 @@ uv sync --extra onnx
 - LiteRT runs a `.tflite` file with the `litert` extra alone. Exporting one, or loading a Keras model by name, needs `tensorflow` too.
 - llama.cpp builds a CPU wheel. For CUDA: `CMAKE_ARGS="-DGGML_CUDA=on" pip install llama-cpp-python`.
 - MLX runs on Apple Silicon. On Linux use the `mlx-cpu` extra.
+- The JAX extras bring in `keras-hub`, which runs `pyml_depth` and `pyml_clip` on `engine-name=jax`.
+  uv leaves out its `tensorflow-text` dependency. pip installs it, and with it TensorFlow, which has no 3.14 wheel,
+  so on 3.14 install the JAX extras with uv.
 - NCNN takes `.param` and `.bin` files. Convert an ONNX model with
   `python -m onnxsim model.onnx model_sim.onnx` (`pip install onnx-simplifier`), then
   `onnx2ncnn model_sim.onnx model.param model.bin`.

@@ -1,3 +1,4 @@
+import importlib.util
 import os
 import sys
 from pathlib import Path
@@ -59,9 +60,16 @@ ZERO_SHOT_SCORE_TOLERANCE = 0.001
 ZERO_SHOT_BOX_TOLERANCE_PIXELS = 1
 # the task engine first
 ENGINE_NAMES = ("pytorch", "onnx")
+BUILTIN_ENGINE_PACKAGES = {"onnx": "onnxruntime", "jax": "keras_hub"}
 
 pytest.importorskip("onnxruntime")
 pytest.importorskip("transformers")
+
+
+# importing keras-hub here would fix keras on its default backend
+def require_package(package):
+    if importlib.util.find_spec(package) is None:
+        pytest.skip(f"{package} is not installed")
 
 
 @pytest.fixture(scope="module")
@@ -79,12 +87,16 @@ def loaded_element(element_class, model_name, engine_name):
     return element
 
 
-def test_depth_on_onnx_matches_depth_on_pytorch(portrait_rgb):
+@pytest.mark.parametrize("builtin_engine", BUILTIN_ENGINE_PACKAGES)
+def test_depth_on_a_builtin_engine_matches_depth_on_pytorch(
+    builtin_engine, portrait_rgb
+):
+    require_package(BUILTIN_ENGINE_PACKAGES[builtin_engine])
     from depth import DepthTransform
 
     reference, exported = (
         loaded_element(DepthTransform, DEPTH_MODEL, engine_name).forward(portrait_rgb)
-        for engine_name in ENGINE_NAMES
+        for engine_name in (ENGINE_NAMES[0], builtin_engine)
     )
 
     assert exported.shape == reference.shape == portrait_rgb.shape[:2]
@@ -100,11 +112,15 @@ def clip_probabilities(model_name, engine_name, frame):
     return dict(element.task_engine.do_forward(frame))
 
 
+@pytest.mark.parametrize("builtin_engine", BUILTIN_ENGINE_PACKAGES)
 @pytest.mark.parametrize("model_name", CLIP_MODELS)
-def test_clip_on_onnx_matches_clip_on_pytorch(model_name, portrait_rgb):
+def test_clip_on_a_builtin_engine_matches_clip_on_pytorch(
+    model_name, builtin_engine, portrait_rgb
+):
+    require_package(BUILTIN_ENGINE_PACKAGES[builtin_engine])
     reference, exported = (
         clip_probabilities(model_name, engine_name, portrait_rgb)
-        for engine_name in ENGINE_NAMES
+        for engine_name in (ENGINE_NAMES[0], builtin_engine)
     )
 
     assert max(reference, key=reference.get) == max(exported, key=exported.get)

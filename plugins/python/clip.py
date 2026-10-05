@@ -24,7 +24,7 @@ try:
     import threading
 
     from video_transform import VideoTransform
-    from engine.clip_engine import ClipEngine, ExportedClip
+    from engine.clip_engine import ClipEngine, ExportedClip, KerasHubClip
     from engine.engine_factory import EngineFactory
     from backend import GObject
     from tasks.clip import ClipTask
@@ -119,6 +119,8 @@ class CLIPTransform(VideoTransform, ClipTask):
         self.logger.info(f"Labels set to: {self._labels_list}")
 
     def export_model(self, model_name):
+        if self.mgr.engine_name == EngineFactory.JAX_ENGINE:
+            return KerasHubClip(model_name)
         return ExportedClip(model_name)
 
     def on_start(self):
@@ -135,6 +137,9 @@ class CLIPTransform(VideoTransform, ClipTask):
     def do_stop(self):
         self._running = False
         self._infer_event.set()  # Wake the thread so it sees _running=False
+        # a worker still inferring at exit crashes the process
+        if self._infer_thread:
+            self._infer_thread.join()
         self._infer_thread = None
         return True
 

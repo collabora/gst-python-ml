@@ -16,6 +16,7 @@
 # Free Software Foundation, Inc., 51 Franklin Street, Fifth Floor,
 # Boston, MA 02110-1301, USA.
 
+from .jax_engine import keras_hub_preset
 from .onnx_export import (
     cached_onnx_export,
     model_input_frames,
@@ -35,7 +36,10 @@ class ExportedClip:
         self.text_embeddings_by_labels = {}
         self.clip_labels = []
         self.engine = None
-        self.path = cached_onnx_export(
+        self.path = self._model_path(model_name)
+
+    def _model_path(self, model_name):
+        return cached_onnx_export(
             f"{model_name.replace('/', '--')}-image-encoder", self._build_image_encoder
         )
 
@@ -85,12 +89,19 @@ class ExportedClip:
             return None
         embedding = self.engine.do_forward(self._model_input(frame))
         image_embedding = np.asarray(embedding).reshape(-1)
+        image_embedding = image_embedding / np.linalg.norm(image_embedding)
         logits = self.logit_scale * self._text_embeddings(labels) @ image_embedding
         probabilities = np.exp(logits - logits.max())
         probabilities /= probabilities.sum()
         results = list(zip(labels, probabilities.tolist()))
         results.sort(key=lambda result: result[1], reverse=True)
         return results
+
+
+# keras-hub's clip tokenizer needs tensorflow
+class KerasHubClip(ExportedClip):
+    def _model_path(self, model_name):
+        return keras_hub_preset(model_name)
 
 
 class ClipEngine(PyTorchEngine):

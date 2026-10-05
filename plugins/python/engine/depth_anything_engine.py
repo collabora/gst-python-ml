@@ -16,6 +16,7 @@
 # Free Software Foundation, Inc., 51 Franklin Street, Fifth Floor,
 # Boston, MA 02110-1301, USA.
 
+from .jax_engine import keras_hub_preset
 from .onnx_export import cached_onnx_export, pixel_normalizer
 from .pytorch_engine import PyTorchEngine
 
@@ -28,7 +29,10 @@ BATCH_DIMENSIONS = 4
 class ExportedDepthAnything:
     def __init__(self, model_name):
         self.engine = None
-        self.path = cached_onnx_export(
+        self.path = self._model_path(model_name)
+
+    def _model_path(self, model_name):
+        return cached_onnx_export(
             f"{model_name.replace('/', '--')}-{EXPORTED_INPUT_SIZE}",
             lambda: self._build_graph(model_name),
         )
@@ -69,6 +73,11 @@ class ExportedDepthAnything:
         depth_map = np.asarray(self.engine.do_forward(model_input), dtype=np.float32)
         depth_map = depth_map.reshape(model_size)
         return cv2.resize(depth_map, (width, height), interpolation=cv2.INTER_CUBIC)
+
+
+class KerasHubDepthAnything(ExportedDepthAnything):
+    def _model_path(self, model_name):
+        return keras_hub_preset(model_name)
 
 
 class DepthAnythingEngine(PyTorchEngine):

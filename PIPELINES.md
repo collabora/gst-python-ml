@@ -377,6 +377,17 @@ python pyml-launch.py filesrc location=data/people.mp4 ! decodebin name=d \
   ! fakesink
 ```
 
+`pyml_depth` and `pyml_clip` run the keras-hub port of their Hugging Face model
+on JAX. CLIP keeps its text tower on PyTorch.
+
+```
+python pyml-launch.py filesrc location=data/people.mp4 ! decodebin name=d \
+  d. ! queue \
+    ! videoconvert ! videoscale ! "video/x-raw,width=640,height=480" \
+    ! pyml_depth engine-name=jax model-name=depth-anything/Depth-Anything-V2-Small-hf device=cpu \
+    ! videoconvert ! autovideosink sync=false
+```
+
 #### MiGraphX Engine
 
 MiGraphX takes ONNX files and needs the ROCm install above.

@@ -106,14 +106,20 @@ llamacpp = [
 jax-cpu = [
     "jax[cpu]",
     "flax",
+    "keras-hub>=0.32",
+    "grain",
 ]
 jax-gpu = [
     "jax[cuda12]",
     "flax",
+    "keras-hub>=0.32",
+    "grain",
 ]
 jax-tpu = [
     "jax[tpu]",
     "flax",
+    "keras-hub>=0.32",
+    "grain",
 ]
 openvino = [
     "openvino>=2024.0",
@@ -172,3 +178,7 @@ package-dir = {"" = "plugins/python"}
 
 [tool.setuptools.packages.find]
 where = ["plugins/python"]
+
+[tool.uv]
+# tensorflow-text has no python 3.14 wheel
+override-dependencies = ["tensorflow-text; sys_platform == 'never'"]
