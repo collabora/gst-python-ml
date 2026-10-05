@@ -9,7 +9,7 @@
 from gi.repository import Gst
 
 from .format_converter import FormatConverter
-from .metadata import Metadata
+from .metadata import BATCH_SOURCE_INDEX_METADATA
 
 
 class MuxedBufferProcessor:
@@ -36,7 +36,6 @@ class MuxedBufferProcessor:
         self.framerate_num = framerate_num
         self.framerate_denom = framerate_denom
         self.format_converter = FormatConverter()
-        self.metadata = Metadata("si")
 
     def extract_frames(self, buf, sinkpad):
         """
@@ -49,11 +48,10 @@ class MuxedBufferProcessor:
         Returns:
             Tuple:
                 - frames: np.ndarray (single frame or batch of frames).
-                - id_str: Metadata ID string (None for single-frame mode).
-                - num_sources: Number of sources from metadata (1 for single-frame mode).
+                - num_sources: Number of frames in the batch (1 for single-frame mode).
                 - format: Video format string.
 
-            Returns (None, None, None, None) on error.
+            Returns (None, None, None) on error.
         """
         import numpy as np
 
@@ -72,10 +70,10 @@ class MuxedBufferProcessor:
 
         if num_chunks < 1:
             self.logger.error("Buffer has no memory chunks")
-            return None, None, None, None
+            return None, None, None
 
         # a blob appended upstream is an extra memory too, only the muxer's trailing metadata means a batch
-        if not self.metadata.present(buf):
+        if not BATCH_SOURCE_INDEX_METADATA.present(buf):
             self.logger.info("Single frame mode (no metadata)")
             with buf.peek_memory(0).map(Gst.MapFlags.READ) as info:
                 frame = self.format_converter.get_rgb_frame(
@@ -83,8 +81,8 @@ class MuxedBufferProcessor:
                 )
                 if frame is None or not isinstance(frame, np.ndarray):
                     self.logger.error("Invalid frame")
-                    return None, None, None, None
-                return frame, None, 1, format
+                    return None, None, None
+                return frame, 1, format
 
         # Batch case: last chunk is metadata
         else:
@@ -98,19 +96,19 @@ class MuxedBufferProcessor:
                     )
                     if frame is None or not isinstance(frame, np.ndarray):
                         self.logger.error(f"Invalid frame at index {i}")
-                        return None, None, None, None
+                        return None, None, None
                     frames.append(frame)
 
             # Read metadata from the last chunk
-            id_str, num_sources = self.metadata.read(buf)
-            self.logger.info(f"Metadata: ID={id_str}, num_sources={num_sources}")
+            num_sources = len(BATCH_SOURCE_INDEX_METADATA.read(buf))
+            self.logger.info(f"Metadata: num_sources={num_sources}")
             if num_sources != num_frames:
                 self.logger.error(
                     f"Metadata num_sources ({num_sources}) does not match frame count ({num_frames})"
                 )
-                return None, None, None, None
+                return None, None, None
 
             # one source keeps the (H, W, C) shape every element expects
             batch_frames = frames[0] if num_frames == 1 else np.stack(frames, axis=0)
             self.logger.info(f"Extracted batch with shape: {batch_frames.shape}")
-            return batch_frames, id_str, num_sources, format
+            return batch_frames, num_sources, format

@@ -24,7 +24,7 @@ gi.require_version("GstBase", "1.0")
 from gi.repository import Gst, GstBase  # noqa: E402
 
 from log.logger_factory import LoggerFactory  # noqa: E402
-from utils.metadata import Metadata  # noqa: E402
+from utils.metadata import BATCH_SOURCE_INDEX_METADATA  # noqa: E402
 
 
 class StreamMux(GstBase.Aggregator):
@@ -57,9 +57,8 @@ class StreamMux(GstBase.Aggregator):
         super().__init__()
         self.logger = LoggerFactory.get(LoggerFactory.LOGGER_TYPE_GST)
         self.batch_buffer = []
+        self.batch_source_indices = []
         self.timestamps = []
-        self.batch_size = 1  # Default batch size, dynamically adjusted
-        self.metadata = Metadata("si")  # Use "si" for string ID and num_sources
 
     def do_request_new_pad(self, templ, name, caps):
         """Handles requests for new sink pads."""
@@ -75,9 +74,8 @@ class StreamMux(GstBase.Aggregator):
 
     def do_aggregate(self, timeout):
         """Aggregates frames from all sink pads into a single batch."""
-        self.batch_size = len(self.sinkpads)
-
         self.batch_buffer.clear()
+        self.batch_source_indices.clear()
         self.timestamps.clear()
 
         self.foreach_sink_pad(self.collect_frame, None)
@@ -88,9 +86,14 @@ class StreamMux(GstBase.Aggregator):
                 structure = Gst.Structure.new_empty("selected-sample")
                 self.selected_samples(buf.pts, buf.dts, buf.duration, structure)
 
+        pads_without_a_frame = [
+            pad
+            for index, pad in enumerate(self.sinkpads)
+            if index not in self.batch_source_indices
+        ]
         # a live source that misses the aggregator latency gets a partial batch
-        batch_is_ready = len(self.batch_buffer) == self.batch_size or (
-            timeout and self.batch_buffer
+        batch_is_ready = self.batch_buffer and (
+            timeout or all(pad.is_eos() for pad in pads_without_a_frame)
         )
         if batch_is_ready:
             self.output_batch()
@@ -104,6 +107,7 @@ class StreamMux(GstBase.Aggregator):
         buf = pad.pop_buffer()
         if buf:
             self.batch_buffer.append(buf)
+            self.batch_source_indices.append(self.sinkpads.index(pad))
             self.timestamps.append(buf.pts)
         return True
 
@@ -113,9 +117,9 @@ class StreamMux(GstBase.Aggregator):
             self.logger.warning("No buffers available, skipping batch output.")
             return
 
-        # a timeout flushes a partial batch
-        num_sources = len(self.batch_buffer)
-        self.logger.info(f"Embedding num-sources={num_sources} into buffer memory")
+        self.logger.info(
+            f"Embedding source indices {self.batch_source_indices} into buffer memory"
+        )
 
         # Create a new buffer
         batch_buffer = Gst.Buffer.new()
@@ -126,8 +130,9 @@ class StreamMux(GstBase.Aggregator):
                 memory = buf.peek_memory(i)
                 batch_buffer.append_memory(memory)
 
-        # Append metadata LAST with string ID "mux/demux" and num_sources
-        self.metadata.write(batch_buffer, "mux/demux", num_sources)
+        BATCH_SOURCE_INDEX_METADATA.write(
+            batch_buffer, [(index,) for index in self.batch_source_indices]
+        )
 
         # Log metadata memory
         with batch_buffer.peek_memory(batch_buffer.n_memory() - 1).map(

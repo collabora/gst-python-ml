@@ -184,3 +184,7 @@ class Metadata:
                         result.append(fixed_values[fixed_idx])
                         fixed_idx += 1
                 return tuple(result)
+
+
+# one (source index,) per frame of a streammux batch, in memory order
+BATCH_SOURCE_INDEX_METADATA = Metadata("l(i)")

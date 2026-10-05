@@ -43,8 +43,7 @@ class GstFrameIO(FrameIO):
         processor = MuxedBufferProcessor(
             self.logger, width, height, framerate[0], framerate[1]
         )
-        frames, _id_str, num_sources, fmt = processor.extract_frames(target, source)
-        return frames, num_sources, fmt
+        return processor.extract_frames(target, source)
 
     def read_frame(self, target, source, width, height):
         success, map_info = target.map(Gst.MapFlags.READ)

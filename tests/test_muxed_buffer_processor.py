@@ -18,11 +18,10 @@ from gi.repository import Gst  # noqa: E402
 Gst.init(None)
 
 from log.logger_factory import LoggerFactory  # noqa: E402
-from utils.metadata import Metadata  # noqa: E402
+from utils.metadata import BATCH_SOURCE_INDEX_METADATA  # noqa: E402
 from utils.muxed_buffer_processor import MuxedBufferProcessor  # noqa: E402
 
 WIDTH, HEIGHT = 4, 3
-MUX_ID = "mux/demux"
 
 
 class RgbPad:
@@ -38,7 +37,9 @@ def muxed_buffer(fill_values):
         frame = Gst.Buffer.new_allocate(None, WIDTH * HEIGHT * 3, None)
         frame.memset(0, fill, WIDTH * HEIGHT * 3)
         buf.append_memory(frame.get_memory(0))
-    Metadata("si").write(buf, MUX_ID, len(fill_values))
+    BATCH_SOURCE_INDEX_METADATA.write(
+        buf, [(index,) for index in range(len(fill_values))]
+    )
     return buf
 
 
@@ -50,10 +51,9 @@ def extract(buf):
 
 
 def test_a_two_source_batch_is_stacked():
-    frames, id_str, num_sources, fmt = extract(muxed_buffer([1, 2]))
-    assert (frames.shape, id_str, num_sources, fmt) == (
+    frames, num_sources, fmt = extract(muxed_buffer([1, 2]))
+    assert (frames.shape, num_sources, fmt) == (
         (2, HEIGHT, WIDTH, 3),
-        MUX_ID,
         2,
         "RGB",
     )
@@ -62,10 +62,9 @@ def test_a_two_source_batch_is_stacked():
 
 # the muxer flushes a partial batch of one source when the others hit eos first
 def test_a_one_source_batch_keeps_the_single_frame_shape():
-    frames, id_str, num_sources, fmt = extract(muxed_buffer([7]))
-    assert (frames.shape, id_str, num_sources, fmt) == (
+    frames, num_sources, fmt = extract(muxed_buffer([7]))
+    assert (frames.shape, num_sources, fmt) == (
         (HEIGHT, WIDTH, 3),
-        MUX_ID,
         1,
         "RGB",
     )

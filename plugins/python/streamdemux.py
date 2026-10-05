@@ -24,7 +24,7 @@ gi.require_version("GstBase", "1.0")
 from gi.repository import Gst, GObject  # noqa: E402
 from backend import analytics  # noqa: E402
 from log.logger_factory import LoggerFactory  # noqa: E402
-from utils.metadata import Metadata  # noqa: E402
+from utils.metadata import BATCH_SOURCE_INDEX_METADATA  # noqa: E402
 from collections import defaultdict  # noqa: E402
 
 
@@ -72,7 +72,6 @@ class StreamDemux(Gst.Element):
         self.sinkpad.set_chain_function_full(self.chain)
         self.add_pad(self.sinkpad)
         self.pad_count = 0
-        self.metadata = Metadata("si")
         self.buffer_queues = defaultdict(list)
         self.src_pads = {}
         self.max_queue_size = 10
@@ -112,7 +111,7 @@ class StreamDemux(Gst.Element):
         self.remove_pad(pad)
         del self.src_pads[pad_name]
 
-    def process_src_pad(self, buffer, memory_chunk, stream_idx):
+    def process_src_pad(self, buffer, memory_chunk, batch_position, source_index):
         out_buffer = Gst.Buffer.new()
         out_buffer.append_memory(memory_chunk)
         out_buffer.pts = buffer.pts
@@ -124,14 +123,16 @@ class StreamDemux(Gst.Element):
             out_meta = analytics.add_relation_meta(out_buffer)
             objects = analytics.read_objects(meta)
             self.logger.info(
-                f"Processing {len(objects)} analytics relations for stream_{stream_idx}"
+                f"Processing {len(objects)} analytics relations for stream_{source_index}"
             )
+            # elements label by batch position, not source index
+            batch_label_prefix = f"stream_{batch_position}_"
             for obj in objects:
                 label = obj["label"]
-                if f"stream_{stream_idx}_" in label:
+                if batch_label_prefix in label:
                     new_od_mtd = analytics.add_object(
                         out_meta,
-                        label,
+                        label.replace(batch_label_prefix, f"stream_{source_index}_", 1),
                         obj["x"],
                         obj["y"],
                         obj["w"],
@@ -160,13 +161,16 @@ class StreamDemux(Gst.Element):
 
     def chain(self, pad, parent, buffer):
         self.logger.debug("Processing buffer in chain function")
+        source_indices = []
         if buffer.n_memory() > 0:
             try:
-                id_str, num_sources = self.metadata.read(buffer)
-                self.logger.info(f"Decoded ID: {id_str}, num_sources: {num_sources}")
+                source_indices = [
+                    index for (index,) in BATCH_SOURCE_INDEX_METADATA.read(buffer)
+                ]
+                self.logger.info(f"Decoded source indices: {source_indices}")
                 # Request all pads upfront on first buffer
                 if not self.pads_requested:
-                    for idx in range(num_sources):
+                    for idx in source_indices:
                         pad_name = f"src_{idx}"
                         if pad_name not in self.src_pads:
                             self.request_pad(
@@ -185,9 +189,8 @@ class StreamDemux(Gst.Element):
             except ValueError as e:
                 self.logger.error(str(e))
 
-        num_memory_chunks = buffer.n_memory() - 1
-        for idx in range(num_memory_chunks):
-            memory_chunk = buffer.peek_memory(idx)
+        for batch_position, idx in enumerate(source_indices):
+            memory_chunk = buffer.peek_memory(batch_position)
             pad_name = f"src_{idx}"
             src_pad = self.get_static_pad(pad_name)
             if src_pad is None:
@@ -214,7 +217,9 @@ class StreamDemux(Gst.Element):
                 src_pad.push_event(Gst.Event.new_segment(segment))
                 src_pad.segment_pushed = True
 
-            out_buffer = self.process_src_pad(buffer, memory_chunk, stream_idx=idx)
+            out_buffer = self.process_src_pad(
+                buffer, memory_chunk, batch_position, source_index=idx
+            )
             while self.buffer_queues[pad_name]:
                 if self.push_buffer(
                     src_pad, self.buffer_queues[pad_name].pop(0), pad_name
