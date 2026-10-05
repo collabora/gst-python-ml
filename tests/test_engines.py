@@ -45,6 +45,7 @@ DETECTION_ENGINES = [
     ("executorch", "executorch", "executorch", ".pte", "nchw"),
     ("iree", "iree.runtime", "onnx", ".onnx", "nchw"),
     ("tinygrad", "tinygrad", "onnx", ".onnx", "auto"),
+    ("migraphx", "migraphx", "onnx", ".onnx", "nchw"),
 ]
 
 # what the ultralytics export of a format needs beyond the engine

@@ -170,6 +170,38 @@ python pyml-launch.py filesrc location=data/people.mp4 ! decodebin name=d \
 
 It takes every `engine-name` below.
 
+##### Task elements on the ONNX engine
+
+`pyml_depth`, `pyml_clip`, `pyml_anomaly`, `pyml_embedding`, `pyml_action`,
+`pyml_superres`, `pyml_optical_flow`, `pyml_sam`, `pyml_yolo`, `pyml_yolo_pose`
+and `pyml_zeroshotdetector` take the Hugging Face or ultralytics model name
+with `engine-name=onnx`. The first run exports the model to
+`~/.cache/gst-python-ml/onnx/`. `track=True` needs the PyTorch engine.
+
+```
+python pyml-launch.py filesrc location=data/people.mp4 ! decodebin name=d \
+  d. ! queue \
+    ! videoconvert ! videoscale ! "video/x-raw,width=640,height=480" \
+    ! pyml_depth engine-name=onnx model-name=depth-anything/Depth-Anything-V2-Small-hf device=cuda \
+    ! videoconvert ! autovideosink sync=false
+```
+
+```
+python pyml-launch.py filesrc location=data/people.mp4 ! decodebin ! videoconvert ! videoscale \
+  ! video/x-raw,width=640,height=480 \
+  ! pyml_yolo engine-name=onnx model-name=yolo11m device=cuda \
+  ! pyml_overlay ! videoconvert ! autovideosink
+```
+
+```
+python pyml-launch.py filesrc location=data/people.mp4 ! decodebin name=d \
+  d. ! queue \
+    ! videoconvert ! videoscale ! "video/x-raw,width=640,height=480" \
+    ! pyml_clip engine-name=onnx model-name=openai/clip-vit-base-patch32 device=cuda \
+              labels="person, bicycle, car, dog, cat" top-k=3 \
+    ! videoconvert ! pyml_overlay ! videoconvert ! autovideosink sync=false
+```
+
 #### OpenVINO Engine
 
 

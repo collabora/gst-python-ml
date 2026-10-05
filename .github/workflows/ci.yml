@@ -250,7 +250,7 @@ jobs:
           # the g2g job has no gi to run its gst driver tests
           python -m pytest tests/test_g2g_backend.py -q
 
-      - name: Cache the PIPELINES.md models (Linux)
+      - name: Cache the models the tests download (Linux)
         if: runner.os == 'Linux'
         uses: actions/cache@v4
         with:
@@ -258,7 +258,7 @@ jobs:
             ~/.cache/huggingface
             ~/.cache/torch
             ~/.config/Ultralytics
-          key: pipelines-${{ hashFiles('PIPELINES.md') }}
+          key: pipelines-${{ hashFiles('PIPELINES.md', 'tests/test_exported_models.py') }}
 
       # the alert pipeline publishes to a local broker
       - name: Run the PIPELINES.md pipelines a headless runner can (Linux)
@@ -275,6 +275,15 @@ jobs:
         with:
           name: pipeline-logs
           path: tests/logs
+
+      # the gst backend step has no onnxruntime
+      - name: Run the exported model tests (Linux)
+        if: runner.os == 'Linux'
+        run: |
+          source .venv/bin/activate
+          unset LD_LIBRARY_PATH
+          pip install -e ".[onnx]"
+          python -m pytest tests/test_exported_models.py -q
 
       - name: ONNX pipeline smoke test (Linux)
         if: runner.os == 'Linux'
