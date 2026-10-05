@@ -20,6 +20,16 @@ from abc import ABC, abstractmethod
 
 from log.logger_factory import LoggerFactory
 
+TORCHVISION_WEIGHTS = "DEFAULT"
+TORCHVISION_RESNET_MODULE = "torchvision.models.resnet"
+
+
+def is_torchvision_resnet(model_name):
+    from torchvision import models
+
+    builder = models.get_model_builder(model_name)
+    return builder.__module__ == TORCHVISION_RESNET_MODULE
+
 
 class MLEngine(ABC):
     """Abstract base class for machine learning engines that load models, run inference on image frames,

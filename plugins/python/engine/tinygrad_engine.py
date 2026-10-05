@@ -22,7 +22,7 @@ from pathlib import Path
 
 import numpy as np
 
-from .ml_engine import MLEngine
+from .ml_engine import MLEngine, TORCHVISION_WEIGHTS, is_torchvision_resnet
 
 # tinygrad loads the nvrtc library this names
 NVRTC_PATH_VARIABLE = "NVRTC_PATH"
@@ -60,11 +60,11 @@ class TinyGradEngine(MLEngine):
         from torchvision import models as tv_models
 
         if hasattr(tv_models, model_name):
-            pt_model = getattr(tv_models, model_name)(pretrained=True)
-            if not isinstance(pt_model, tv_models.ResNet):
+            if not is_torchvision_resnet(model_name):
                 raise ValueError(
                     f"TinyGrad runs the torchvision resnet family, not '{model_name}'."
                 )
+            pt_model = getattr(tv_models, model_name)(weights=TORCHVISION_WEIGHTS)
             from .tinygrad_resnet import tinygrad_resnet
 
             self.model = tinygrad_resnet(pt_model.eval())

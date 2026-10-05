@@ -20,7 +20,7 @@ import os
 import numpy as np
 import openvino as ov
 
-from .ml_engine import MLEngine
+from .ml_engine import MLEngine, TORCHVISION_WEIGHTS
 
 
 class OpenVinoEngine(MLEngine):
@@ -52,14 +52,16 @@ class OpenVinoEngine(MLEngine):
             from torchvision import models
 
             if hasattr(models, model_name):
-                pt_model = getattr(models, model_name)(pretrained=True)
+                pt_model = getattr(models, model_name)(weights=TORCHVISION_WEIGHTS)
                 self.ov_model = ov.convert_model(pt_model)
                 self.model_type = "classification"
                 self.logger.info(
                     f"Pre-trained vision model '{model_name}' converted to OpenVINO."
                 )
             elif hasattr(models.detection, model_name):
-                pt_model = getattr(models.detection, model_name)(pretrained=True)
+                pt_model = getattr(models.detection, model_name)(
+                    weights=TORCHVISION_WEIGHTS
+                )
                 self.ov_model = ov.convert_model(pt_model)
                 self.model_type = "detection"
                 self.logger.info(

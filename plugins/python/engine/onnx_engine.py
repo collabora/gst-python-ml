@@ -24,7 +24,7 @@ from pathlib import Path
 import numpy as np
 import onnxruntime as ort
 
-from .ml_engine import MLEngine
+from .ml_engine import MLEngine, TORCHVISION_WEIGHTS
 
 TENSORRT_PROVIDER = "TensorrtExecutionProvider"
 # providers are tried in the order listed
@@ -160,10 +160,12 @@ class ONNXEngine(MLEngine):
             from torchvision import models as tv_models
 
             if hasattr(tv_models, model_name):
-                pt_model = getattr(tv_models, model_name)(pretrained=True)
+                pt_model = getattr(tv_models, model_name)(weights=TORCHVISION_WEIGHTS)
                 self.model_type = "classification"
             elif hasattr(tv_models.detection, model_name):
-                pt_model = getattr(tv_models.detection, model_name)(pretrained=True)
+                pt_model = getattr(tv_models.detection, model_name)(
+                    weights=TORCHVISION_WEIGHTS
+                )
                 self.model_type = "detection"
             else:
                 raise FileNotFoundError(

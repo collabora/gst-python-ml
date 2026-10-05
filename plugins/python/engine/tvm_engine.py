@@ -21,7 +21,7 @@ import numpy as np
 import tvm
 from tvm import relax
 
-from .ml_engine import MLEngine
+from .ml_engine import MLEngine, TORCHVISION_WEIGHTS
 
 CLASSIFIER_INPUT_SHAPE = (1, 3, 224, 224)
 # the torch importer names the exported graph main
@@ -50,7 +50,7 @@ class TVMEngine(MLEngine):
         from torchvision import models as tv_models
 
         if hasattr(tv_models, model_name):
-            pt_model = getattr(tv_models, model_name)(pretrained=True)
+            pt_model = getattr(tv_models, model_name)(weights=TORCHVISION_WEIGHTS)
             self._compile_pytorch_model(pt_model, CLASSIFIER_INPUT_SHAPE)
             self.model_type = "classification"
             self.logger.info(

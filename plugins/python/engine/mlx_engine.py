@@ -19,7 +19,7 @@
 import os
 import numpy as np
 
-from .ml_engine import MLEngine
+from .ml_engine import MLEngine, TORCHVISION_WEIGHTS, is_torchvision_resnet
 
 
 class MLXEngine(MLEngine):
@@ -68,11 +68,11 @@ class MLXEngine(MLEngine):
         from torchvision import models as tv_models
 
         if hasattr(tv_models, model_name):
-            pt_model = getattr(tv_models, model_name)(pretrained=True)
-            if not isinstance(pt_model, tv_models.ResNet):
+            if not is_torchvision_resnet(model_name):
                 raise ValueError(
                     f"MLX runs the torchvision resnet family, not '{model_name}'."
                 )
+            pt_model = getattr(tv_models, model_name)(weights=TORCHVISION_WEIGHTS)
             from .mlx_resnet import mlx_resnet
 
             self.model = mlx_resnet(pt_model.eval())

@@ -19,7 +19,7 @@
 import os
 import numpy as np
 
-from .ml_engine import MLEngine
+from .ml_engine import MLEngine, TORCHVISION_WEIGHTS
 
 
 # transformers 5 returns a model output from get_*_features, 4 returned the tensor
@@ -64,7 +64,7 @@ class PyTorchEngine(MLEngine):
                 self.logger.info(f"Model loaded from local path: {model_name}")
         else:
             if hasattr(models, model_name):
-                self.model = getattr(models, model_name)(pretrained=True)
+                self.model = getattr(models, model_name)(weights=TORCHVISION_WEIGHTS)
                 self.logger.info(
                     f"Pre-trained vision model '{model_name}' loaded from TorchVision"
                 )
