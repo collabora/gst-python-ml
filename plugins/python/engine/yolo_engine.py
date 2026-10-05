@@ -40,6 +40,7 @@ FRAME_PATH = ""
 
 
 def exported_yolo_path(model_name):
+    import torch
     from ultralytics import YOLO
 
     path = ONNX_EXPORT_CACHE / f"{model_name}.onnx"
@@ -47,7 +48,10 @@ def exported_yolo_path(model_name):
         return str(path)
     EXPORT_WORK_DIRECTORY.mkdir(parents=True, exist_ok=True)
     weights = YOLO(str(EXPORT_WORK_DIRECTORY / f"{model_name}.pt"))
-    exported_path = weights.export(format="onnx", imgsz=EXPORTED_INPUT_SIZE)
+    # a device name makes ultralytics hide the gpu from the whole process
+    exported_path = weights.export(
+        format="onnx", imgsz=EXPORTED_INPUT_SIZE, device=torch.device("cpu")
+    )
     Path(exported_path).rename(path)
     return str(path)
 
