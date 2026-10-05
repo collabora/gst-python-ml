@@ -149,14 +149,7 @@ class JAXEngine(MLEngine):
         jax_input = jnp.array(img)
         if self.model_type == "classification":
             preds = np.asarray(self.model(jax_input))
-            probs = np.exp(preds) / np.sum(np.exp(preds), axis=1, keepdims=True)
-            top_classes = np.argmax(probs, axis=1)
-            confidences = np.max(probs, axis=1)
-            results = [
-                {"labels": [int(c)], "scores": [float(s)]}
-                for c, s in zip(top_classes, confidences)
-            ]
-            return results[0] if not is_batch else results
+            return self._top_classes(preds, is_batch)
         if self.apply_fn is None:
             self.logger.error(
                 "A bare Flax checkpoint has no graph to run, load a model."

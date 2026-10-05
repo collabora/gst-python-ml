@@ -117,14 +117,7 @@ class TVMEngine(MLEngine):
             img_array = np.expand_dims(img_array, 0)
 
         preds = self._run(img_array)[0]
-        probs = np.exp(preds) / np.sum(np.exp(preds), axis=1, keepdims=True)
-        top_classes = np.argmax(probs, axis=1)
-        confidences = np.max(probs, axis=1)
-        results = [
-            {"labels": [int(c)], "scores": [float(s)]}
-            for c, s in zip(top_classes, confidences)
-        ]
-        return results[0] if not is_batch else results
+        return self._top_classes(preds, is_batch)
 
     def do_forward(self, frames):
         is_batch = isinstance(frames, np.ndarray) and frames.ndim == 4

@@ -89,6 +89,18 @@ class MLEngine(ABC):
         # "nhwc" or "auto" → leave as (B, H, W, C)
         return img
 
+    def _top_classes(self, preds, is_batch):
+        import numpy as np
+
+        probs = np.exp(preds) / np.sum(np.exp(preds), axis=1, keepdims=True)
+        top_classes = np.argmax(probs, axis=1)
+        confidences = np.max(probs, axis=1)
+        results = [
+            {"labels": [int(c)], "scores": [float(s)]}
+            for c, s in zip(top_classes, confidences)
+        ]
+        return results[0] if not is_batch else results
+
     def _apply_post_process(self, raw, is_batch):
         """Apply post-processing to raw engine output per self.post_process."""
         import numpy as np

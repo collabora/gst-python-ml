@@ -240,15 +240,9 @@ class PyTorchEngine(MLEngine):
                 )
                 if not is_batch:
                     preds = np.expand_dims(preds, 0)
-                probs = np.exp(preds) / np.sum(np.exp(preds), axis=1, keepdims=True)
-                top_classes = np.argmax(probs, axis=1)
-                confidences = np.max(probs, axis=1)
-                results = [
-                    {"labels": [int(c)], "scores": [float(s)]}
-                    for c, s in zip(top_classes, confidences)
-                ]
+                results = self._top_classes(preds, is_batch)
                 self.logger.info(f"Classification results: {results}")
-                return results[0] if not is_batch else results
+                return results
 
             # Detection models (e.g., Mask R-CNN) with true batch inference
             writable_frames = np.array(frames, copy=True)

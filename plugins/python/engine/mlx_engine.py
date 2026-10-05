@@ -109,14 +109,7 @@ class MLXEngine(MLEngine):
         mx_input = mx.array(img)
         if self.model_type == "classification":
             preds = np.array(self.model(mx_input))
-            probs = np.exp(preds) / np.sum(np.exp(preds), axis=1, keepdims=True)
-            top_classes = np.argmax(probs, axis=1)
-            confidences = np.max(probs, axis=1)
-            results = [
-                {"labels": [int(c)], "scores": [float(s)]}
-                for c, s in zip(top_classes, confidences)
-            ]
-            return results[0] if not is_batch else results
+            return self._top_classes(preds, is_batch)
         if self.model_type == "custom" and callable(self.model):
             return self._apply_post_process(np.array(self.model(mx_input)), is_batch)
         self.logger.error("A bare state dict has no graph to run, load a model.")

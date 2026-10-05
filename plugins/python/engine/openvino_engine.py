@@ -116,14 +116,7 @@ class OpenVinoEngine(MLEngine):
         infer_request = self.compiled_model.create_infer_request()
         infer_request.infer({0: img_array})
         preds = infer_request.get_output_tensor(0).data
-        probs = np.exp(preds) / np.sum(np.exp(preds), axis=1, keepdims=True)
-        top_classes = np.argmax(probs, axis=1)
-        confidences = np.max(probs, axis=1)
-        results = [
-            {"labels": [int(c)], "scores": [float(s)]}
-            for c, s in zip(top_classes, confidences)
-        ]
-        return results[0] if not is_batch else results
+        return self._top_classes(preds, is_batch)
 
     def do_forward(self, frames):
         """Handle inference for different types of models, supporting single frames or batches."""
