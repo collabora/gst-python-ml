@@ -43,8 +43,7 @@ class AnalyticsUtils:
     metadata added by object detection and tracking elements, such as YOLO-based transformers.
 
     Supported Label Formats:
-    - Advanced person tracking: 'stream_<idx>_person_id_<id>' → label='person', track_id=<id>
-    - Advanced ball tracking: 'stream_<idx>_ball_id_<id>' → label='ball', track_id=<id>
+    - Named tracking: 'stream_<idx>_<name>_id_<id>' → label='<name>', track_id=<id>
     - Simpler tracking: 'stream_<idx>_id_<id>' → label='id_<id>', track_id=<id>
     - Class name (no tracking): 'stream_<idx>_<class_name>' → label='<class_name>', track_id=None
     - Trail point: 'stream_<idx>_<name>_trail' → label='<name>_trail', track_id=None
@@ -107,23 +106,13 @@ class AnalyticsUtils:
         return metadata
 
     def extract_id_from_label(self, full_label):
-        # Handle advanced person format: stream_\d+_person_id_\d+
-        match = re.match(r"stream_\d+_person_id_(\d+)", full_label)
+        # Handle named tracking format: stream_\d+_<name>_id_\d+
+        match = re.match(r"stream_\d+_(.+)_id_(\d+)", full_label)
         if match:
-            track_id = int(match.group(1))
-            label = "person"
+            track_id = int(match.group(2))
+            label = match.group(1)
             self.logger.debug(
-                f"Extracted track_id {track_id} and label '{label}' from '{full_label}' (advanced person)"
-            )
-            return track_id, label
-
-        # Handle advanced ball format: stream_\d+_ball_id_\d+
-        match = re.match(r"stream_\d+_ball_id_(\d+)", full_label)
-        if match:
-            track_id = int(match.group(1))
-            label = "ball"
-            self.logger.debug(
-                f"Extracted track_id {track_id} and label '{label}' from '{full_label}' (advanced ball)"
+                f"Extracted track_id {track_id} and label '{label}' from '{full_label}' (named tracking)"
             )
             return track_id, label
 
