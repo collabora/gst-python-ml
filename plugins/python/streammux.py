@@ -21,8 +21,7 @@ import gi
 
 gi.require_version("Gst", "1.0")
 gi.require_version("GstBase", "1.0")
-gi.require_version("GObject", "2.0")
-from gi.repository import Gst, GObject, GstBase  # noqa: E402
+from gi.repository import Gst, GstBase  # noqa: E402
 
 from log.logger_factory import LoggerFactory  # noqa: E402
 from utils.metadata import Metadata  # noqa: E402
@@ -54,34 +53,13 @@ class StreamMux(GstBase.Aggregator):
             ),
         )
 
-    timeout = GObject.Property(
-        type=int,
-        default=5000,
-        nick="Timeout",
-        blurb="Timeout for batch aggregation (in milliseconds)",
-    )
-
     def __init__(self):
         super().__init__()
         self.logger = LoggerFactory.get(LoggerFactory.LOGGER_TYPE_GST)
         self.batch_buffer = []
         self.timestamps = []
-        self.timeout_source = None
         self.batch_size = 1  # Default batch size, dynamically adjusted
         self.metadata = Metadata("si")  # Use "si" for string ID and num_sources
-        self.start_timeout()
-
-    def start_timeout(self):
-        """Start timeout for batch processing if not already running."""
-        if self.timeout_source:
-            return  # Already running
-        self.timeout_source = GObject.timeout_add(self.timeout, self.handle_timeout)
-
-    def stop_timeout(self):
-        """Stop the timeout if it is running."""
-        if self.timeout_source:
-            GObject.source_remove(self.timeout_source)
-            self.timeout_source = None
 
     def do_request_new_pad(self, templ, name, caps):
         """Handles requests for new sink pads."""
@@ -94,12 +72,6 @@ class StreamMux(GstBase.Aggregator):
 
         self.add_pad(pad)
         return pad
-
-    def handle_timeout(self):
-        """Handle timeout event: process batch if not full yet."""
-        if len(self.batch_buffer) > 0:
-            self.output_batch()
-        return True  # Keep the timeout active
 
     def do_aggregate(self, timeout):
         """Aggregates frames from all sink pads into a single batch."""
@@ -116,7 +88,11 @@ class StreamMux(GstBase.Aggregator):
                 structure = Gst.Structure.new_empty("selected-sample")
                 self.selected_samples(buf.pts, buf.dts, buf.duration, structure)
 
-        if len(self.batch_buffer) == self.batch_size:
+        # a live source that misses the aggregator latency gets a partial batch
+        batch_is_ready = len(self.batch_buffer) == self.batch_size or (
+            timeout and self.batch_buffer
+        )
+        if batch_is_ready:
             self.output_batch()
         elif all(pad.is_eos() for pad in self.sinkpads):
             return Gst.FlowReturn.EOS
@@ -200,19 +176,6 @@ class StreamMux(GstBase.Aggregator):
             self.aggregator_update_latency()
             return True  # Mark event as handled
         return GstBase.Aggregator.do_sink_event(self, pad, event)
-
-    def do_set_property(self, prop, value):
-        if prop.name == "timeout":
-            self.timeout = value
-            self.start_timeout()
-        else:
-            raise AttributeError(f"Unknown property: {prop.name}")
-
-    def do_get_property(self, prop):
-        if prop.name == "timeout":
-            return self.timeout
-        else:
-            raise AttributeError(f"Unknown property: {prop.name}")
 
 
 if backend.BACKEND == "gst":
