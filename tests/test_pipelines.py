@@ -130,9 +130,10 @@ EXPORTED_MODEL_SUFFIXES = {
     ".tflite",
     ".onnx",
     ".pte",
+    ".rknn",
     ".safetensors",
 }
-EXPORTED_MODEL_DIR_MARKERS = ("_saved_model", "_openvino_model")
+EXPORTED_MODEL_DIR_MARKERS = ("_saved_model", "_openvino_model", "snapshot")
 
 
 # the engine class registers without its runtime, so check the runtime itself
@@ -151,6 +152,8 @@ ENGINE_RUNTIME_MODULES = {
     "jax": "jax",
     "tinygrad": "tinygrad",
     "migraphx": "migraphx",
+    "rknn": "rknnlite",
+    "vart": "runner",
 }
 
 

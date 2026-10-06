@@ -19,7 +19,6 @@
 from abc import abstractmethod
 
 import backend
-from backend import GObject
 from base_aggregator import BaseAggregator
 
 if backend.BACKEND == "gst":
@@ -60,29 +59,6 @@ class BaseTranslate(BaseAggregator):
                 GstBase.AggregatorPad.__gtype__,
             ),
         )
-
-    def __init__(self):
-        super().__init__()
-        self.__src = "en"
-        self.__target = "en"
-
-    @GObject.Property(type=str)
-    def src(self):
-        "Source language code (e.g., 'de' for German)."
-        return self.__src
-
-    @src.setter
-    def src(self, value):
-        self.__src = value
-
-    @GObject.Property(type=str)
-    def target(self):
-        "Destination language code (e.g., 'ko' for Korean)."
-        return self.__target
-
-    @target.setter
-    def target(self, value):
-        self.__target = value
 
     @abstractmethod
     def do_translate_text(self, text):

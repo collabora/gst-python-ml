@@ -38,6 +38,8 @@ class EngineFactory:
     IREE_ENGINE = "iree"
     NCNN_ENGINE = "ncnn"
     DRPAI_ENGINE = "drpai"
+    RKNN_ENGINE = "rknn"
+    VART_ENGINE = "vart"
 
     BUILTIN_ENGINES = {
         PYTORCH_ENGINE: ("pytorch_engine", "PyTorchEngine"),
@@ -55,6 +57,8 @@ class EngineFactory:
         IREE_ENGINE: ("iree_engine", "IREEEngine"),
         NCNN_ENGINE: ("ncnn_engine", "NCNNEngine"),
         DRPAI_ENGINE: ("drpai_engine", "DRPAIEngine"),
+        RKNN_ENGINE: ("rknn_engine", "RKNNEngine"),
+        VART_ENGINE: ("vart_engine", "VARTEngine"),
     }
 
     @staticmethod

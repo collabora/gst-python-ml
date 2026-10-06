@@ -481,6 +481,37 @@ python pyml-launch.py filesrc location=data/people.mp4 ! decodebin name=d \
   ! fakesink
 ```
 
+#### RKNN Engine on Rockchip NPU
+
+RKNN takes a `.rknn` model built for the board with RKNN Toolkit2. It runs
+through RKNN Toolkit Lite2 and the board's `librknnrt`. Use `npu:0`, `npu:1`,
+`npu:2`, or `npu:all` to select NPU cores on supported chips.
+
+```
+python pyml-launch.py filesrc location=data/people.mp4 ! decodebin name=d \
+  d. ! queue ! videoconvert ! videoscale \
+  ! "video/x-raw,format=RGB,width=640,height=640" \
+  ! pyml_inference engine-name=rknn model-name=yolo11m.rknn device=npu \
+              input-format=nhwc post-process=none \
+  ! fakesink
+```
+
+#### VART Engine on AMD VEK280
+
+This preliminary path uses the Python VART API from the Vitis AI 5.1 target
+image. Write the model as `snapshot-directory::network-name`. The snapshot,
+NPU IP and target image must come from the same reference flow.
+
+```
+source /etc/vai.sh
+python pyml-launch.py filesrc location=data/people.mp4 ! decodebin name=d \
+  d. ! queue ! videoconvert ! videoscale \
+  ! "video/x-raw,format=RGB,width=224,height=224" \
+  ! pyml_inference engine-name=vart model-name=snapshot.NPU.resnet50.TF::resnet50 device=npu \
+              input-format=nhwc post-process=none \
+  ! fakesink
+```
+
 #### ONNX Runtime with TensorRT
 
 `device=tensorrt` runs the model through TensorRT, and `device=tensorrt-fp16`
@@ -774,10 +805,16 @@ python pyml-launch.py filesrc location=data/air_traffic_korean_with_english.wav 
 #### mariantranslate
 
 ```
-python pyml-launch.py filesrc location=data/air_traffic_korean_with_english.wav ! decodebin ! audioconvert ! pyml_whispertranscribe device=cuda language=ko translate=yes ! pyml_mariantranslate device=cuda src=en target=fr ! fakesink
+python pyml-launch.py filesrc location=data/air_traffic_korean_with_english.wav ! decodebin ! audioconvert ! pyml_whispertranscribe device=cuda language=ko translate=yes ! pyml_mariantranslate device=cuda model-name=Helsinki-NLP/opus-mt-en-fr ! fakesink
 ```
 
-`src` and `target` take any pair with a [Helsinki-NLP opus-mt model](https://huggingface.co/models?search=Helsinki).
+`model-name` is the Hugging Face model id. `Helsinki-NLP/opus-mt-en-fr` is English to French. There is no `Helsinki-NLP/opus-mt-en-ko`. English to Korean is `Helsinki-NLP/opus-mt-tc-big-en-ko`.
+
+`opus-mt-en-fr` lists its English pieces in `vocab.json` and the element uses those ids. `opus-mt-tc-big-en-ko` lists Korean pieces there, so the element encodes the English with the source SentencePiece ids. On CUDA, "Air Traffic Control is the key element of modern aviation industry." is "Le contrôle du trafic aérien est l'élément clé de l'industrie aéronautique moderne." in French and "항공 교통 통제는 현대 항공 산업의 핵심 요소입니다." in Korean.
+
+```
+python pyml-launch.py filesrc location=data/air_traffic_korean_with_english.wav ! decodebin ! audioconvert ! pyml_whispertranscribe device=cuda language=ko translate=yes ! pyml_mariantranslate device=cuda model-name=Helsinki-NLP/opus-mt-tc-big-en-ko ! fakesink
+```
 
 
 #### whisperlive

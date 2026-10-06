@@ -136,6 +136,9 @@ litert = [
 ncnn = [
     "ncnn",
 ]
+rknn = [
+    "rknn-toolkit-lite2>=2.3.2; platform_machine == 'aarch64' and python_version == '3.12'",
+]
 iree = [
     "iree-base-runtime",
     "iree-base-compiler",

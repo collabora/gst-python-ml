@@ -35,8 +35,12 @@ DEVICE_PROVIDERS = {
     "hip": ("MIGraphXExecutionProvider", "ROCMExecutionProvider"),
     "npu": ("VitisAIExecutionProvider",),
     "ryzenai": ("VitisAIExecutionProvider",),
+    "coreml": ("CoreMLExecutionProvider",),
 }
-PROVIDERS_WITHOUT_DEVICE_ID = ("VitisAIExecutionProvider",)
+PROVIDERS_WITHOUT_DEVICE_ID = (
+    "VitisAIExecutionProvider",
+    "CoreMLExecutionProvider",
+)
 PROVIDERS_ON_NVIDIA_LIBRARIES = (TENSORRT_PROVIDER, "CUDAExecutionProvider")
 # an uncached engine takes minutes to build on every start
 TENSORRT_ENGINE_CACHE = Path.home() / ".cache" / "gst-python-ml" / "tensorrt"

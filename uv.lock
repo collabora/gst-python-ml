@@ -1711,6 +1711,9 @@ onnx-gpu = [
 openvino = [
     { name = "openvino" },
 ]
+rknn = [
+    { name = "rknn-toolkit-lite2", marker = "python_full_version < '3.13' and platform_machine == 'aarch64'" },
+]
 skia = [
     { name = "skia-python" },
 ]
@@ -1799,6 +1802,7 @@ requires-dist = [
     { name = "pysilero", marker = "extra == 'vad'" },
     { name = "pysilero-vad", marker = "extra == 'vad'" },
     { name = "qwen-vl-utils", extras = ["decord"], marker = "extra == 'llm'", specifier = ">=0.0.8" },
+    { name = "rknn-toolkit-lite2", marker = "python_full_version == '3.12.*' and platform_machine == 'aarch64' and extra == 'rknn'", specifier = ">=2.3.2" },
     { name = "scipy" },
     { name = "sentencepiece" },
     { name = "skia-python", marker = "extra == 'skia'" },
@@ -1818,7 +1822,7 @@ requires-dist = [
     { name = "ultralytics", marker = "extra == 'yolo'" },
     { name = "whisperspeech", marker = "extra == 'audio'" },
 ]
-provides-extras = ["yolo", "llm", "awq", "audio", "diffusion", "face", "superres", "skia", "kafka", "mqtt", "onnx", "onnx-gpu", "tvm", "tinygrad", "mlx", "mlx-cpu", "executorch", "llamacpp", "jax-cpu", "jax-gpu", "jax-tpu", "openvino", "tensorflow", "litert", "ncnn", "iree", "vad", "mcp", "all"]
+provides-extras = ["yolo", "llm", "awq", "audio", "diffusion", "face", "superres", "skia", "kafka", "mqtt", "onnx", "onnx-gpu", "tvm", "tinygrad", "mlx", "mlx-cpu", "executorch", "llamacpp", "jax-cpu", "jax-gpu", "jax-tpu", "openvino", "tensorflow", "litert", "ncnn", "rknn", "iree", "vad", "mcp", "all"]
 
 [package.metadata.requires-dev]
 dev = [{ name = "pytest", specifier = ">=9.0.3" }]
@@ -5119,6 +5123,19 @@ dependencies = [
 sdist = { url = "https://files.pythonhosted.org/packages/c0/8f/0722ca900cc807c13a6a0c696dacf35430f72e0ec571c4275d2371fca3e9/rich-15.0.0.tar.gz", hash = "sha256:edd07a4824c6b40189fb7ac9bc4c52536e9780fbbfbddf6f1e2502c31b068c36", size = 230680, upload-time = "2026-04-12T08:24:00.75Z" }
 wheels = [
     { url = "https://files.pythonhosted.org/packages/82/3b/64d4899d73f91ba49a8c18a8ff3f0ea8f1c1d75481760df8c68ef5235bf5/rich-15.0.0-py3-none-any.whl", hash = "sha256:33bd4ef74232fb73fe9279a257718407f169c09b78a87ad3d296f548e27de0bb", size = 310654, upload-time = "2026-04-12T08:24:02.83Z" },
+]
+
+[[package]]
+name = "rknn-toolkit-lite2"
+version = "2.3.2"
+source = { registry = "https://pypi.org/simple" }
+dependencies = [
+    { name = "numpy", version = "2.2.6", source = { registry = "https://pypi.org/simple" }, marker = "python_full_version < '3.13'" },
+    { name = "psutil", marker = "python_full_version < '3.13'" },
+    { name = "ruamel-yaml", marker = "python_full_version < '3.13'" },
+]
+wheels = [
+    { url = "https://files.pythonhosted.org/packages/ff/db/64c756f3f06b219e92ff4f0fd4e000870ee49f214d505ff01c8b0275e26d/rknn_toolkit_lite2-2.3.2-cp312-cp312-manylinux_2_17_aarch64.manylinux2014_aarch64.whl", hash = "sha256:e1e4ec691fed900c0e6fde5e7d8eeba17f806aa45092b63b361ee775e2c1b50e", size = 527458, upload-time = "2025-04-09T09:39:58.881Z" },
 ]
 
 [[package]]

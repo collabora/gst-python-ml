@@ -130,7 +130,7 @@ either, so `all` resolves on 3.12 and 3.13 only.
 
 Every engine beyond PyTorch is an extra: `onnx`, `onnx-gpu`, `openvino`,
 `tensorflow`, `litert`, `tvm`, `tinygrad`, `mlx`, `executorch`, `llamacpp`,
-`mlx-cpu`, `jax-cpu`, `jax-gpu`, `jax-tpu`, `iree`, `ncnn`.
+`mlx-cpu`, `jax-cpu`, `jax-gpu`, `jax-tpu`, `iree`, `ncnn`, `rknn`.
 
 ```
 uv sync --extra onnx
@@ -148,7 +148,18 @@ uv sync --extra onnx
 - NCNN takes `.param` and `.bin` files. Convert an ONNX model with
   `python -m onnxsim model.onnx model_sim.onnx` (`pip install onnx-simplifier`), then
   `onnx2ncnn model_sim.onnx model.param model.bin`.
+- RKNN takes a `.rknn` file built for the board with RKNN Toolkit2. The `rknn`
+  extra installs RKNN Toolkit Lite2 on AArch64 Python 3.12. Its version must
+  match the board's `librknnrt`. Use `engine-name=rknn device=npu`, or select
+  a core with `npu:0`, `npu:1`, `npu:2`, or `npu:all`.
+- VART support is preliminary and targets the AMD VEK280 reference flow in
+  Vitis AI 5.1. The runtime comes from the target image rather than a uv extra.
+  Source `/etc/vai.sh`, then use `engine-name=vart device=npu` and pass
+  `model-name=/path/to/snapshot::network-name`. Use `device=npu-only` to reject
+  CPU subgraphs. The snapshot, NPU IP and target image must match.
 - The ONNX engine with `device=npu` needs the [Ryzen AI SDK](https://ryzenai.docs.amd.com/) on AMD Ryzen AI laptops.
+- The ONNX engine uses the macOS ONNX Runtime CoreML provider for
+  `device=coreml`.
 - ZenDNN speeds up ONNX Runtime and TensorFlow on AMD EPYC CPUs with
   `ZENDNN_INT8_SUPPORT=1` and `OMP_NUM_THREADS=$(nproc)`, no separate engine.
 
