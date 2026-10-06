@@ -175,7 +175,11 @@ class Session:
             Gst.MessageType.EOS,
             Gst.MessageType.SEGMENT_DONE,
         ):
-            if self.loop_clip and self.pipeline is not None and not self._stopped.is_set():
+            if (
+                self.loop_clip
+                and self.pipeline is not None
+                and not self._stopped.is_set()
+            ):
                 self._replay.set()
             else:
                 with self.lock:
