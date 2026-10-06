@@ -1,6 +1,10 @@
 import sys
 from pathlib import Path
 
+import pytest
+
+pytest.importorskip("onnxruntime")
+
 BASE_DIRECTORY = Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(BASE_DIRECTORY / "plugins" / "python"))
 

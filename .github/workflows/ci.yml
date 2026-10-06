@@ -101,7 +101,11 @@ jobs:
       - name: Run the engine tests
         env:
           PYML_REQUIRE_ENGINE: ${{ matrix.engine }}
-        run: python -m pytest tests/test_engines.py -q -k "${{ matrix.engine }}"
+        run: |
+          python -m pytest tests/test_engines.py -q -k "${{ matrix.engine }}"
+          if [ "${{ matrix.engine }}" = "onnx" ]; then
+            python -m pytest tests/test_onnx_devices.py -q
+          fi
 
   build:
     needs: lint
