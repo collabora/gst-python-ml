@@ -175,7 +175,7 @@ class Session:
             Gst.MessageType.EOS,
             Gst.MessageType.SEGMENT_DONE,
         ):
-            if self.loop_clip and self.pipeline is not None:
+            if self.loop_clip and self.pipeline is not None and not self._stopped.is_set():
                 self._replay.set()
             else:
                 with self.lock:
@@ -269,9 +269,16 @@ def pipeline_status() -> dict:
 
 @server.tool(description="Stop and release the running pipeline.")
 def stop_pipeline() -> dict:
+    pipeline = session.pipeline
+    # EOS lets the muxer finish the mp4.
+    record = pipeline is not None and pipeline.get_by_name("record") is not None
     session._stopped.set()
     session._replay.set()
     thread = session._replayer
+    if record:
+        pipeline.send_event(Gst.Event.new_eos())
+        with session.lock:
+            session.lock.wait(timeout=8)
     if session.pipeline is not None:
         session.pipeline.set_state(Gst.State.NULL)
         session.pipeline = None

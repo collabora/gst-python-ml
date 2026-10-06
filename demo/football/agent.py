@@ -120,6 +120,7 @@ async def model_tools(mcp):
 
 
 DEMO_VIDEO = "data/iStock-1446288409.mp4"
+RECORD_PATH = "/tmp/football-voice.mp4"
 
 
 def demo_pipeline():
@@ -130,22 +131,31 @@ def demo_pipeline():
         text=True,
     ).stdout.strip()
     sink = "autovideosink sync=true"
-    caption = (
+    record = (
         'textoverlay name=transcript text="" font-desc="Sans, 32" '
         "halignment=center valignment=bottom shaded-background=true "
-        "auto-resize=false wrap-mode=word ! "
-        + sink
+        "auto-resize=false wrap-mode=word ! tee name=view "
+        "view. ! queue max-size-buffers=8 max-size-time=0 max-size-bytes=0 ! "
+        "videoconvert ! autovideosink name=display sync=true "
+        "view. ! queue max-size-buffers=8 max-size-time=0 max-size-bytes=0 ! "
+        "videoconvert ! video/x-raw,format=I420 ! openh264enc ! h264parse ! mux. "
+        f"pulsesrc device={HEADSET_SOURCE} do-timestamp=true ! "
+        "queue max-size-time=2000000000 max-size-buffers=0 max-size-bytes=0 ! "
+        "audioconvert ! audioresample ! audio/x-raw,rate=48000,channels=1 ! "
+        "avenc_aac ! mux. "
+        "mp4mux name=mux fragment-duration=500 fragment-mode=first-moov-then-finalise ! "
+        f"filesink name=record location={RECORD_PATH}"
     )
     if sink not in pipeline:
         raise SystemExit("football pipeline has no display sink for the transcript")
-    return pipeline.replace(sink, caption)
+    return pipeline.replace(sink, record)
 
 
 async def run_tool(mcp, name, arguments):
     if name == "start_football_demo":
         name, arguments = "start_pipeline", {
             "pipeline": demo_pipeline(),
-            "loop": True,
+            "loop": False,
         }
     result = await mcp.call_tool(name, arguments)
     text = "\n".join(block.text for block in result.content if hasattr(block, "text"))
