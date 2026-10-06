@@ -22,6 +22,7 @@ import re
 import sys
 import tempfile
 import threading
+import time
 from collections import deque
 from importlib.metadata import version
 from pathlib import Path
@@ -96,7 +97,65 @@ class Session:
         self.posted = 0
         self.errors = []
         self.ended = False
+        self.loop_clip = False
+        self._duration = 0
+        self._stopped = threading.Event()
+        self._replay = threading.Event()
+        self._replayer = None
         self.lock = threading.Condition()
+
+    def _segment_seek(self, flush):
+        pipeline = self.pipeline
+        if pipeline is None or self._duration <= 0:
+            return False
+        flags = Gst.SeekFlags.SEGMENT
+        if flush:
+            flags |= Gst.SeekFlags.FLUSH
+        return pipeline.seek(
+            1.0,
+            Gst.Format.TIME,
+            flags,
+            Gst.SeekType.SET,
+            0,
+            Gst.SeekType.SET,
+            self._duration,
+        )
+
+    def _arm_segment(self):
+        pipeline = self.pipeline
+        for _ in range(50):
+            if self._stopped.is_set() or pipeline is None:
+                return
+            ok, duration = pipeline.query_duration(Gst.Format.TIME)
+            if ok and duration > 0:
+                self._duration = duration
+                # A flush at the end stalls the picture.
+                self._segment_seek(flush=True)
+                return
+            time.sleep(0.1)
+
+    def replay(self):
+        self._arm_segment()
+        while not self._stopped.is_set():
+            if not self._replay.wait(0.2):
+                continue
+            if self._stopped.is_set():
+                return
+            self._replay.clear()
+            pipeline = self.pipeline
+            if pipeline is None or self._stopped.is_set():
+                continue
+            if self._segment_seek(flush=False):
+                continue
+            # The flush seek waits until the streaming-thread EOS handler returns.
+            time.sleep(0.05)
+            if pipeline.seek_simple(
+                Gst.Format.TIME, Gst.SeekFlags.FLUSH | Gst.SeekFlags.KEY_UNIT, 0
+            ):
+                continue
+            with self.lock:
+                self.ended = True
+                self.lock.notify_all()
 
     def on_message(self, bus, message):
         if message.type == Gst.MessageType.APPLICATION:
@@ -112,10 +171,16 @@ class Session:
             with self.lock:
                 self.errors.append(f"{message.src.get_name()}: {error.message}")
                 self.lock.notify_all()
-        elif message.type == Gst.MessageType.EOS:
-            with self.lock:
-                self.ended = True
-                self.lock.notify_all()
+        elif message.type in (
+            Gst.MessageType.EOS,
+            Gst.MessageType.SEGMENT_DONE,
+        ):
+            if self.loop_clip and self.pipeline is not None:
+                self._replay.set()
+            else:
+                with self.lock:
+                    self.ended = True
+                    self.lock.notify_all()
         # nothing else pops this bus
         return Gst.BusSyncReply.DROP
 
@@ -161,7 +226,7 @@ def serialized(spec, value):
     description="Start a pipeline from a gst-launch description, stopping any running one first. "
     "End it with pyml_metasink so its results reach latest_metadata."
 )
-def start_pipeline(pipeline: str) -> dict:
+def start_pipeline(pipeline: str, loop: bool = False) -> dict:
     stop_pipeline()
     try:
         parsed = Gst.parse_launch(pipeline)
@@ -169,6 +234,7 @@ def start_pipeline(pipeline: str) -> dict:
         raise ToolError(error.message) from error
     session.__init__()
     session.pipeline = parsed
+    session.loop_clip = loop
     # records already arrive over the bus
     for sink in metadata_sinks(parsed):
         if not sink.get_property("location"):
@@ -178,6 +244,9 @@ def start_pipeline(pipeline: str) -> dict:
         errors = ", ".join(session.errors) or "the pipeline refused to start"
         stop_pipeline()
         raise ToolError(errors)
+    if loop:
+        session._replayer = threading.Thread(target=session.replay, daemon=True)
+        session._replayer.start()
     return pipeline_status()
 
 
@@ -200,9 +269,15 @@ def pipeline_status() -> dict:
 
 @server.tool(description="Stop and release the running pipeline.")
 def stop_pipeline() -> dict:
+    session._stopped.set()
+    session._replay.set()
+    thread = session._replayer
     if session.pipeline is not None:
         session.pipeline.set_state(Gst.State.NULL)
         session.pipeline = None
+    if thread is not None:
+        thread.join(timeout=1)
+        session._replayer = None
     return {"state": "none"}
 
 

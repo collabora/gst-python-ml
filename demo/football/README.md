@@ -75,6 +75,13 @@ call as it happens. The model sees five tools: `start_football_demo`,
 `run.sh print` echoes the display pipeline the agent starts. Server logs go to
 `football-agent-llama.log` and `football-agent-pyml-mcp.log` in the temp dir.
 
+Say the same commands into the headset mic. Whisper base runs on the CPU. Qwen 3.5 4B turns each transcript into pipeline tool calls.
+The script selects the headset port, then sends every transcript to that model.
+
+```bash
+.venv/bin/python demo/football/agent.py --voice
+```
+
 ## Environment knobs
 
 | Var        | Default | Meaning |

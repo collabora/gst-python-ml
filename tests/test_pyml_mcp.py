@@ -154,6 +154,18 @@ def test_a_bad_description_is_reported_and_leaves_nothing_running():
     assert pyml_mcp.pipeline_status() == {"state": "none"}
 
 
+def test_a_looping_pipeline_seeks_instead_of_ending():
+    pyml_mcp.start_pipeline(
+        "videotestsrc num-buffers=5 ! fakesink sync=true", loop=True
+    )
+    time.sleep(1)
+    status = pyml_mcp.pipeline_status()
+    pyml_mcp.stop_pipeline()
+    assert status["errors"] == []
+    assert status["ended"] is False
+    assert status["state"] == "playing"
+
+
 def test_describe_frame_captions_the_newest_frame(monkeypatch):
     engine = StubVlmEngine()
     monkeypatch.setattr(pyml_mcp, "vlm_engine", lambda model_name: engine)

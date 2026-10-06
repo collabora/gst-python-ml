@@ -43,6 +43,7 @@ class WhisperTranscribe(BaseTranscribe):
 
     def __init__(self):
         super().__init__()
+        self._beam_size = 5
         self.model_name = "medium"
         # set engine name directly since property is read only
         self.mgr.engine_name = "pyml_whispertranscribe_engine"
@@ -60,11 +61,20 @@ class WhisperTranscribe(BaseTranscribe):
             "The 'engine_name' property cannot be set in this derived class."
         )
 
+    @GObject.Property(type=int, default=5, minimum=1, maximum=8)
+    def beam_size(self):
+        return self._beam_size
+
+    @beam_size.setter
+    def beam_size(self, value):
+        self._beam_size = value
+
     def do_transcribe(self, audio_data, task):
         result, _ = self.get_model().transcribe(
             audio_data,
             language=self.language,
             task=task,
+            beam_size=self._beam_size,
             initial_prompt=self.initial_prompt,
         )
         return result
