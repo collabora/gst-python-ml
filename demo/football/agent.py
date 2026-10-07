@@ -123,6 +123,8 @@ DEMO_VIDEO = "data/iStock-1446288409.mp4"
 RECORD_PATH = "/tmp/football-voice.mp4"
 # a seek back to the start leaves the recorded mp4 unplayable
 LOOP_CLIP = "--loop" in sys.argv
+WINDOW_TITLE = "Football demo"
+TITLE_TAG = f'taginject tags="title=\\"{WINDOW_TITLE}\\"" ! '
 TRANSCRIPT_OVERLAY = (
     'textoverlay name=transcript text="" font-desc="Sans, 32" '
     "halignment=center valignment=bottom shaded-background=true "
@@ -138,9 +140,11 @@ def demo_pipeline():
         text=True,
     ).stdout.strip()
     sink = "autovideosink sync=true"
-    display = TRANSCRIPT_OVERLAY + "videoconvert ! autovideosink name=display sync=true"
+    display = (
+        TITLE_TAG + TRANSCRIPT_OVERLAY + "videoconvert ! autovideosink name=display sync=true"
+    )
     record = (
-        TRANSCRIPT_OVERLAY + "tee name=view "
+        TITLE_TAG + TRANSCRIPT_OVERLAY + "tee name=view "
         "view. ! queue max-size-buffers=8 max-size-time=0 max-size-bytes=0 ! "
         "videoconvert ! autovideosink name=display sync=true "
         "view. ! queue max-size-buffers=8 max-size-time=0 max-size-bytes=0 ! "

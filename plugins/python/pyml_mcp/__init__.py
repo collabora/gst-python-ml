@@ -56,6 +56,7 @@ from alertrecorder import Clip, DEFAULT_ENCODER  # noqa: E402
 from embedding_index import EmbeddingIndex  # noqa: E402
 from log.logger_factory import LoggerFactory  # noqa: E402
 
+APPLICATION_NAME = "gst-python-ml"
 BACKEND = os.environ.get("PYML_BACKEND", "gst").lower()
 MODEL_DEVICE = os.environ.get("PYML_MCP_DEVICE", "")
 VLM_MODEL = os.environ.get("PYML_MCP_VLM_MODEL", "HuggingFaceTB/SmolVLM-500M-Instruct")
@@ -80,7 +81,7 @@ PIPELINES_PATH = (
 )
 
 server = MCPServer(
-    "gst-python-ml",
+    APPLICATION_NAME,
     version=version("gst-python-ml"),
     instructions=(
         "Pipelines are gst-launch descriptions. End one with pyml_metasink to read "
@@ -649,6 +650,8 @@ def main():
         raise SystemExit(
             "pyml-mcp runs the gst backend in-process; for g2g use glass2glass's g2g-mcp"
         )
+    # video sinks put it in their window title, after the stream's title tag
+    GLib.set_application_name(APPLICATION_NAME)
     server.run()
 
 
