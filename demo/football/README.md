@@ -188,6 +188,9 @@ flushes the mux and the file never finalizes. The clip plays once. The live
 mic does not send EOS, so the file keeps growing after the picture ends until
 `stop_pipeline` runs.
 
+`--voice --loop` drops the recording and loops the clip until Ctrl-C. The
+transcript still shows on the picture.
+
 Say the command and the words show on the picture a few seconds later. Qwen
 then changes `overlay` or `detector`. From the end of the phrase to the
 change is about 4 to 5 seconds: Whisper about 3, Qwen about 1 to 2.

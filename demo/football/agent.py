@@ -121,6 +121,13 @@ async def model_tools(mcp):
 
 DEMO_VIDEO = "data/iStock-1446288409.mp4"
 RECORD_PATH = "/tmp/football-voice.mp4"
+# a seek back to the start leaves the recorded mp4 unplayable
+LOOP_CLIP = "--loop" in sys.argv
+TRANSCRIPT_OVERLAY = (
+    'textoverlay name=transcript text="" font-desc="Sans, 32" '
+    "halignment=center valignment=bottom shaded-background=true "
+    "auto-resize=false wrap-mode=word ! "
+)
 
 
 def demo_pipeline():
@@ -131,10 +138,9 @@ def demo_pipeline():
         text=True,
     ).stdout.strip()
     sink = "autovideosink sync=true"
+    display = TRANSCRIPT_OVERLAY + "videoconvert ! autovideosink name=display sync=true"
     record = (
-        'textoverlay name=transcript text="" font-desc="Sans, 32" '
-        "halignment=center valignment=bottom shaded-background=true "
-        "auto-resize=false wrap-mode=word ! tee name=view "
+        TRANSCRIPT_OVERLAY + "tee name=view "
         "view. ! queue max-size-buffers=8 max-size-time=0 max-size-bytes=0 ! "
         "videoconvert ! autovideosink name=display sync=true "
         "view. ! queue max-size-buffers=8 max-size-time=0 max-size-bytes=0 ! "
@@ -148,14 +154,14 @@ def demo_pipeline():
     )
     if sink not in pipeline:
         raise SystemExit("football pipeline has no display sink for the transcript")
-    return pipeline.replace(sink, record)
+    return pipeline.replace(sink, display if LOOP_CLIP else record)
 
 
 async def run_tool(mcp, name, arguments):
     if name == "start_football_demo":
         name, arguments = "start_pipeline", {
             "pipeline": demo_pipeline(),
-            "loop": False,
+            "loop": LOOP_CLIP,
         }
     result = await mcp.call_tool(name, arguments)
     text = "\n".join(block.text for block in result.content if hasattr(block, "text"))
