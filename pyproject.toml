@@ -1,10 +1,10 @@
 [build-system]
-requires = ["setuptools", "wheel"]
-build-backend = "setuptools.build_meta"
+requires = ["hatchling>=1.27"]
+build-backend = "hatchling.build"
 
 [project]
 name = "gst-python-ml"
-version = "1.2.0"
+version = "1.2.1"
 description = "An ML package for GStreamer"
 readme = "README.md"
 requires-python = ">=3.12"
@@ -174,16 +174,21 @@ markers = [
 ]
 
 [project.scripts]
-pyml-launch = "pyml_launch:main"
-pyml-mcp = "pyml_mcp:main"
+pyml-launch = "gst_python_ml:launch"
+pyml-mcp = "gst_python_ml:mcp"
 
-[tool.setuptools]
-include-package-data = true
-py-modules = ["pyml_launch"]
-package-dir = {"" = "plugins/python"}
+[tool.hatch.build.targets.wheel]
+only-include = ["plugins"]
+exclude = ["plugins/python/gst_python_ml"]
+sources = {"plugins" = "gst_python_ml/plugins"}
+dev-mode-dirs = ["plugins/python"]
 
-[tool.setuptools.packages.find]
-where = ["plugins/python"]
+[tool.hatch.build.targets.wheel.force-include]
+"plugins/python/gst_python_ml/__init__.py" = "gst_python_ml/__init__.py"
+"PIPELINES.md" = "gst_python_ml/PIPELINES.md"
+
+[tool.hatch.build.targets.sdist]
+only-include = ["plugins", "PIPELINES.md"]
 
 [tool.uv]
 # tensorflow-text has no python 3.14 wheel

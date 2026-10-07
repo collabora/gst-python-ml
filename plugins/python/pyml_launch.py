@@ -51,8 +51,7 @@ import sys
 from pathlib import Path
 from typing import NamedTuple
 
-#: The checkout's `plugins` tree, when this module was loaded from one. An
-#: installed copy sits in site-packages, which carries no element modules.
+#: The `plugins` tree this module sits in, in a checkout or the installed wheel.
 _PLUGINS = Path(__file__).resolve().parent.parent
 CHECKOUT_PLUGINS = _PLUGINS if _PLUGINS.name == "plugins" else None
 

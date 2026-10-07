@@ -640,7 +640,6 @@ def register_pipeline_prompts(doc_path):
         )(section_prompt(heading, descriptions, doc_path.parent))
 
 
-# an installed wheel has no PIPELINES.md beside the plugins
 if PIPELINES_PATH is not None:
     register_pipeline_prompts(PIPELINES_PATH)
 
