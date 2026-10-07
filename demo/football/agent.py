@@ -4,7 +4,9 @@ import os
 import subprocess
 import sys
 import tempfile
+import termios
 import time
+import tty
 from pathlib import Path
 
 import httpx
@@ -34,6 +36,7 @@ FAULT_CONFIDENCE = "0.99"
 HEADSET_SOURCE = "alsa_input.pci-0000_34_00.6.analog-stereo"
 HEADSET_PORT = "analog-input-mic"
 WHISPER_MODEL = "base"
+VOICE_TOGGLE_KEY = b" "
 PASSTHROUGH_TOOLS = ("set_property", "get_property", "pipeline_status", "stop_pipeline")
 START_TOOL = {
     "type": "function",
@@ -47,8 +50,8 @@ START_TOOL = {
 SYSTEM_PROMPT = """You operate a live GStreamer football broadcast pipeline through tools.
 The pipeline has two named elements you may change:
 - detector (pyml_yolo): property `confidence`, float 0 to 1, default 0.1. The minimum score a detection needs. Set high, players and the ball stop being detected and their markers vanish.
-- overlay (pyml_football_overlay): property `show-ball`, bool, default false, draws the ball marker. The ball track is that marker plus its trail, and the trail is drawn only when `trails` is also true. Property `trails`, bool, default false, draws a fading motion trail behind each player, and behind the ball when `show-ball` is true. Property `show-hud`, bool, default true, draws the focal-player HUD with headshot, contacts and distance.
-Showing the ball track, or tracking the ball, sets `show-ball` to true and `trails` to true. Hiding or stopping the ball track sets `show-ball` to false and leaves `trails` as it is. Showing the player tracks sets `trails` to true and leaves `show-ball` as it is. Hiding the player tracks sets `trails` to false and leaves `show-ball` as it is.
+- overlay (pyml_football_overlay): property `show-ball`, bool, default false, draws the ball marker. Property `ball-trail`, bool, default false, draws a fading trail behind the ball. The ball track is that marker plus its trail. Property `trails`, bool, default false, draws a fading motion trail behind each player. Property `show-hud`, bool, default true, draws the focal-player HUD with headshot, contacts and distance.
+Showing the ball track, or tracking the ball, sets `show-ball` and `ball-trail` to true and leaves `trails` as it is. Hiding or stopping the ball track sets `show-ball` and `ball-trail` to false and leaves `trails` as it is. Showing the player tracks sets `trails` to true and leaves the ball properties as they are. Hiding the player tracks sets `trails` to false and leaves the ball properties as they are.
 Spell booleans as true or false and numbers plainly.
 Start the pipeline with start_football_demo only when asked to start it.
 For a plain request to change a property, call set_property straight away.
@@ -141,7 +144,9 @@ def demo_pipeline():
     ).stdout.strip()
     sink = "autovideosink sync=true"
     display = (
-        TITLE_TAG + TRANSCRIPT_OVERLAY + "videoconvert ! autovideosink name=display sync=true"
+        TITLE_TAG
+        + TRANSCRIPT_OVERLAY
+        + "videoconvert ! autovideosink name=display sync=true"
     )
     record = (
         TITLE_TAG + TRANSCRIPT_OVERLAY + "tee name=view "
@@ -184,7 +189,9 @@ def format_call(name, arguments):
     return f"{name}({rendered})"
 
 
-async def chat(http, messages, tools, max_tokens=MAX_TOKENS, timeout=CHAT_TIMEOUT_SECONDS):
+async def chat(
+    http, messages, tools, max_tokens=MAX_TOKENS, timeout=CHAT_TIMEOUT_SECONDS
+):
     response = await http.post(
         f"{LLAMA_URL}/v1/chat/completions",
         json={
@@ -201,7 +208,14 @@ async def chat(http, messages, tools, max_tokens=MAX_TOKENS, timeout=CHAT_TIMEOU
 
 
 async def answer(
-    http, mcp, messages, tools, request, speak=True, max_tokens=MAX_TOKENS, timeout=CHAT_TIMEOUT_SECONDS
+    http,
+    mcp,
+    messages,
+    tools,
+    request,
+    speak=True,
+    max_tokens=MAX_TOKENS,
+    timeout=CHAT_TIMEOUT_SECONDS,
 ):
     messages.append({"role": "user", "content": request})
     offered = {tool["function"]["name"] for tool in tools}
@@ -291,6 +305,8 @@ def start_microphone(loop, queue):
     pipeline = Gst.parse_launch(
         "pulsesrc name=mic ! audioconvert ! audioresample ! "
         "audio/x-raw,format=S16LE,rate=16000,channels=1 ! "
+        # silence ends a phrase the toggle cuts off
+        "volume name=voice_toggle mute=true ! "
         f"pyml_whispertranscribe name=stt device=cpu language=en "
         f"model-name={WHISPER_MODEL} beam-size=1 ! "
         "appsink name=words emit-signals=true sync=false"
@@ -351,9 +367,24 @@ async def voice(http, mcp):
     queue = asyncio.Queue()
     pipeline = start_microphone(asyncio.get_running_loop(), queue)
     print(await run_tool(mcp, "start_football_demo", {}), flush=True)
+    voice_toggle = pipeline.get_by_name("voice_toggle")
+
+    def toggle_voice():
+        pressed = os.read(stdin, 64)
+        for _ in range(pressed.count(VOICE_TOGGLE_KEY)):
+            was_muted = voice_toggle.get_property("mute")
+            voice_toggle.set_property("mute", not was_muted)
+            print(
+                "voice commands on" if was_muted else "voice commands off", flush=True
+            )
+
+    stdin = sys.stdin.fileno()
+    terminal_settings = termios.tcgetattr(stdin)
+    tty.setcbreak(stdin)
+    asyncio.get_running_loop().add_reader(stdin, toggle_voice)
     print(
-        "listening on the headset mic. whisper base is on the cpu. "
-        "say a command, Ctrl-C to stop.",
+        "headset mic, whisper base on the cpu. voice commands are off. "
+        "press space in this terminal to turn them on or off, Ctrl-C to stop.",
         flush=True,
     )
     try:
@@ -395,6 +426,8 @@ async def voice(http, mcp):
             except Exception as error:
                 print(f"  ! {error}", flush=True)
     finally:
+        asyncio.get_running_loop().remove_reader(stdin)
+        termios.tcsetattr(stdin, termios.TCSADRAIN, terminal_settings)
         pipeline.set_state(Gst.State.NULL)
         # without end of stream the recorded mp4 is never finalized
         await run_tool(mcp, "stop_pipeline", {})

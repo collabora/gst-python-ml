@@ -121,7 +121,14 @@ class FootballOverlay(InPlaceVideoTransform):
         type=bool,
         default=True,
         nick="Show Trails",
-        blurb="Draw a fading motion trail behind each tracked object",
+        blurb="Draw a fading motion trail behind each tracked player",
+        flags=GObject.ParamFlags.READWRITE,
+    )
+    ball_trail = GObject.Property(
+        type=bool,
+        default=False,
+        nick="Show Ball Trail",
+        blurb="Draw a fading motion trail behind the ball",
         flags=GObject.ParamFlags.READWRITE,
     )
     trail_length = GObject.Property(
@@ -1088,8 +1095,8 @@ class FootballOverlay(InPlaceVideoTransform):
                 if rgba is None:
                     continue
                 self._draw_trail(cv2, np, frame, self._trail.get(tid, []), rgba)
-            if self.show_ball:
-                self._draw_trail(cv2, np, frame, self._ball_trail, _BALL_RGBA)
+        if self.ball_trail:
+            self._draw_trail(cv2, np, frame, self._ball_trail, _BALL_RGBA)
 
         # Which drawn box is the focal (HUD) player? Match the focal
         # track's box to the nearest drawn box so we can highlight it

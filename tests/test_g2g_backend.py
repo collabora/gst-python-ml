@@ -487,6 +487,47 @@ def test_football_overlay_draws_a_tracked_player_in_place():
     assert not pixels[550:700, 900:1200].any(), "nothing drawn on the empty pitch"
 
 
+BALL_TRAIL_FRAMES = 6
+BALL_START_X = 300
+BALL_STEP_PIXELS = 4
+BALL_Y = 200
+BALL_SIZE = 8
+
+
+def ball_path_pixels(ball_trail):
+    from football_overlay import FootballOverlay
+
+    overlay = FootballOverlay()
+    overlay.team_colors = False
+    overlay.trails = False
+    overlay.show_ball = False
+    overlay.ball_trail = ball_trail
+    width, height = 1280, 720
+    player = {"label": "player_id_3", "x": 900, "y": 400, "w": 40, "h": 120}
+    for step in range(BALL_TRAIL_FRAMES):
+        frame = bytearray(width * height * 4)
+        ball = {
+            "label": "ball_id_7",
+            "x": BALL_START_X + step * BALL_STEP_PIXELS,
+            "y": BALL_Y,
+            "w": BALL_SIZE,
+            "h": BALL_SIZE,
+        }
+        upstream = [{**player, "score": 1.0}, {**ball, "score": 1.0}]
+        overlay.g2g_process(
+            frame, width, height, "RGBA", StubMetaSink(upstream_objects=upstream)
+        )
+    pixels = np.frombuffer(frame, dtype=np.uint8).reshape(height, width, 4)
+    centre_y = BALL_Y + BALL_SIZE // 2
+    return pixels[centre_y - 3 : centre_y + 4, BALL_START_X : BALL_START_X + 30]
+
+
+def test_football_overlay_draws_the_ball_trail_without_the_player_trails():
+    pytest.importorskip("cv2")
+    assert ball_path_pixels(ball_trail=True).any(), "the ball trail was drawn"
+    assert not ball_path_pixels(ball_trail=False).any(), "no ball trail when off"
+
+
 def test_aggregator_drives_the_same_hook_a_transform_fills_in():
     """The N-source case spells the same on both backends: one `process_frames`
     taking (H, W, C) for a single source and (N, H, W, C) for several."""

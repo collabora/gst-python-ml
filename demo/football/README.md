@@ -59,7 +59,7 @@ by typing. It starts the local model described below, spawns
 `.venv/bin/pyml-mcp`, and shows each tool call as it happens. The model sees
 five tools: `start_football_demo`, `set_property`, `get_property`,
 `pipeline_status`, `stop_pipeline`. It knows `overlay show-ball`,
-`overlay trails`, `overlay show-hud` and `detector confidence`.
+`overlay ball-trail`, `overlay trails`, `overlay show-hud` and `detector confidence`.
 
 ```bash
 .venv/bin/python demo/football/agent.py
@@ -117,6 +117,13 @@ That source is the Ryzen HD Audio / ALC287 headset mic. Jack sense reports
 `analog-input-mic` unavailable until the port is selected. Without it, Pulse
 uses the C920 webcam mic. `pulsesrc` is pinned to that source by name.
 
+Voice commands start off. Space in the agent's terminal turns them on, and
+the next space turns them off. Off sets `mute=true` on `volume name=voice_toggle`
+in front of Whisper, so Whisper hears silence. A phrase still in progress when
+you turn commands off is transcribed and runs. The key is read from the
+terminal, so the terminal needs focus. Clicking the video window takes it away.
+The recording keeps the mic either way.
+
 Each transcript is written on the picture by `textoverlay name=transcript`
 along the bottom, then sent to Qwen. If several transcripts are waiting, only
 the newest one is sent.
@@ -156,10 +163,10 @@ Ctrl-C runs `stop_pipeline`, so the recording is finalized.
 
 Property rules in the system prompt:
 
-- "track the ball" / "show the ball track": `overlay show-ball=true` and `trails=true`. The ball trail is drawn only when both are true.
-- "stop" / "hide" the ball track: `show-ball=false`, `trails` unchanged.
-- "show player tracks": `trails=true`, `show-ball` unchanged.
-- "hide player tracks": `trails=false`, `show-ball` unchanged.
+- "track the ball" / "show the ball track": `overlay show-ball=true` and `ball-trail=true`, `trails` unchanged.
+- "stop" / "hide" the ball track: `show-ball=false` and `ball-trail=false`, `trails` unchanged.
+- "show player tracks": `trails=true`, ball properties unchanged.
+- "hide player tracks": `trails=false`, ball properties unchanged.
 
 ### pyml-mcp
 
@@ -205,14 +212,15 @@ change is about 4 to 5 seconds: Whisper about 3, Qwen about 1 to 2.
 | `HOST`     | `gst`   | `gst` runs `gst-launch-1.0`. `g2g` runs the same three Python elements hosted by `g2g-launch-py` (needs it on `PATH`, `pt` backend only). |
 | `INTERVAL` | `1`     | Run detection every Nth frame; the tracker/overlay still update every frame, so it stays smooth at ~N× less inference cost. The main real-time lever. The ball trail needs 1. |
 | `IMGSZ`    | `640`   | Network input size for the `pt` backend. `1280` finds the ball on about half the frames instead of a third, at three times the inference cost. |
-| `TRAILS`   | `false` | Draw motion trails behind the players and the ball. |
+| `TRAILS`   | `false` | Draw motion trails behind the players. |
+| `BALL_TRAIL` | `false` | Draw a motion trail behind the ball. |
 | `SHOW_BALL` | `false` | Draw the ball marker. |
 
 ```bash
 BACKEND=fp16 demo/football/run.sh display     # faster inference path
 INTERVAL=5   demo/football/run.sh display     # detect every 5th frame
 INTERVAL=3   demo/football/run.sh             # detect every 3rd frame (cheaper, sparse ball trail)
-TRAILS=true SHOW_BALL=true demo/football/run.sh display data/soccer_tracking.mp4
+TRAILS=true SHOW_BALL=true BALL_TRAIL=true demo/football/run.sh display data/soccer_tracking.mp4
 HOST=g2g demo/football/run.sh display              # same pipeline on the g2g host
 ```
 
