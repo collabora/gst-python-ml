@@ -62,6 +62,7 @@ MODEL_DEVICE = os.environ.get("PYML_MCP_DEVICE", "")
 VLM_MODEL = os.environ.get("PYML_MCP_VLM_MODEL", "HuggingFaceTB/SmolVLM-500M-Instruct")
 ELEMENT_PREFIX = "pyml_"
 RECENT_RECORDS = 1000
+RECENT_BUS_MESSAGES = 1000
 SNAPSHOT_IMAGE_FORMAT = "jpeg"
 FRAME_CONVERT_SECONDS = 5
 RGB_CAPS = "video/x-raw,format=RGB"
@@ -97,6 +98,7 @@ class Session:
         # the deque drops its oldest entries
         self.posted = 0
         self.errors = []
+        self.bus_messages = deque(maxlen=RECENT_BUS_MESSAGES)
         self.ended = False
         self.loop_clip = False
         self._duration = 0
@@ -158,6 +160,12 @@ class Session:
                 self.ended = True
                 self.lock.notify_all()
 
+    def keep_bus_message(self, kind, message, text):
+        with self.lock:
+            self.bus_messages.append(
+                {"type": kind, "source": message.src.get_name(), "text": text}
+            )
+
     def on_message(self, bus, message):
         if message.type == Gst.MessageType.APPLICATION:
             structure = message.get_structure()
@@ -172,6 +180,13 @@ class Session:
             with self.lock:
                 self.errors.append(f"{message.src.get_name()}: {error.message}")
                 self.lock.notify_all()
+        elif message.type == Gst.MessageType.WARNING:
+            warning, _debug = message.parse_warning()
+            self.keep_bus_message("warning", message, warning.message)
+        elif message.type == Gst.MessageType.ELEMENT:
+            self.keep_bus_message(
+                "element", message, message.get_structure().to_string()
+            )
         elif message.type in (
             Gst.MessageType.EOS,
             Gst.MessageType.SEGMENT_DONE,
@@ -300,6 +315,16 @@ def stop_pipeline() -> dict:
 def latest_metadata(count: int = 10) -> list[dict]:
     with session.lock:
         return list(session.records)[-count:]
+
+
+@server.tool(
+    description="The newest element messages and warnings the running pipeline posted on "
+    "its bus, oldest first, such as level's loudness or spectrum's bands. Each names the "
+    "element that posted it."
+)
+def latest_bus_messages(count: int = 10) -> list[dict]:
+    with session.lock:
+        return list(session.bus_messages)[-count:]
 
 
 @server.tool(

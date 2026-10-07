@@ -1260,6 +1260,7 @@ End every pipeline with a `pyml_metasink`, that is where records come from.
 - When the pipeline has an element named `record`, such as `filesink name=record`, `stop_pipeline` sends end of stream first so the mp4 it writes is playable.
 - `latest_metadata` returns the newest records, at most the last 1000. `wait_for_records` blocks until the sink posts new ones, optionally only those carrying a key such as `detections`.
 - `load_metadata` reads a JSON lines file a `pyml_metasink` wrote, so a finished run needs no pipeline.
+- `latest_bus_messages` returns the newest element messages and warnings any element posted, such as `level` loudness, at most the last 1000. Debug logs never reach the bus.
 - `snapshot_frame` returns the newest rendered frame as a JPEG. `describe_frame` captions it with the model `PYML_MCP_VLM_MODEL` names, `HuggingFaceTB/SmolVLM-500M-Instruct` by default.
 - `search_video` reads an index `pyml_embeddingsink` wrote and returns the frames closest to a description, embedded with the index's own model. That model has to embed text too, so build the index with CLIP, not DINOv2. `clip_at` cuts a webm around a pts, which turns a hit into a clip.
 - Every pipeline section of this file is a prompt named after it, such as `object_detection`.

@@ -25,6 +25,7 @@ pytestmark = pytest.mark.skipif(
 )
 
 RECORD_WAIT_SECONDS = 10
+RECENT_MESSAGES_READ = 100
 FRAME_WAIT_SECONDS = 2
 MISSING_KEY_WAIT_SECONDS = 0.5
 MISSING_KEY_DEADLINE_SECONDS = 5
@@ -89,6 +90,20 @@ def test_text_flows_from_the_sink_to_latest_metadata(tmp_path):
     assert "state" in waited["status"]
     assert [record["text"] for record in pyml_mcp.latest_metadata()] == ["hello"]
     assert pyml_mcp.stop_pipeline() == {"state": "none"}
+
+
+def test_element_messages_from_any_element_reach_latest_bus_messages():
+    pyml_mcp.start_pipeline("audiotestsrc num-buffers=20 ! level name=meter ! fakesink")
+    pyml_mcp.wait_for_records(1, timeout=RECORD_WAIT_SECONDS)
+    readings = [
+        message
+        for message in pyml_mcp.latest_bus_messages(RECENT_MESSAGES_READ)
+        if message["source"] == "meter"
+    ]
+    assert readings
+    assert all(reading["text"].startswith("level, ") for reading in readings)
+    assert "rms=" in readings[0]["text"]
+    pyml_mcp.stop_pipeline()
 
 
 def test_snapshot_frame_returns_a_jpeg_of_the_newest_frame():
