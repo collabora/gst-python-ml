@@ -100,7 +100,7 @@ shown at 1280×720. `start_football_demo` is rewritten to
 
 - Model `base`, device `cpu`, `beam-size=1`, language `en`.
 - Audio is S16LE, 16 kHz, mono.
-- `initial-prompt` is `show the ball track. hide the ball track. start the football demo.`
+- `initial-prompt` is `show the ball track. hide the ball track.` Whisper repeats the prompt in silence, so it must not hold a phrase that changes the run.
 - The element property is `beam_size` (gst name `beam-size`), default 5. Voice sets 1.
 - CPU int8. Leave it on the CPU. The GPU is for the detector and Qwen.
 - A short phrase is about 3 seconds after you stop talking, plus the 300 ms
@@ -149,8 +149,10 @@ prompt only. A long history was making the 4B repeat "turn the ball track on"
 and, past about 5,000 tokens, a closed connection left the listener stuck so
 later phrases never ran.
 
-`stop_pipeline` is hidden from the voice model. A misheard "go back" had
-stopped the picture. The typed REPL still has that tool.
+`start_football_demo` and `stop_pipeline` are hidden from the voice model, and
+a call to a hidden tool is refused. A misheard "go back" had stopped the
+picture, and silence had restarted it. The typed REPL still has both tools.
+Ctrl-C runs `stop_pipeline`, so the recording is finalized.
 
 Property rules in the system prompt:
 

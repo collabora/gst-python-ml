@@ -200,6 +200,7 @@ async def answer(
     http, mcp, messages, tools, request, speak=True, max_tokens=MAX_TOKENS, timeout=CHAT_TIMEOUT_SECONDS
 ):
     messages.append({"role": "user", "content": request})
+    offered = {tool["function"]["name"] for tool in tools}
     for _ in range(MAX_TOOL_ROUNDS):
         reply = await chat(http, messages, tools, max_tokens, timeout)
         calls = reply.get("tool_calls") or []
@@ -220,6 +221,8 @@ async def answer(
             print(f"  -> {format_call(name, arguments)}", flush=True)
             # a failed tool goes back to the model as text
             try:
+                if name not in offered:
+                    raise ValueError(f"no tool named {name}")
                 output = await run_tool(mcp, name, arguments)
             except Exception as error:
                 output = f"error: {error}"
@@ -291,7 +294,7 @@ def start_microphone(loop, queue):
     pipeline.get_by_name("mic").set_property("device", HEADSET_SOURCE)
     pipeline.get_by_name("stt").set_property(
         "initial-prompt",
-        "show the ball track. hide the ball track. start the football demo.",
+        "show the ball track. hide the ball track.",
     )
 
     def on_sample(sink):
@@ -334,11 +337,11 @@ async def voice(http, mcp):
     gi.require_version("Gst", "1.0")
     from gi.repository import Gst
 
-    # A misheard phrase must not be able to stop the picture.
+    # whisper makes up phrases in silence
     tools = [
         tool
         for tool in await model_tools(mcp)
-        if tool["function"]["name"] != "stop_pipeline"
+        if tool["function"]["name"] not in ("start_football_demo", "stop_pipeline")
     ]
     messages = [{"role": "system", "content": SYSTEM_PROMPT}]
     queue = asyncio.Queue()
@@ -389,6 +392,8 @@ async def voice(http, mcp):
                 print(f"  ! {error}", flush=True)
     finally:
         pipeline.set_state(Gst.State.NULL)
+        # without end of stream the recorded mp4 is never finalized
+        await run_tool(mcp, "stop_pipeline", {})
 
 
 async def main():
