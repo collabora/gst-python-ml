@@ -1,27 +1,33 @@
-# Building PyPI Package
+# PyPI release
 
 ## Setup
-1. Generate token on PyPI and copy to `.pypirc`
+
+Put a PyPI API token in `~/.pypirc`. A section with a name other than `pypi` needs the `repository` line, or twine fails with `KeyError: 'repository'`.
 
 ```
-[pypi]
+[pypi-gst-python-ml]
+  repository = https://upload.pypi.org/legacy/
   username = __token__
-  password = $TOKEN
+  password = <token>
 ```
 
-2. Install build dependencies
-
-```
-pip install setuptools wheel twine
-pip install --upgrade build
-```
 ## Release
 
-1. rev version number in project.toml, commit and push
-
-2. build and upload
+Set `version` in `pyproject.toml`, then:
 
 ```
-python -m build
-twine upload dist/*
+uv lock
+git commit -am "bump version to X.Y.Z"
+git tag -a vX.Y.Z -m vX.Y.Z
+git push origin master vX.Y.Z
+rm -rf dist
+uv build
+uvx twine check dist/*
+uvx twine upload -r pypi-gst-python-ml dist/*
 ```
+
+`uv lock` records the new version in `uv.lock`.
+
+Use `uvx twine`. Hatchling writes metadata version 2.5, and twine 6.2 rejects it.
+
+The wheel should have one top-level directory, `gst_python_ml/`, with the elements under `gst_python_ml/plugins/python`.
