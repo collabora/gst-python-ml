@@ -27,7 +27,7 @@ dependencies = [
     "torch>=2.7.0; python_version < '3.14'",
     "torchvision>=0.26.0; python_version >= '3.14'",
     "torchvision>=0.22.0; python_version < '3.14'",
-    "transformers>=5.6.2; python_version >= '3.14'",
+    "transformers>=5.5; python_version >= '3.14'",
     "transformers>=4.44.0; python_version < '3.14'",
     "accelerate>=1.13.0",
     "huggingface-hub",
@@ -128,6 +128,8 @@ jax-tpu = [
 ]
 openvino = [
     "openvino>=2024.0",
+    "openvino-genai",
+    "optimum-intel",
 ]
 tensorflow = [
     "tensorflow>=2.16.0",

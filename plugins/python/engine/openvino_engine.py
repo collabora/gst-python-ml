@@ -20,7 +20,9 @@ import os
 import numpy as np
 import openvino as ov
 
+from .hub_causal_lm import is_hub_causal_lm
 from .ml_engine import MLEngine, TORCHVISION_WEIGHTS
+from .openvino_llm import OpenVinoLLM
 
 
 class OpenVinoEngine(MLEngine):
@@ -52,6 +54,11 @@ class OpenVinoEngine(MLEngine):
             self.ov_model = self.core.read_model(xml_path)
             self.model_type = "custom"
             self.logger.info(f"OpenVINO IR model loaded from local path: {model_name}")
+        elif is_hub_causal_lm(model_name):
+            self.model = OpenVinoLLM(model_name, self.device)
+            self.model_type = "llm"
+            self.logger.info(f"openvino-genai model exported and loaded: {model_name}")
+            return True
         else:
             from torchvision import models
 
@@ -183,7 +190,8 @@ class OpenVinoEngine(MLEngine):
             raise ValueError("Unsupported model type.")
 
     def do_generate(self, input_text, max_length=1000, system_prompt=None):
-        raise NotImplementedError(
-            "OpenVINO does not support text generation. "
-            "Use PyTorch or llama.cpp for LLM workloads."
-        )
+        if self.model_type != "llm":
+            raise NotImplementedError(
+                "OpenVINO generates text from a Hugging Face causal language model name"
+            )
+        return self.model.generate(input_text, max_length, system_prompt)

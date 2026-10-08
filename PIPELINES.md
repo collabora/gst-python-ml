@@ -850,14 +850,18 @@ Gated models need `hf auth login` first.
 
 `python pyml-launch.py filesrc location=data/prompt_for_llm.txt !  pyml_llm device=cuda model-name="microsoft/phi-2" ! fakesink`
 
-`pyml_llm` takes the Hugging Face name on `engine-name=pytorch` and on
-`engine-name=onnx`, where the first run builds the model once with
+`pyml_llm` takes the Hugging Face name on `engine-name=pytorch`, `onnx` and
+`openvino`. On `onnx` the first run builds the model once with
 onnxruntime-genai into `~/.cache/gst-python-ml/onnx-genai/`, int4 weights for
-`device=cpu` and fp16 for `device=cuda`. `engine-name=mlx` takes an mlx-lm
-model and `engine-name=llamacpp` a `.gguf`, as a file or as a Hub repo with its
+`device=cpu` and fp16 for `device=cuda`. On `openvino` the first run exports it
+once with optimum-intel into `~/.cache/gst-python-ml/openvino-genai/` with int4
+weights, and openvino-genai runs it. `engine-name=mlx` takes an mlx-lm model
+and `engine-name=llamacpp` a `.gguf`, as a file or as a Hub repo with its
 quant, `Qwen/Qwen3-0.6B-GGUF:Q8_0`.
 
 `python pyml-launch.py filesrc location=data/prompt_for_llm.txt ! pyml_llm engine-name=onnx device=cpu model-name="Qwen/Qwen3-0.6B" ! fakesink`
+
+`python pyml-launch.py filesrc location=data/prompt_for_llm.txt ! pyml_llm engine-name=openvino device=cpu model-name="Qwen/Qwen3-0.6B" ! fakesink`
 
 #### Remote LLM
 

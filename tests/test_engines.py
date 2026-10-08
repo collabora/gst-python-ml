@@ -275,6 +275,13 @@ def test_onnx_generates_text_from_a_hub_causal_lm():
     assert isinstance(text, str) and text.strip()
 
 
+def test_openvino_generates_text_from_a_hub_causal_lm():
+    engine = engine_on_cpu("openvino", "openvino_genai")
+    assert engine.do_load_model(CAUSAL_LM) is True
+    text = engine.do_generate(GENERATION_PROMPT, max_length=GENERATION_TOKENS)
+    assert isinstance(text, str) and text.strip()
+
+
 def test_onnx_refuses_a_model_path_that_does_not_exist():
     engine = engine_on_cpu("onnx", "onnxruntime")
     with pytest.raises(FileNotFoundError, match="yolo11m.onxx"):

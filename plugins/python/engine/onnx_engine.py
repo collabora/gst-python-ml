@@ -25,7 +25,8 @@ import numpy as np
 import onnxruntime as ort
 
 from .ml_engine import MLEngine, TORCHVISION_WEIGHTS, fixed_height_width
-from .onnx_genai import GenAIModel, is_hub_causal_lm
+from .hub_causal_lm import is_hub_causal_lm
+from .onnx_genai import GenAIModel
 
 TENSORRT_PROVIDER = "TensorrtExecutionProvider"
 # providers are tried in the order listed

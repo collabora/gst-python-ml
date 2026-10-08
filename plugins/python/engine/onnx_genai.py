@@ -18,28 +18,15 @@
 
 import ctypes
 import functools
-import os
-import tempfile
 from pathlib import Path
 
+from .hub_causal_lm import chat_prompt, export_once, hub_cache_name
 from .ml_engine import MODEL_CACHE
 
 GENAI_CACHE = MODEL_CACHE / "onnx-genai"
 GENAI_CONFIG_NAME = "genai_config.json"
-CAUSAL_LM_SUFFIX = "ForCausalLM"
-HUB_NAME_SEPARATOR = "/"
-CACHE_NAME_SEPARATOR = "--"
 GENAI_LIBRARY_NAME = "libonnxruntime-genai.so"
 DEVICE_BUILDS = {"cpu": ("cpu", "int4"), "cuda": ("cuda", "fp16")}
-
-
-def is_hub_causal_lm(model_name):
-    if HUB_NAME_SEPARATOR not in model_name:
-        return False
-    from transformers import AutoConfig
-
-    architectures = AutoConfig.from_pretrained(model_name).architectures or []
-    return any(name.endswith(CAUSAL_LM_SUFFIX) for name in architectures)
 
 
 def device_build(device):
@@ -54,41 +41,31 @@ def device_build(device):
     return build
 
 
-def built_model_path(model_name, device):
-    execution_provider, precision = device_build(device)
-    cache_name = model_name.replace(HUB_NAME_SEPARATOR, CACHE_NAME_SEPARATOR)
-    path = GENAI_CACHE / f"{cache_name}-{execution_provider}-{precision}"
-    if (path / GENAI_CONFIG_NAME).exists():
-        return path
+def build_model(model_name, output, precision, execution_provider):
     from huggingface_hub.constants import HF_HUB_CACHE
     from onnxruntime_genai.models import builder
 
-    GENAI_CACHE.mkdir(parents=True, exist_ok=True)
-    with tempfile.TemporaryDirectory(dir=GENAI_CACHE) as work_directory:
-        output = Path(work_directory) / path.name
-        arguments = (
-            model_name,
-            "",
-            str(output),
-            precision,
-            execution_provider,
-            HF_HUB_CACHE,
-        )
-        options = builder.parse_extra_options(*arguments, [])
-        builder.create_model(*arguments, **options)
-        os.replace(output, path)
-    return path
+    arguments = (
+        model_name,
+        "",
+        str(output),
+        precision,
+        execution_provider,
+        HF_HUB_CACHE,
+    )
+    options = builder.parse_extra_options(*arguments, [])
+    builder.create_model(*arguments, **options)
 
 
-# base models such as phi-2 ship no chat template
-def chat_prompt(tokenizer, input_text, system_prompt):
-    if tokenizer.chat_template is None:
-        return f"{system_prompt}\n{input_text}" if system_prompt else input_text
-    messages = [{"role": "user", "content": input_text}]
-    if system_prompt:
-        messages.insert(0, {"role": "system", "content": system_prompt})
-    return tokenizer.apply_chat_template(
-        messages, tokenize=False, add_generation_prompt=True, enable_thinking=False
+def built_model_path(model_name, device):
+    execution_provider, precision = device_build(device)
+    path = (
+        GENAI_CACHE / f"{hub_cache_name(model_name)}-{execution_provider}-{precision}"
+    )
+    return export_once(
+        path,
+        GENAI_CONFIG_NAME,
+        lambda output: build_model(model_name, output, precision, execution_provider),
     )
 
 
