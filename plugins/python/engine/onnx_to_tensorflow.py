@@ -35,6 +35,9 @@ ONNX2TF_OPTIONS = {
 }
 FLOAT32_TFLITE_SUFFIX = "_float32.tflite"
 SAVED_MODEL_OUTPUT_PREFIX = "output_"
+IMAGE_RANK = 4
+CHANNEL_AXIS = 1
+NHWC_TO_NCHW = (0, 3, 1, 2)
 
 
 def onnx_graph(onnx_path):
@@ -54,6 +57,29 @@ def onnx_input_names(graph):
 
 def onnx_output_names(onnx_path):
     return [graph_output.name for graph_output in onnx_graph(onnx_path).output]
+
+
+def onnx_output_channels(onnx_path):
+    channels = []
+    for graph_output in onnx_graph(onnx_path).output:
+        dims = graph_output.type.tensor_type.shape.dim
+        is_image = len(dims) == IMAGE_RANK
+        channels.append(dims[CHANNEL_AXIS].dim_value if is_image else None)
+    return channels
+
+
+def is_channels_last(output, channels):
+    if not channels or output.ndim != IMAGE_RANK:
+        return False
+    return output.shape[-1] == channels and output.shape[CHANNEL_AXIS] != channels
+
+
+# onnx2tf turns a 4D output channels-last
+def channels_first(outputs, output_channels):
+    return [
+        output.transpose(NHWC_TO_NCHW) if is_channels_last(output, channels) else output
+        for output, channels in zip(outputs, output_channels)
+    ]
 
 
 # onnx2tf names the signature outputs output_0, output_1... in onnx order

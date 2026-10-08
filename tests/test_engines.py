@@ -1,3 +1,4 @@
+import contextlib
 import os
 import shutil
 import sys
@@ -133,14 +134,16 @@ def reference_boxes(detector, people_frames_bgr):
 
 
 @pytest.fixture(scope="session")
-def exported_detector(detector):
+def exported_detector(detector, tmp_path_factory):
     exported = {}
 
     def export(export_format):
         if export_format not in exported:
-            exported[export_format] = Path(
-                detector.export(format=export_format, imgsz=DETECTOR_INPUT_SIZE)
-            )
+            # ultralytics drops onnx2tf's calibration file in the working directory
+            with contextlib.chdir(tmp_path_factory.mktemp("export")):
+                exported[export_format] = Path(
+                    detector.export(format=export_format, imgsz=DETECTOR_INPUT_SIZE)
+                )
         return exported[export_format]
 
     return export

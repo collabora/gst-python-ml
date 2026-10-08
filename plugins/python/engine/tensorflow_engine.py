@@ -24,6 +24,8 @@ from tensorflow import keras
 from .ml_engine import MLEngine
 from .onnx_to_tensorflow import (
     ONNX_SUFFIX,
+    channels_first,
+    onnx_output_channels,
     saved_model_from_onnx,
     saved_model_output_names,
 )
@@ -33,9 +35,11 @@ class TensorFlowEngine(MLEngine):
     def do_load_model(self, model_name, **kwargs):
         self.model_type = None
         self.output_names = None
+        self.output_channels = None
 
         if model_name.endswith(ONNX_SUFFIX):
             self.output_names = saved_model_output_names(model_name)
+            self.output_channels = onnx_output_channels(model_name)
             model_name = str(saved_model_from_onnx(model_name))
 
         if os.path.isdir(model_name):
@@ -124,7 +128,10 @@ class TensorFlowEngine(MLEngine):
 
             # Convert results to NumPy for consistency
             if isinstance(results, dict) and self.output_names:
-                outputs = [results[name].numpy() for name in self.output_names]
+                outputs = channels_first(
+                    [results[name].numpy() for name in self.output_names],
+                    self.output_channels,
+                )
                 output_np = outputs if len(outputs) > 1 else outputs[0]
             elif isinstance(results, dict):
                 output_np = {

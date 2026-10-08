@@ -23,7 +23,9 @@ from ai_edge_litert.interpreter import Interpreter, load_delegate
 from .ml_engine import MLEngine
 from .onnx_to_tensorflow import (
     ONNX_SUFFIX,
+    channels_first,
     float32_tflite_from_onnx,
+    onnx_output_channels,
     onnx_output_names,
 )
 
@@ -39,15 +41,18 @@ class LiteRTEngine(MLEngine):
         self.kwargs = None
         self.model_type = None
         self.output_names = None
+        self.output_channels = None
 
     def do_load_model(self, model_name, **kwargs):
         """Load a pre-trained model and convert to TFLite if necessary."""
         self.model_name = model_name
         self.kwargs = kwargs
         self.output_names = None
+        self.output_channels = None
 
         if model_name.endswith(ONNX_SUFFIX):
             self.output_names = onnx_output_names(model_name)
+            self.output_channels = onnx_output_channels(model_name)
             model_name = str(float32_tflite_from_onnx(model_name))
 
         if os.path.isfile(model_name) and model_name.endswith(".tflite"):
@@ -163,6 +168,8 @@ class LiteRTEngine(MLEngine):
                 self.interpreter.get_tensor(output["index"])
                 for output in self.output_details
             ]
+            if self.output_channels:
+                outputs = channels_first(outputs, self.output_channels)
 
             # Standard TFLite detection: [boxes, classes, scores, num_detections]
             if self.output_names is None and len(outputs) >= 4:
