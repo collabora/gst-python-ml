@@ -1,6 +1,7 @@
 import asyncio
 import json
 import os
+import socket
 import subprocess
 import sys
 import tempfile
@@ -22,12 +23,14 @@ LLAMA_RUNTIME = Path.home() / ".local/share/liquid/runtime"
 LLAMA_SERVER = LLAMA_RUNTIME / "llama-vulkan/llama-server"
 # 4B fits on the GPU beside the detector.
 MODEL = LLAMA_RUNTIME / "models/Qwen3.5-4B-Q4_K_M.gguf"
-LLAMA_URL = "http://127.0.0.1:8089"
+LLAMA_PORT = 8089
+LLAMA_URL = f"http://127.0.0.1:{LLAMA_PORT}"
 GPU_LAYERS = 99
 CPU_THREADS = 6
 CONTEXT_TOKENS = 8192
 MAX_TOKENS = 300
 LLAMA_START_TIMEOUT_SECONDS = 90
+LLAMA_PORT_FREE_TIMEOUT_SECONDS = 10
 CHAT_TIMEOUT_SECONDS = 120
 
 MAX_TOOL_ROUNDS = 8
@@ -37,12 +40,26 @@ HEADSET_SOURCE = "alsa_input.pci-0000_34_00.6.analog-stereo"
 HEADSET_PORT = "analog-input-mic"
 WHISPER_MODEL = "base"
 VOICE_TOGGLE_KEY = b" "
-PASSTHROUGH_TOOLS = ("set_property", "get_property", "pipeline_status", "stop_pipeline")
+PASSTHROUGH_TOOLS = (
+    "set_property",
+    "get_property",
+    "pipeline_status",
+    "stop_pipeline",
+)
 START_TOOL = {
     "type": "function",
     "function": {
         "name": "start_football_demo",
         "description": "Start the football broadcast overlay pipeline on the demo video.",
+        "parameters": {"type": "object", "properties": {}},
+    },
+}
+ELEMENT_LATENCIES_TOOL = {
+    "type": "function",
+    "function": {
+        "name": "element_latencies",
+        "description": "Each element's average time per frame in milliseconds, "
+        "slowest first. Queues are left out.",
         "parameters": {"type": "object", "properties": {}},
     },
 }
@@ -56,7 +73,23 @@ Spell booleans as true or false and numbers plainly.
 Start the pipeline with start_football_demo only when asked to start it.
 For a plain request to change a property, call set_property straight away.
 When the user reports something wrong with the picture, first call pipeline_status and then get_property on the properties above to find the cause. Only then change something, and say what was wrong.
-Never change anything the user did not ask about. After the tools finish, answer in one short sentence."""
+When the user asks which element is slow or adds the most latency, call element_latencies and name the first element with its latency in milliseconds.
+Never change anything the user did not ask about. After the tools finish, answer in one short sentence of plain text, no markdown."""
+
+
+def kill_old_llama_servers():
+    subprocess.run(["pkill", "-KILL", "-x", "llama-server"])
+    # a killed server leaves the process list before it frees the port
+    deadline = time.monotonic() + LLAMA_PORT_FREE_TIMEOUT_SECONDS
+    while time.monotonic() < deadline:
+        with socket.socket() as probe:
+            probe.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
+            try:
+                probe.bind(("127.0.0.1", LLAMA_PORT))
+                return
+            except OSError:
+                time.sleep(0.1)
+    raise SystemExit(f"port {LLAMA_PORT} still in use")
 
 
 def start_llama_server():
@@ -73,7 +106,7 @@ def start_llama_server():
             "-c",
             str(CONTEXT_TOKENS),
             "--port",
-            LLAMA_URL.rsplit(":", 1)[1],
+            str(LLAMA_PORT),
             "--jinja",
             "--no-ui",
         ],
@@ -119,7 +152,7 @@ async def model_tools(mcp):
     passthrough = [
         openai_tool(tool) for tool in listed.tools if tool.name in PASSTHROUGH_TOOLS
     ]
-    return [START_TOOL, *passthrough]
+    return [START_TOOL, ELEMENT_LATENCIES_TOOL, *passthrough]
 
 
 DEMO_VIDEO = "data/iStock-1446288409.mp4"
@@ -133,6 +166,11 @@ TRANSCRIPT_OVERLAY = (
     "halignment=center valignment=bottom shaded-background=true "
     "auto-resize=false wrap-mode=word ! "
 )
+MIC_ICON = "🎤"
+MIC_ICON_OVERLAY = (
+    'textoverlay name=mic_icon text="" font-desc="Sans, 20" '
+    "halignment=right valignment=top shaded-background=true ! "
+)
 
 
 def demo_pipeline():
@@ -145,11 +183,12 @@ def demo_pipeline():
     sink = "autovideosink sync=true"
     display = (
         TITLE_TAG
+        + MIC_ICON_OVERLAY
         + TRANSCRIPT_OVERLAY
         + "videoconvert ! autovideosink name=display sync=true"
     )
     record = (
-        TITLE_TAG + TRANSCRIPT_OVERLAY + "tee name=view "
+        TITLE_TAG + MIC_ICON_OVERLAY + TRANSCRIPT_OVERLAY + "tee name=view "
         "view. ! queue max-size-buffers=8 max-size-time=0 max-size-bytes=0 ! "
         "videoconvert ! autovideosink name=display sync=true "
         "view. ! queue max-size-buffers=8 max-size-time=0 max-size-bytes=0 ! "
@@ -166,7 +205,23 @@ def demo_pipeline():
     return pipeline.replace(sink, display if LOOP_CLIP else record)
 
 
+async def element_latencies(mcp):
+    result = await mcp.call_tool("buffer_flow", {})
+    slowest = {}
+    for block in result.content:
+        flow = json.loads(block.text)
+        element = flow["pad"].split(".")[0]
+        # a queue's latency is time spent waiting for the element after it
+        if "latency_ms" not in flow or element.startswith("queue"):
+            continue
+        slowest[element] = max(slowest.get(element, 0), flow["latency_ms"])
+    ranked = sorted(slowest.items(), key=lambda item: item[1], reverse=True)
+    return [{"element": element, "latency_ms": ms} for element, ms in ranked]
+
+
 async def run_tool(mcp, name, arguments):
+    if name == "element_latencies":
+        return json.dumps(await element_latencies(mcp))
     if name == "start_football_demo":
         name, arguments = "start_pipeline", {
             "pipeline": demo_pipeline(),
@@ -213,7 +268,7 @@ async def answer(
     messages,
     tools,
     request,
-    speak=True,
+    stop_after_changes=False,
     max_tokens=MAX_TOKENS,
     timeout=CHAT_TIMEOUT_SECONDS,
 ):
@@ -230,9 +285,7 @@ async def answer(
             }
         )
         if not calls:
-            if speak:
-                print(reply.get("content") or "")
-            return
+            return reply.get("content") or ""
         for call in calls:
             name = call["function"]["name"]
             arguments = json.loads(call["function"]["arguments"] or "{}")
@@ -248,9 +301,21 @@ async def answer(
             messages.append(
                 {"role": "tool", "tool_call_id": call["id"], "content": output}
             )
-        if not speak:
-            return
-    print("gave up after too many tool rounds")
+        changes_only = all(call["function"]["name"] == "set_property" for call in calls)
+        if stop_after_changes and changes_only:
+            return None
+    return "gave up after too many tool rounds"
+
+
+async def show_transcript(mcp, text):
+    try:
+        await run_tool(
+            mcp,
+            "set_property",
+            {"element": "transcript", "property": "text", "value": text},
+        )
+    except Exception as error:
+        print(f"  ! transcript: {error}", flush=True)
 
 
 async def inject_fault(mcp):
@@ -280,7 +345,7 @@ async def repl(http, mcp):
         if request == "/fault":
             await inject_fault(mcp)
             continue
-        await answer(http, mcp, messages, tools, request)
+        print(await answer(http, mcp, messages, tools, request))
 
 
 def use_headset_mic():
@@ -369,21 +434,40 @@ async def voice(http, mcp):
     print(await run_tool(mcp, "start_football_demo", {}), flush=True)
     voice_toggle = pipeline.get_by_name("voice_toggle")
 
+    screen_updates = set()
+
+    async def show_voice_state():
+        listening = not voice_toggle.get_property("mute")
+        print("voice commands on" if listening else "voice commands off", flush=True)
+        screen_text = {"mic_icon": MIC_ICON if listening else "", "transcript": ""}
+        for element, text in screen_text.items():
+            try:
+                await run_tool(
+                    mcp,
+                    "set_property",
+                    {"element": element, "property": "text", "value": text},
+                )
+            except Exception as error:
+                print(f"  ! {element}: {error}", flush=True)
+
     def toggle_voice():
         pressed = os.read(stdin, 64)
         for _ in range(pressed.count(VOICE_TOGGLE_KEY)):
-            was_muted = voice_toggle.get_property("mute")
-            voice_toggle.set_property("mute", not was_muted)
-            print(
-                "voice commands on" if was_muted else "voice commands off", flush=True
-            )
+            voice_toggle.set_property("mute", not voice_toggle.get_property("mute"))
+        if VOICE_TOGGLE_KEY not in pressed:
+            return
+        # the loop holds only a weak reference to a task
+        update = asyncio.create_task(show_voice_state())
+        screen_updates.add(update)
+        update.add_done_callback(screen_updates.discard)
 
     stdin = sys.stdin.fileno()
     terminal_settings = termios.tcgetattr(stdin)
     tty.setcbreak(stdin)
     asyncio.get_running_loop().add_reader(stdin, toggle_voice)
+    await show_voice_state()
     print(
-        "headset mic, whisper base on the cpu. voice commands are off. "
+        "headset mic, whisper base on the cpu. "
         "press space in this terminal to turn them on or off, Ctrl-C to stop.",
         flush=True,
     )
@@ -404,27 +488,28 @@ async def voice(http, mcp):
             # A long chat was teaching the model to keep the ball track on.
             messages[:] = [{"role": "system", "content": SYSTEM_PROMPT}]
             print(f"> {text}", flush=True)
+            # the phrase still in progress at the toggle arrives after it
+            on_screen = not voice_toggle.get_property("mute")
+            if on_screen:
+                await show_transcript(mcp, text)
             try:
-                await run_tool(
-                    mcp,
-                    "set_property",
-                    {"element": "transcript", "property": "text", "value": text},
-                )
-            except Exception as error:
-                print(f"  ! transcript: {error}", flush=True)
-            try:
-                await answer(
+                reply = await answer(
                     http,
                     mcp,
                     messages,
                     tools,
                     text,
-                    speak=False,
+                    stop_after_changes=True,
                     max_tokens=160,
                     timeout=20,
                 )
             except Exception as error:
                 print(f"  ! {error}", flush=True)
+                continue
+            if reply:
+                print(f"  {reply}", flush=True)
+                if on_screen:
+                    await show_transcript(mcp, reply)
     finally:
         asyncio.get_running_loop().remove_reader(stdin)
         termios.tcsetattr(stdin, termios.TCSADRAIN, terminal_settings)
@@ -434,6 +519,7 @@ async def voice(http, mcp):
 
 
 async def main():
+    kill_old_llama_servers()
     llama = start_llama_server()
     try:
         async with Client(pyml_mcp_transport()) as mcp, httpx.AsyncClient() as http:

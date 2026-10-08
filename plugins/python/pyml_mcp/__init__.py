@@ -63,6 +63,8 @@ VLM_MODEL = os.environ.get("PYML_MCP_VLM_MODEL", "HuggingFaceTB/SmolVLM-500M-Ins
 ELEMENT_PREFIX = "pyml_"
 RECENT_RECORDS = 1000
 RECENT_BUS_MESSAGES = 1000
+RECENT_LATENCIES = 30
+PENDING_LATENCY_BUFFERS = 64
 SNAPSHOT_IMAGE_FORMAT = "jpeg"
 FRAME_CONVERT_SECONDS = 5
 RGB_CAPS = "video/x-raw,format=RGB"
@@ -99,6 +101,7 @@ class Session:
         self.posted = 0
         self.errors = []
         self.bus_messages = deque(maxlen=RECENT_BUS_MESSAGES)
+        self.buffer_flows = {}
         self.ended = False
         self.loop_clip = False
         self._duration = 0
@@ -176,13 +179,24 @@ class Session:
                     self.posted += 1
                     self.lock.notify_all()
         elif message.type == Gst.MessageType.ERROR:
-            error, _debug = message.parse_error()
+            error, debug = message.parse_error()
             with self.lock:
-                self.errors.append(f"{message.src.get_name()}: {error.message}")
+                self.errors.append(
+                    f"{message.src.get_name()}: {with_debug(error, debug)}"
+                )
                 self.lock.notify_all()
         elif message.type == Gst.MessageType.WARNING:
-            warning, _debug = message.parse_warning()
-            self.keep_bus_message("warning", message, warning.message)
+            warning, debug = message.parse_warning()
+            self.keep_bus_message("warning", message, with_debug(warning, debug))
+        elif message.type == Gst.MessageType.QOS:
+            _format, processed, dropped = message.parse_qos_stats()
+            jitter, _proportion, _quality = message.parse_qos_values()
+            self.keep_bus_message(
+                "qos",
+                message,
+                f"processed {processed}, dropped {dropped}, "
+                f"jitter {jitter // Gst.MSECOND} ms",
+            )
         elif message.type == Gst.MessageType.ELEMENT:
             self.keep_bus_message(
                 "element", message, message.get_structure().to_string()
@@ -203,6 +217,92 @@ class Session:
                     self.lock.notify_all()
         # nothing else pops this bus
         return Gst.BusSyncReply.DROP
+
+
+def with_debug(error, debug):
+    return f"{error.message} ({debug})" if debug else error.message
+
+
+class ElementLatency:
+    def __init__(self):
+        self.entered = {}
+        self.recent = deque(maxlen=RECENT_LATENCIES)
+        # input and output probes run on different threads behind a queue
+        self.lock = threading.Lock()
+
+    def enter(self, _pad, info):
+        pts = info.get_buffer().pts
+        if pts == Gst.CLOCK_TIME_NONE:
+            return Gst.PadProbeReturn.OK
+        with self.lock:
+            # an element that changes timestamps never matches its input
+            if len(self.entered) >= PENDING_LATENCY_BUFFERS:
+                del self.entered[next(iter(self.entered))]
+            self.entered[pts] = time.monotonic()
+        return Gst.PadProbeReturn.OK
+
+    def leave(self, pts, now):
+        with self.lock:
+            entered = self.entered.pop(pts, None)
+            if entered is not None:
+                self.recent.append(now - entered)
+
+    def milliseconds(self):
+        with self.lock:
+            if not self.recent:
+                return None
+            return round(1000 * sum(self.recent) / len(self.recent), 1)
+
+
+class BufferFlow:
+    def __init__(self, latency):
+        self.latency = latency
+        self.buffers = 0
+        self.first = None
+        self.last = None
+
+    def count(self, _pad, info):
+        now = time.monotonic()
+        if self.first is None:
+            self.first = now
+        self.buffers += 1
+        self.last = now
+        self.latency.leave(info.get_buffer().pts, now)
+        return Gst.PadProbeReturn.OK
+
+    def report(self, pad, now):
+        if self.last is None:
+            return {"pad": pad, "buffers": 0}
+        flowing_seconds = self.last - self.first
+        per_second = (self.buffers - 1) / flowing_seconds if flowing_seconds else 0
+        report = {
+            "pad": pad,
+            "buffers": self.buffers,
+            "per_second": round(per_second, 1),
+            "seconds_since_last": round(now - self.last, 1),
+        }
+        latency_ms = self.latency.milliseconds()
+        if latency_ms is not None:
+            report["latency_ms"] = latency_ms
+        return report
+
+
+def watch_pad(element, pad, latency):
+    if pad.get_direction() == Gst.PadDirection.SINK:
+        pad.add_probe(Gst.PadProbeType.BUFFER, latency.enter)
+        return
+    flow = BufferFlow(latency)
+    session.buffer_flows[f"{element.get_name()}.{pad.get_name()}"] = flow
+    pad.add_probe(Gst.PadProbeType.BUFFER, flow.count)
+
+
+def watch_buffer_flow(pipeline):
+    for element in pipeline.iterate_elements():
+        latency = ElementLatency()
+        for pad in element.iterate_pads():
+            watch_pad(element, pad, latency)
+        # decodebin and demuxers add their source pads once data arrives
+        element.connect("pad-added", watch_pad, latency)
 
 
 session = Session()
@@ -260,6 +360,7 @@ def start_pipeline(pipeline: str, loop: bool = False) -> dict:
         if not sink.get_property("location"):
             sink.set_property("location", os.devnull)
     parsed.get_bus().set_sync_handler(session.on_message)
+    watch_buffer_flow(parsed)
     if parsed.set_state(Gst.State.PLAYING) == Gst.StateChangeReturn.FAILURE:
         errors = ", ".join(session.errors) or "the pipeline refused to start"
         stop_pipeline()
@@ -318,13 +419,26 @@ def latest_metadata(count: int = 10) -> list[dict]:
 
 
 @server.tool(
-    description="The newest element messages and warnings the running pipeline posted on "
-    "its bus, oldest first, such as level's loudness or spectrum's bands. Each names the "
-    "element that posted it."
+    description="The newest element messages, warnings and QoS reports the running "
+    "pipeline posted on its bus, oldest first, such as level's loudness, spectrum's "
+    "bands, or a sink dropping late frames. Each names the element that posted it."
 )
 def latest_bus_messages(count: int = 10) -> list[dict]:
     with session.lock:
         return list(session.bus_messages)[-count:]
+
+
+@server.tool(
+    description="How many buffers each source pad of the running pipeline has pushed, "
+    "named element.pad, with the rate while they flowed and the seconds since the last "
+    "one. Data stops at the first pad whose count stopped growing. latency_ms is the "
+    "element's recent average time from a buffer entering to it leaving, absent when "
+    "the element changes timestamps or has no input."
+)
+def buffer_flow() -> list[dict]:
+    running_pipeline()
+    now = time.monotonic()
+    return [flow.report(pad, now) for pad, flow in list(session.buffer_flows.items())]
 
 
 @server.tool(

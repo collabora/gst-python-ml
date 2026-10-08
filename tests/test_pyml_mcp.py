@@ -42,6 +42,8 @@ LEAST_CLIP_FRAMES = 55
 MOST_CLIP_FRAMES = 65
 CLIP_SECONDS = 2.0
 CLIP_DURATION_TOLERANCE = 0.2
+FLOW_SETTLE_SECONDS = 1.0
+SLOW_ELEMENT_MICROSECONDS = 60000
 
 VIDEO_PIPELINE = (
     "videotestsrc ! video/x-raw,width=64,height=48 ! pyml_metasink name=sink"
@@ -104,6 +106,69 @@ def test_element_messages_from_any_element_reach_latest_bus_messages():
     assert all(reading["text"].startswith("level, ") for reading in readings)
     assert "rms=" in readings[0]["text"]
     pyml_mcp.stop_pipeline()
+
+
+def test_an_error_keeps_the_reason_gstreamer_gave(tmp_path):
+    with pytest.raises(ToolError, match="No such file"):
+        pyml_mcp.start_pipeline(f"filesrc location={tmp_path / 'missing'} ! fakesink")
+
+
+def test_a_sink_dropping_late_frames_reports_qos():
+    pyml_mcp.start_pipeline(
+        "videotestsrc ! video/x-raw,framerate=30/1 "
+        f"! identity sleep-time={SLOW_ELEMENT_MICROSECONDS} "
+        "! fakesink name=screen sync=true qos=true max-lateness=1"
+    )
+    time.sleep(FLOW_SETTLE_SECONDS)
+    reports = [
+        message
+        for message in pyml_mcp.latest_bus_messages(RECENT_MESSAGES_READ)
+        if message["type"] == "qos"
+    ]
+    pyml_mcp.stop_pipeline()
+    assert reports
+    assert reports[0]["source"] == "screen"
+    assert "dropped" in reports[0]["text"]
+
+
+def test_buffer_flow_shows_where_the_data_stops():
+    pyml_mcp.start_pipeline(
+        "videotestsrc name=source ! video/x-raw,framerate=30/1 "
+        "! valve name=gate drop=false ! fakesink sync=true"
+    )
+    time.sleep(FLOW_SETTLE_SECONDS)
+    pyml_mcp.set_property("gate", "drop", "true")
+    time.sleep(FLOW_SETTLE_SECONDS)
+    flows = {flow["pad"]: flow for flow in pyml_mcp.buffer_flow()}
+    pyml_mcp.stop_pipeline()
+    assert flows["gate.src"]["buffers"] > 0
+    assert flows["gate.src"]["seconds_since_last"] >= FLOW_SETTLE_SECONDS / 2
+    assert flows["source.src"]["seconds_since_last"] < FLOW_SETTLE_SECONDS / 2
+
+
+def test_buffer_flow_measures_how_long_each_element_holds_a_buffer():
+    pyml_mcp.start_pipeline(
+        "videotestsrc name=source ! video/x-raw,framerate=30/1 ! identity name=fast "
+        f"! identity name=slow sleep-time={SLOW_ELEMENT_MICROSECONDS} ! fakesink"
+    )
+    time.sleep(FLOW_SETTLE_SECONDS)
+    flows = {flow["pad"]: flow for flow in pyml_mcp.buffer_flow()}
+    pyml_mcp.stop_pipeline()
+    assert flows["slow.src"]["latency_ms"] >= SLOW_ELEMENT_MICROSECONDS / 1000
+    assert flows["fast.src"]["latency_ms"] < flows["slow.src"]["latency_ms"]
+    assert "latency_ms" not in flows["source.src"]
+
+
+def test_buffer_flow_counts_a_pad_decodebin_adds(video_file):
+    pyml_mcp.start_pipeline(
+        f"filesrc location={video_file} ! decodebin name=decoder ! fakesink"
+    )
+    pyml_mcp.wait_for_records(1, timeout=RECORD_WAIT_SECONDS)
+    flows = pyml_mcp.buffer_flow()
+    pyml_mcp.stop_pipeline()
+    decoded = [flow for flow in flows if flow["pad"].startswith("decoder.")]
+    assert decoded
+    assert decoded[0]["buffers"] == CLIP_SOURCE_FRAMES
 
 
 def test_snapshot_frame_returns_a_jpeg_of_the_newest_frame():

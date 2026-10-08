@@ -122,6 +122,9 @@ the next space turns them off. Off sets `mute=true` on `volume name=voice_toggle
 in front of Whisper, so Whisper hears silence. A phrase still in progress when
 you turn commands off is transcribed and runs. The key is read from the
 terminal, so the terminal needs focus. Clicking the video window takes it away.
+A small mic icon in the top right of the picture shows while commands are on.
+Each toggle clears the transcript, and a phrase that finishes after commands
+are off still runs but is not shown.
 The recording keeps the mic either way.
 
 Each transcript is written on the picture by `textoverlay name=transcript`
@@ -135,6 +138,9 @@ Qwen 3.5 4B, Q4_K_M, file:
 `~/.local/share/liquid/runtime/models/Qwen3.5-4B-Q4_K_M.gguf`
 
 Server binary: `~/.local/share/liquid/runtime/llama-vulkan/llama-server`
+
+At startup the agent kills every running `llama-server` and waits for port
+8089 to free up.
 
 ```text
 llama-server -m <that file> -ngl 99 -t 6 -c 8192 --port 8089 --jinja --no-ui
@@ -160,6 +166,12 @@ later phrases never ran.
 a call to a hidden tool is refused. A misheard "go back" had stopped the
 picture, and silence had restarted it. The typed REPL still has both tools.
 Ctrl-C runs `stop_pipeline`, so the recording is finalized.
+
+Ask "which element has the most latency?" and the model calls
+`element_latencies`, which `agent.py` builds from `pyml-mcp`'s `buffer_flow`:
+each element's average time per frame, slowest first, queues left out. The
+answer replaces the transcript on the picture. A phrase that only changes
+properties gets no answer, as before.
 
 Property rules in the system prompt:
 
