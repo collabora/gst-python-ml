@@ -24,7 +24,9 @@ DEPTH_MODEL = "depth-anything/Depth-Anything-V2-Small-hf"
 DEPTH_CORRELATION_FLOOR = 0.98
 CLIP_MODELS = ["openai/clip-vit-base-patch32", "google/siglip-base-patch16-224"]
 CLIP_LABELS = ["a man", "a dog", "a car", "a tree"]
-SIGLIP_ON_TENSORFLOW = ("tensorflow", CLIP_MODELS[1])
+SIGLIP_ON_ONNX2TF = [("tensorflow", CLIP_MODELS[1]), ("tflite", CLIP_MODELS[1])]
+SIGLIP_ON_NCNN = ("ncnn", CLIP_MODELS[1])
+DEPTH_ON_NCNN = "ncnn"
 CLIP_PROBABILITY_TOLERANCE = 0.02
 ANOMALY_BACKBONE = "resnet18"
 HEATMAP_TOLERANCE = 0.01
@@ -117,6 +119,8 @@ def test_depth_on_a_builtin_engine_matches_depth_on_pytorch(
     builtin_engine, portrait_rgb
 ):
     require_engine(builtin_engine)
+    if builtin_engine == DEPTH_ON_NCNN:
+        pytest.xfail("ncnn rejects the broadcast across the batch axis")
     from depth import DepthTransform
 
     reference, exported = (
@@ -143,8 +147,10 @@ def test_clip_on_a_builtin_engine_matches_clip_on_pytorch(
     model_name, builtin_engine, portrait_rgb
 ):
     require_engine(builtin_engine)
-    if (builtin_engine, model_name) == SIGLIP_ON_TENSORFLOW:
-        pytest.xfail("onnx2tf's tf_converter splits a constant vector one off")
+    if (builtin_engine, model_name) in SIGLIP_ON_ONNX2TF:
+        pytest.xfail("onnx2tf splits a constant vector one off")
+    if (builtin_engine, model_name) == SIGLIP_ON_NCNN:
+        pytest.xfail("ncnn rejects the reshape that indexes the batch")
     reference, exported = (
         clip_probabilities(model_name, engine_name, portrait_rgb)
         for engine_name in (ENGINE_NAMES[0], builtin_engine)

@@ -191,12 +191,13 @@ it once more into `~/.cache/gst-python-ml/<engine>/`. ExecuTorch exports a
 `track=True` needs the PyTorch engine.
 
 Every engine runs depth, CLIP, SigLIP, YOLO and YOLO pose against the PyTorch
-results in `tests/test_exported_models.py`, except: ncnn has no 5D permute, so
-only the convolutional exports run on it (YOLO, pose, anomaly, super
-resolution); the tensorflow engine gets SigLIP wrong, onnx2tf splits one of
-its constants off by one; TVM runs these graphs unscheduled on the CPU, a depth
-frame takes over a minute. The other six task elements are verified on the
-ONNX engine only.
+results in `tests/test_exported_models.py`, except: ncnn rejects depth (a
+broadcast across the batch axis) and SigLIP (a reshape that indexes the
+batch), so CLIP and the convolutional exports run on it (YOLO, pose, anomaly,
+super resolution); the tensorflow and tflite engines get SigLIP wrong, onnx2tf
+splits one of its constants off by one; TVM runs these graphs unscheduled on
+the CPU, a depth frame takes over a minute. The other six task elements are
+verified on the ONNX engine only.
 
 ```
 python pyml-launch.py filesrc location=data/people.mp4 ! decodebin name=d \

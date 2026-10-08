@@ -129,8 +129,8 @@ openvino = [
 ]
 tensorflow = [
     "tensorflow>=2.16.0",
-    # onnx2tf converts the exports and imports tf_keras
-    "onnx2tf>=2.6.9",
+    # the onnx2tf pin is the one ultralytics installs on its own exports
+    "onnx2tf>=1.26.3,<1.29.0",
     "tf-keras",
 ]
 litert = [

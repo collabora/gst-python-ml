@@ -24,8 +24,8 @@ from tensorflow import keras
 from .ml_engine import MLEngine
 from .onnx_to_tensorflow import (
     ONNX_SUFFIX,
-    onnx_output_names,
     saved_model_from_onnx,
+    saved_model_output_names,
 )
 
 
@@ -35,7 +35,7 @@ class TensorFlowEngine(MLEngine):
         self.output_names = None
 
         if model_name.endswith(ONNX_SUFFIX):
-            self.output_names = onnx_output_names(model_name)
+            self.output_names = saved_model_output_names(model_name)
             model_name = str(saved_model_from_onnx(model_name))
 
         if os.path.isdir(model_name):

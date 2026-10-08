@@ -87,15 +87,8 @@ class LiteRTEngine(MLEngine):
 
         self.interpreter.allocate_tensors()
         self.input_details = self.interpreter.get_input_details()
+        # a converted export lists its outputs in onnx order
         self.output_details = self.interpreter.get_output_details()
-        if self.output_names:
-            # the interpreter lists a converted model's outputs out of onnx order
-            signature_outputs = (
-                self.interpreter.get_signature_runner().get_output_details()
-            )
-            self.output_details = [
-                signature_outputs[name] for name in self.output_names
-            ]
 
         return True
 

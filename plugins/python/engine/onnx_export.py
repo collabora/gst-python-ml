@@ -197,9 +197,16 @@ def patch_conv_as_matmul(conv):
             rows, columns = height // self.patch_height, width // self.patch_width
             patches = (
                 image.reshape(
-                    batch, channels, rows, self.patch_height, columns, self.patch_width
+                    batch, channels * rows, self.patch_height, columns, self.patch_width
                 )
-                .permute(0, 2, 4, 1, 3, 5)
+                .permute(0, 1, 3, 2, 4)
+                .reshape(
+                    batch,
+                    channels,
+                    rows * columns,
+                    self.patch_height * self.patch_width,
+                )
+                .permute(0, 2, 1, 3)
                 .reshape(batch, rows * columns, -1)
             )
             embedded = patches @ self.weight
