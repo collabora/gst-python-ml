@@ -80,10 +80,12 @@ mqtt = [
 ]
 onnx = [
     "onnxruntime",
+    "onnxruntime-genai",
     "onnxscript",
 ]
 onnx-gpu = [
     "onnxruntime-gpu",
+    "onnxruntime-genai-cuda",
     "onnxscript",
 ]
 tvm = [

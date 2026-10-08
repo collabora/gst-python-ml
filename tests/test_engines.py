@@ -33,6 +33,8 @@ CLASSIFIER_INPUT_SIZE = 224
 
 GGUF_REPOSITORY = "ggml-org/models"
 GGUF_FILE = "tinyllamas/stories260K.gguf"
+GGUF_QUANT = "stories260K"
+CAUSAL_LM = "HuggingFaceTB/SmolLM2-135M-Instruct"
 GENERATION_PROMPT = "Once upon a time"
 GENERATION_TOKENS = 8
 
@@ -255,6 +257,20 @@ def test_llamacpp_generates_text():
     engine = engine_on_cpu("llamacpp", "llama_cpp")
     model_path = hf_hub_download(GGUF_REPOSITORY, GGUF_FILE)
     assert engine.do_load_model(model_path) is True
+    text = engine.do_generate(GENERATION_PROMPT, max_length=GENERATION_TOKENS)
+    assert isinstance(text, str) and text.strip()
+
+
+def test_llamacpp_downloads_a_hub_gguf_by_repo_and_quant():
+    engine = engine_on_cpu("llamacpp", "llama_cpp")
+    assert engine.do_load_model(f"{GGUF_REPOSITORY}:{GGUF_QUANT}") is True
+    text = engine.do_generate(GENERATION_PROMPT, max_length=GENERATION_TOKENS)
+    assert isinstance(text, str) and text.strip()
+
+
+def test_onnx_generates_text_from_a_hub_causal_lm():
+    engine = engine_on_cpu("onnx", "onnxruntime_genai")
+    assert engine.do_load_model(CAUSAL_LM) is True
     text = engine.do_generate(GENERATION_PROMPT, max_length=GENERATION_TOKENS)
     assert isinstance(text, str) and text.strip()
 

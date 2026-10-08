@@ -380,11 +380,12 @@ python pyml-launch.py filesrc location=data/people.mp4 ! decodebin name=d \
 
 #### llama.cpp Engine
 
-llama.cpp runs `.gguf` files.
+llama.cpp runs `.gguf` files, a local path or a Hub repo with the quant that
+ends the file name.
 
 ```
 python pyml-launch.py filesrc location=data/prompt_for_llm.txt \
-  ! pyml_llm engine-name=llamacpp model-name=model.gguf device=cpu \
+  ! pyml_llm engine-name=llamacpp model-name=Qwen/Qwen3-0.6B-GGUF:Q8_0 device=cpu \
   ! fakesink
 ```
 
@@ -848,6 +849,15 @@ With more than 6 GB of GPU memory, `llm-model-name="microsoft/phi-2"` also works
 Gated models need `hf auth login` first.
 
 `python pyml-launch.py filesrc location=data/prompt_for_llm.txt !  pyml_llm device=cuda model-name="microsoft/phi-2" ! fakesink`
+
+`pyml_llm` takes the Hugging Face name on `engine-name=pytorch` and on
+`engine-name=onnx`, where the first run builds the model once with
+onnxruntime-genai into `~/.cache/gst-python-ml/onnx-genai/`, int4 weights for
+`device=cpu` and fp16 for `device=cuda`. `engine-name=mlx` takes an mlx-lm
+model and `engine-name=llamacpp` a `.gguf`, as a file or as a Hub repo with its
+quant, `Qwen/Qwen3-0.6B-GGUF:Q8_0`.
+
+`python pyml-launch.py filesrc location=data/prompt_for_llm.txt ! pyml_llm engine-name=onnx device=cpu model-name="Qwen/Qwen3-0.6B" ! fakesink`
 
 #### Remote LLM
 

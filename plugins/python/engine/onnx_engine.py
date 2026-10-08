@@ -25,6 +25,7 @@ import numpy as np
 import onnxruntime as ort
 
 from .ml_engine import MLEngine, TORCHVISION_WEIGHTS, fixed_height_width
+from .onnx_genai import GenAIModel, is_hub_causal_lm
 
 TENSORRT_PROVIDER = "TensorrtExecutionProvider"
 # providers are tried in the order listed
@@ -111,6 +112,11 @@ class ONNXEngine(MLEngine):
                 f"ONNX model loaded from local path: {model_name} "
                 f"(active providers: {self.session.get_providers()})"
             )
+            return True
+        elif is_hub_causal_lm(model_name):
+            self.model = GenAIModel(model_name, self.device)
+            self.model_type = "llm"
+            self.logger.info(f"onnxruntime-genai model built and loaded: {model_name}")
             return True
         else:
             from torchvision import models as tv_models
@@ -313,7 +319,8 @@ class ONNXEngine(MLEngine):
             raise ValueError("Unsupported model type.")
 
     def do_generate(self, input_text, max_length=1000, system_prompt=None):
-        raise NotImplementedError(
-            "ONNX does not support text generation. "
-            "Use PyTorch or llama.cpp for LLM workloads."
-        )
+        if self.model_type != "llm":
+            raise NotImplementedError(
+                "ONNX generates text from a Hugging Face causal language model name"
+            )
+        return self.model.generate(input_text, max_length, system_prompt)

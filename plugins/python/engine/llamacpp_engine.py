@@ -21,6 +21,15 @@ import numpy as np
 
 from .ml_engine import MLEngine
 
+GGUF_SUFFIX = ".gguf"
+# model-name=repo:quant, the shorthand llama.cpp's own -hf flag takes
+HUB_QUANT_SEPARATOR = ":"
+
+
+def hub_gguf_pattern(model_name):
+    repo_id, _, quant = model_name.partition(HUB_QUANT_SEPARATOR)
+    return repo_id, f"*{quant}{GGUF_SUFFIX}"
+
 
 class LlamaCppEngine(MLEngine):
     def __init__(self):
@@ -66,22 +75,20 @@ class LlamaCppEngine(MLEngine):
         self.kwargs = kwargs
         self.n_ctx = kwargs.get("n_ctx", self.n_ctx)
 
-        if not os.path.isfile(model_name):
-            raise FileNotFoundError(f"GGUF model file not found: {model_name}")
-
-        if not model_name.endswith(".gguf"):
-            self.logger.warning(
-                f"Expected .gguf file, got: {model_name}. Attempting to load anyway."
-            )
-
         from llama_cpp import Llama
 
-        self.model = Llama(
-            model_path=model_name,
-            n_gpu_layers=self.n_gpu_layers,
-            n_ctx=self.n_ctx,
-            verbose=False,
-        )
+        options = {
+            "n_gpu_layers": self.n_gpu_layers,
+            "n_ctx": self.n_ctx,
+            "verbose": False,
+        }
+        if os.path.isfile(model_name):
+            self.model = Llama(model_path=model_name, **options)
+        elif model_name.endswith(GGUF_SUFFIX):
+            raise FileNotFoundError(f"GGUF model file not found: {model_name}")
+        else:
+            repo_id, pattern = hub_gguf_pattern(model_name)
+            self.model = Llama.from_pretrained(repo_id, pattern, **options)
         self.model_type = "llm"
         self.logger.info(
             f"GGUF model loaded: {model_name} "
