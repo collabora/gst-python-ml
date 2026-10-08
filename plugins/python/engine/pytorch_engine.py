@@ -19,6 +19,7 @@
 import os
 import numpy as np
 
+from .hub_causal_lm import chat_prompt
 from .ml_engine import MLEngine, TORCHVISION_WEIGHTS
 
 
@@ -295,21 +296,7 @@ class PyTorchEngine(MLEngine):
             import executorch.pybindings as et
         except ImportError:
             et = None
-        messages = [{"role": "user", "content": input_text}]
-        if system_prompt:
-            messages.append({"role": "system", "content": system_prompt})
-        # base models such as phi-2 ship no chat template
-        if self.tokenizer.chat_template is None:
-            input_text = (
-                f"{system_prompt}\n{input_text}" if system_prompt else input_text
-            )
-        else:
-            input_text = self.tokenizer.apply_chat_template(
-                messages,
-                tokenize=False,
-                add_generation_prompt=True,
-                enable_thinking=False,  # Switches between thinking and non-thinking modes. Default is True.
-            )
+        input_text = chat_prompt(self.tokenizer, input_text, system_prompt)
 
         if self.is_executorch:
             if not self.tokenizer:
