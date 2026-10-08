@@ -17,7 +17,7 @@
 # Boston, MA 02110-1301, USA.
 
 from .onnx_export import (
-    cached_onnx_export,
+    exported_model_path,
     model_input_frames,
     model_input_shape,
     pixel_normalizer,
@@ -44,13 +44,14 @@ def action_result(logits, id2label):
 
 
 class ExportedAction:
-    def __init__(self, model_name):
+    def __init__(self, model_name, engine_name):
         from transformers import AutoConfig, AutoImageProcessor
 
         self.engine = None
         self.image_processor = AutoImageProcessor.from_pretrained(model_name)
         self.config = AutoConfig.from_pretrained(model_name)
-        self.path = cached_onnx_export(
+        self.path = exported_model_path(
+            engine_name,
             f"{model_name.replace('/', '--')}-{self.config.num_frames}-frames",
             lambda: self._build_graph(model_name),
         )

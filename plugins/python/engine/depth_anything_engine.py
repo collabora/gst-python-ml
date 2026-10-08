@@ -17,7 +17,7 @@
 # Boston, MA 02110-1301, USA.
 
 from .jax_engine import keras_hub_preset
-from .onnx_export import cached_onnx_export, pixel_normalizer
+from .onnx_export import exported_model_path, pixel_normalizer
 from .pytorch_engine import PyTorchEngine
 
 COLOR_CHANNELS = 3
@@ -27,12 +27,13 @@ BATCH_DIMENSIONS = 4
 
 
 class ExportedDepthAnything:
-    def __init__(self, model_name):
+    def __init__(self, model_name, engine_name):
         self.engine = None
-        self.path = self._model_path(model_name)
+        self.path = self._model_path(model_name, engine_name)
 
-    def _model_path(self, model_name):
-        return cached_onnx_export(
+    def _model_path(self, model_name, engine_name):
+        return exported_model_path(
+            engine_name,
             f"{model_name.replace('/', '--')}-{EXPORTED_INPUT_SIZE}",
             lambda: self._build_graph(model_name),
         )
@@ -76,7 +77,7 @@ class ExportedDepthAnything:
 
 
 class KerasHubDepthAnything(ExportedDepthAnything):
-    def _model_path(self, model_name):
+    def _model_path(self, model_name, engine_name):
         return keras_hub_preset(model_name)
 
 

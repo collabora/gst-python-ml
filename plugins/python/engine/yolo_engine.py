@@ -21,7 +21,7 @@ import time
 from pathlib import Path
 
 from .engine_factory import EngineFactory
-from .onnx_export import ONNX_EXPORT_CACHE
+from .onnx_export import ONNX_EXPORT_CACHE, executorch_export_path
 from .pytorch_engine import PyTorchEngine
 
 EXPORTED_INPUT_SIZE = 640
@@ -29,6 +29,7 @@ EXPORTED_INPUT_SHAPE = (EXPORTED_INPUT_SIZE, EXPORTED_INPUT_SIZE)
 # an interrupted export must not reach the cache
 EXPORT_WORK_DIRECTORY = ONNX_EXPORT_CACHE / "ultralytics"
 BATCH_DIMENSIONS = 4
+ULTRALYTICS_EXECUTORCH_FILE = "model.pte"
 # the ultralytics defaults the pytorch pose engine runs with
 DEFAULT_CONFIDENCE = 0.25
 DEFAULT_IOU = 0.7
@@ -56,6 +57,22 @@ def exported_yolo_path(model_name):
     return str(path)
 
 
+def exported_yolo_executorch_path(model_name):
+    import torch
+    from ultralytics import YOLO
+
+    path = executorch_export_path(model_name)
+    if path.exists():
+        return str(path)
+    path.parent.mkdir(parents=True, exist_ok=True)
+    weights = YOLO(str(EXPORT_WORK_DIRECTORY / f"{model_name}.pt"))
+    exported_directory = weights.export(
+        format="executorch", imgsz=EXPORTED_INPUT_SIZE, device=torch.device("cpu")
+    )
+    Path(exported_directory, ULTRALYTICS_EXECUTORCH_FILE).rename(path)
+    return str(path)
+
+
 def exported_yolo_metadata(path):
     import onnx
 
@@ -63,14 +80,17 @@ def exported_yolo_metadata(path):
 
 
 class ExportedYolo:
-    def __init__(self, model_name):
+    def __init__(self, model_name, engine_name):
         self.engine = None
         self.track = False
         self.conf = DEFAULT_CONFIDENCE
         self.iou = DEFAULT_IOU
         self.agnostic_nms = False
-        self.path = exported_yolo_path(model_name)
-        self.metadata = exported_yolo_metadata(self.path)
+        onnx_path = exported_yolo_path(model_name)
+        self.metadata = exported_yolo_metadata(onnx_path)
+        self.path = onnx_path
+        if engine_name == EngineFactory.EXECUTORCH_ENGINE:
+            self.path = exported_yolo_executorch_path(model_name)
         self.names = ast.literal_eval(self.metadata["names"])
         self.end2end = ast.literal_eval(self.metadata["end2end"])
 

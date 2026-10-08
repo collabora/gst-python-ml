@@ -44,7 +44,11 @@ class OpenVinoEngine(MLEngine):
             base = model_name
         xml_path = f"{base}.xml"
         bin_path = f"{base}.bin"
-        if os.path.isfile(xml_path) and os.path.isfile(bin_path):
+        if model_name.endswith(".onnx") and os.path.isfile(model_name):
+            self.ov_model = self.core.read_model(model_name)
+            self.model_type = "custom"
+            self.logger.info(f"ONNX model loaded into OpenVINO from: {model_name}")
+        elif os.path.isfile(xml_path) and os.path.isfile(bin_path):
             self.ov_model = self.core.read_model(xml_path)
             self.model_type = "custom"
             self.logger.info(f"OpenVINO IR model loaded from local path: {model_name}")
@@ -69,7 +73,8 @@ class OpenVinoEngine(MLEngine):
                 )
             else:
                 raise FileNotFoundError(
-                    "OpenVINO takes an IR .xml with its .bin or a torchvision model name, "
+                    "OpenVINO takes an IR .xml with its .bin, an .onnx file "
+                    "or a torchvision model name, "
                     f"got: {model_name}"
                 )
 

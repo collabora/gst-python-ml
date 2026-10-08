@@ -17,7 +17,7 @@
 # Boston, MA 02110-1301, USA.
 
 from .ml_engine import TORCHVISION_WEIGHTS
-from .onnx_export import cached_onnx_export, pixel_normalizer
+from .onnx_export import exported_model_path, pixel_normalizer
 from .pytorch_engine import PyTorchEngine
 
 SMALL_MODEL_NAME = "raft_small"
@@ -59,9 +59,10 @@ def bilinear_sample_by_gather(image, absolute_grid, mode, align_corners):
 
 
 class ExportedOpticalFlow:
-    def __init__(self, model_name):
+    def __init__(self, model_name, engine_name):
         self.engine = None
-        self.path = cached_onnx_export(
+        self.path = exported_model_path(
+            engine_name,
             f"{model_name}-{EXPORTED_HEIGHT}x{EXPORTED_WIDTH}",
             lambda: self._build_graph(model_name),
         )

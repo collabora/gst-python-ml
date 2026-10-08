@@ -83,15 +83,8 @@ class ExecuTorchEngine(MLEngine):
         # the runtime reads the buffer as laid out, a transposed view crashes it
         input_tensor = torch.from_numpy(np.ascontiguousarray(img))
 
-        outputs = self.model.execute([input_tensor])
-        if isinstance(outputs, (list, tuple)):
-            raw = (
-                outputs[0].numpy()
-                if hasattr(outputs[0], "numpy")
-                else np.array(outputs[0])
-            )
-        else:
-            raw = outputs.numpy() if hasattr(outputs, "numpy") else np.array(outputs)
+        outputs = [np.asarray(output) for output in self.model.execute([input_tensor])]
+        raw = outputs if len(outputs) > 1 else outputs[0]
 
         return self._apply_post_process(raw, is_batch)
 

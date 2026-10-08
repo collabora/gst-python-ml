@@ -97,7 +97,7 @@ class AnomalyTransform(VideoTransform, AnomalyTask):
         self._reference_loaded = False
 
     def export_model(self, model_name):
-        return ExportedAnomaly(model_name)
+        return ExportedAnomaly(model_name, self.mgr.engine_name)
 
     def process_frames(self, frames, num_sources, fmt, target):
         """Score the primary frame against the reference features."""

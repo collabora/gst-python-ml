@@ -24,6 +24,7 @@ DEPTH_MODEL = "depth-anything/Depth-Anything-V2-Small-hf"
 DEPTH_CORRELATION_FLOOR = 0.98
 CLIP_MODELS = ["openai/clip-vit-base-patch32", "google/siglip-base-patch16-224"]
 CLIP_LABELS = ["a man", "a dog", "a car", "a tree"]
+SIGLIP_ON_TENSORFLOW = ("tensorflow", CLIP_MODELS[1])
 CLIP_PROBABILITY_TOLERANCE = 0.02
 ANOMALY_BACKBONE = "resnet18"
 HEATMAP_TOLERANCE = 0.01
@@ -60,16 +61,38 @@ ZERO_SHOT_SCORE_TOLERANCE = 0.001
 ZERO_SHOT_BOX_TOLERANCE_PIXELS = 1
 # the task engine first
 ENGINE_NAMES = ("pytorch", "onnx")
-BUILTIN_ENGINE_PACKAGES = {"onnx": "onnxruntime", "jax": "keras_hub"}
+# every engine that runs the exported onnx, in its own format or as is
+EXPORTED_MODEL_ENGINE_PACKAGES = {
+    "onnx": "onnxruntime",
+    "openvino": "openvino",
+    "tvm": "tvm",
+    "tensorflow": "tensorflow",
+    "tflite": "ai_edge_litert",
+    "ncnn": "ncnn",
+    "executorch": "executorch",
+    "iree": "iree.runtime",
+    "tinygrad": "tinygrad",
+    "migraphx": "migraphx",
+}
+# jax runs a keras-hub preset instead of the export
+BUILTIN_ENGINE_PACKAGES = {**EXPORTED_MODEL_ENGINE_PACKAGES, "jax": "keras_hub"}
+# a ci matrix leg fails on a missing engine instead of skipping
+REQUIRED_ENGINE = os.environ.get("PYML_REQUIRE_ENGINE")
+# the pytorch reference stays on the cpu
+BUILTIN_ENGINE_DEVICE = os.environ.get("PYML_TEST_DEVICE", "cpu")
 
 pytest.importorskip("onnxruntime")
 pytest.importorskip("transformers")
 
 
 # importing keras-hub here would fix keras on its default backend
-def require_package(package):
-    if importlib.util.find_spec(package) is None:
-        pytest.skip(f"{package} is not installed")
+def require_engine(engine_name):
+    package = BUILTIN_ENGINE_PACKAGES[engine_name]
+    if importlib.util.find_spec(package) is not None:
+        return
+    if REQUIRED_ENGINE == engine_name:
+        pytest.fail(f"{package} is not installed but {engine_name} is required")
+    pytest.skip(f"{package} is not installed")
 
 
 @pytest.fixture(scope="module")
@@ -83,6 +106,8 @@ def loaded_element(element_class, model_name, engine_name):
     element = element_class()
     element.set_property("model-name", model_name)
     element.set_property("engine-name", engine_name)
+    if engine_name != ENGINE_NAMES[0]:
+        element.set_property("device", BUILTIN_ENGINE_DEVICE)
     element.do_load_model()
     return element
 
@@ -91,7 +116,7 @@ def loaded_element(element_class, model_name, engine_name):
 def test_depth_on_a_builtin_engine_matches_depth_on_pytorch(
     builtin_engine, portrait_rgb
 ):
-    require_package(BUILTIN_ENGINE_PACKAGES[builtin_engine])
+    require_engine(builtin_engine)
     from depth import DepthTransform
 
     reference, exported = (
@@ -117,7 +142,9 @@ def clip_probabilities(model_name, engine_name, frame):
 def test_clip_on_a_builtin_engine_matches_clip_on_pytorch(
     model_name, builtin_engine, portrait_rgb
 ):
-    require_package(BUILTIN_ENGINE_PACKAGES[builtin_engine])
+    require_engine(builtin_engine)
+    if (builtin_engine, model_name) == SIGLIP_ON_TENSORFLOW:
+        pytest.xfail("onnx2tf's tf_converter splits a constant vector one off")
     reference, exported = (
         clip_probabilities(model_name, engine_name, portrait_rgb)
         for engine_name in (ENGINE_NAMES[0], builtin_engine)
@@ -230,21 +257,21 @@ def test_sam_on_onnx_matches_sam_on_pytorch(portrait_rgb):
     assert agreement > SAM_MASK_AGREEMENT_FLOOR
 
 
-def detection_results(frame):
+def detection_results(frame, builtin_engine):
     pytest.importorskip("ultralytics")
     from yolo import YOLOTransform
 
-    for engine_name in ENGINE_NAMES:
+    for engine_name in (ENGINE_NAMES[0], builtin_engine):
         element = loaded_element(YOLOTransform, YOLO_MODEL, engine_name)
         element.set_property("confidence", YOLO_CONFIDENCE)
         yield element.do_forward(frame)
 
 
-def pose_results(frame):
+def pose_results(frame, builtin_engine):
     pytest.importorskip("ultralytics")
     from pose import YOLOPoseTransform
 
-    for engine_name in ENGINE_NAMES:
+    for engine_name in (ENGINE_NAMES[0], builtin_engine):
         element = loaded_element(YOLOPoseTransform, YOLO_POSE_MODEL, engine_name)
         yield element.do_forward(frame)
 
@@ -266,16 +293,22 @@ def assert_same_boxes(exported, reference):
     return exported_order, reference_order
 
 
-def test_yolo_on_onnx_matches_yolo_on_pytorch(portrait_rgb):
-    reference, exported = detection_results(portrait_rgb)
+@pytest.mark.parametrize("builtin_engine", EXPORTED_MODEL_ENGINE_PACKAGES)
+def test_yolo_on_a_builtin_engine_matches_yolo_on_pytorch(builtin_engine, portrait_rgb):
+    require_engine(builtin_engine)
+    reference, exported = detection_results(portrait_rgb, builtin_engine)
 
     assert_same_boxes(exported, reference)
     assert exported.names == reference.names
     assert exported.masks is None
 
 
-def test_yolo_pose_on_onnx_matches_yolo_pose_on_pytorch(portrait_rgb):
-    reference, exported = pose_results(portrait_rgb)
+@pytest.mark.parametrize("builtin_engine", EXPORTED_MODEL_ENGINE_PACKAGES)
+def test_yolo_pose_on_a_builtin_engine_matches_yolo_pose_on_pytorch(
+    builtin_engine, portrait_rgb
+):
+    require_engine(builtin_engine)
+    reference, exported = pose_results(portrait_rgb, builtin_engine)
 
     exported_order, reference_order = assert_same_boxes(exported, reference)
     reference_keypoints = reference.keypoints[reference_order]

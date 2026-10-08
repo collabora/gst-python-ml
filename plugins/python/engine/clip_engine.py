@@ -18,7 +18,7 @@
 
 from .jax_engine import keras_hub_preset
 from .onnx_export import (
-    cached_onnx_export,
+    exported_model_path,
     model_input_frames,
     model_input_shape,
     pixel_normalizer,
@@ -27,7 +27,7 @@ from .pytorch_engine import PyTorchEngine, projected
 
 
 class ExportedClip:
-    def __init__(self, model_name):
+    def __init__(self, model_name, engine_name):
         from transformers import AutoModel, AutoProcessor
 
         self.processor = AutoProcessor.from_pretrained(model_name)
@@ -36,11 +36,13 @@ class ExportedClip:
         self.text_embeddings_by_labels = {}
         self.clip_labels = []
         self.engine = None
-        self.path = self._model_path(model_name)
+        self.path = self._model_path(model_name, engine_name)
 
-    def _model_path(self, model_name):
-        return cached_onnx_export(
-            f"{model_name.replace('/', '--')}-image-encoder", self._build_image_encoder
+    def _model_path(self, model_name, engine_name):
+        return exported_model_path(
+            engine_name,
+            f"{model_name.replace('/', '--')}-image-encoder",
+            self._build_image_encoder,
         )
 
     def _build_image_encoder(self):
@@ -100,7 +102,7 @@ class ExportedClip:
 
 # keras-hub's clip tokenizer needs tensorflow
 class KerasHubClip(ExportedClip):
-    def _model_path(self, model_name):
+    def _model_path(self, model_name, engine_name):
         return keras_hub_preset(model_name)
 
 

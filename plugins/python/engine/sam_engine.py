@@ -17,7 +17,7 @@
 # Boston, MA 02110-1301, USA.
 
 from .onnx_export import (
-    cached_onnx_export,
+    exported_model_path,
     model_input_frames,
     model_input_shape,
     pixel_normalizer,
@@ -59,14 +59,16 @@ def segmentation_result(masks, scores, max_masks):
 
 
 class ExportedSam:
-    def __init__(self, model_name):
+    def __init__(self, model_name, engine_name):
         self.engine = None
         # the prompt encoder and mask decoder stay on pytorch
         self.torch_engine = SamEngine()
         self.torch_engine.do_set_device(DECODER_DEVICE)
         self.torch_engine.do_load_model(model_name)
-        self.path = cached_onnx_export(
-            f"{model_name.replace('/', '--')}-image-encoder", self._build_image_encoder
+        self.path = exported_model_path(
+            engine_name,
+            f"{model_name.replace('/', '--')}-image-encoder",
+            self._build_image_encoder,
         )
 
     @property

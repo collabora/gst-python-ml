@@ -23,8 +23,8 @@ from .yolo_engine import EXPORTED_INPUT_SHAPE, BOX_AND_CLASS_COLUMNS, ExportedYo
 
 
 class ExportedYoloPose(ExportedYolo):
-    def __init__(self, model_name):
-        super().__init__(model_name)
+    def __init__(self, model_name, engine_name):
+        super().__init__(model_name, engine_name)
         self.keypoint_shape = ast.literal_eval(self.metadata["kpt_shape"])
 
     def _results(self, frame, detections):

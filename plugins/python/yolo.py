@@ -95,7 +95,7 @@ class YOLOTransform(BaseObjectDetector, YoloTask):
         EngineFactory.register(self.mgr.engine_name, YoloEngine)
 
     def export_model(self, model_name):
-        return ExportedYolo(model_name)
+        return ExportedYolo(model_name, self.mgr.engine_name)
 
     def do_forward(self, frames):
         # Push NMS/confidence knobs to the engine before it runs the model.

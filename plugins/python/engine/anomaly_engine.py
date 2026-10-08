@@ -17,7 +17,7 @@
 # Boston, MA 02110-1301, USA.
 
 from .ml_engine import TORCHVISION_WEIGHTS
-from .onnx_export import cached_onnx_export, pixel_normalizer
+from .onnx_export import exported_model_path, pixel_normalizer
 from .pytorch_engine import PyTorchEngine
 
 COLOR_CHANNELS = 3
@@ -49,11 +49,13 @@ def anomaly_result(feature_map, reference_features, threshold):
 
 
 class ExportedAnomaly:
-    def __init__(self, model_name):
+    def __init__(self, model_name, engine_name):
         self.engine = None
         self.reference_features = None
-        self.path = cached_onnx_export(
-            f"{model_name}-anomaly-features", lambda: self._build_graph(model_name)
+        self.path = exported_model_path(
+            engine_name,
+            f"{model_name}-anomaly-features",
+            lambda: self._build_graph(model_name),
         )
 
     def _build_graph(self, model_name):

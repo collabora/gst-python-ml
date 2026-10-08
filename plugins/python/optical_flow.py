@@ -85,7 +85,7 @@ class OpticalFlowTransform(VideoTransform, OpticalFlowTask):
         self._prev_frame = None
 
     def export_model(self, model_name):
-        return ExportedOpticalFlow(model_name)
+        return ExportedOpticalFlow(model_name, self.mgr.engine_name)
 
     def process_frames(self, frames, num_sources, fmt, target):
         """Pair this frame with the previous one and draw the flow overlay."""

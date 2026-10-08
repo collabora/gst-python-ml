@@ -21,6 +21,11 @@ import numpy as np
 from ai_edge_litert.interpreter import Interpreter, load_delegate
 
 from .ml_engine import MLEngine
+from .onnx_to_tensorflow import (
+    ONNX_SUFFIX,
+    float32_tflite_from_onnx,
+    onnx_output_names,
+)
 
 
 class LiteRTEngine(MLEngine):
@@ -33,11 +38,17 @@ class LiteRTEngine(MLEngine):
         self.model_name = None
         self.kwargs = None
         self.model_type = None
+        self.output_names = None
 
     def do_load_model(self, model_name, **kwargs):
         """Load a pre-trained model and convert to TFLite if necessary."""
         self.model_name = model_name
         self.kwargs = kwargs
+        self.output_names = None
+
+        if model_name.endswith(ONNX_SUFFIX):
+            self.output_names = onnx_output_names(model_name)
+            model_name = str(float32_tflite_from_onnx(model_name))
 
         if os.path.isfile(model_name) and model_name.endswith(".tflite"):
             self.interpreter = Interpreter(
@@ -77,6 +88,14 @@ class LiteRTEngine(MLEngine):
         self.interpreter.allocate_tensors()
         self.input_details = self.interpreter.get_input_details()
         self.output_details = self.interpreter.get_output_details()
+        if self.output_names:
+            # the interpreter lists a converted model's outputs out of onnx order
+            signature_outputs = (
+                self.interpreter.get_signature_runner().get_output_details()
+            )
+            self.output_details = [
+                signature_outputs[name] for name in self.output_names
+            ]
 
         return True
 
@@ -153,7 +172,7 @@ class LiteRTEngine(MLEngine):
             ]
 
             # Standard TFLite detection: [boxes, classes, scores, num_detections]
-            if len(outputs) >= 4:
+            if self.output_names is None and len(outputs) >= 4:
                 boxes, classes, scores, num_dets = outputs[:4]
                 results = []
                 for i in range(img.shape[0]):

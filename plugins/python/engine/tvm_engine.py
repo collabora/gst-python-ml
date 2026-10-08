@@ -21,11 +21,13 @@ import numpy as np
 import tvm
 from tvm import relax
 
-from .ml_engine import MLEngine, TORCHVISION_WEIGHTS
+from .ml_engine import MLEngine, TORCHVISION_WEIGHTS, converted_model_path
 
 CLASSIFIER_INPUT_SHAPE = (1, 3, 224, 224)
-# the torch importer names the exported graph main
+# the torch and onnx importers both name the graph main
 ENTRY_FUNCTION = "main"
+COMPILED_LIBRARY_SUFFIX = ".so"
+PARTIAL_SAVE_SUFFIX = ".partial"
 
 
 class TVMEngine(MLEngine):
@@ -47,6 +49,14 @@ class TVMEngine(MLEngine):
             self.logger.info(f"TVM compiled model loaded from local path: {model_name}")
             return True
 
+        if os.path.isfile(model_name) and model_name.endswith(".onnx"):
+            self._start_vm(
+                tvm.runtime.load_module(self._compile_onnx_model(model_name))
+            )
+            self.model_type = "custom"
+            self.logger.info(f"ONNX model compiled with TVM from: {model_name}")
+            return True
+
         from torchvision import models as tv_models
 
         if hasattr(tv_models, model_name):
@@ -59,7 +69,8 @@ class TVMEngine(MLEngine):
             return True
 
         raise FileNotFoundError(
-            f"TVM takes a compiled .so or .tar or a torchvision model name, got: {model_name}"
+            "TVM takes a compiled .so or .tar, an .onnx file or a torchvision model name, "
+            f"got: {model_name}"
         )
 
     def _compile_pytorch_model(self, pt_model, input_shape):
@@ -70,6 +81,25 @@ class TVMEngine(MLEngine):
         exported = torch.export.export(pt_model, (torch.randn(*input_shape),))
         module = from_exported_program(exported)
         self._start_vm(tvm.compile(module, self._get_target()))
+
+    def _compile_onnx_model(self, onnx_path):
+        target = self._get_target()
+        library_path = converted_model_path(
+            "tvm", onnx_path, COMPILED_LIBRARY_SUFFIX, str(target)
+        )
+        if library_path.is_file():
+            return str(library_path)
+
+        import onnx
+        from tvm.relax.frontend.onnx import from_onnx
+
+        module = from_onnx(onnx.load(onnx_path))
+        executable = tvm.compile(module, target)
+        library_path.parent.mkdir(parents=True, exist_ok=True)
+        partial_path = library_path.with_suffix(PARTIAL_SAVE_SUFFIX)
+        executable.export_library(str(partial_path))
+        partial_path.rename(library_path)
+        return str(library_path)
 
     def _start_vm(self, module):
         self.tvm_device = self._get_tvm_device()

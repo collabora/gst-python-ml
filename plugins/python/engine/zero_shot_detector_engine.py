@@ -17,7 +17,7 @@
 # Boston, MA 02110-1301, USA.
 
 from .onnx_export import (
-    cached_onnx_export,
+    exported_model_path,
     model_input_frames,
     model_input_shape,
     pixel_normalizer,
@@ -70,7 +70,7 @@ def index_of(text, labels):
 
 
 class ExportedZeroShotDetector:
-    def __init__(self, model_name):
+    def __init__(self, model_name, engine_name):
         from transformers import (
             AutoConfig,
             AutoModelForZeroShotObjectDetection,
@@ -93,8 +93,10 @@ class ExportedZeroShotDetector:
         self.confidence = DEFAULT_CONFIDENCE
         self.track = False
         self.engine = None
-        self.path = cached_onnx_export(
-            f"{model_name.replace('/', '--')}-image-detector", self._build_image_graph
+        self.path = exported_model_path(
+            engine_name,
+            f"{model_name.replace('/', '--')}-image-detector",
+            self._build_image_graph,
         )
 
     def _build_image_graph(self):

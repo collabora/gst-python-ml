@@ -120,8 +120,8 @@ class CLIPTransform(VideoTransform, ClipTask):
 
     def export_model(self, model_name):
         if self.mgr.engine_name == EngineFactory.JAX_ENGINE:
-            return KerasHubClip(model_name)
-        return ExportedClip(model_name)
+            return KerasHubClip(model_name, self.mgr.engine_name)
+        return ExportedClip(model_name, self.mgr.engine_name)
 
     def on_start(self):
         # Push labels into the engine after it has been initialised

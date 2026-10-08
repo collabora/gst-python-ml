@@ -93,7 +93,7 @@ class EmbeddingTransform(VideoTransform, EmbeddingTask):
         self._cached_text = None
 
     def export_model(self, model_name):
-        return ExportedEmbedding(model_name)
+        return ExportedEmbedding(model_name, self.mgr.engine_name)
 
     @GObject.Property(type=int, default=0)
     def output_dim(self):

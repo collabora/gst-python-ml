@@ -31,8 +31,10 @@ TENSORRT_PROVIDER = "TensorrtExecutionProvider"
 DEVICE_PROVIDERS = {
     "tensorrt": (TENSORRT_PROVIDER,),
     "cuda": ("CUDAExecutionProvider",),
-    "rocm": ("MIGraphXExecutionProvider", "ROCMExecutionProvider"),
-    "hip": ("MIGraphXExecutionProvider", "ROCMExecutionProvider"),
+    # migraphx 6.4 rejects the resize attribute onnxruntime adds to every graph
+    "rocm": ("ROCMExecutionProvider", "MIGraphXExecutionProvider"),
+    "hip": ("ROCMExecutionProvider", "MIGraphXExecutionProvider"),
+    "migraphx": ("MIGraphXExecutionProvider",),
     "npu": ("VitisAIExecutionProvider",),
     "ryzenai": ("VitisAIExecutionProvider",),
     "coreml": ("CoreMLExecutionProvider",),

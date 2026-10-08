@@ -90,7 +90,7 @@ class SamTransform(VideoTransform, SamTask):
         self.format_converter = FormatConverter()
 
     def export_model(self, model_name):
-        return ExportedSam(model_name)
+        return ExportedSam(model_name, self.mgr.engine_name)
 
 
 if CAN_REGISTER_ELEMENT and backend.BACKEND == "gst":

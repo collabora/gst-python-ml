@@ -16,9 +16,12 @@
 # Free Software Foundation, Inc., 51 Franklin Street, Fifth Floor,
 # Boston, MA 02110-1301, USA.
 
-from pathlib import Path
+from .engine_factory import EngineFactory
+from .ml_engine import MODEL_CACHE
 
-ONNX_EXPORT_CACHE = Path.home() / ".cache" / "gst-python-ml" / "onnx"
+ONNX_EXPORT_CACHE = MODEL_CACHE / "onnx"
+EXECUTORCH_EXPORT_CACHE = MODEL_CACHE / EngineFactory.EXECUTORCH_ENGINE
+EXECUTORCH_SUFFIX = ".pte"
 PARTIAL_EXPORT_SUFFIX = ".partial"
 GRAPH_INPUT_NAME = "image"
 GRAPH_OUTPUT_NAME = "output"
@@ -253,3 +256,36 @@ def cached_onnx_export(file_stem, build_graph, **export_options):
     resize_align_corners_as_matmuls(partial_path)
     partial_path.rename(path)
     return str(path)
+
+
+def executorch_export_path(file_stem):
+    return EXECUTORCH_EXPORT_CACHE / f"{file_stem}{EXECUTORCH_SUFFIX}"
+
+
+def cached_executorch_export(file_stem, build_graph, **export_options):
+    import torch
+    from executorch.backends.xnnpack.partition.xnnpack_partitioner import (
+        XnnpackPartitioner,
+    )
+    from executorch.exir import to_edge_transform_and_lower
+
+    path = executorch_export_path(file_stem)
+    if path.exists():
+        return str(path)
+    EXECUTORCH_EXPORT_CACHE.mkdir(parents=True, exist_ok=True)
+    graph, example_input = build_graph()
+    program = to_edge_transform_and_lower(
+        torch.export.export(graph.eval(), (example_input,), **export_options),
+        partitioner=[XnnpackPartitioner()],
+    ).to_executorch()
+    partial_path = path.with_suffix(PARTIAL_EXPORT_SUFFIX)
+    partial_path.write_bytes(program.buffer)
+    partial_path.rename(path)
+    return str(path)
+
+
+# executorch has no onnx importer
+def exported_model_path(engine_name, file_stem, build_graph, **export_options):
+    if engine_name == EngineFactory.EXECUTORCH_ENGINE:
+        return cached_executorch_export(file_stem, build_graph, **export_options)
+    return cached_onnx_export(file_stem, build_graph, **export_options)

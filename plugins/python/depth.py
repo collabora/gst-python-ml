@@ -95,8 +95,8 @@ class DepthTransform(VideoTransform, DepthTask):
 
     def export_model(self, model_name):
         if self.mgr.engine_name == EngineFactory.JAX_ENGINE:
-            return KerasHubDepthAnything(model_name)
-        return ExportedDepthAnything(model_name)
+            return KerasHubDepthAnything(model_name, self.mgr.engine_name)
+        return ExportedDepthAnything(model_name, self.mgr.engine_name)
 
 
 if CAN_REGISTER_ELEMENT and backend.BACKEND == "gst":

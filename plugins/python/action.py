@@ -86,7 +86,7 @@ class ActionTransform(VideoTransform, ActionTask):
         self._last_result = None
 
     def export_model(self, model_name):
-        return ExportedAction(model_name)
+        return ExportedAction(model_name, self.mgr.engine_name)
 
     def process_frames(self, frames, num_sources, fmt, target):
         """Accumulate a frame window, classify when it is full, decode the

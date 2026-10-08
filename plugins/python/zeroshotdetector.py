@@ -88,7 +88,7 @@ class ZeroShotDetector(BaseObjectDetector, ZeroShotDetectorTask):
         self.logger.info(f"Labels set to: {self._labels_list}")
 
     def export_model(self, model_name):
-        return ExportedZeroShotDetector(model_name)
+        return ExportedZeroShotDetector(model_name, self.mgr.engine_name)
 
     def do_forward(self, frames):
         if self.task_engine:

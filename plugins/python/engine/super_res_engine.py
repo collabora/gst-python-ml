@@ -16,7 +16,7 @@
 # Free Software Foundation, Inc., 51 Franklin Street, Fifth Floor,
 # Boston, MA 02110-1301, USA.
 
-from .onnx_export import cached_onnx_export
+from .onnx_export import exported_model_path
 from .pytorch_engine import PyTorchEngine
 
 CHECKPOINT_URLS = {
@@ -49,11 +49,12 @@ def load_upsampler(model_name):
 
 
 class ExportedSuperRes:
-    def __init__(self, model_name):
+    def __init__(self, model_name, engine_name):
         import torch
 
         self.engine = None
-        self.path = cached_onnx_export(
+        self.path = exported_model_path(
+            engine_name,
             model_name,
             lambda: self._build_graph(model_name),
             dynamic_shapes={

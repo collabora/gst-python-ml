@@ -23,6 +23,10 @@ gi.require_version("Gst", "1.0")
 from gi.repository import Gst  # noqa: E402
 from .logger import Logger  # noqa: E402
 
+# a pip pygobject without the gst-python overrides has no Gst.info
+if not hasattr(Gst, "info"):
+    raise ImportError("Gst has no logging functions, gst-python is not installed")
+
 
 class GstLogger(Logger):
     """Logger implementation using GStreamer with caller file and line number."""

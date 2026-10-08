@@ -16,12 +16,25 @@
 # Free Software Foundation, Inc., 51 Franklin Street, Fifth Floor,
 # Boston, MA 02110-1301, USA.
 
+import hashlib
 from abc import ABC, abstractmethod
+from pathlib import Path
 
 from log.logger_factory import LoggerFactory
 
 TORCHVISION_WEIGHTS = "DEFAULT"
 TORCHVISION_RESNET_MODULE = "torchvision.models.resnet"
+MODEL_CACHE = Path.home() / ".cache" / "gst-python-ml"
+CONVERSION_DIGEST_LENGTH = 12
+
+
+# the file behind a path can change
+def converted_model_path(engine_name, source_path, suffix, *options):
+    source = Path(source_path).resolve()
+    stat = source.stat()
+    key = repr((str(source), stat.st_size, stat.st_mtime_ns, options))
+    digest = hashlib.sha256(key.encode()).hexdigest()[:CONVERSION_DIGEST_LENGTH]
+    return MODEL_CACHE / engine_name / f"{source.stem}-{digest}{suffix}"
 
 
 def is_torchvision_resnet(model_name):

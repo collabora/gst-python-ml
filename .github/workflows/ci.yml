@@ -43,41 +43,46 @@ jobs:
         include:
           - engine: onnx
             extra: onnx
+            exported-models: true
           - engine: openvino
-            extra: openvino
+            extra: openvino,onnx
+            exported-models: true
           - engine: tensorflow
-            extra: tensorflow
+            extra: tensorflow,onnx
+            exported-models: true
           # the yolo export needs tensorflow
           - engine: tflite
-            extra: tensorflow,litert
+            extra: tensorflow,litert,onnx
+            exported-models: true
           - engine: ncnn
-            extra: ncnn
+            extra: ncnn,onnx
+            exported-models: true
           - engine: executorch
-            extra: executorch
+            extra: executorch,onnx
+            exported-models: true
           - engine: iree
-            extra: iree
+            extra: iree,onnx
+            exported-models: true
           - engine: pytorch
             extra: onnx
           - engine: llamacpp
             extra: llamacpp
           - engine: tvm
-            extra: tvm
+            extra: tvm,onnx
+            exported-models: true
           - engine: mlx
             extra: mlx-cpu
           - engine: jax
-            extra: jax-cpu
+            extra: jax-cpu,onnx
+            exported-models: true
           - engine: tinygrad
-            extra: tinygrad
+            extra: tinygrad,onnx
+            exported-models: true
           # runs on the onnxruntime stand-in for the board's runtime
           - engine: drpai
             extra: onnx
     steps:
       - uses: actions/checkout@v6
-
-      - name: Set up Python
-        uses: actions/setup-python@v6
-        with:
-          python-version: "3.12"
 
       - name: Cache model downloads
         uses: actions/cache@v4
@@ -92,20 +97,31 @@ jobs:
         env:
           # the cached llama.cpp wheel must run on whichever cpu the next runner has
           CMAKE_ARGS: -DGGML_NATIVE=OFF
+        # the gst bindings only exist on the system python
         run: |
-          # pygobject and pycairo build from source, this job has no gstreamer step to pull their headers in
           sudo apt-get update
-          sudo apt-get install -y libcairo2-dev libgirepository-2.0-dev libglib2.0-dev pkg-config
-          pip install -e ".[${{ matrix.extra }},yolo]" pytest
+          sudo apt-get install -y \
+            gir1.2-gstreamer-1.0 gir1.2-gst-plugins-base-1.0 gir1.2-gst-plugins-bad-1.0 \
+            gstreamer1.0-plugins-base gstreamer1.0-plugins-good gstreamer1.0-plugins-bad \
+            python3-gi python3-gst-1.0 python3-venv python3-dev \
+            libcairo2-dev libgirepository-2.0-dev libglib2.0-dev pkg-config
+          /usr/bin/python3 -m venv --system-site-packages .venv
+          .venv/bin/pip install -e ".[${{ matrix.extra }},yolo]" pytest
 
       - name: Run the engine tests
         env:
           PYML_REQUIRE_ENGINE: ${{ matrix.engine }}
         run: |
-          python -m pytest tests/test_engines.py -q -k "${{ matrix.engine }}"
+          .venv/bin/python -m pytest tests/test_engines.py -q -k "${{ matrix.engine }}"
           if [ "${{ matrix.engine }}" = "onnx" ]; then
-            python -m pytest tests/test_onnx_devices.py -q
+            .venv/bin/python -m pytest tests/test_onnx_devices.py -q
           fi
+
+      - name: Run the exported model tests
+        if: matrix.exported-models
+        env:
+          PYML_REQUIRE_ENGINE: ${{ matrix.engine }}
+        run: .venv/bin/python -m pytest tests/test_exported_models.py -q -k "${{ matrix.engine }}"
 
   build:
     needs: lint

@@ -62,7 +62,7 @@ class SuperResTransform(VideoTransform, SuperResTask):
         self.model_name = DEFAULT_MODEL_NAME
 
     def export_model(self, model_name):
-        return ExportedSuperRes(model_name)
+        return ExportedSuperRes(model_name, self.mgr.engine_name)
 
     def process_frames(self, frames, num_sources, fmt, target):
         """Upscale the primary frame and write it back at the original size."""

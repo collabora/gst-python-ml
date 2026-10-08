@@ -17,7 +17,7 @@
 # Boston, MA 02110-1301, USA.
 
 from .onnx_export import (
-    cached_onnx_export,
+    exported_model_path,
     model_input_frames,
     model_input_shape,
     pixel_normalizer,
@@ -28,15 +28,17 @@ TEXT_ENCODER_DEVICE = "cpu"
 
 
 class ExportedEmbedding:
-    def __init__(self, model_name):
+    def __init__(self, model_name, engine_name):
         self.engine = None
         # the text side and the image processor stay on pytorch
         self.torch_engine = EmbeddingEngine()
         self.torch_engine.do_set_device(TEXT_ENCODER_DEVICE)
         self.torch_engine.do_load_model(model_name)
         self.output_dim = self.torch_engine.output_dim
-        self.path = cached_onnx_export(
-            f"{model_name.replace('/', '--')}-image-embedding", self._build_graph
+        self.path = exported_model_path(
+            engine_name,
+            f"{model_name.replace('/', '--')}-image-embedding",
+            self._build_graph,
         )
 
     @property

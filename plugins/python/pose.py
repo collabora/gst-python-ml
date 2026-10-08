@@ -122,7 +122,7 @@ class YOLOPoseTransform(BaseObjectDetector):
         EngineFactory.register(self.mgr.engine_name, YoloPoseEngine)
 
     def export_model(self, model_name):
-        return ExportedYoloPose(model_name)
+        return ExportedYoloPose(model_name, self.mgr.engine_name)
 
     def do_decode(self, buf, result, stream_idx=0):
         boxes = result.boxes

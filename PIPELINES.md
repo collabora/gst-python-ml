@@ -177,13 +177,26 @@ python pyml-launch.py filesrc location=data/people.mp4 ! decodebin name=d \
 
 It takes every `engine-name` below.
 
-##### Task elements on the ONNX engine
+##### Task elements on a builtin engine
 
 `pyml_depth`, `pyml_clip`, `pyml_anomaly`, `pyml_embedding`, `pyml_action`,
 `pyml_superres`, `pyml_optical_flow`, `pyml_sam`, `pyml_yolo`, `pyml_yolo_pose`
 and `pyml_zeroshotdetector` take the Hugging Face or ultralytics model name
-with `engine-name=onnx`. The first run exports the model to
-`~/.cache/gst-python-ml/onnx/`. `track=True` needs the PyTorch engine.
+with any of `engine-name=onnx`, `openvino`, `tvm`, `tensorflow`, `tflite`,
+`ncnn`, `executorch`, `iree`, `tinygrad` or `migraphx`, and `pyml_depth` and
+`pyml_clip` also `jax`. The first run exports the model to
+`~/.cache/gst-python-ml/onnx/`, and an engine that does not read ONNX converts
+it once more into `~/.cache/gst-python-ml/<engine>/`. ExecuTorch exports a
+`.pte` from the torch graph instead, and jax loads a keras-hub preset.
+`track=True` needs the PyTorch engine.
+
+Every engine runs depth, CLIP, SigLIP, YOLO and YOLO pose against the PyTorch
+results in `tests/test_exported_models.py`, except: ncnn has no 5D permute, so
+only the convolutional exports run on it (YOLO, pose, anomaly, super
+resolution); the tensorflow engine gets SigLIP wrong, onnx2tf splits one of
+its constants off by one; TVM runs these graphs unscheduled on the CPU, a depth
+frame takes over a minute. The other six task elements are verified on the
+ONNX engine only.
 
 ```
 python pyml-launch.py filesrc location=data/people.mp4 ! decodebin name=d \
@@ -531,7 +544,11 @@ python pyml-launch.py filesrc location=data/people.mp4 ! decodebin name=d \
 
 #### ONNX Runtime on AMD GPUs (ROCm)
 
-`device=rocm` picks the MIGraphX execution provider, falling back to ROCm's.
+`device=rocm` picks the ROCm execution provider, falling back to MIGraphX's,
+and `device=migraphx` MIGraphX only. MIGraphX 6.4 rejects the resize attribute
+ONNX Runtime adds to a graph, so it fails on YOLO and the task element exports.
+On an APU ROCm does not list, such as the Rembrandt gfx1035, the ROCm provider
+runs with `HSA_OVERRIDE_GFX_VERSION=10.3.0`.
 
 ```
 python pyml-launch.py filesrc location=data/people.mp4 ! decodebin name=d \

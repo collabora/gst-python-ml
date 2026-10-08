@@ -22,11 +22,21 @@ import tensorflow as tf
 from tensorflow import keras
 
 from .ml_engine import MLEngine
+from .onnx_to_tensorflow import (
+    ONNX_SUFFIX,
+    onnx_output_names,
+    saved_model_from_onnx,
+)
 
 
 class TensorFlowEngine(MLEngine):
     def do_load_model(self, model_name, **kwargs):
         self.model_type = None
+        self.output_names = None
+
+        if model_name.endswith(ONNX_SUFFIX):
+            self.output_names = onnx_output_names(model_name)
+            model_name = str(saved_model_from_onnx(model_name))
 
         if os.path.isdir(model_name):
             self.model = tf.saved_model.load(model_name)
@@ -113,7 +123,10 @@ class TensorFlowEngine(MLEngine):
                     results = self.model(img_tensor, training=False)
 
             # Convert results to NumPy for consistency
-            if isinstance(results, dict):
+            if isinstance(results, dict) and self.output_names:
+                outputs = [results[name].numpy() for name in self.output_names]
+                output_np = outputs if len(outputs) > 1 else outputs[0]
+            elif isinstance(results, dict):
                 output_np = {
                     k: v.numpy() if isinstance(v, tf.Tensor) else v
                     for k, v in results.items()

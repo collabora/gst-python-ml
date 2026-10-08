@@ -219,6 +219,16 @@ ninja -C build install
 export PYTHONPATH=$HOME/src/AMDMIGraphX/install/lib:$PYTHONPATH
 ```
 
+### ONNX Runtime on ROCm
+
+AMD publishes the wheel outside PyPI, for Python 3.12 at most. It needs the
+ROCm release in its URL and, on Fedora, `hipfft` and `rccl` beside the packages
+above.
+
+```
+uv pip install https://repo.radeon.com/rocm/manylinux/rocm-rel-6.4.2/onnxruntime_rocm-1.21.0-cp312-cp312-manylinux_2_27_x86_64.manylinux_2_28_x86_64.whl
+```
+
 The first GPU compile of a model takes a couple of minutes. The `device=cpu` reference target
 runs but is very slow on detection models.
 
