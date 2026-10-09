@@ -1617,6 +1617,7 @@ all = [
     { name = "onnxruntime" },
     { name = "onnxruntime-genai" },
     { name = "onnxscript" },
+    { name = "onnxslim" },
     { name = "openvino" },
     { name = "openvino-genai" },
     { name = "optimum-intel" },
@@ -1753,6 +1754,7 @@ vad = [
 ]
 yolo = [
     { name = "lap" },
+    { name = "onnxslim" },
     { name = "ultralytics" },
 ]
 
@@ -1812,6 +1814,7 @@ requires-dist = [
     { name = "onnxruntime-gpu", marker = "extra == 'onnx-gpu'" },
     { name = "onnxscript", marker = "extra == 'onnx'" },
     { name = "onnxscript", marker = "extra == 'onnx-gpu'" },
+    { name = "onnxslim", marker = "extra == 'yolo'", specifier = ">=0.1.71" },
     { name = "opencv-python-headless", marker = "python_full_version < '3.14'", specifier = ">=4.9.0" },
     { name = "opencv-python-headless", marker = "python_full_version >= '3.14'", specifier = ">=4.13.0" },
     { name = "openvino", marker = "extra == 'openvino'", specifier = ">=2024.0" },
@@ -3973,6 +3976,22 @@ dependencies = [
 sdist = { url = "https://files.pythonhosted.org/packages/0a/01/3e3fab8d643ca097ea4aa9e51246643699dfaaa0650589744fe44bc46651/onnxscript-0.7.2.tar.gz", hash = "sha256:2c664f6383d10f332a4d47b2876dcab16dba84909fe703656b19abc281fda165", size = 646719, upload-time = "2026-09-09T17:06:44.567Z" }
 wheels = [
     { url = "https://files.pythonhosted.org/packages/b9/3b/06260997cdc41138e58718588a6c87d0eb342bbe0dda8a6aae91d163c384/onnxscript-0.7.2-py3-none-any.whl", hash = "sha256:d0e7121c6a1eefd608058928e111cbdb76709f70d269ff0d07aee493bd1d13c9", size = 754215, upload-time = "2026-09-09T17:06:46.442Z" },
+]
+
+[[package]]
+name = "onnxslim"
+version = "0.1.98"
+source = { registry = "https://pypi.org/simple" }
+dependencies = [
+    { name = "colorama" },
+    { name = "ml-dtypes" },
+    { name = "onnx" },
+    { name = "packaging" },
+    { name = "sympy" },
+]
+sdist = { url = "https://files.pythonhosted.org/packages/55/91/956b6e2ab4a10f274af9766dbafa616623c72bb4ee6226ed9de5f9253ab4/onnxslim-0.1.98.tar.gz", hash = "sha256:f9160f1a325de623409a4fd0b3b876124ad1c604b1ebdd4ed81f25b888e42ff4", size = 611126, upload-time = "2026-10-08T05:42:21.373Z" }
+wheels = [
+    { url = "https://files.pythonhosted.org/packages/ea/7e/756d2b76d16df71282021260b0f6a8aebb91a23a10bce1a25cf79e81bf50/onnxslim-0.1.98-py3-none-any.whl", hash = "sha256:25383fcd43c471e3cabeb774b5cdbf3e36a1b3fd283c7ebbdcdf5aa6731dcee3", size = 245766, upload-time = "2026-10-08T05:42:19.981Z" },
 ]
 
 [[package]]
