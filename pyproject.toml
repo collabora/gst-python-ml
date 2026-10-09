@@ -191,6 +191,7 @@ markers = [
 [project.scripts]
 pyml-launch = "gst_python_ml:launch"
 pyml-mcp = "gst_python_ml:mcp"
+pyml-engines = "gst_python_ml:engines"
 
 [tool.hatch.build.targets.wheel]
 only-include = ["plugins"]

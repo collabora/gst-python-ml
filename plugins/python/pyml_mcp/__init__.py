@@ -54,6 +54,7 @@ import metasink  # noqa: E402
 import documented_pipelines  # noqa: E402
 from alertrecorder import Clip, DEFAULT_ENCODER  # noqa: E402
 from embedding_index import EmbeddingIndex  # noqa: E402
+from engine import model_engines  # noqa: E402
 from log.logger_factory import LoggerFactory  # noqa: E402
 
 APPLICATION_NAME = "gst-python-ml"
@@ -752,6 +753,17 @@ def inspect(element: str) -> dict:
             for spec in instance.list_properties()
         ],
     }
+
+
+@server.tool(
+    description="Which engines and devices run a model name or file, with the extra to "
+    "install for the missing ones."
+)
+def engine_options(model: str) -> dict:
+    options = model_engines.engine_options(model)
+    if not options["tasks"]:
+        raise ToolError(f"no task or engine matches {model!r}")
+    return model_engines.with_available_devices(options)
 
 
 def prompt_name(heading):

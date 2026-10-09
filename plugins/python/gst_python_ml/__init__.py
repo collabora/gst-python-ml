@@ -17,3 +17,9 @@ def mcp():
     import pyml_mcp
 
     pyml_mcp.main()
+
+
+def engines():
+    import pyml_engines
+
+    pyml_engines.main()

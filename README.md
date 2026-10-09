@@ -92,6 +92,20 @@ generated from `plugins/python/engine/support_matrix.py`, regenerate it with
 13. tinygrad's Gather rejects 2-d constant indices
 <!-- support matrix end -->
 
+`pyml-engines` reads the same tables for one model. It takes a Hugging Face id, a
+model name such as `yolo11n-pose` or `resnet18`, or a model file, and prints each
+engine's status, its devices, and the extra to install when the engine is missing.
+`*` marks a device this machine reaches, `?` one it does not probe. `--json` prints
+the same as JSON.
+
+```
+$ pyml-engines depth-anything/Depth-Anything-V2-Small-hf
+depth
+  pytorch     runs                                                       cpu* cuda*
+  onnx        runs                                                       cpu* cuda* tensorrt* rocm migraphx npu? coreml
+  openvino    runs                                                       cpu gpu npu                                     pip install gst-python-ml[openvino]
+```
+
 ## Install
 
 Ubuntu 24.04 or later:
