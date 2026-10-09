@@ -318,6 +318,14 @@ async def show_transcript(mcp, text):
         print(f"  ! transcript: {error}", flush=True)
 
 
+# the typed command and the reply go on the video once the demo pipeline runs
+async def show_on_screen(mcp, text):
+    status = json.loads(await run_tool(mcp, "pipeline_status", {}))
+    if status.get("state") == "none":
+        return
+    await show_transcript(mcp, text)
+
+
 async def inject_fault(mcp):
     output = await run_tool(
         mcp,
@@ -345,7 +353,11 @@ async def repl(http, mcp):
         if request == "/fault":
             await inject_fault(mcp)
             continue
-        print(await answer(http, mcp, messages, tools, request))
+        await show_on_screen(mcp, f"> {request}")
+        reply = await answer(http, mcp, messages, tools, request)
+        print(reply)
+        if reply:
+            await show_on_screen(mcp, f"> {request}\n{reply}")
 
 
 def use_headset_mic():
