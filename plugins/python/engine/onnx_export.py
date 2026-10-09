@@ -179,6 +179,68 @@ def resize_align_corners_as_matmuls(path):
     onnx.save(model, path)
 
 
+def constant_value(name, initializers, producers):
+    from onnx import numpy_helper
+
+    if name in initializers:
+        return numpy_helper.to_array(initializers[name])
+    node = producers.get(name)
+    # expanding keeps a constant all true or all zero
+    if node is not None and node.op_type == "Expand":
+        return constant_value(node.input[0], initializers, producers)
+    return None
+
+
+def is_zero_mask(node, initializers, producers):
+    if node is None or node.op_type != "Where":
+        return False
+    condition = constant_value(node.input[0], initializers, producers)
+    masked_value = constant_value(node.input[1], initializers, producers)
+    if condition is None or condition.dtype != bool or masked_value is None:
+        return False
+    return bool(condition.all()) and not masked_value.any()
+
+
+def remove_dead_nodes(graph):
+    used = {name for node in graph.node for name in node.input}
+    used.update(output.name for output in graph.output)
+    kept = [node for node in graph.node if any(o in used for o in node.output)]
+    if len(kept) == len(graph.node):
+        kept_initializers = [i for i in graph.initializer if i.name in used]
+        graph.ClearField("initializer")
+        graph.initializer.extend(kept_initializers)
+        return
+    graph.ClearField("node")
+    graph.node.extend(kept)
+    remove_dead_nodes(graph)
+
+
+# transformers exports a padding mask that is all true, onnx2tf transposes it wrong
+def remove_all_true_attention_masks(path):
+    import onnx
+
+    model = onnx.load(path)
+    graph = model.graph
+    initializers = {initializer.name: initializer for initializer in graph.initializer}
+    producers = {output: node for node in graph.node for output in node.output}
+    graph_outputs = {output.name for output in graph.output}
+    renames = {}
+    for node in graph.node:
+        if node.op_type != "Add" or node.output[0] in graph_outputs:
+            continue
+        for mask, scores in (node.input, reversed(node.input)):
+            if is_zero_mask(producers.get(mask), initializers, producers):
+                renames[node.output[0]] = scores
+                break
+    if not renames:
+        return
+    for node in graph.node:
+        for index, name in enumerate(node.input):
+            node.input[index] = renames.get(name, name)
+    remove_dead_nodes(graph)
+    onnx.save(model, path)
+
+
 def patch_conv_as_matmul(conv):
     import torch
 
@@ -261,6 +323,7 @@ def cached_onnx_export(file_stem, build_graph, **export_options):
     # a weights file beside the model would keep the partial file's name
     program.save(str(partial_path), external_data=False)
     resize_align_corners_as_matmuls(partial_path)
+    remove_all_true_attention_masks(partial_path)
     partial_path.rename(path)
     return str(path)
 

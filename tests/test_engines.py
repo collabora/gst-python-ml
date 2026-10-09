@@ -51,7 +51,8 @@ DETECTION_ENGINES = [
     ("onnx", "onnxruntime", "onnx", ".onnx", "nchw"),
     ("openvino", "openvino", "openvino", ".xml", "nchw"),
     ("tensorflow", "tensorflow", "saved_model", None, "auto"),
-    ("tflite", "ai_edge_litert", "tflite", "_float32.tflite", "auto"),
+    # the ultralytics tflite export installs litert-torch, which pins torch
+    ("tflite", "ai_edge_litert", "onnx", ".onnx", "auto"),
     ("ncnn", "ncnn", "ncnn", ".param", "nchw"),
     ("executorch", "executorch", "executorch", ".pte", "nchw"),
     ("iree", "iree.runtime", "onnx", ".onnx", "nchw"),
@@ -59,8 +60,8 @@ DETECTION_ENGINES = [
     ("migraphx", "migraphx", "onnx", ".onnx", "nchw"),
 ]
 
-# what the ultralytics export of a format needs beyond the engine
-EXPORT_MODULES = {"tflite": "tensorflow"}
+# what an engine needs to convert the export beyond its own package
+CONVERSION_MODULES = {"tflite": "tensorflow"}
 
 DRPAI_EMULATION_DIR = BASE_DIR / "extern" / "rzv2h" / "emulation"
 
@@ -190,8 +191,8 @@ def test_detections_match_reference(
     people_frames_rgb,
 ):
     engine = engine_on_cpu(engine_name, module_name)
-    if export_format in EXPORT_MODULES:
-        require_module(engine_name, EXPORT_MODULES[export_format])
+    if engine_name in CONVERSION_MODULES:
+        require_module(engine_name, CONVERSION_MODULES[engine_name])
     model_path = artifact_path(exported_detector(export_format), suffix)
     engine.input_format = input_format
     engine.post_process = "anchor_free"

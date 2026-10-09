@@ -44,15 +44,20 @@ jobs:
           - engine: onnx
             extra: onnx
             exported-models: true
+          # optimum-intel 1.x has no nncf, pip picks it to keep a newer transformers
           - engine: openvino
             extra: openvino,onnx
+            pins: optimum-intel>=2.2
             exported-models: true
+          # the tensorflow pins are the ones the ultralytics export asks for
           - engine: tensorflow
             extra: tensorflow,onnx
+            pins: tensorflow<=2.19 tf-keras<=2.19
             exported-models: true
           # the yolo export needs tensorflow
           - engine: tflite
             extra: tensorflow,litert,onnx
+            pins: tensorflow<=2.19 tf-keras<=2.19
             exported-models: true
           - engine: ncnn
             extra: ncnn,onnx
@@ -97,6 +102,8 @@ jobs:
         env:
           # the cached llama.cpp wheel must run on whichever cpu the next runner has
           CMAKE_ARGS: -DGGML_NATIVE=OFF
+          # the venv must hold every export requirement up front, not get rewritten under a running test
+          YOLO_AUTOINSTALL: "false"
         # the gst bindings only exist on the system python
         run: |
           sudo apt-get update
@@ -106,11 +113,12 @@ jobs:
             python3-gi python3-gst-1.0 python3-venv python3-dev \
             libcairo2-dev libgirepository-2.0-dev libglib2.0-dev pkg-config
           /usr/bin/python3 -m venv --system-site-packages .venv
-          .venv/bin/pip install -e ".[${{ matrix.extra }},yolo]" pytest
+          .venv/bin/pip install -e ".[${{ matrix.extra }},yolo]" pytest ${{ matrix.pins }}
 
       - name: Run the engine tests
         env:
           PYML_REQUIRE_ENGINE: ${{ matrix.engine }}
+          YOLO_AUTOINSTALL: "false"
         run: |
           .venv/bin/python -m pytest tests/test_engines.py -q -k "${{ matrix.engine }}"
           if [ "${{ matrix.engine }}" = "onnx" ]; then
@@ -121,6 +129,7 @@ jobs:
         if: matrix.exported-models
         env:
           PYML_REQUIRE_ENGINE: ${{ matrix.engine }}
+          YOLO_AUTOINSTALL: "false"
         run: .venv/bin/python -m pytest tests/test_exported_models.py -q -k "${{ matrix.engine }}"
 
   build:

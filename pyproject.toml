@@ -129,13 +129,16 @@ jax-tpu = [
 openvino = [
     "openvino>=2024.0",
     "openvino-genai",
-    "optimum-intel>=2.2",
+    "optimum-intel",
 ]
 tensorflow = [
     "tensorflow>=2.16.0",
     # the onnx2tf pin is the one ultralytics installs on its own exports
     "onnx2tf>=1.26.3,<1.29.0",
     "tf-keras",
+    # onnx2tf imports these without declaring them
+    "sng4onnx>=1.0.1",
+    "onnx_graphsurgeon>=0.3.26",
 ]
 litert = [
     "ai-edge-litert",
