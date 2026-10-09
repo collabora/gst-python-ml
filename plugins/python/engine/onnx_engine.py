@@ -25,8 +25,8 @@ import numpy as np
 import onnxruntime as ort
 
 from .ml_engine import MLEngine, TORCHVISION_WEIGHTS, fixed_height_width
-from .hub_causal_lm import is_hub_causal_lm
-from .onnx_genai import GenAIModel
+from .hub_causal_lm import is_hub_causal_lm, is_hub_whisper
+from .onnx_genai import GenAIModel, GenAIWhisper
 
 TENSORRT_PROVIDER = "TensorrtExecutionProvider"
 # providers are tried in the order listed
@@ -118,6 +118,13 @@ class ONNXEngine(MLEngine):
             self.model = GenAIModel(model_name, self.device)
             self.model_type = "llm"
             self.logger.info(f"onnxruntime-genai model built and loaded: {model_name}")
+            return True
+        elif is_hub_whisper(model_name):
+            self.model = GenAIWhisper(model_name, self.device)
+            self.model_type = "whisper"
+            self.logger.info(
+                f"onnxruntime-genai whisper built and loaded: {model_name}"
+            )
             return True
         else:
             from torchvision import models as tv_models

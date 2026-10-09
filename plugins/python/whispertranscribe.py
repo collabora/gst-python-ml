@@ -23,7 +23,7 @@ CAN_REGISTER_ELEMENT = True
 try:
     from backend import GObject
     from base_transcribe import BaseTranscribe
-    from engine.whisper_engine import WhisperEngine
+    from engine.whisper_engine import ExportedWhisper, WhisperEngine
     from engine.engine_factory import EngineFactory
 
 except ImportError as e:
@@ -45,21 +45,11 @@ class WhisperTranscribe(BaseTranscribe):
         super().__init__()
         self._beam_size = 5
         self.model_name = "medium"
-        # set engine name directly since property is read only
-        self.mgr.engine_name = "pyml_whispertranscribe_engine"
+        self.task_engine_name = self.mgr.engine_name = "pyml_whispertranscribe_engine"
         EngineFactory.register(self.mgr.engine_name, WhisperEngine)
 
-    # make engine_name read only
-    @GObject.Property(type=str)
-    def engine_name(self):
-        """Machine Learning Engine (read-only in this class)."""
-        return self.mgr.engine_name
-
-    @engine_name.setter
-    def engine_name(self, value):
-        raise ValueError(
-            "The 'engine_name' property cannot be set in this derived class."
-        )
+    def export_model(self, model_name):
+        return ExportedWhisper(model_name)
 
     @GObject.Property(type=int, default=5, minimum=1, maximum=8)
     def beam_size(self):
@@ -70,14 +60,9 @@ class WhisperTranscribe(BaseTranscribe):
         self._beam_size = value
 
     def do_transcribe(self, audio_data, task):
-        result, _ = self.get_model().transcribe(
-            audio_data,
-            language=self.language,
-            task=task,
-            beam_size=self._beam_size,
-            initial_prompt=self.initial_prompt,
+        return self.task_engine.transcribe(
+            audio_data, self.language, task, self._beam_size, self.initial_prompt
         )
-        return result
 
 
 if CAN_REGISTER_ELEMENT and backend.BACKEND == "gst":

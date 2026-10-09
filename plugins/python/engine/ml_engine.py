@@ -84,21 +84,14 @@ class MLEngine(ABC):
         """Load a model by name or path, with additional options."""
         pass
 
-    @abstractmethod
     def do_set_device(self, device):
-        """Set the device (e.g., cpu, cuda)."""
-        pass
+        self.device = device
 
-    @abstractmethod
     def do_forward(self, frames):
-        """Execute inference on a single frame or batch of frames.
-        Input can be a single NumPy array (H, W, C) or a batch (B, H, W, C)."""
-        pass
+        raise NotImplementedError(f"{type(self).__name__} runs no frames")
 
-    @abstractmethod
     def do_generate(self, input_text, max_length=1000, system_prompt=None):
-        """Generate LLM text."""
-        pass
+        raise NotImplementedError(f"{type(self).__name__} generates no text")
 
     # Implementation #
     def _model_input_hw(self):

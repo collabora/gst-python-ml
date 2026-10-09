@@ -18,25 +18,36 @@
 
 import ctypes
 import functools
+import io
+import wave
 from pathlib import Path
 
 from .hub_causal_lm import chat_prompt, export_once, hub_cache_name
 from .ml_engine import MODEL_CACHE
+from .whisper_engine import WHISPER_SAMPLE_RATE
 
 GENAI_CACHE = MODEL_CACHE / "onnx-genai"
 GENAI_CONFIG_NAME = "genai_config.json"
 GENAI_LIBRARY_NAME = "libonnxruntime-genai.so"
 DEVICE_BUILDS = {"cpu": ("cpu", "int4"), "cuda": ("cuda", "fp16")}
+# int4 makes whisper-tiny repeat itself
+WHISPER_DEVICE_BUILDS = {"cpu": ("cpu", "fp32"), "cuda": ("cuda", "fp16")}
+WHISPER_CONTEXT_TOKENS = 448
+WHISPER_START_TOKEN = "<|startoftranscript|>"
+WHISPER_PREVIOUS_TOKEN = "<|startofprev|>"
+WHISPER_NO_TIMESTAMPS_TOKEN = "<|notimestamps|>"
+PCM16_SAMPLE_WIDTH = 2
+PCM16_SCALE = 32767
 
 
-def device_build(device):
+def device_build(device, builds=DEVICE_BUILDS):
     build = next(
-        (build for keyword, build in DEVICE_BUILDS.items() if keyword in device),
+        (build for keyword, build in builds.items() if keyword in device),
         None,
     )
     if build is None:
         raise ValueError(
-            f"onnxruntime-genai builds for {', '.join(DEVICE_BUILDS)}, got {device}"
+            f"onnxruntime-genai builds for {', '.join(builds)}, got {device}"
         )
     return build
 
@@ -57,8 +68,8 @@ def build_model(model_name, output, precision, execution_provider):
     builder.create_model(*arguments, **options)
 
 
-def built_model_path(model_name, device):
-    execution_provider, precision = device_build(device)
+def built_model_path(model_name, device, builds=DEVICE_BUILDS):
+    execution_provider, precision = device_build(device, builds)
     path = (
         GENAI_CACHE / f"{hub_cache_name(model_name)}-{execution_provider}-{precision}"
     )
@@ -107,3 +118,58 @@ class GenAIModel:
             generator.generate_next_token()
             tokens.append(generator.get_next_tokens()[0])
         return self.tokenizer.decode(tokens, skip_special_tokens=True)
+
+
+def whisper_prompt(language, task, initial_prompt):
+    prompt = f"{WHISPER_PREVIOUS_TOKEN} {initial_prompt}" if initial_prompt else ""
+    prompt += WHISPER_START_TOKEN
+    if language:
+        prompt += f"<|{language}|>"
+    return f"{prompt}<|{task}|>{WHISPER_NO_TIMESTAMPS_TOKEN}"
+
+
+# genai decodes audio from an encoded file, not from samples
+def wav_bytes(audio):
+    import numpy as np
+
+    samples = (np.clip(audio, -1.0, 1.0) * PCM16_SCALE).astype(np.int16)
+    buffer = io.BytesIO()
+    with wave.open(buffer, "wb") as writer:
+        writer.setnchannels(1)
+        writer.setsampwidth(PCM16_SAMPLE_WIDTH)
+        writer.setframerate(WHISPER_SAMPLE_RATE)
+        writer.writeframes(samples.tobytes())
+    return buffer.getvalue()
+
+
+class GenAIWhisper:
+    def __init__(self, model_name, device):
+        import onnxruntime_genai as og
+
+        self.og = og
+        self.model = og.Model(
+            str(built_model_path(model_name, device, WHISPER_DEVICE_BUILDS))
+        )
+        shut_down_genai_before_its_exit_handler()
+        self.processor = self.model.create_multimodal_processor()
+        self.tokenizer = og.Tokenizer(self.model)
+
+    def transcribe(self, audio, language, task, beam_size, initial_prompt):
+        prompt = whisper_prompt(language, task, initial_prompt)
+        prompt_length = len(self.tokenizer.encode(prompt))
+        inputs = self.processor(
+            [prompt], audios=self.og.Audios.open_bytes(wav_bytes(audio))
+        )
+        params = self.og.GeneratorParams(self.model)
+        params.set_search_options(
+            do_sample=False,
+            num_beams=beam_size,
+            max_length=WHISPER_CONTEXT_TOKENS,
+            batch_size=1,
+        )
+        generator = self.og.Generator(self.model, params)
+        generator.set_inputs(inputs)
+        while not generator.is_done():
+            generator.generate_next_token()
+        tokens = generator.get_sequence(0)[prompt_length:]
+        return [self.processor.decode(tokens).strip()]

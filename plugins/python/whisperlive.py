@@ -136,13 +136,13 @@ class WhisperLive(BaseTranscribe):
         self.logger.info(f"Model {self.llm_model_name} loaded successfully.")
 
     def do_transcribe(self, audio_data, task):
-        result, _ = self.get_model().transcribe(
+        segments, _ = self.get_model().transcribe(
             audio_data,
             language=self.language,
             task=task,
             initial_prompt=self.initial_prompt,
         )
-        return result
+        return [segment.text for segment in segments]
 
     def do_process_text(self, transcript):
         import numpy as np

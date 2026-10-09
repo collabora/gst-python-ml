@@ -21,17 +21,27 @@ import tempfile
 from pathlib import Path
 
 CAUSAL_LM_SUFFIX = "ForCausalLM"
+WHISPER_ARCHITECTURE = "WhisperForConditionalGeneration"
 HUB_NAME_SEPARATOR = "/"
 CACHE_NAME_SEPARATOR = "--"
 
 
-def is_hub_causal_lm(model_name):
+def hub_architectures(model_name):
     if HUB_NAME_SEPARATOR not in model_name:
-        return False
+        return []
     from transformers import AutoConfig
 
-    architectures = AutoConfig.from_pretrained(model_name).architectures or []
-    return any(name.endswith(CAUSAL_LM_SUFFIX) for name in architectures)
+    return AutoConfig.from_pretrained(model_name).architectures or []
+
+
+def is_hub_causal_lm(model_name):
+    return any(
+        name.endswith(CAUSAL_LM_SUFFIX) for name in hub_architectures(model_name)
+    )
+
+
+def is_hub_whisper(model_name):
+    return WHISPER_ARCHITECTURE in hub_architectures(model_name)
 
 
 def hub_cache_name(model_name):

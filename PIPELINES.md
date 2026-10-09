@@ -188,7 +188,8 @@ with any of `engine-name=onnx`, `openvino`, `tvm`, `tensorflow`, `tflite`,
 `~/.cache/gst-python-ml/onnx/`, and an engine that does not read ONNX converts
 it once more into `~/.cache/gst-python-ml/<engine>/`. ExecuTorch exports a
 `.pte` from the torch graph instead, and jax loads a keras-hub preset.
-`track=True` needs the PyTorch engine.
+`track=True` needs the PyTorch engine. `pyml_whispertranscribe` runs on onnx and
+openvino through their genai runtimes, see [Transcription](#transcription).
 
 Every engine runs depth, CLIP, SigLIP, YOLO and YOLO pose against the PyTorch
 results in `tests/test_exported_models.py`, except: ncnn rejects depth (a
@@ -766,6 +767,20 @@ python pyml-launch.py pulsesrc ! audio/x-raw,format=S16LE,rate=16000,channels=1 
 ### Transcription
 
 Transcripts are logged at GStreamer info level. Run with `GST_DEBUG=python:4` to see them.
+
+`pyml_whispertranscribe` runs faster-whisper on the PyTorch engine. With
+`engine-name=onnx` it builds the Hugging Face checkpoint for onnxruntime-genai,
+and with `engine-name=openvino` it exports it for openvino-genai, each once into
+`~/.cache/gst-python-ml/`. A size name such as `medium` means
+`openai/whisper-medium` on those engines.
+
+```
+python pyml-launch.py filesrc location=data/air_traffic_korean_with_english.wav ! decodebin ! audioconvert ! pyml_whispertranscribe engine-name=onnx device=cpu language=ko ! fakesink
+```
+
+```
+python pyml-launch.py filesrc location=data/air_traffic_korean_with_english.wav ! decodebin ! audioconvert ! pyml_whispertranscribe engine-name=openvino device=cpu language=ko ! fakesink
+```
 
 faster-whisper's CTranslate2 wheel loads CUDA 12 cuBLAS. With a CUDA 13 torch install, add it to the venv and the loader path. On Linux:
 

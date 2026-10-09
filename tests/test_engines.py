@@ -38,6 +38,14 @@ CAUSAL_LM = "HuggingFaceTB/SmolLM2-135M-Instruct"
 GENERATION_PROMPT = "Once upon a time"
 GENERATION_TOKENS = 8
 
+WHISPER_MODEL = "openai/whisper-tiny"
+WHISPER_CLIP = BASE_DIR / "data" / "air_traffic_korean_with_english.wav"
+WHISPER_CLIP_SECONDS = 20
+WHISPER_LANGUAGE = "ko"
+# the clip opens with 항공 관제, air traffic control
+WHISPER_EXPECTED_WORD = "항공"
+PCM16_SCALE = 32768.0
+
 # the tensorflow exports take channels last, the rest take channels first like the PIPELINES.md pipelines
 DETECTION_ENGINES = [
     ("onnx", "onnxruntime", "onnx", ".onnx", "nchw"),
@@ -280,6 +288,33 @@ def test_openvino_generates_text_from_a_hub_causal_lm():
     assert engine.do_load_model(CAUSAL_LM) is True
     text = engine.do_generate(GENERATION_PROMPT, max_length=GENERATION_TOKENS)
     assert isinstance(text, str) and text.strip()
+
+
+def whisper_clip():
+    import wave
+
+    with wave.open(str(WHISPER_CLIP)) as reader:
+        rate = reader.getframerate()
+        frames = reader.readframes(rate * WHISPER_CLIP_SECONDS)
+    return np.frombuffer(frames, dtype=np.int16).astype(np.float32) / PCM16_SCALE
+
+
+def transcribed_with(engine):
+    assert engine.do_load_model(WHISPER_MODEL) is True
+    texts = engine.model.transcribe(
+        whisper_clip(), WHISPER_LANGUAGE, "transcribe", 1, ""
+    )
+    return " ".join(texts)
+
+
+def test_onnx_transcribes_with_a_hub_whisper():
+    engine = engine_on_cpu("onnx", "onnxruntime_genai")
+    assert WHISPER_EXPECTED_WORD in transcribed_with(engine)
+
+
+def test_openvino_transcribes_with_a_hub_whisper():
+    engine = engine_on_cpu("openvino", "openvino_genai")
+    assert WHISPER_EXPECTED_WORD in transcribed_with(engine)
 
 
 def test_onnx_refuses_a_model_path_that_does_not_exist():

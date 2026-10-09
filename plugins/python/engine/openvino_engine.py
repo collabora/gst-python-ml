@@ -20,9 +20,10 @@ import os
 import numpy as np
 import openvino as ov
 
-from .hub_causal_lm import is_hub_causal_lm
+from .hub_causal_lm import is_hub_causal_lm, is_hub_whisper
 from .ml_engine import MLEngine, TORCHVISION_WEIGHTS
 from .openvino_llm import OpenVinoLLM
+from .openvino_whisper import OpenVinoWhisper
 
 
 class OpenVinoEngine(MLEngine):
@@ -58,6 +59,13 @@ class OpenVinoEngine(MLEngine):
             self.model = OpenVinoLLM(model_name, self.device)
             self.model_type = "llm"
             self.logger.info(f"openvino-genai model exported and loaded: {model_name}")
+            return True
+        elif is_hub_whisper(model_name):
+            self.model = OpenVinoWhisper(model_name, self.device)
+            self.model_type = "whisper"
+            self.logger.info(
+                f"openvino-genai whisper exported and loaded: {model_name}"
+            )
             return True
         else:
             from torchvision import models

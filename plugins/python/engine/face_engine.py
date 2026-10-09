@@ -18,12 +18,12 @@
 
 import os
 
-from .pytorch_engine import PyTorchEngine
+from .ml_engine import MLEngine
 
 
-class FaceEngine(PyTorchEngine):
+class FaceEngine(MLEngine):
     """
-    PyTorch engine for face detection and recognition using InsightFace.
+    Face detection and recognition using InsightFace.
 
     Supports InsightFace model packs:
       buffalo_l   (large, most accurate)

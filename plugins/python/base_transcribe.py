@@ -127,7 +127,7 @@ class BaseTranscribe(BaseAggregator):
         self.__streaming = value
 
     @abstractmethod
-    def do_transcribe(self, audio_data, task):
+    def do_transcribe(self, audio_data, task) -> list[str]:
         pass
 
     def do_process_text(self, transcript):
@@ -197,8 +197,8 @@ class BaseTranscribe(BaseAggregator):
         # Get the current audio data from the buffer for streaming transcription
         audio_data = np.array(chunk).astype(np.float32) / 32768.0
         task = "translate" if self.translate else "transcribe"
-        result = self.do_transcribe(audio_data, task)
-        # Combine all segments into a single transcript
-        transcript = " ".join([seg.text.strip() for seg in list(result)])
+        transcript = " ".join(
+            text.strip() for text in self.do_transcribe(audio_data, task)
+        )
         self.logger.info(f"transcription: {transcript}")
         return transcript
