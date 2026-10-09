@@ -30,6 +30,8 @@ GENAI_CACHE = MODEL_CACHE / "onnx-genai"
 GENAI_CONFIG_NAME = "genai_config.json"
 GENAI_LIBRARY_NAME = "libonnxruntime-genai.so"
 DEVICE_BUILDS = {"cpu": ("cpu", "int4"), "cuda": ("cuda", "fp16")}
+# the builder's default asks the hub for a login, which a public model does not need
+NO_HUB_TOKEN_OPTION = "hf_token=false"
 # int4 makes whisper-tiny repeat itself
 WHISPER_DEVICE_BUILDS = {"cpu": ("cpu", "fp32"), "cuda": ("cuda", "fp16")}
 WHISPER_CONTEXT_TOKENS = 448
@@ -64,7 +66,7 @@ def build_model(model_name, output, precision, execution_provider):
         execution_provider,
         HF_HUB_CACHE,
     )
-    options = builder.parse_extra_options(*arguments, [])
+    options = builder.parse_extra_options(*arguments, [NO_HUB_TOKEN_OPTION])
     builder.create_model(*arguments, **options)
 
 

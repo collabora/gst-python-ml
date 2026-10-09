@@ -825,13 +825,6 @@ def test_gst_payload_push_after_the_pipeline_stopped_is_not_an_error():
 VAD_CHUNK_SAMPLES = 2400  # 150 ms at 16 kHz, so two silent chunks end a clip
 
 
-class Segment:
-    """One piece of a transcript, as the Whisper models hand it back."""
-
-    def __init__(self, text):
-        self.text = text
-
-
 def stub_vad(monkeypatch):
     """Stand in for the optional VAD package the transcribe family builds in its
     constructor. This one calls any non-zero sample speech, which lets a test
@@ -859,7 +852,7 @@ def transcribe_leaf(monkeypatch, transcript):
 
     class FakeTranscribe(BaseTranscribe, driver):
         def do_transcribe(self, audio_data, task):
-            return [Segment(word) for word in transcript.split()]
+            return transcript.split()
 
     leaf = FakeTranscribe()
     leaf.engine_name = None

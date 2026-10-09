@@ -129,7 +129,7 @@ jax-tpu = [
 openvino = [
     "openvino>=2024.0",
     "openvino-genai",
-    "optimum-intel",
+    "optimum-intel>=2.2",
 ]
 tensorflow = [
     "tensorflow>=2.16.0",

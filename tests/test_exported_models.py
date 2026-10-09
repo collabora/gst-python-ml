@@ -88,9 +88,17 @@ pytest.importorskip("transformers")
 
 
 # importing keras-hub here would fix keras on its default backend
+def is_installed(package):
+    # a dotted name raises when its parent package is missing
+    try:
+        return importlib.util.find_spec(package) is not None
+    except ModuleNotFoundError:
+        return False
+
+
 def require_engine(engine_name):
     package = BUILTIN_ENGINE_PACKAGES[engine_name]
-    if importlib.util.find_spec(package) is not None:
+    if is_installed(package):
         return
     if REQUIRED_ENGINE == engine_name:
         pytest.fail(f"{package} is not installed but {engine_name} is required")
