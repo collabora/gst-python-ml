@@ -16,21 +16,27 @@ gi = pytest.importorskip("gi")
 gi.require_version("Gst", "1.0")
 from gi.repository import Gst  # noqa: E402
 
+from engine.support_matrix import (  # noqa: E402
+    DINOV2_MODEL,
+    ENGINE_PACKAGES,
+    EXPORTED_MODEL_ENGINES,
+    SIGLIP_MODEL,
+    TASK_ENGINES,
+    refusal,
+)
+
 Gst.init(None)
 
 PORTRAIT = BASE_DIR / "data" / "Chinedu-Obasi_2684938.jpg"
 DEPTH_MODEL = "depth-anything/Depth-Anything-V2-Small-hf"
 # the exported graph takes a square frame
 DEPTH_CORRELATION_FLOOR = 0.98
-CLIP_MODELS = ["openai/clip-vit-base-patch32", "google/siglip-base-patch16-224"]
+CLIP_MODELS = ["openai/clip-vit-base-patch32", SIGLIP_MODEL]
 CLIP_LABELS = ["a man", "a dog", "a car", "a tree"]
-SIGLIP_ON_ONNX2TF = [("tensorflow", CLIP_MODELS[1]), ("tflite", CLIP_MODELS[1])]
-SIGLIP_ON_NCNN = ("ncnn", CLIP_MODELS[1])
-DEPTH_ON_NCNN = "ncnn"
 CLIP_PROBABILITY_TOLERANCE = 0.02
 ANOMALY_BACKBONE = "resnet18"
 HEATMAP_TOLERANCE = 0.01
-EMBEDDING_MODELS = ["openai/clip-vit-base-patch32", "facebook/dinov2-small"]
+EMBEDDING_MODELS = ["openai/clip-vit-base-patch32", DINOV2_MODEL]
 EMBEDDING_COSINE_FLOOR = 0.999
 ACTION_MODEL = "MCG-NJU/videomae-base-finetuned-kinetics"
 ACTION_WINDOW_FRAMES = 16
@@ -63,21 +69,6 @@ ZERO_SHOT_SCORE_TOLERANCE = 0.001
 ZERO_SHOT_BOX_TOLERANCE_PIXELS = 1
 # the task engine first
 ENGINE_NAMES = ("pytorch", "onnx")
-# every engine that runs the exported onnx, in its own format or as is
-EXPORTED_MODEL_ENGINE_PACKAGES = {
-    "onnx": "onnxruntime",
-    "openvino": "openvino",
-    "tvm": "tvm",
-    "tensorflow": "tensorflow",
-    "tflite": "ai_edge_litert",
-    "ncnn": "ncnn",
-    "executorch": "executorch",
-    "iree": "iree.runtime",
-    "tinygrad": "tinygrad",
-    "migraphx": "migraphx",
-}
-# jax runs a keras-hub preset instead of the export
-BUILTIN_ENGINE_PACKAGES = {**EXPORTED_MODEL_ENGINE_PACKAGES, "jax": "keras_hub"}
 # a ci matrix leg fails on a missing engine instead of skipping
 REQUIRED_ENGINE = os.environ.get("PYML_REQUIRE_ENGINE")
 # the pytorch reference stays on the cpu
@@ -97,12 +88,18 @@ def is_installed(package):
 
 
 def require_engine(engine_name):
-    package = BUILTIN_ENGINE_PACKAGES[engine_name]
+    package = ENGINE_PACKAGES[engine_name]
     if is_installed(package):
         return
     if REQUIRED_ENGINE == engine_name:
         pytest.fail(f"{package} is not installed but {engine_name} is required")
     pytest.skip(f"{package} is not installed")
+
+
+def xfail_refused(task, engine_name, model_name=None):
+    reason = refusal(task, engine_name, model_name)
+    if reason:
+        pytest.xfail(reason)
 
 
 @pytest.fixture(scope="module")
@@ -122,13 +119,12 @@ def loaded_element(element_class, model_name, engine_name):
     return element
 
 
-@pytest.mark.parametrize("builtin_engine", BUILTIN_ENGINE_PACKAGES)
+@pytest.mark.parametrize("builtin_engine", TASK_ENGINES["depth"])
 def test_depth_on_a_builtin_engine_matches_depth_on_pytorch(
     builtin_engine, portrait_rgb
 ):
     require_engine(builtin_engine)
-    if builtin_engine == DEPTH_ON_NCNN:
-        pytest.xfail("ncnn rejects the broadcast across the batch axis")
+    xfail_refused("depth", builtin_engine)
     from depth import DepthTransform
 
     reference, exported = (
@@ -149,16 +145,13 @@ def clip_probabilities(model_name, engine_name, frame):
     return dict(element.task_engine.do_forward(frame))
 
 
-@pytest.mark.parametrize("builtin_engine", BUILTIN_ENGINE_PACKAGES)
+@pytest.mark.parametrize("builtin_engine", TASK_ENGINES["clip"])
 @pytest.mark.parametrize("model_name", CLIP_MODELS)
 def test_clip_on_a_builtin_engine_matches_clip_on_pytorch(
     model_name, builtin_engine, portrait_rgb
 ):
     require_engine(builtin_engine)
-    if (builtin_engine, model_name) in SIGLIP_ON_ONNX2TF:
-        pytest.xfail("onnx2tf splits a constant vector one off")
-    if (builtin_engine, model_name) == SIGLIP_ON_NCNN:
-        pytest.xfail("ncnn rejects the reshape that indexes the batch")
+    xfail_refused("clip", builtin_engine, model_name)
     reference, exported = (
         clip_probabilities(model_name, engine_name, portrait_rgb)
         for engine_name in (ENGINE_NAMES[0], builtin_engine)
@@ -171,14 +164,19 @@ def test_clip_on_a_builtin_engine_matches_clip_on_pytorch(
         )
 
 
-def test_anomaly_on_onnx_matches_anomaly_on_pytorch(portrait_rgb):
+@pytest.mark.parametrize("builtin_engine", EXPORTED_MODEL_ENGINES)
+def test_anomaly_on_a_builtin_engine_matches_anomaly_on_pytorch(
+    builtin_engine, portrait_rgb
+):
+    require_engine(builtin_engine)
+    xfail_refused("anomaly", builtin_engine)
     from anomaly import AnomalyTransform
 
     reference, exported = (
         loaded_element(AnomalyTransform, ANOMALY_BACKBONE, engine_name).forward(
             portrait_rgb
         )
-        for engine_name in ENGINE_NAMES
+        for engine_name in (ENGINE_NAMES[0], builtin_engine)
     )
 
     assert exported["heatmap"] == pytest.approx(
@@ -186,28 +184,38 @@ def test_anomaly_on_onnx_matches_anomaly_on_pytorch(portrait_rgb):
     )
 
 
+@pytest.mark.parametrize("builtin_engine", EXPORTED_MODEL_ENGINES)
 @pytest.mark.parametrize("model_name", EMBEDDING_MODELS)
-def test_embedding_on_onnx_matches_embedding_on_pytorch(model_name, portrait_rgb):
+def test_embedding_on_a_builtin_engine_matches_embedding_on_pytorch(
+    model_name, builtin_engine, portrait_rgb
+):
+    require_engine(builtin_engine)
+    xfail_refused("embedding", builtin_engine, model_name)
     from embedding import EmbeddingTransform
 
     reference, exported = (
         loaded_element(EmbeddingTransform, model_name, engine_name).forward(
             portrait_rgb
         )
-        for engine_name in ENGINE_NAMES
+        for engine_name in (ENGINE_NAMES[0], builtin_engine)
     )
 
     assert exported.shape == reference.shape
     assert float(exported @ reference) > EMBEDDING_COSINE_FLOOR
 
 
-def test_action_on_onnx_matches_action_on_pytorch(portrait_rgb):
+@pytest.mark.parametrize("builtin_engine", EXPORTED_MODEL_ENGINES)
+def test_action_on_a_builtin_engine_matches_action_on_pytorch(
+    builtin_engine, portrait_rgb
+):
+    require_engine(builtin_engine)
+    xfail_refused("action", builtin_engine)
     from action import ActionTransform
 
     window = [portrait_rgb] * ACTION_WINDOW_FRAMES
     reference, exported = (
         loaded_element(ActionTransform, ACTION_MODEL, engine_name).forward(window)
-        for engine_name in ENGINE_NAMES
+        for engine_name in (ENGINE_NAMES[0], builtin_engine)
     )
 
     assert exported["label"] == reference["label"]
@@ -216,7 +224,12 @@ def test_action_on_onnx_matches_action_on_pytorch(portrait_rgb):
     )
 
 
-def test_superres_on_onnx_matches_superres_on_pytorch(portrait_rgb):
+@pytest.mark.parametrize("builtin_engine", EXPORTED_MODEL_ENGINES)
+def test_superres_on_a_builtin_engine_matches_superres_on_pytorch(
+    builtin_engine, portrait_rgb
+):
+    require_engine(builtin_engine)
+    xfail_refused("superres", builtin_engine)
     pytest.importorskip("spandrel")
     import cv2
     from superres import SuperResTransform
@@ -226,7 +239,7 @@ def test_superres_on_onnx_matches_superres_on_pytorch(portrait_rgb):
         loaded_element(SuperResTransform, SUPERRES_MODEL, engine_name).forward(
             small_frame
         )
-        for engine_name in ENGINE_NAMES
+        for engine_name in (ENGINE_NAMES[0], builtin_engine)
     )
 
     assert exported.shape == reference.shape
@@ -234,7 +247,12 @@ def test_superres_on_onnx_matches_superres_on_pytorch(portrait_rgb):
     assert difference.mean() < SUPERRES_MEAN_DIFFERENCE
 
 
-def test_optical_flow_on_onnx_matches_optical_flow_on_pytorch(portrait_rgb):
+@pytest.mark.parametrize("builtin_engine", EXPORTED_MODEL_ENGINES)
+def test_optical_flow_on_a_builtin_engine_matches_optical_flow_on_pytorch(
+    builtin_engine, portrait_rgb
+):
+    require_engine(builtin_engine)
+    xfail_refused("optical_flow", builtin_engine)
     import cv2
     from optical_flow import OpticalFlowTransform
 
@@ -244,7 +262,7 @@ def test_optical_flow_on_onnx_matches_optical_flow_on_pytorch(portrait_rgb):
         loaded_element(OpticalFlowTransform, FLOW_MODEL, engine_name).forward(
             previous_frame, current_frame
         )
-        for engine_name in ENGINE_NAMES
+        for engine_name in (ENGINE_NAMES[0], builtin_engine)
     )
 
     assert np.median(reference[..., 0]) == pytest.approx(
@@ -253,12 +271,15 @@ def test_optical_flow_on_onnx_matches_optical_flow_on_pytorch(portrait_rgb):
     assert np.abs(exported - reference).mean() < FLOW_TOLERANCE_PIXELS
 
 
-def test_sam_on_onnx_matches_sam_on_pytorch(portrait_rgb):
+@pytest.mark.parametrize("builtin_engine", EXPORTED_MODEL_ENGINES)
+def test_sam_on_a_builtin_engine_matches_sam_on_pytorch(builtin_engine, portrait_rgb):
+    require_engine(builtin_engine)
+    xfail_refused("sam", builtin_engine)
     from sam import SamTransform
 
     reference, exported = (
         loaded_element(SamTransform, SAM_MODEL, engine_name).forward(portrait_rgb)
-        for engine_name in ENGINE_NAMES
+        for engine_name in (ENGINE_NAMES[0], builtin_engine)
     )
 
     assert len(exported["masks"]) == len(reference["masks"])
@@ -307,9 +328,10 @@ def assert_same_boxes(exported, reference):
     return exported_order, reference_order
 
 
-@pytest.mark.parametrize("builtin_engine", EXPORTED_MODEL_ENGINE_PACKAGES)
+@pytest.mark.parametrize("builtin_engine", EXPORTED_MODEL_ENGINES)
 def test_yolo_on_a_builtin_engine_matches_yolo_on_pytorch(builtin_engine, portrait_rgb):
     require_engine(builtin_engine)
+    xfail_refused("yolo", builtin_engine)
     reference, exported = detection_results(portrait_rgb, builtin_engine)
 
     assert_same_boxes(exported, reference)
@@ -317,11 +339,12 @@ def test_yolo_on_a_builtin_engine_matches_yolo_on_pytorch(builtin_engine, portra
     assert exported.masks is None
 
 
-@pytest.mark.parametrize("builtin_engine", EXPORTED_MODEL_ENGINE_PACKAGES)
+@pytest.mark.parametrize("builtin_engine", EXPORTED_MODEL_ENGINES)
 def test_yolo_pose_on_a_builtin_engine_matches_yolo_pose_on_pytorch(
     builtin_engine, portrait_rgb
 ):
     require_engine(builtin_engine)
+    xfail_refused("pose", builtin_engine)
     reference, exported = pose_results(portrait_rgb, builtin_engine)
 
     exported_order, reference_order = assert_same_boxes(exported, reference)
@@ -359,10 +382,15 @@ def zero_shot_detector(model_name, engine_name):
     return element
 
 
-def test_zero_shot_on_onnx_matches_zero_shot_on_pytorch(portrait_rgb):
+@pytest.mark.parametrize("builtin_engine", EXPORTED_MODEL_ENGINES)
+def test_zero_shot_on_a_builtin_engine_matches_zero_shot_on_pytorch(
+    builtin_engine, portrait_rgb
+):
+    require_engine(builtin_engine)
+    xfail_refused("zero_shot", builtin_engine)
     reference, exported = (
         zero_shot_detector(OWL_MODEL, engine_name).do_forward(portrait_rgb)
-        for engine_name in ENGINE_NAMES
+        for engine_name in (ENGINE_NAMES[0], builtin_engine)
     )
 
     assert reference["boxes"]

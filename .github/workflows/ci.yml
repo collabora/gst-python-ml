@@ -32,6 +32,7 @@ jobs:
         run: |
           pip install pytest numpy
           pytest tests/test_g2g_backend.py -q
+          pytest tests/test_support_matrix.py -q
 
   # each leg installs one engine's extra so their pins never have to agree
   engines:
