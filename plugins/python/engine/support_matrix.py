@@ -47,6 +47,80 @@ ENGINE_PACKAGES = {
     "jax": "keras_hub",
     "llamacpp": "llama_cpp",
     "mlx": "mlx_lm",
+    "rknn": "rknnlite.api",
+    "drpai": "drpai_runtime",
+    "vart": "runner",
+}
+# the devices each engine's do_set_device takes, its default first
+ENGINE_DEVICES = {
+    "pytorch": ("cpu", "cuda"),
+    "onnx": ("cpu", "cuda", "tensorrt", "rocm", "migraphx", "npu", "coreml"),
+    "openvino": ("cpu", "gpu", "npu"),
+    "tvm": ("cpu", "cuda"),
+    "tensorflow": ("cpu", "cuda"),
+    "tflite": ("cpu",),
+    "ncnn": ("cpu", "vulkan"),
+    "executorch": ("cpu", "xnnpack", "qnn", "coreml", "mps"),
+    "iree": ("cpu", "cuda", "rocm", "vulkan", "metal"),
+    "tinygrad": ("cpu", "cuda"),
+    "migraphx": ("cpu", "gpu"),
+    "jax": ("cpu", "gpu", "tpu"),
+    "llamacpp": ("cpu", "cuda", "metal"),
+    "mlx": ("gpu", "cpu"),
+    "rknn": ("npu",),
+    "drpai": ("npu",),
+    "vart": ("npu", "npu-only"),
+}
+# the pyproject extras that install each engine, cpu first
+ENGINE_EXTRAS = {
+    "pytorch": (),
+    "onnx": ("onnx", "onnx-gpu"),
+    "openvino": ("openvino",),
+    "tvm": ("tvm",),
+    "tensorflow": ("tensorflow",),
+    "tflite": ("litert",),
+    "ncnn": ("ncnn",),
+    "executorch": ("executorch",),
+    "iree": ("iree",),
+    "tinygrad": ("tinygrad",),
+    "migraphx": (),
+    "jax": ("jax-cpu", "jax-gpu", "jax-tpu"),
+    "llamacpp": ("llamacpp",),
+    "mlx": ("mlx-cpu", "mlx"),
+    "rknn": ("rknn",),
+    "drpai": (),
+    "vart": (),
+}
+DIRECTORY_INPUT = "directory"
+# the engines whose do_load_model takes a file with this suffix, converting it when needed
+FILE_ENGINES = {
+    ".onnx": (
+        "onnx",
+        "openvino",
+        "tvm",
+        "tensorflow",
+        "tflite",
+        "ncnn",
+        "iree",
+        "tinygrad",
+        "migraphx",
+    ),
+    ".pte": ("executorch",),
+    ".gguf": ("llamacpp",),
+    ".tflite": ("tflite",),
+    ".vmfb": ("iree",),
+    ".param": ("ncnn",),
+    ".bin": ("openvino", "ncnn"),
+    ".xml": ("openvino",),
+    ".rknn": ("rknn",),
+    ".so": ("tvm",),
+    ".tar": ("tvm",),
+    ".safetensors": ("mlx",),
+    ".npz": ("mlx",),
+    ".msgpack": ("jax",),
+    ".keras": ("tensorflow",),
+    ".h5": ("tensorflow",),
+    DIRECTORY_INPUT: ("tensorflow", "jax", "drpai", "vart"),
 }
 SIGLIP_MODEL = "google/siglip-base-patch16-224"
 DINOV2_MODEL = "facebook/dinov2-small"
@@ -93,6 +167,42 @@ REFUSALS = {
     ("zero_shot", "ncnn"): OWLV2_MEMORY,
     ("zero_shot", "migraphx"): OWLV2_MEMORY,
 }
+# the Hugging Face architectures the elements load, with the tasks they serve
+TASK_ARCHITECTURES = {
+    "DepthAnythingForDepthEstimation": ("depth",),
+    "CLIPModel": ("clip", "embedding"),
+    "SiglipModel": ("clip", "embedding"),
+    "Dinov2Model": ("embedding",),
+    "Sam2VideoModel": ("sam",),
+    "Owlv2ForObjectDetection": ("zero_shot",),
+    "VideoMAEForVideoClassification": ("action",),
+    "GroundingDinoForObjectDetection": ("zero_shot",),
+    "Idefics3ForConditionalGeneration": ("vlm",),
+    "LlavaForConditionalGeneration": ("vlm",),
+    "Qwen2_5_VLForConditionalGeneration": ("vlm",),
+    "ClapModel": ("clap",),
+    "MarianMTModel": ("translate",),
+    "VisionEncoderDecoderModel": ("ocr",),
+}
+# architectures of a ported task that only pytorch runs, with the reason
+PYTORCH_ONLY_ARCHITECTURES = {
+    "GroundingDinoForObjectDetection": "its image encoder takes the text",
+}
+ULTRALYTICS_NAME_PATTERN = r"yolov?\d+[nsmlx](?P<variant>-[a-z]+)?(\.pt)?"
+ULTRALYTICS_VARIANT_TASKS = {
+    None: "yolo",
+    "-pose": "pose",
+    "-seg": "yolo",
+    "-obb": "yolo",
+    "-cls": "yolo",
+}
+UNTESTED_ULTRALYTICS_VARIANTS = ("-seg", "-obb", "-cls")
+UNTESTED_VARIANT_NOTE = "variant not in the parity tests"
+OPTICAL_FLOW_MODELS = ("raft_small", "raft_large")
+CLASSIFIER_TASK = "classifier"
+ANOMALY_TASK = "anomaly"
+OPTICAL_FLOW_TASK = "optical_flow"
+SUPERRES_TASK = "superres"
 RUNS = "yes"
 NOT_PORTED = "no"
 TABLE_ENGINES = ("pytorch",) + EXPORTED_MODEL_ENGINES + ("jax", "llamacpp", "mlx")
