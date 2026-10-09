@@ -46,7 +46,7 @@ ENGINE_PACKAGES = {
     # jax runs a keras-hub preset instead of the export
     "jax": "keras_hub",
     "llamacpp": "llama_cpp",
-    "mlx": "mlx_lm",
+    "mlx": "mlx.core",
     "rknn": "rknnlite.api",
     "drpai": "drpai_runtime",
     "vart": "runner",

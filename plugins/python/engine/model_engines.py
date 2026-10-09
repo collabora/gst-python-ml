@@ -264,10 +264,17 @@ def apple_silicon():
     )
 
 
+JAX_BACKEND_LOGGER = "jax._src.xla_bridge"
+
+
 # jax raises when it has no backend for the platform
 def jax_has_platform(platform_name):
+    import logging
+
     import jax
 
+    # a cpu-only jaxlib warns about the nvidia gpu on every probe
+    logging.getLogger(JAX_BACKEND_LOGGER).setLevel(logging.ERROR)
     return bool(jax.devices(platform_name))
 
 

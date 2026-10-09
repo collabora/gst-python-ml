@@ -1057,7 +1057,7 @@ python pyml-launch.py filesrc location=data/people.mp4 ! decodebin name=d \
 ```
 python pyml-launch.py filesrc location=data/people.mp4 ! decodebin name=d \
   d. ! queue ! videoconvert ! videoscale ! "video/x-raw,width=640,height=480" \
-  ! pyml_optical_flow model-name=raft-small device=cuda visualize=true \
+  ! pyml_optical_flow model-name=raft_small device=cuda visualize=true \
   ! videoconvert ! autovideosink sync=false
 ```
 
