@@ -46,7 +46,7 @@ Write the pipeline in `gst-launch` format and run it with `pyml-launch`, with me
   - PyTorch by default
   - ONNX Runtime, TensorRT through ONNX Runtime, OpenVINO, LiteRT, TensorFlow
   - Apache TVM, tinygrad, Apple MLX, ExecuTorch, llama.cpp, JAX
-  - MiGraphX, IREE, NCNN, Renesas DRP-AI
+  - MiGraphX, IREE, NCNN, Renesas DRP-AI, Rockchip RKNN, AMD VART
   - The task elements export their model once and run it on any engine with
     `engine-name=`, and on any accelerator with `device=`
   - CI runs every engine that installs from PyPI on the CPU and checks its
