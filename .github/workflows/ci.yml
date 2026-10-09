@@ -47,17 +47,17 @@ jobs:
           # optimum-intel 1.x has no nncf, pip picks it to keep a newer transformers
           - engine: openvino
             extra: openvino,onnx
-            pins: optimum-intel>=2.2
+            pins: "'optimum-intel>=2.2'"
             exported-models: true
           # the tensorflow pins are the ones the ultralytics export asks for
           - engine: tensorflow
             extra: tensorflow,onnx
-            pins: tensorflow<=2.19 tf-keras<=2.19
+            pins: "'tensorflow<=2.19' 'tf-keras<=2.19'"
             exported-models: true
           # the yolo export needs tensorflow
           - engine: tflite
             extra: tensorflow,litert,onnx
-            pins: tensorflow<=2.19 tf-keras<=2.19
+            pins: "'tensorflow<=2.19' 'tf-keras<=2.19'"
             exported-models: true
           - engine: ncnn
             extra: ncnn,onnx
