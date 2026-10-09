@@ -19,6 +19,7 @@
 import os
 import numpy as np
 import openvino as ov
+import openvino.properties.hint as hints
 
 from .hub_causal_lm import is_hub_causal_lm, is_hub_whisper
 from .ml_engine import MLEngine, TORCHVISION_WEIGHTS
@@ -93,7 +94,13 @@ class OpenVinoEngine(MLEngine):
                     f"got: {model_name}"
                 )
 
-        self.compiled_model = self.core.compile_model(self.ov_model, self.device)
+        config = {}
+        if self.device == "CPU":
+            # the cpu plugin otherwise runs bf16 on avx512_bf16 and amx cpus
+            config[hints.inference_precision] = ov.Type.f32
+        self.compiled_model = self.core.compile_model(
+            self.ov_model, self.device, config
+        )
         self.logger.info(f"Model compiled on {self.device}")
 
         return True
