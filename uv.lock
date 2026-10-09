@@ -1735,6 +1735,7 @@ superres = [
     { name = "spandrel" },
 ]
 tensorflow = [
+    { name = "ai-edge-litert" },
     { name = "onnx-graphsurgeon" },
     { name = "onnx2tf" },
     { name = "sng4onnx" },
@@ -1770,6 +1771,7 @@ test = [
 requires-dist = [
     { name = "accelerate", specifier = ">=1.13.0" },
     { name = "ai-edge-litert", marker = "extra == 'litert'" },
+    { name = "ai-edge-litert", marker = "extra == 'tensorflow'" },
     { name = "apache-tvm", marker = "extra == 'tvm'" },
     { name = "bitsandbytes", marker = "extra == 'llm'", specifier = ">=0.49.2" },
     { name = "confluent-kafka", marker = "extra == 'kafka'" },

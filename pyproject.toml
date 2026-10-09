@@ -141,6 +141,7 @@ tensorflow = [
     # onnx2tf imports these without declaring them
     "sng4onnx>=1.0.1",
     "onnx_graphsurgeon>=0.3.26",
+    "ai-edge-litert",
 ]
 litert = [
     "ai-edge-litert",
