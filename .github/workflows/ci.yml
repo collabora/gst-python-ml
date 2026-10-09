@@ -119,6 +119,7 @@ jobs:
         env:
           PYML_REQUIRE_ENGINE: ${{ matrix.engine }}
           YOLO_AUTOINSTALL: "false"
+          # tensorflow's onednn kernels segfault the depth model on the runner
           TF_ENABLE_ONEDNN_OPTS: "0"
         run: |
           .venv/bin/python -m pytest tests/test_engines.py -q -k "${{ matrix.engine }}"
@@ -131,6 +132,7 @@ jobs:
         env:
           PYML_REQUIRE_ENGINE: ${{ matrix.engine }}
           YOLO_AUTOINSTALL: "false"
+          # tensorflow's onednn kernels segfault the depth model on the runner
           TF_ENABLE_ONEDNN_OPTS: "0"
         run: .venv/bin/python -m pytest tests/test_exported_models.py -q -k "${{ matrix.engine }}"
 
