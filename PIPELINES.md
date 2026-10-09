@@ -185,7 +185,9 @@ and `pyml_zeroshotdetector` take the Hugging Face or ultralytics model name
 with any of `engine-name=onnx`, `openvino`, `tvm`, `tensorflow`, `tflite`,
 `ncnn`, `executorch`, `iree`, `tinygrad` or `migraphx`, and `pyml_depth` and
 `pyml_clip` also `jax`. The first run exports the model to
-`~/.cache/gst-python-ml/onnx/`, and an engine that does not read ONNX converts
+`~/.cache/gst-python-ml/onnx/` under a name that carries the torch, torchvision
+and transformers versions (ultralytics for YOLO), so a library upgrade exports
+again, and an engine that does not read ONNX converts
 it once more into `~/.cache/gst-python-ml/<engine>/`. ExecuTorch exports a
 `.pte` from the torch graph instead, and jax loads a keras-hub preset.
 `track=True` needs the PyTorch engine. `pyml_whispertranscribe` runs on onnx and

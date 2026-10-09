@@ -27,6 +27,8 @@ GRAPH_INPUT_NAME = "image"
 GRAPH_OUTPUT_NAME = "output"
 ANY_FRAME_SHAPE = (480, 640, 3)
 UINT8_MAX = 255
+# the exported graph follows the libraries that build it
+EXPORT_LIBRARIES = ("torch", "torchvision", "transformers")
 # large enough to fold a vision transformer's position embeddings
 CONSTANT_FOLDING_INPUT_SIZE_LIMIT = 1 << 20
 RESIZE_POLICY_ATTRIBUTE = "keep_aspect_ratio_policy"
@@ -297,11 +299,19 @@ def replace_patch_convs(module):
             replace_patch_convs(child)
 
 
+def versioned_stem(file_stem, libraries=EXPORT_LIBRARIES):
+    from importlib.metadata import version
+
+    # a local tag such as +cpu is the same exporter
+    tags = (f"{library}{version(library).split('+')[0]}" for library in libraries)
+    return "-".join((file_stem, *tags))
+
+
 def cached_onnx_export(file_stem, build_graph, **export_options):
     import onnxscript.optimizer
     import torch
 
-    path = ONNX_EXPORT_CACHE / f"{file_stem}.onnx"
+    path = ONNX_EXPORT_CACHE / f"{versioned_stem(file_stem)}.onnx"
     if path.exists():
         return str(path)
     ONNX_EXPORT_CACHE.mkdir(parents=True, exist_ok=True)
@@ -339,7 +349,7 @@ def cached_executorch_export(file_stem, build_graph, **export_options):
     )
     from executorch.exir import to_edge_transform_and_lower
 
-    path = executorch_export_path(file_stem)
+    path = executorch_export_path(versioned_stem(file_stem))
     if path.exists():
         return str(path)
     EXECUTORCH_EXPORT_CACHE.mkdir(parents=True, exist_ok=True)

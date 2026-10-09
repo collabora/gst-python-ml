@@ -21,13 +21,14 @@ import time
 from pathlib import Path
 
 from .engine_factory import EngineFactory
-from .onnx_export import ONNX_EXPORT_CACHE, executorch_export_path
+from .onnx_export import ONNX_EXPORT_CACHE, executorch_export_path, versioned_stem
 from .pytorch_engine import PyTorchEngine
 
 EXPORTED_INPUT_SIZE = 640
 EXPORTED_INPUT_SHAPE = (EXPORTED_INPUT_SIZE, EXPORTED_INPUT_SIZE)
 # an interrupted export must not reach the cache
 EXPORT_WORK_DIRECTORY = ONNX_EXPORT_CACHE / "ultralytics"
+YOLO_EXPORT_LIBRARIES = ("torch", "ultralytics")
 BATCH_DIMENSIONS = 4
 ULTRALYTICS_EXECUTORCH_FILE = "model.pte"
 # the ultralytics defaults the pytorch pose engine runs with
@@ -44,7 +45,9 @@ def exported_yolo_path(model_name):
     import torch
     from ultralytics import YOLO
 
-    path = ONNX_EXPORT_CACHE / f"{model_name}.onnx"
+    path = (
+        ONNX_EXPORT_CACHE / f"{versioned_stem(model_name, YOLO_EXPORT_LIBRARIES)}.onnx"
+    )
     if path.exists():
         return str(path)
     EXPORT_WORK_DIRECTORY.mkdir(parents=True, exist_ok=True)
@@ -61,7 +64,7 @@ def exported_yolo_executorch_path(model_name):
     import torch
     from ultralytics import YOLO
 
-    path = executorch_export_path(model_name)
+    path = executorch_export_path(versioned_stem(model_name, YOLO_EXPORT_LIBRARIES))
     if path.exists():
         return str(path)
     path.parent.mkdir(parents=True, exist_ok=True)
