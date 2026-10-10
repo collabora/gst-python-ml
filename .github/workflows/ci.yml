@@ -74,7 +74,9 @@ jobs:
           export PYTHONPATH="${VENV_SITE};${GI_SITE};${WS}/plugins/python"
           # the gstreamer wheels set GST_PLUGIN_PATH_1_0, which hides GST_PLUGIN_PATH
           export GST_PLUGIN_PATH_1_0="${WS}/plugins"
-          GST_DEBUG=pyplugin:5 gst-inspect-1.0 python
+          # the import check above cached a registry without the plugins dir
+          rm -rf .venv/Temp/gstreamer-1.0
+          GST_DEBUG=2,pyplugin:5 gst-inspect-1.0 python
           gst-inspect-1.0 pyml_objectdetector
 
       - name: ONNX pipeline smoke test
@@ -86,6 +88,7 @@ jobs:
           GI_SITE=$(python -c "import os; print(os.environ['GST_PYTHONPATH_1_0'])")
           export PYTHONPATH="${VENV_SITE};${GI_SITE};${WS}/plugins/python"
           export GST_PLUGIN_PATH_1_0="${WS}/plugins"
+          rm -rf .venv/Temp/gstreamer-1.0
           python -c "from ultralytics import YOLO; YOLO('yolo11n.pt').export(format='onnx')"
           gst-launch-1.0 videotestsrc num-buffers=2 \
             ! "video/x-raw,format=RGB,width=640,height=640" \
