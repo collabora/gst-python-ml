@@ -39,25 +39,34 @@ sudo dnf install -y python3-pip \
 
 #### Windows
 
-1. Install the runtime and development MSVC x86_64 installers from the
-   [GStreamer site](https://gstreamer.freedesktop.org/download/#windows). The default path is `C:\gstreamer\1.0\msvc_x86_64`.
+1. Install Python 3.12 or later.
 
-2. Set the environment variables:
+2. Install GStreamer and its Python bindings from the GStreamer project's
+   wheels, in the same venv as this package:
 
 ```powershell
-# Add GStreamer to PATH
-[Environment]::SetEnvironmentVariable("PATH", "C:\gstreamer\1.0\msvc_x86_64\bin;" + $env:PATH, "User")
-
-# Point GStreamer at your plugin directory
-[Environment]::SetEnvironmentVariable("GST_PLUGIN_PATH", "D:\Workspace\gst-python-ml\plugins", "User")
+pip install "gstreamer-meta[cli]"
 ```
 
-3. Install Python 3.12 or later.
+   The venv's `python`, `gst-launch-1.0` and `gst-inspect-1.0` find the
+   GStreamer libraries on their own.
 
-4. Install PyGObject, through conda or the [gstreamer-python](https://pypi.org/project/gstreamer-python/) wheel:
+3. Point GStreamer at the plugin directory. The wheels set
+   `GST_PLUGIN_PATH_1_0`, which hides `GST_PLUGIN_PATH`, so use that name. The
+   Python plugin loader embeds the base interpreter, not the venv, so it also
+   needs `PYTHONPATH` to find the venv packages, the bundled `gi` and the
+   plugins:
 
 ```powershell
-pip install gstreamer-python
+$venv = "D:\Workspace\gst-python-ml\.venv"
+$env:GST_PLUGIN_PATH_1_0 = "D:\Workspace\gst-python-ml\plugins"
+$env:PYTHONPATH = "$venv\Lib\site-packages;$venv\Lib\site-packages\gstreamer_python\Lib\site-packages;D:\Workspace\gst-python-ml\plugins\python"
+```
+
+4. Check the elements load:
+
+```powershell
+gst-inspect-1.0 pyml_objectdetector
 ```
 
 5. For CUDA, install the [CUDA Toolkit](https://developer.nvidia.com/cuda-downloads) matching your driver, then the CUDA PyTorch:
