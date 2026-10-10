@@ -17,8 +17,8 @@ classifiers = [
     "Operating System :: OS Independent",
 ]
 dependencies = [
-    "pygobject",
-    "pycairo",
+    "pygobject; sys_platform != 'win32'",
+    "pycairo; sys_platform != 'win32'",
     "numpy",
     "scipy",
     "opencv-python-headless>=4.13.0; python_version >= '3.14'",

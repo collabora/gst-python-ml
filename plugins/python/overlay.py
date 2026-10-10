@@ -48,15 +48,15 @@ try:
     gi.require_version("Gst", "1.0")
     gi.require_version("GstBase", "1.0")
     gi.require_version("GstVideo", "1.0")
-    gi.require_version("GstGL", "1.0")  # For OpenGL support
-    gi.require_version("GstVulkan", "1.0")  # Add Vulkan support
-    from gi.repository import (
-        Gst,
-        GstBase,
-        GstVideo,
-        GstGL,
-        GstVulkan,
-    )  # noqa: E402
+    gi.require_version("GstGL", "1.0")
+    from gi.repository import Gst, GstBase, GstVideo, GstGL  # noqa: E402
+
+    try:
+        gi.require_version("GstVulkan", "1.0")
+        from gi.repository import GstVulkan
+    except (ValueError, ImportError):
+        # brew's gstreamer ships no vulkan typelib
+        GstVulkan = None
     from backend import GObject, post_error
     from log.logger_factory import LoggerFactory
 except ImportError as e:
@@ -64,6 +64,11 @@ except ImportError as e:
     GlobalLogger().warning(
         f"The 'pyml_overlay' element will not be available. Error: {e}"
     )
+
+
+def is_vulkan_memory(memory):
+    return GstVulkan is not None and GstVulkan.is_vulkan_memory(memory)
+
 
 # Support CPU, OpenGL, and Vulkan buffers
 VIDEO_FORMATS = "video/x-raw, format=(string){ RGBA, ARGB, BGRA, ABGR }; video/x-raw(memory:GLMemory), format=(string){ RGBA, ARGB, BGRA, ABGR }; video/x-raw(memory:VulkanMemory), format=(string){ RGBA, ARGB, BGRA, ABGR }"
@@ -322,7 +327,7 @@ class Overlay(GstBase.BaseTransform):
             if buf.n_memory() > 0:
                 memory = buf.peek_memory(0)
                 is_gl_buffer = GstGL.is_gl_memory(memory)
-                is_vulkan_buffer = GstVulkan.is_vulkan_memory(memory)
+                is_vulkan_buffer = is_vulkan_memory(memory)
             else:
                 self.logger.warning(
                     "Buffer has no memory objects, falling back to Cairo"
@@ -396,7 +401,7 @@ class Overlay(GstBase.BaseTransform):
 
         # Handle rendering based on the graphics type
         if self.graphics_type == GraphicsType.VULKAN:
-            if not GstVulkan.is_vulkan_memory(buf.peek_memory(0)):
+            if not is_vulkan_memory(buf.peek_memory(0)):
                 self.logger.error(
                     "Buffer is not in VulkanMemory, cannot proceed with Vulkan overlay"
                 )
