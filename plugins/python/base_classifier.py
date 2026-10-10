@@ -17,7 +17,6 @@
 # Boston, MA 02110-1301, USA.
 
 
-from utils.runtime_utils import runtime_check_gstreamer_version
 from video_transform import VideoTransform
 
 from backend import analytics
@@ -30,7 +29,6 @@ class BaseClassifier(VideoTransform):
 
     def __init__(self):
         super().__init__()
-        runtime_check_gstreamer_version()
         self.logger.info("BaseClassifier initialized.")
 
     def do_forward(self, frame):

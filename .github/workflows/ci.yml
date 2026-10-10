@@ -183,12 +183,7 @@ jobs:
               brew install gstreamer cairo pkg-config pygobject3 gobject-introspection
               echo "DYLD_LIBRARY_PATH=$(brew --prefix)/lib:$DYLD_LIBRARY_PATH" >> $GITHUB_ENV
               echo "GI_TYPELIB_PATH=$(brew --prefix)/lib/girepository-1.0" >> $GITHUB_ENV
-          - os: windows-latest
-            gst-install: |
-              choco install gstreamer gstreamer-devel --yes
-              "C:\gstreamer\1.0\msvc_x86_64\bin" >> $env:GITHUB_PATH
-              "GST_PLUGIN_PATH=C:\gstreamer\1.0\msvc_x86_64\lib\gstreamer-1.0" >> $env:GITHUB_ENV
-              "PKG_CONFIG_PATH=C:\gstreamer\1.0\msvc_x86_64\lib\pkgconfig" >> $env:GITHUB_ENV
+          # windows gets gstreamer from the gstreamer-meta wheels in the venv step
 
     runs-on: ${{ matrix.os }}
     steps:
@@ -200,16 +195,16 @@ jobs:
           python-version: ${{ matrix.python-version }}
 
       - name: Install GStreamer
+        if: runner.os != 'Windows'
         run: ${{ matrix.gst-install }}
 
       - name: Create venv and install CPU dependencies
         shell: bash
-        # pygobject builds from source and choco gstreamer-devel ships no pkg-config
-        continue-on-error: ${{ matrix.os == 'windows-latest' }}
         run: |
           ${{ matrix.venv-python || 'python' }} -m venv --system-site-packages .venv
           if [[ "$RUNNER_OS" == "Windows" ]]; then
             source .venv/Scripts/activate
+            pip install "gstreamer-meta[cli]"
           else
             source .venv/bin/activate
           fi
@@ -217,7 +212,6 @@ jobs:
 
       - name: Verify core imports
         shell: bash
-        continue-on-error: true
         run: |
           if [[ "$RUNNER_OS" == "Windows" ]]; then
             source .venv/Scripts/activate
@@ -357,31 +351,33 @@ jobs:
             ! pyml_objectdetector engine-name=onnx model-name=yolo11n.onnx device=cpu input-format=nchw post-process=anchor_free \
             ! fakesink
 
+      - name: Check GStreamer plugin discovery (Windows)
+        if: runner.os == 'Windows'
+        shell: bash
+        run: |
+          source .venv/Scripts/activate
+          WS=$(pwd -W)
+          VENV_SITE=$(python -c "import sysconfig; print(sysconfig.get_paths()['purelib'])")
+          GI_SITE=$(python -c "import os; print(os.environ['GST_PYTHONPATH_1_0'])")
+          # the python plugin loader embeds the base interpreter, which sees none of the venv
+          echo "PYTHONPATH=${VENV_SITE};${GI_SITE};${WS}/plugins/python" >> $GITHUB_ENV
+          # the gstreamer wheels set GST_PLUGIN_PATH_1_0, which hides GST_PLUGIN_PATH
+          echo "GST_PLUGIN_PATH_1_0=${WS}/plugins" >> $GITHUB_ENV
+          export PYTHONPATH="${VENV_SITE};${GI_SITE};${WS}/plugins/python"
+          export GST_PLUGIN_PATH_1_0="${WS}/plugins"
+          # the import check above cached a registry without the plugins dir
+          rm -rf .venv/Temp/gstreamer-1.0
+          gst-inspect-1.0 python
+          gst-inspect-1.0 pyml_objectdetector
+
       - name: ONNX pipeline smoke test (Windows)
         if: runner.os == 'Windows'
-        continue-on-error: true
         shell: bash
         run: |
           source .venv/Scripts/activate
           pip install onnxruntime
-          SITE_PKGS=$(python -c "import site; print(site.getsitepackages()[0])")
-          # Find GStreamer install location
-          GST_BIN=$(find /c/gstreamer -name "gst-launch-1.0.exe" 2>/dev/null | head -1 | xargs dirname)
-          if [[ -z "$GST_BIN" ]]; then
-            echo "ERROR: gst-launch-1.0.exe not found under /c/gstreamer"
-            find /c/gstreamer -type f -name "gst-*" 2>/dev/null || echo "No gst binaries found"
-            ls /c/gstreamer/ 2>/dev/null || echo "/c/gstreamer does not exist"
-            exit 1
-          fi
-          echo "Found GStreamer at: $GST_BIN"
-          export PATH="${GST_BIN}:$PATH"
-          GST_LIB=$(dirname "$GST_BIN")/lib/gstreamer-1.0
-          export GST_PLUGIN_PATH="${{ github.workspace }}/plugins;${GST_LIB}"
-          export PYTHONPATH="${SITE_PKGS};${{ github.workspace }}/plugins/python;$PYTHONPATH"
-          # Export YOLO model to ONNX
           python -c "from ultralytics import YOLO; YOLO('yolo11n.pt').export(format='onnx')"
-          # Run 2-frame smoke test with synthetic source (avoids codec deps)
-          gst-launch-1.0.exe videotestsrc num-buffers=2 \
+          gst-launch-1.0 videotestsrc num-buffers=2 \
             ! "video/x-raw,format=RGB,width=640,height=640" \
             ! pyml_objectdetector engine-name=onnx model-name=yolo11n.onnx device=cpu input-format=nchw post-process=anchor_free \
             ! fakesink

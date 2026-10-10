@@ -30,7 +30,6 @@ try:
     from gi.repository import Gst  # noqa: E402
 
     from log.logger_factory import LoggerFactory  # noqa: E402
-    from utils.runtime_utils import runtime_check_gstreamer_version  # noqa: E402
     from backend import analytics, GObject  # noqa: E402
 except ImportError as e:
     CAN_REGISTER_ELEMENT = False
@@ -116,7 +115,6 @@ class KafkaSink(Gst.Element):
     def __init__(self):
         super().__init__()
         self.logger = LoggerFactory.get(LoggerFactory.LOGGER_TYPE_GST)
-        runtime_check_gstreamer_version()
 
         self.sinkpad = Gst.Pad.new_from_template(
             Gst.PadTemplate.new(
