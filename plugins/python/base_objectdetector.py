@@ -16,7 +16,6 @@
 # Free Software Foundation, Inc., 51 Franklin Street, Fifth Floor,
 # Boston, MA 02110-1301, USA.
 
-from utils.runtime_utils import runtime_check_gstreamer_version
 from video_transform import VideoTransform
 from utils.format_converter import FormatConverter
 from backend import analytics, GObject
@@ -35,7 +34,6 @@ class BaseObjectDetector(VideoTransform, ObjectDetectorTask):
 
     def __init__(self):
         super().__init__()
-        runtime_check_gstreamer_version()
         self.framerate_num = 30
         self.framerate_denom = 1
         self.format_converter = FormatConverter()
