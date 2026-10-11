@@ -22,7 +22,7 @@ LOG_DIR = BASE_DIR / "tests" / "logs"
 
 # Seconds to let a pipeline run. Overridable because a local LLM generating a
 # few hundred tokens takes minutes, not seconds.
-PIPELINE_TIMEOUT = int(os.environ.get("PIPELINE_TIMEOUT", "30"))
+PIPELINE_TIMEOUT = int(os.environ.get("PIPELINE_TIMEOUT", "120"))
 
 # Only these mean the pipeline broke. Warnings are not fatal: plugins unrelated
 # to the pipeline warn during setup and would fail a run that went fine.
