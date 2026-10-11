@@ -44,3 +44,12 @@ def to_format(rgb, fmt):
         return np.roll(bgra, 1, axis=-1)
     else:
         return rgb
+
+
+# the buffer keeps its alpha channel, the write fills the colour channels only
+def to_device_format(rgb, fmt):
+    from utils.format_converter import packed_format_layout
+
+    _, rgb_slice = packed_format_layout(fmt)
+    reversed_channels = (rgb_slice[-1].step or 1) < 0
+    return rgb.flip(-1) if reversed_channels else rgb

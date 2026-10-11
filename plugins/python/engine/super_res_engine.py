@@ -121,28 +121,32 @@ class SuperResEngine(PyTorchEngine):
         import numpy as np
         import torch
 
+        if torch.is_tensor(frames):
+            return self._upscale(frames.to(self.device))
         is_batch = isinstance(frames, np.ndarray) and frames.ndim == 4
         batch = frames if is_batch else frames[np.newaxis]
-
-        results = []
-        for frame in batch:
-            tensor = (
-                torch.from_numpy(np.array(frame, dtype=np.uint8, copy=True))
-                .to(self.device)
-                .permute(2, 0, 1)
-                .unsqueeze(0)
-                .float()
-                .div(255)
+        results = [
+            self._upscale(
+                torch.from_numpy(np.array(frame, dtype=np.uint8, copy=True)).to(
+                    self.device
+                )
             )
-            with torch.inference_mode():
-                upscaled = self.upsampler(tensor)
-            results.append(
-                upscaled.squeeze(0)
-                .permute(1, 2, 0)
-                .clamp(0, 1)
-                .mul(255)
-                .to(torch.uint8)
-                .cpu()
-                .numpy()
-            )
+            .cpu()
+            .numpy()
+            for frame in batch
+        ]
         return results if is_batch else results[0]
+
+    def _upscale(self, frame):
+        import torch
+
+        tensor = frame.permute(2, 0, 1).unsqueeze(0).float().div(UINT8_MAX)
+        with torch.inference_mode():
+            upscaled = self.upsampler(tensor)
+        return (
+            upscaled.squeeze(0)
+            .permute(1, 2, 0)
+            .clamp(0, 1)
+            .mul(UINT8_MAX)
+            .to(torch.uint8)
+        )

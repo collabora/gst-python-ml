@@ -123,7 +123,10 @@ the analytics metadata, so it goes after the last element that reads it.
 image processor resizes and normalises the frame on the GPU and the colormap
 frame is written back into the CUDA buffer, with only the uint8 depth blob
 going to the host, about 5 ms a frame less than through system memory. Add
-`cudadownload` after it to save or show the colormap. Every other element
+`cudadownload` after it to save or show the colormap. `pyml_superres` takes
+CUDA memory on the same engine: the frame reaches Real-ESRGAN as a tensor and
+comes back to the frame size with an antialiased bicubic resize on the GPU
+instead of Lanczos, then is written into the CUDA buffer. Every other element
 takes frames in system memory.
 
 Each pytorch element on `device=cuda` runs its inference on a CUDA stream of its
