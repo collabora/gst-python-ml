@@ -29,6 +29,8 @@ GST_CUDA_LIBRARY = "libgstcuda-1.0.so.0"
 CUDA_DRIVER_LIBRARY = "libcuda.so.1"
 
 GST_MAP_READ = 1
+VIDEO_MEMORY = 0
+MAPPED_MEMORY_COUNT = 1
 GST_MAP_WRITE = 2
 # the gi map override drops this flag, hence ctypes
 GST_MAP_CUDA = 1 << 17
@@ -100,12 +102,15 @@ class GstCudaMemory(ctypes.Structure):
 @cache
 def gstreamer_library():
     library = ctypes.CDLL(GSTREAMER_LIBRARY)
-    library.gst_buffer_map.argtypes = [
+    # mapping the whole buffer would merge an appended chunk into host memory
+    library.gst_buffer_map_range.argtypes = [
         ctypes.c_void_p,
+        ctypes.c_uint,
+        ctypes.c_int,
         ctypes.POINTER(GstMapInfo),
         ctypes.c_int,
     ]
-    library.gst_buffer_map.restype = ctypes.c_int
+    library.gst_buffer_map_range.restype = ctypes.c_int
     library.gst_buffer_unmap.argtypes = [ctypes.c_void_p, ctypes.POINTER(GstMapInfo)]
     library.gst_buffer_unmap.restype = None
     return library
@@ -215,10 +220,10 @@ def is_cuda_buffer(buffer):
     # without the typelib the gi map downloads cuda memory to the host
     if gst_cuda is None:
         return False
-    memories = [buffer.peek_memory(index) for index in range(buffer.n_memory())]
-    return bool(memories) and all(
-        gst_cuda.is_cuda_memory(memory) for memory in memories
-    )
+    # an analytics chunk or a blob after the frame is system memory by design
+    if buffer.n_memory() == 0:
+        return False
+    return gst_cuda.is_cuda_memory(buffer.peek_memory(VIDEO_MEMORY))
 
 
 @dataclass
@@ -254,8 +259,12 @@ def map_device_frame(buffer, height, width, channels, writable=False):
     if writable:
         map_flags |= GST_MAP_WRITE
     map_info = GstMapInfo()
-    mapped = gstreamer_library().gst_buffer_map(
-        buffer.__ptr__(), ctypes.byref(map_info), map_flags
+    mapped = gstreamer_library().gst_buffer_map_range(
+        buffer.__ptr__(),
+        VIDEO_MEMORY,
+        MAPPED_MEMORY_COUNT,
+        ctypes.byref(map_info),
+        map_flags,
     )
     if not mapped:
         raise RuntimeError("could not map the cuda memory of the buffer")

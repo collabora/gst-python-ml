@@ -22,6 +22,8 @@ gi.require_version("Gst", "1.0")
 from gi.repository import Gst  # noqa: E402
 
 from log.logger_factory import LoggerFactory  # noqa: E402
+from utils.blobs import BLOB_PREFIX  # noqa: E402
+from utils.metadata import first_memory_with_prefix  # noqa: E402
 from utils.muxed_buffer_processor import MuxedBufferProcessor  # noqa: E402
 from utils.format_converter import FormatConverter, packed_format_layout  # noqa: E402
 from backend.frameio import FrameIO  # noqa: E402
@@ -64,9 +66,11 @@ class GstFrameIO(FrameIO):
             self.keep_mapped(target, processor.map_infos)
 
     def read_device_frame(self, target, source, width, height):
-        if target.n_memory() != MAPPED_MEMORY_COUNT:
+        first_blob = first_memory_with_prefix(target, BLOB_PREFIX)
+        frame_memories = target.n_memory() if first_blob is None else first_blob
+        if frame_memories != MAPPED_MEMORY_COUNT:
             raise ValueError(
-                f"a buffer of {target.n_memory()} cuda memories is a batch, "
+                f"a buffer of {frame_memories} cuda memories is a batch, "
                 "frames in cuda memory are read one per buffer"
             )
         video_format = self.format_converter.get_video_format(target, source)

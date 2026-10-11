@@ -189,3 +189,25 @@ def test_the_tracker_passes_cuda_memory_through():
     pipeline.set_state(Gst.State.NULL)
 
     assert message is not None and message.type == Gst.MessageType.EOS
+
+
+@needs_cuda
+@pytest.mark.parametrize("running_pipeline", [("RGBA", "RGBA")], indirect=True)
+def test_a_chunk_appended_after_the_frame_keeps_the_buffer_on_the_device(
+    running_pipeline,
+):
+    from backend.gst.cuda_memory import is_cuda_buffer
+
+    device_sink = running_pipeline.get_by_name("device_sink")
+    system_sink = running_pipeline.get_by_name("system_sink")
+    device_buffer = pull_buffer(device_sink)
+    system_frame = read_frame(system_sink, pull_buffer(system_sink))
+    chunked = Gst.Buffer.new()
+    chunked.append_memory(device_buffer.peek_memory(0))
+    chunked.append_memory(Gst.Buffer.new_wrapped(b"GST-ANALYTICS:{}").peek_memory(0))
+
+    assert is_cuda_buffer(chunked)
+    device_frame = read_frame(device_sink, chunked)
+    assert device_frame.device.type == "cuda"
+    assert np.array_equal(device_frame.cpu().numpy(), system_frame)
+    frameio.release_frames(chunked)

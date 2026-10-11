@@ -111,7 +111,8 @@ class CairoOverlayGraphics(OverlayGraphics):
         self.surface = None
 
     def draw_bounding_box(self, box):
-        self.context.set_source_rgb(1, 0, 0)
+        # the cairo surface is bgra, red is the third channel
+        self.context.set_source_rgb(0, 0, 1)
         self.context.set_line_width(2.0)
         self.context.rectangle(
             box["x1"], box["y1"], box["x2"] - box["x1"], box["y2"] - box["y1"]
