@@ -147,6 +147,7 @@ NCNN_BATCH_RESHAPE = "ncnn rejects the reshape that indexes the batch"
 NCNN_RANK_5_PERMUTE = "ncnn cannot permute a 5-rank tensor"
 OWLV2_MEMORY = "converting owlv2 runs past 12 GB"
 ONNX2TF_CONVNEXT_SCALE = "onnx2tf scales convnext's layers along the wrong axis"
+ONNX2TF_SEG_BOXES = "onnx2tf multiplies the segmentation boxes along the wrong axis"
 # why an engine refuses a task, keyed by task and engine, with the model when only one model is refused
 REFUSALS = {
     ("depth", "ncnn"): NCNN_BATCH_BROADCAST,
@@ -169,6 +170,9 @@ REFUSALS = {
     ("classifier", "ncnn", "vit_b_16"): NCNN_BATCH_RESHAPE,
     ("classifier", "ncnn", "swin_t"): NCNN_RANK_5_PERMUTE,
     ("embedding", "ncnn", DINOV2_MODEL): NCNN_BATCH_BROADCAST,
+    ("yolo", "tvm", "yolo11n-seg"): "tvm's vm cannot emit the subtract from a constant",
+    ("yolo", "tensorflow", "yolo11n-seg"): ONNX2TF_SEG_BOXES,
+    ("yolo", "tflite", "yolo11n-seg"): ONNX2TF_SEG_BOXES,
     ("action", "ncnn"): NCNN_ONE_FRAME,
     ("action", "executorch"): "executorch's convolution takes 3-d or 4-d input",
     ("superres", "tensorflow"): "onnx2tf slices a shape with a negative size",

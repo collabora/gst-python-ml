@@ -63,42 +63,44 @@ generated from `plugins/python/engine/support_matrix.py`, regenerate it with
 <!-- support matrix start -->
 | task | pytorch | onnx | openvino | tvm | tensorflow | tflite | ncnn | executorch | iree | tinygrad | migraphx | jax | llamacpp | mlx |
 |---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|
-| yolo | yes | yes | yes | yes | yes | yes | yes | yes | yes | yes | yes | no | no | no |
+| yolo | yes | yes | yes | partial [1] | partial [2] | partial [2] | yes | yes | yes | yes | yes | no | no | no |
 | pose | yes | yes | yes | yes | yes | yes | yes | yes | yes | yes | yes | no | no | no |
-| depth | yes | yes | yes | yes | yes | yes | no [1] | yes | yes | yes | yes | yes | no | no |
-| clip | yes | yes | yes | yes | partial [2] | partial [2] | partial [3] | yes | yes | yes | yes | yes | no | no |
+| depth | yes | yes | yes | yes | yes | yes | no [3] | yes | yes | yes | yes | yes | no | no |
+| clip | yes | yes | yes | yes | partial [4] | partial [4] | partial [5] | yes | yes | yes | yes | yes | no | no |
 | anomaly | yes | yes | yes | yes | yes | yes | yes | yes | yes | yes | yes | no | no | no |
-| classifier | yes | yes | yes | yes | partial [4] | partial [4] | partial [5, 6, 7] | yes | yes | partial [8, 9] | partial [10, 11] | no | no | no |
-| embedding | yes | yes | yes | yes | yes | yes | partial [12] | yes | yes | yes | yes | no | no | no |
-| action | yes | yes | yes | yes | yes | yes | no [13] | no [14] | yes | yes | yes | no | no | no |
-| superres | yes | yes | yes | yes | no [15] | no [15] | yes | yes | yes | yes | yes | no | no | no |
-| optical_flow | yes | yes | yes | yes | no [16] | no [16] | no [13] | yes | yes | yes | yes | no | no | no |
-| sam | yes | yes | yes | yes | no [17] | no [17] | no [18] | yes | yes | yes | no [19] | no | no | no |
-| zero_shot | yes | yes | yes | yes | no [20] | no [20] | no [20] | yes | yes | no [21] | no [20] | no | no | no |
+| classifier | yes | yes | yes | yes | partial [6] | partial [6] | partial [7, 8, 9] | yes | yes | partial [10, 11] | partial [12, 13] | no | no | no |
+| embedding | yes | yes | yes | yes | yes | yes | partial [14] | yes | yes | yes | yes | no | no | no |
+| action | yes | yes | yes | yes | yes | yes | no [15] | no [16] | yes | yes | yes | no | no | no |
+| superres | yes | yes | yes | yes | no [17] | no [17] | yes | yes | yes | yes | yes | no | no | no |
+| optical_flow | yes | yes | yes | yes | no [18] | no [18] | no [15] | yes | yes | yes | yes | no | no | no |
+| sam | yes | yes | yes | yes | no [19] | no [19] | no [20] | yes | yes | yes | no [21] | no | no | no |
+| zero_shot | yes | yes | yes | yes | no [22] | no [22] | no [22] | yes | yes | no [23] | no [22] | no | no | no |
 | llm | yes | yes | yes | no | no | no | no | no | no | no | no | no | yes | yes |
 | whisper | yes | yes | yes | no | no | no | no | no | no | no | no | no | no | no |
 
-1. ncnn rejects the broadcast across the batch axis
-2. google/siglip-base-patch16-224: onnx2tf splits a constant vector one off
-3. google/siglip-base-patch16-224: ncnn rejects the reshape that indexes the batch
-4. convnext_tiny: onnx2tf scales convnext's layers along the wrong axis
-5. convnext_tiny: ncnn has no Gather layer
-6. vit_b_16: ncnn rejects the reshape that indexes the batch
-7. swin_t: ncnn cannot permute a 5-rank tensor
-8. convnext_tiny: tinygrad's Gather rejects nested constant indices
-9. swin_t: tinygrad's ScatterND writes into a tensor with other uses
-10. convnext_tiny: migraphx's convnext logits are uncorrelated with onnx's
-11. swin_t: migraphx's swin logits are off by up to 2
-12. facebook/dinov2-small: ncnn rejects the broadcast across the batch axis
-13. ncnn runs one frame at a time
-14. executorch's convolution takes 3-d or 4-d input
-15. onnx2tf slices a shape with a negative size
-16. the onnx2tf raft flow is tens of pixels off
-17. onnx2tf tiles a 4-d tensor with one multiple
-18. ncnn cannot permute a 5-rank tensor
-19. migraphx resizes only nearest and linear
-20. converting owlv2 runs past 12 GB
-21. tinygrad's Gather rejects 2-d constant indices
+1. yolo11n-seg: tvm's vm cannot emit the subtract from a constant
+2. yolo11n-seg: onnx2tf multiplies the segmentation boxes along the wrong axis
+3. ncnn rejects the broadcast across the batch axis
+4. google/siglip-base-patch16-224: onnx2tf splits a constant vector one off
+5. google/siglip-base-patch16-224: ncnn rejects the reshape that indexes the batch
+6. convnext_tiny: onnx2tf scales convnext's layers along the wrong axis
+7. convnext_tiny: ncnn has no Gather layer
+8. vit_b_16: ncnn rejects the reshape that indexes the batch
+9. swin_t: ncnn cannot permute a 5-rank tensor
+10. convnext_tiny: tinygrad's Gather rejects nested constant indices
+11. swin_t: tinygrad's ScatterND writes into a tensor with other uses
+12. convnext_tiny: migraphx's convnext logits are uncorrelated with onnx's
+13. swin_t: migraphx's swin logits are off by up to 2
+14. facebook/dinov2-small: ncnn rejects the broadcast across the batch axis
+15. ncnn runs one frame at a time
+16. executorch's convolution takes 3-d or 4-d input
+17. onnx2tf slices a shape with a negative size
+18. the onnx2tf raft flow is tens of pixels off
+19. onnx2tf tiles a 4-d tensor with one multiple
+20. ncnn cannot permute a 5-rank tensor
+21. migraphx resizes only nearest and linear
+22. converting owlv2 runs past 12 GB
+23. tinygrad's Gather rejects 2-d constant indices
 <!-- support matrix end -->
 
 `pyml-engines` reads the same tables for one model. It takes a Hugging Face id, a

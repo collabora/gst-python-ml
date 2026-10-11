@@ -149,7 +149,8 @@ class ExportedYolo:
         from ultralytics.engine.results import Results
         from ultralytics.utils import ops
 
-        predictions, prototypes = outputs
+        # ncnn returns the two outputs in the other order
+        predictions, prototypes = sorted(outputs, key=np.ndim)
         detections = self._detections(predictions)
         detections[:, :BOX_COLUMNS] = ops.scale_boxes(
             EXPORTED_INPUT_SHAPE, detections[:, :BOX_COLUMNS], frame.shape
