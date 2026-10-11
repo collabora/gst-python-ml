@@ -93,6 +93,7 @@ BENCHMARK_DRIVERS = {
         "clip", "CLIPTransform", call_clip_engine, clip_labels=CLIP_LABELS
     ),
     "anomaly": BenchmarkDriver("anomaly", "AnomalyTransform", call_forward),
+    "classifier": BenchmarkDriver("classifier", "Classifier", call_do_forward),
     "embedding": BenchmarkDriver("embedding", "EmbeddingTransform", call_forward),
     "action": BenchmarkDriver("action", "ActionTransform", call_action_window),
     "superres": BenchmarkDriver(

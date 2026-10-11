@@ -131,6 +131,7 @@ TASK_ENGINES = {
     "depth": EXPORTED_MODEL_ENGINES + ("jax",),
     "clip": EXPORTED_MODEL_ENGINES + ("jax",),
     "anomaly": EXPORTED_MODEL_ENGINES,
+    "classifier": EXPORTED_MODEL_ENGINES,
     "embedding": EXPORTED_MODEL_ENGINES,
     "action": EXPORTED_MODEL_ENGINES,
     "superres": EXPORTED_MODEL_ENGINES,
@@ -149,6 +150,12 @@ REFUSALS = {
     ("clip", "tensorflow", SIGLIP_MODEL): "onnx2tf splits a constant vector one off",
     ("clip", "tflite", SIGLIP_MODEL): "onnx2tf splits a constant vector one off",
     ("clip", "ncnn", SIGLIP_MODEL): "ncnn rejects the reshape that indexes the batch",
+    ("classifier", "tinygrad", "convnext_tiny"): (
+        "tinygrad's Gather rejects nested constant indices"
+    ),
+    ("classifier", "tinygrad", "swin_t"): (
+        "tinygrad's ScatterND writes into a tensor with other uses"
+    ),
     ("embedding", "ncnn", DINOV2_MODEL): NCNN_BATCH_BROADCAST,
     ("action", "ncnn"): NCNN_ONE_FRAME,
     ("action", "executorch"): "executorch's convolution takes 3-d or 4-d input",

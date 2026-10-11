@@ -117,6 +117,12 @@ def test_a_torchvision_resnet_serves_classifier_and_anomaly():
     assert set(tasks_of("resnet18")) == {"classifier", "anomaly"}
 
 
+def test_a_torchvision_classifier_runs_on_onnx_and_is_not_ported_to_jax():
+    classifier = tasks_of("mobilenet_v3_small")["classifier"]
+    assert engine_of(classifier, "onnx")["status"] == model_engines.STATUS_RUNS
+    assert engine_of(classifier, "jax")["status"] == model_engines.STATUS_NOT_PORTED
+
+
 def test_an_unknown_name_resolves_to_nothing():
     assert model_engines.resolve("not-a-model") == []
 

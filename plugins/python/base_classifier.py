@@ -35,8 +35,8 @@ class BaseClassifier(VideoTransform):
         """
         Runs classification inference and returns a label with a confidence score.
         """
-        if self.engine:
-            return self.engine.do_forward(frame)
+        if self.task_engine:
+            return self.task_engine.do_forward(frame)
         self.logger.error("No model loaded in BaseClassifier.")
         return None
 
@@ -51,26 +51,14 @@ class BaseClassifier(VideoTransform):
         """
         Decodes classification output and attaches metadata.
         """
-        import numpy as np
-
-        if isinstance(output, dict):
-            label = output.get("labels")  # e.g., [405]
-            score = output.get("scores")  # e.g., [0.057...]
-
-            # Convert to scalars, handling both NumPy arrays and lists
-            if isinstance(label, (np.ndarray, list)) and len(label) > 0:
-                label = int(label[0])
-            if isinstance(score, (np.ndarray, list)) and len(score) > 0:
-                score = float(score[0])
-
-        elif isinstance(output, list) and len(output) == 2:
-            label, score = output
-
-        else:
+        if not isinstance(output, dict):
             self.logger.error(
                 f"Unexpected classification output format: {type(output)}"
             )
             return
+
+        label = output.get("label")
+        score = output.get("score")
 
         if label is None or score is None:
             self.logger.warning("Classification result missing label or score.")
@@ -81,7 +69,5 @@ class BaseClassifier(VideoTransform):
         # Attach classification metadata
         meta = analytics.add_relation_meta(buf)
         if meta:
-            analytics.add_object(
-                meta, f"class_{label}", 0, 0, self.width, self.height, score
-            )
+            analytics.add_object(meta, label, 0, 0, self.width, self.height, score)
             self.logger.info(f"Classified as {label} with score {score:.2f}")

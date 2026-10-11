@@ -68,28 +68,31 @@ generated from `plugins/python/engine/support_matrix.py`, regenerate it with
 | depth | yes | yes | yes | yes | yes | yes | no [1] | yes | yes | yes | yes | yes | no | no |
 | clip | yes | yes | yes | yes | partial [2] | partial [2] | partial [3] | yes | yes | yes | yes | yes | no | no |
 | anomaly | yes | yes | yes | yes | yes | yes | yes | yes | yes | yes | yes | no | no | no |
-| embedding | yes | yes | yes | yes | yes | yes | partial [4] | yes | yes | yes | yes | no | no | no |
-| action | yes | yes | yes | yes | yes | yes | no [5] | no [6] | yes | yes | yes | no | no | no |
-| superres | yes | yes | yes | yes | no [7] | no [7] | yes | yes | yes | yes | yes | no | no | no |
-| optical_flow | yes | yes | yes | yes | no [8] | no [8] | no [5] | yes | yes | yes | yes | no | no | no |
-| sam | yes | yes | yes | yes | no [9] | no [9] | no [10] | yes | yes | yes | no [11] | no | no | no |
-| zero_shot | yes | yes | yes | yes | no [12] | no [12] | no [12] | yes | yes | no [13] | no [12] | no | no | no |
+| classifier | yes | yes | yes | yes | yes | yes | yes | yes | yes | partial [4, 5] | yes | no | no | no |
+| embedding | yes | yes | yes | yes | yes | yes | partial [6] | yes | yes | yes | yes | no | no | no |
+| action | yes | yes | yes | yes | yes | yes | no [7] | no [8] | yes | yes | yes | no | no | no |
+| superres | yes | yes | yes | yes | no [9] | no [9] | yes | yes | yes | yes | yes | no | no | no |
+| optical_flow | yes | yes | yes | yes | no [10] | no [10] | no [7] | yes | yes | yes | yes | no | no | no |
+| sam | yes | yes | yes | yes | no [11] | no [11] | no [12] | yes | yes | yes | no [13] | no | no | no |
+| zero_shot | yes | yes | yes | yes | no [14] | no [14] | no [14] | yes | yes | no [15] | no [14] | no | no | no |
 | llm | yes | yes | yes | no | no | no | no | no | no | no | no | no | yes | yes |
 | whisper | yes | yes | yes | no | no | no | no | no | no | no | no | no | no | no |
 
 1. ncnn rejects the broadcast across the batch axis
 2. google/siglip-base-patch16-224: onnx2tf splits a constant vector one off
 3. google/siglip-base-patch16-224: ncnn rejects the reshape that indexes the batch
-4. facebook/dinov2-small: ncnn rejects the broadcast across the batch axis
-5. ncnn runs one frame at a time
-6. executorch's convolution takes 3-d or 4-d input
-7. onnx2tf slices a shape with a negative size
-8. the onnx2tf raft flow is tens of pixels off
-9. onnx2tf tiles a 4-d tensor with one multiple
-10. ncnn cannot permute a 5-rank tensor
-11. migraphx resizes only nearest and linear
-12. converting owlv2 runs past 12 GB
-13. tinygrad's Gather rejects 2-d constant indices
+4. convnext_tiny: tinygrad's Gather rejects nested constant indices
+5. swin_t: tinygrad's ScatterND writes into a tensor with other uses
+6. facebook/dinov2-small: ncnn rejects the broadcast across the batch axis
+7. ncnn runs one frame at a time
+8. executorch's convolution takes 3-d or 4-d input
+9. onnx2tf slices a shape with a negative size
+10. the onnx2tf raft flow is tens of pixels off
+11. onnx2tf tiles a 4-d tensor with one multiple
+12. ncnn cannot permute a 5-rank tensor
+13. migraphx resizes only nearest and linear
+14. converting owlv2 runs past 12 GB
+15. tinygrad's Gather rejects 2-d constant indices
 <!-- support matrix end -->
 
 `pyml-engines` reads the same tables for one model. It takes a Hugging Face id, a

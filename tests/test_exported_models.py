@@ -37,6 +37,15 @@ CLIP_LABELS = ["a man", "a dog", "a car", "a tree"]
 CLIP_PROBABILITY_TOLERANCE = 0.02
 ANOMALY_BACKBONE = "resnet18"
 HEATMAP_TOLERANCE = 0.01
+CLASSIFIER_MODELS = (
+    "resnet50",
+    "mobilenet_v3_large",
+    "efficientnet_b0",
+    "convnext_tiny",
+    "vit_b_16",
+    "swin_t",
+)
+CLASSIFIER_SCORE_TOLERANCE = 0.02
 EMBEDDING_MODELS = ["openai/clip-vit-base-patch32", DINOV2_MODEL]
 EMBEDDING_COSINE_FLOOR = 0.999
 ACTION_MODEL = "MCG-NJU/videomae-base-finetuned-kinetics"
@@ -182,6 +191,26 @@ def test_anomaly_on_a_builtin_engine_matches_anomaly_on_pytorch(
 
     assert exported["heatmap"] == pytest.approx(
         reference["heatmap"], abs=HEATMAP_TOLERANCE
+    )
+
+
+@pytest.mark.parametrize("builtin_engine", EXPORTED_MODEL_ENGINES)
+@pytest.mark.parametrize("model_name", CLASSIFIER_MODELS)
+def test_a_classifier_on_a_builtin_engine_matches_the_classifier_on_pytorch(
+    model_name, builtin_engine, portrait_rgb
+):
+    require_engine(builtin_engine)
+    xfail_refused("classifier", builtin_engine, model_name)
+    from classifier import Classifier
+
+    reference, exported = (
+        loaded_element(Classifier, model_name, engine_name).do_forward(portrait_rgb)
+        for engine_name in (ENGINE_NAMES[0], builtin_engine)
+    )
+
+    assert exported["label"] == reference["label"]
+    assert exported["score"] == pytest.approx(
+        reference["score"], abs=CLASSIFIER_SCORE_TOLERANCE
     )
 
 

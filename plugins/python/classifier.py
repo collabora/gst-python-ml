@@ -22,6 +22,12 @@ import backend
 CAN_REGISTER_ELEMENT = True
 try:
     from base_classifier import BaseClassifier
+    from engine.classifier_engine import (
+        ClassifierEngine,
+        ExportedClassifier,
+        PortedResnetClassifier,
+    )
+    from engine.engine_factory import EngineFactory
 except ImportError as e:
     CAN_REGISTER_ELEMENT = False
     GlobalLogger().warning(
@@ -43,6 +49,14 @@ class Classifier(BaseClassifier):
 
     def __init__(self):
         super().__init__()
+        self.task_engine_name = self.mgr.engine_name = "pyml_classifier_engine"
+        EngineFactory.register(self.mgr.engine_name, ClassifierEngine)
+
+    def export_model(self, model_name):
+        ported_engines = (EngineFactory.JAX_ENGINE, EngineFactory.MLX_ENGINE)
+        if self.mgr.engine_name in ported_engines:
+            return PortedResnetClassifier(model_name, self.mgr.engine_name)
+        return ExportedClassifier(model_name, self.mgr.engine_name)
 
 
 if CAN_REGISTER_ELEMENT and backend.BACKEND == "gst":
