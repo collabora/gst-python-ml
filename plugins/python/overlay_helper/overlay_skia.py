@@ -19,24 +19,27 @@
 import numpy as np
 import skia
 
-from .overlay_utils_interface import OverlayGraphics, Color
+from .overlay_utils_interface import (
+    BOX_COLOR,
+    BOX_LABEL_FONT_SIZE,
+    BOX_LABEL_OFFSET,
+    BOX_LINE_WIDTH,
+    CLASSIFICATION_BACKGROUND_COLOR,
+    CLASSIFICATION_BACKGROUND_MARGIN,
+    CLASSIFICATION_FONT_SIZE,
+    CLASSIFICATION_LABEL_WIDTH,
+    CLASSIFICATION_LINE_HEIGHT,
+    CLASSIFICATION_PADDING,
+    CLASSIFICATION_TEXT_COLOR,
+    TRACKING_POINT_SIZE,
+    OverlayGraphics,
+)
 
 COLOR_TYPE_BY_VIDEO_FORMAT = {
     "RGBA": skia.ColorType.kRGBA_8888_ColorType,
     "BGRA": skia.ColorType.kBGRA_8888_ColorType,
 }
 BYTES_PER_PIXEL = 4
-BOX_COLOR = Color(1, 0, 0, 1)
-BOX_LINE_WIDTH = 2
-BOX_LABEL_FONT_SIZE = 12
-BOX_LABEL_OFFSET = 10
-TRACKING_POINT_SIZE = 10
-CLASSIFICATION_PADDING = 10
-CLASSIFICATION_LINE_HEIGHT = 22
-CLASSIFICATION_FONT_SIZE = 14
-CLASSIFICATION_LABEL_WIDTH = 220
-CLASSIFICATION_BACKGROUND_COLOR = Color(0, 0, 0, 0.6)
-CLASSIFICATION_TEXT_COLOR = Color(0, 1, 0, 1)
 
 
 def to_skia_color(color, alpha):
@@ -122,8 +125,8 @@ class SkiaOverlayGraphics(OverlayGraphics):
             )
             self.canvas.drawRect(
                 skia.Rect.MakeXYWH(
-                    x - 4,
-                    y - CLASSIFICATION_LINE_HEIGHT + 4,
+                    x - CLASSIFICATION_BACKGROUND_MARGIN,
+                    y - CLASSIFICATION_LINE_HEIGHT + CLASSIFICATION_BACKGROUND_MARGIN,
                     CLASSIFICATION_LABEL_WIDTH,
                     CLASSIFICATION_LINE_HEIGHT,
                 ),

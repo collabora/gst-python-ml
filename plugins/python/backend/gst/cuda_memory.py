@@ -29,6 +29,7 @@ GST_CUDA_LIBRARY = "libgstcuda-1.0.so.0"
 CUDA_DRIVER_LIBRARY = "libcuda.so.1"
 
 GST_MAP_READ = 1
+GST_MAP_WRITE = 2
 # the gi map override drops this flag, hence ctypes
 GST_MAP_CUDA = 1 << 17
 MAP_INFO_USER_DATA_SLOTS = 4
@@ -245,13 +246,16 @@ def row_pitch(buffer, width, channels):
     return video_meta.stride[0]
 
 
-def map_device_frame(buffer, height, width, channels):
+def map_device_frame(buffer, height, width, channels, writable=False):
     import torch
 
     pitch = row_pitch(buffer, width, channels)
+    map_flags = GST_MAP_READ | GST_MAP_CUDA
+    if writable:
+        map_flags |= GST_MAP_WRITE
     map_info = GstMapInfo()
     mapped = gstreamer_library().gst_buffer_map(
-        buffer.__ptr__(), ctypes.byref(map_info), GST_MAP_READ | GST_MAP_CUDA
+        buffer.__ptr__(), ctypes.byref(map_info), map_flags
     )
     if not mapped:
         raise RuntimeError("could not map the cuda memory of the buffer")

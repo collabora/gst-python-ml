@@ -28,6 +28,20 @@ class Color:
         self.a = a
 
 
+BOX_COLOR = Color(1, 0, 0, 1)
+BOX_LINE_WIDTH = 2
+BOX_LABEL_FONT_SIZE = 12
+BOX_LABEL_OFFSET = 10
+TRACKING_POINT_SIZE = 10
+CLASSIFICATION_PADDING = 10
+CLASSIFICATION_LINE_HEIGHT = 22
+CLASSIFICATION_FONT_SIZE = 14
+CLASSIFICATION_LABEL_WIDTH = 220
+CLASSIFICATION_BACKGROUND_MARGIN = 4
+CLASSIFICATION_BACKGROUND_COLOR = Color(0, 0, 0, 0.6)
+CLASSIFICATION_TEXT_COLOR = Color(0, 1, 0, 1)
+
+
 class TrackingDisplay:
     def __init__(self, max_history_length=5000):
         self.history = []
@@ -158,12 +172,17 @@ class OverlayGraphics(ABC):
         """Draw a line from start to end with specified color and width."""
         pass
 
+    def draw_polyline(self, points, color, width):
+        for start, end in zip(points, points[1:]):
+            self.draw_line(start, end, color, width)
+
 
 class GraphicsType(Enum):
     CAIRO = "cairo"
     SKIA = "skia"
     OPENGL = "opengl"
     VULKAN = "vulkan"  # Add Vulkan as a graphics type
+    TORCH = "torch"
 
 
 class OverlayGraphicsFactory:
@@ -178,6 +197,10 @@ class OverlayGraphicsFactory:
             from .overlay_skia import SkiaOverlayGraphics
 
             return SkiaOverlayGraphics(width, height, kwargs["video_format"])
+        elif graphics_type == GraphicsType.TORCH:
+            from .overlay_torch import TorchOverlayGraphics
+
+            return TorchOverlayGraphics(width, height, kwargs["video_format"])
         elif graphics_type == GraphicsType.OPENGL:
             from .overlay_opengl import OpenGLOverlayGraphics
 

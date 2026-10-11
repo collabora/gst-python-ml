@@ -75,6 +75,30 @@ class GstFrameIO(FrameIO):
         self.keep_mapped(target, [device_map])
         return rgb_device_frame(device_map.tensor, video_format), 1, video_format
 
+    # all channels, torch copies a reversed channel view and drops the writes
+    def read_frame_for_drawing(self, target, width, height, video_format):
+        import numpy as np
+
+        if not target.is_writable():
+            raise ValueError(
+                "drawing in place needs a writable buffer, this one is shared"
+            )
+        channel_count, _ = packed_format_layout(video_format)
+        if is_cuda_buffer(target):
+            device_map = map_device_frame(
+                target, height, width, channel_count, writable=True
+            )
+            self.keep_mapped(target, [device_map])
+            return device_map.tensor
+        success, map_info = map_video_memory(target, Gst.MapFlags.WRITE)
+        if not success:
+            raise RuntimeError("could not map the video memory for writing")
+        self.keep_mapped(target, [map_info])
+        frame = np.frombuffer(
+            map_info.data, dtype=np.uint8, count=width * height * channel_count
+        )
+        return frame.reshape(height, width, channel_count)
+
     def read_frame(self, target, source, width, height):
         success, map_info = map_video_memory(target, Gst.MapFlags.READ)
         if not success:

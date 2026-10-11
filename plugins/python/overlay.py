@@ -67,8 +67,8 @@ def is_vulkan_memory(memory):
     return GstVulkan is not None and GstVulkan.is_vulkan_memory(memory)
 
 
-# Support CPU, OpenGL, and Vulkan buffers
-VIDEO_FORMATS = "video/x-raw, format=(string){ RGBA, ARGB, BGRA, ABGR }; video/x-raw(memory:GLMemory), format=(string){ RGBA, ARGB, BGRA, ABGR }; video/x-raw(memory:VulkanMemory), format=(string){ RGBA, ARGB, BGRA, ABGR }"
+# Support CPU, CUDA, OpenGL, and Vulkan buffers
+VIDEO_FORMATS = "video/x-raw, format=(string){ RGBA, ARGB, BGRA, ABGR }; video/x-raw(memory:CUDAMemory), format=(string){ RGBA, ARGB, BGRA, ABGR }; video/x-raw(memory:GLMemory), format=(string){ RGBA, ARGB, BGRA, ABGR }; video/x-raw(memory:VulkanMemory), format=(string){ RGBA, ARGB, BGRA, ABGR }"
 # Building a Gst object needs Gst.init, which only the gst backend calls.
 if backend.BACKEND == "gst":
     OVERLAY_CAPS = Gst.Caps.from_string(VIDEO_FORMATS)
@@ -276,7 +276,7 @@ class Overlay(GstBase.BaseTransform):
         self.height = height
 
     def do_transform_ip(self, buf):
-        from backend.gst.frameio import map_video_memory
+        from backend.gst.cuda_memory import is_cuda_buffer
 
         # First try to extract metadata from frame meta
         if not self.from_file:
@@ -335,7 +335,9 @@ class Overlay(GstBase.BaseTransform):
                 is_vulkan_buffer = False
 
             # Determine the graphics backend to use
-            if self.use_vulkan and is_vulkan_buffer:
+            if is_cuda_buffer(buf):
+                self.graphics_type = GraphicsType.TORCH
+            elif self.use_vulkan and is_vulkan_buffer:
                 self.graphics_type = GraphicsType.VULKAN
                 # Try to get the Vulkan context if not already set
                 if not self.vk_device:
@@ -391,12 +393,12 @@ class Overlay(GstBase.BaseTransform):
             if self.graphics_type == GraphicsType.VULKAN:
                 kwargs["vk_device"] = self.vk_device
                 kwargs["vk_queue"] = self.vk_queue
-            elif self.graphics_type == GraphicsType.SKIA:
+            elif self.graphics_type in (GraphicsType.SKIA, GraphicsType.TORCH):
                 kwargs["video_format"] = self.video_format
             self.overlay_graphics = OverlayGraphicsFactory.create(
                 self.graphics_type, self.width, self.height, **kwargs
             )
-            self.logger.info(f"Initialized graphics backend: {self.graphics_type}")
+            self.logger.info(f"Drawing with the {self.graphics_type.value} renderer")
 
         # Handle rendering based on the graphics type
         if self.graphics_type == GraphicsType.VULKAN:
@@ -438,6 +440,14 @@ class Overlay(GstBase.BaseTransform):
             finally:
                 self.gl_context.make_current(False)
 
+        elif self.graphics_type == GraphicsType.TORCH:
+            try:
+                with self.overlay_graphics.drawing_stream():
+                    self.draw_in_place(buf, frame_metadata)
+            except Exception as exception:
+                post_error(self, "torch rendering failed", exception)
+                return Gst.FlowReturn.ERROR
+
         else:  # Cairo or Skia rendering on system memory
             video_meta = GstVideo.buffer_get_video_meta(buf)
             if not video_meta:
@@ -445,21 +455,27 @@ class Overlay(GstBase.BaseTransform):
                     "No video meta available, cannot proceed with overlay"
                 )
                 return Gst.FlowReturn.ERROR
-
-            success, map_info = map_video_memory(buf, Gst.MapFlags.WRITE)
-            if not success:
-                self.logger.error("Failed to map buffer for writing")
-                return Gst.FlowReturn.ERROR
-
             try:
-                self.overlay_graphics.initialize(map_info.data)
-                self.do_post_process(frame_metadata)
-                self.overlay_graphics.finalize()
-            finally:
-                buf.unmap(map_info)
+                self.draw_in_place(buf, frame_metadata)
+            except Exception as exception:
+                post_error(
+                    self, f"{self.graphics_type.value} rendering failed", exception
+                )
+                return Gst.FlowReturn.ERROR
 
         self.frame_counter += 1
         return Gst.FlowReturn.OK
+
+    def draw_in_place(self, buf, frame_metadata):
+        try:
+            frame = backend.frameio.read_frame_for_drawing(
+                buf, self.width, self.height, self.video_format
+            )
+            self.overlay_graphics.initialize(frame)
+            self.do_post_process(frame_metadata)
+            self.overlay_graphics.finalize()
+        finally:
+            backend.frameio.release_frames(buf)
 
     def do_post_process(self, frame_metadata):
         trails = {}
@@ -479,13 +495,11 @@ class Overlay(GstBase.BaseTransform):
             self.tracking_display.fade_history()
 
     def draw_trail(self, points):
-        for start, end in zip(points, points[1:]):
-            self.overlay_graphics.draw_line(
-                {"x": start["x1"], "y": start["y1"]},
-                {"x": end["x1"], "y": end["y1"]},
-                TRAIL_COLOR,
-                TRAIL_LINE_WIDTH,
-            )
+        self.overlay_graphics.draw_polyline(
+            [{"x": point["x1"], "y": point["y1"]} for point in points],
+            TRAIL_COLOR,
+            TRAIL_LINE_WIDTH,
+        )
 
 
 if CAN_REGISTER_ELEMENT and backend.BACKEND == "gst":

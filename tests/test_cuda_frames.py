@@ -16,6 +16,7 @@ Gst.init(None)
 torch = pytest.importorskip("torch")
 
 from backend import frameio  # noqa: E402
+from backend.gst.cuda_memory import map_device_frame  # noqa: E402
 from backend.gst.video_transform import (  # noqa: E402
     CUDA_MEMORY_CAPS,
     CUDA_MEMORY_FEATURE,
@@ -29,6 +30,9 @@ needs_cuda = pytest.mark.skipif(
 WIDTH, HEIGHT = 640, 480
 PADDED_WIDTH, PADDED_HEIGHT = 800, 600
 RGB_CHANNELS = 3
+RGBA_CHANNELS = 4
+WRITTEN_ROW = 7
+WRITTEN_VALUE = 201
 FRAME_COUNT = 3
 PULL_TIMEOUT = 10 * Gst.SECOND
 
@@ -117,6 +121,30 @@ def test_writing_a_frame_into_cuda_memory_is_refused(running_pipeline):
         frameio.write_frame(
             device_buffer, np.zeros((HEIGHT, WIDTH, RGB_CHANNELS), np.uint8)
         )
+
+
+def write_then_read_back(buffer):
+    writable_map = map_device_frame(buffer, HEIGHT, WIDTH, RGBA_CHANNELS, writable=True)
+    writable_map.tensor[WRITTEN_ROW].fill_(WRITTEN_VALUE)
+    torch.cuda.synchronize()
+    writable_map.unmap()
+    read_map = map_device_frame(buffer, HEIGHT, WIDTH, RGBA_CHANNELS)
+    try:
+        return read_map.tensor[WRITTEN_ROW].cpu()
+    finally:
+        read_map.unmap()
+
+
+@needs_cuda
+@pytest.mark.parametrize("running_pipeline", [("RGBA", "RGBA")], indirect=True)
+def test_a_writable_device_map_round_trips(running_pipeline):
+    pulled = pull_buffer(running_pipeline.get_by_name("device_sink"))
+    device_buffer = pulled.copy_deep()
+
+    with ThreadPoolExecutor(max_workers=1) as streaming_thread:
+        row = streaming_thread.submit(write_then_read_back, device_buffer).result()
+
+    assert (row == WRITTEN_VALUE).all()
 
 
 def offers_cuda_memory(caps):
