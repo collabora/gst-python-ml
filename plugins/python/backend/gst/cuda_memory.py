@@ -232,9 +232,23 @@ class DeviceFrameMap:
         )
 
 
+# cuda memory pads rows to a pitch, the video meta carries it
+def row_pitch(buffer, width, channels):
+    import gi
+
+    gi.require_version("GstVideo", "1.0")
+    from gi.repository import GstVideo
+
+    video_meta = GstVideo.buffer_get_video_meta(buffer)
+    if video_meta is None:
+        return width * channels
+    return video_meta.stride[0]
+
+
 def map_device_frame(buffer, height, width, channels):
     import torch
 
+    pitch = row_pitch(buffer, width, channels)
     map_info = GstMapInfo()
     mapped = gstreamer_library().gst_buffer_map(
         buffer.__ptr__(), ctypes.byref(map_info), GST_MAP_READ | GST_MAP_CUDA
@@ -251,7 +265,7 @@ def map_device_frame(buffer, height, width, channels):
                 "typestr": UNSIGNED_BYTE_TYPESTR,
                 "data": (map_info.data, False),
                 "version": CUDA_ARRAY_INTERFACE_VERSION,
-                "strides": None,
+                "strides": (pitch, channels, 1),
             }
         )
         device_map.tensor = torch.as_tensor(array_interface, device="cuda")

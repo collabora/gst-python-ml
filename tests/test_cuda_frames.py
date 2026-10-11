@@ -27,15 +27,16 @@ needs_cuda = pytest.mark.skipif(
 )
 
 WIDTH, HEIGHT = 640, 480
+PADDED_WIDTH, PADDED_HEIGHT = 800, 600
 RGB_CHANNELS = 3
 FRAME_COUNT = 3
 PULL_TIMEOUT = 10 * Gst.SECOND
 
 
-def start_pipeline(video_format, device_format):
+def start_pipeline(video_format, device_format, width=WIDTH, height=HEIGHT):
     pipeline = Gst.parse_launch(
         f"videotestsrc num-buffers={FRAME_COUNT} "
-        f"! video/x-raw,format={video_format},width={WIDTH},height={HEIGHT} "
+        f"! video/x-raw,format={video_format},width={width},height={height} "
         "! tee name=split "
         "split. ! queue ! cudaupload ! cudaconvert "
         f"! video/x-raw(memory:CUDAMemory),format={device_format} "
@@ -43,6 +44,7 @@ def start_pipeline(video_format, device_format):
         "split. ! queue ! appsink name=system_sink sync=false"
     )
     pipeline.set_state(Gst.State.PLAYING)
+    pipeline.frame_size = (width, height)
     return pipeline
 
 
@@ -52,9 +54,9 @@ def pull_buffer(sink):
     return sample.get_buffer()
 
 
-def read_frame(sink, buffer):
+def read_frame(sink, buffer, width=WIDTH, height=HEIGHT):
     frame, num_sources, _ = frameio.read_frames(
-        buffer, sink.get_static_pad("sink"), WIDTH, HEIGHT
+        buffer, sink.get_static_pad("sink"), width, height
     )
     assert num_sources == 1
     return frame
@@ -75,12 +77,15 @@ def running_pipeline(request):
         ("BGRA", "BGRA"),
         # cudaconvert writes the swizzled frame on a cuda stream of its own
         ("RGBA", "BGRA"),
+        # an 800 pixel row is padded to the cuda pitch
+        ("RGBA", "RGBA", PADDED_WIDTH, PADDED_HEIGHT),
     ],
     indirect=True,
 )
 def test_a_cuda_frame_reads_without_a_copy_as_the_system_frame(running_pipeline):
     device_sink = running_pipeline.get_by_name("device_sink")
     system_sink = running_pipeline.get_by_name("system_sink")
+    width, height = running_pipeline.frame_size
     for _ in range(FRAME_COUNT):
         device_buffer = pull_buffer(device_sink)
         system_buffer = pull_buffer(system_sink)
@@ -88,12 +93,12 @@ def test_a_cuda_frame_reads_without_a_copy_as_the_system_frame(running_pipeline)
         # a streaming thread has no cuda context current
         with ThreadPoolExecutor(max_workers=1) as streaming_thread:
             device_frame = streaming_thread.submit(
-                read_frame, device_sink, device_buffer
+                read_frame, device_sink, device_buffer, width, height
             ).result()
-        system_frame = read_frame(system_sink, system_buffer)
+        system_frame = read_frame(system_sink, system_buffer, width, height)
 
         assert device_frame.device.type == "cuda"
-        assert device_frame.shape == (HEIGHT, WIDTH, RGB_CHANNELS)
+        assert device_frame.shape == (height, width, RGB_CHANNELS)
         assert np.array_equal(device_frame.cpu().numpy(), system_frame)
         (device_map,) = frameio.read_map_infos[device_buffer]
         assert device_map.tensor.data_ptr() == device_map.map_info.data
