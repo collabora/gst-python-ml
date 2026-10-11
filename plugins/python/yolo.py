@@ -47,6 +47,7 @@ class YOLOTransform(BaseObjectDetector, YoloTask):
         "Performs object detection, segmentation, and tracking using YOLO on video frames",
         "Aaron Boxer <aaron.boxer@collabora.com>",
     )
+    ACCEPTS_DEVICE_FRAMES = True
 
     imgsz = GObject.Property(
         type=int,

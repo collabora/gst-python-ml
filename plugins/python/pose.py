@@ -106,6 +106,7 @@ class YOLOPoseTransform(BaseObjectDetector):
         "Human pose estimation with COCO 17-keypoint skeleton using YOLO",
         "Aaron Boxer <aaron.boxer@collabora.com>",
     )
+    ACCEPTS_DEVICE_FRAMES = True
 
     visualize = GObject.Property(
         type=bool,

@@ -19,7 +19,20 @@
 import ast
 
 from .pytorch_engine import PyTorchEngine
-from .yolo_engine import EXPORTED_INPUT_SHAPE, BOX_AND_CLASS_COLUMNS, ExportedYolo
+from .yolo_engine import (
+    BOX_AND_CLASS_COLUMNS,
+    DEFAULT_CONFIDENCE,
+    EXPORTED_INPUT_SHAPE,
+    ExportedYolo,
+    predict_device_frame,
+)
+
+POSE_INPUT_SIZE = 640
+POSE_PREDICTION_OPTIONS = {
+    "imgsz": POSE_INPUT_SIZE,
+    "conf": DEFAULT_CONFIDENCE,
+    "verbose": False,
+}
 
 
 class ExportedYoloPose(ExportedYolo):
@@ -55,7 +68,17 @@ class YoloPoseEngine(PyTorchEngine):
 
     def do_forward(self, frames):
         import numpy as np
+        import torch
 
+        if torch.is_tensor(frames):
+            return self.execute_with_stream(
+                lambda: predict_device_frame(
+                    self.get_model(),
+                    frames.to(self.device),
+                    track=False,
+                    **POSE_PREDICTION_OPTIONS,
+                )
+            )
         is_batch = isinstance(frames, np.ndarray) and frames.ndim == 4
         # ultralytics reads a numpy frame as bgr
         writable = np.ascontiguousarray(frames[..., ::-1])
@@ -68,7 +91,7 @@ class YoloPoseEngine(PyTorchEngine):
 
         img_list = [writable[i] for i in range(batch_size)] if is_batch else [writable]
         results = self.execute_with_stream(
-            lambda: model(img_list, imgsz=640, conf=0.25, verbose=False)
+            lambda: model(img_list, **POSE_PREDICTION_OPTIONS)
         )
         if not results:
             return None if not is_batch else [None] * batch_size

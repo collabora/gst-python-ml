@@ -41,6 +41,13 @@ BOX_AND_CLASS_COLUMNS = 6
 FRAME_PATH = ""
 SEGMENT_TASK = "segment"
 ORIENTED_BOX_TASK = "obb"
+HOST_FRAME_TASKS = (SEGMENT_TASK, ORIENTED_BOX_TASK)
+TRACKER_CONFIGURATION = "botsort.yaml"
+LETTERBOX_PADDING_VALUE = 114
+PIXEL_MAXIMUM = 255
+# LetterBox rounds this way so an odd padding pixel goes to the bottom and right
+PADDING_ROUNDING_OFFSET = 0.1
+HEIGHT_AND_WIDTH = 2
 
 
 def exported_yolo_path(model_name):
@@ -78,6 +85,78 @@ def exported_yolo_executorch_path(model_name):
     return str(path)
 
 
+# the LetterBox(auto=True) model.predict applies to a numpy frame for pt weights
+def letterboxed_device_input(frame, imgsz, stride):
+    import torch
+    from ultralytics.utils.checks import check_imgsz
+
+    target_height, target_width = check_imgsz(
+        imgsz, stride=stride, min_dim=HEIGHT_AND_WIDTH
+    )
+    height, width = frame.shape[:2]
+    scale = min(target_height / height, target_width / width)
+    resized_height, resized_width = round(height * scale), round(width * scale)
+    pad_height = (target_height - resized_height) % stride / 2
+    pad_width = (target_width - resized_width) % stride / 2
+    image = frame.permute(2, 0, 1).unsqueeze(0).float() / PIXEL_MAXIMUM
+    if (resized_height, resized_width) != (height, width):
+        image = torch.nn.functional.interpolate(
+            image,
+            size=(resized_height, resized_width),
+            mode="bilinear",
+            align_corners=False,
+        )
+    padding = (
+        round(pad_width - PADDING_ROUNDING_OFFSET),
+        round(pad_width + PADDING_ROUNDING_OFFSET),
+        round(pad_height - PADDING_ROUNDING_OFFSET),
+        round(pad_height + PADDING_ROUNDING_OFFSET),
+    )
+    return torch.nn.functional.pad(
+        image, padding, value=LETTERBOX_PADDING_VALUE / PIXEL_MAXIMUM
+    )
+
+
+def frame_result(result, model_input_shape, frame_shape):
+    import numpy as np
+    from ultralytics.engine.results import Results
+    from ultralytics.utils import ops
+
+    boxes = result.boxes.data.clone()
+    boxes[:, :BOX_COLUMNS] = ops.scale_boxes(
+        model_input_shape, boxes[:, :BOX_COLUMNS], frame_shape
+    )
+    # results only read its shape, the frame itself stays on the device
+    frame_placeholder = np.zeros(frame_shape, np.uint8)
+    rescaled = Results(
+        frame_placeholder, path=FRAME_PATH, names=result.names, boxes=boxes
+    )
+    if result.keypoints is not None:
+        keypoints = result.keypoints.data.clone()
+        rescaled.update(
+            keypoints=ops.scale_coords(model_input_shape, keypoints, frame_shape)
+        )
+    return rescaled
+
+
+# ultralytics reads a tensor as rgb in 0..1 and skips its own letterbox for it
+def predict_device_frame(model, frame, track, **options):
+    if model.task in HOST_FRAME_TASKS:
+        raise ValueError(
+            f"yolo {model.task} models take frames in system memory, "
+            "put cudadownload before the element"
+        )
+    stride = int(model.model.stride.max())
+    model_input = letterboxed_device_input(frame, options["imgsz"], stride)
+    if track:
+        results = model.track(
+            model_input, persist=True, tracker=TRACKER_CONFIGURATION, **options
+        )
+    else:
+        results = model.predict(model_input, **options)
+    return frame_result(results[0], model_input.shape[2:], frame.shape)
+
+
 def exported_yolo_metadata(path):
     import onnx
 
@@ -104,6 +183,13 @@ class ExportedYolo:
         }.get(self.metadata["task"], self._detection_result)
 
     def do_forward(self, frames):
+        import numpy as np
+
+        if not isinstance(frames, np.ndarray):
+            raise TypeError(
+                "exported yolo models take frames in system memory, "
+                "put cudadownload before the element or use engine-name=pytorch"
+            )
         if self.track:
             raise ValueError(
                 f"tracking runs only on the {EngineFactory.PYTORCH_ENGINE} engine"
@@ -218,7 +304,21 @@ class YoloEngine(PyTorchEngine):
 
     def do_forward(self, frames):
         import numpy as np
+        import torch
 
+        if torch.is_tensor(frames):
+            return self.execute_with_stream(
+                lambda: predict_device_frame(
+                    self.get_model(),
+                    frames.to(self.device),
+                    self.track,
+                    imgsz=self.imgsz,
+                    conf=self.conf,
+                    iou=self.iou,
+                    agnostic_nms=self.agnostic_nms,
+                    verbose=True,
+                )
+            )
         is_batch = isinstance(frames, np.ndarray) and frames.ndim == 4
         # ultralytics reads a numpy frame as bgr
         writable_frames = np.ascontiguousarray(frames[..., ::-1])
@@ -258,7 +358,7 @@ class YoloEngine(PyTorchEngine):
                     iou=iou,
                     agnostic_nms=agnostic,
                     verbose=True,
-                    tracker="botsort.yaml",
+                    tracker=TRACKER_CONFIGURATION,
                 )
             )
         else:

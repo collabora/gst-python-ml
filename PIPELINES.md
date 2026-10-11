@@ -78,7 +78,19 @@ offers CUDA memory only when its engine reads tensors, which is the pytorch
 engine. With an exported-model engine such as onnx it drops those caps, so a
 pipeline feeding it CUDA memory fails to link when it is built rather than at
 the first frame. Put `cudadownload` before the element for those engines.
-Every other element takes frames in system memory.
+
+`pyml_yolo` and `pyml_yolo_pose` take CUDA memory on the pytorch engine too. The
+frame is scaled and padded to the model's input size on the GPU and handed to
+ultralytics as a tensor, and the boxes and keypoints are mapped back to the
+frame, so the analytics metadata matches the system-memory path. Segmentation
+and oriented-box models refuse these frames, and `pyml_yolo_pose` needs
+`visualize=false` because it cannot draw into a CUDA buffer. `pyml_tracker` and
+`pyml_overlay` take system memory, so put `cudadownload` after the detector when
+they follow it. Every other element takes frames in system memory.
+
+```
+python pyml-launch.py filesrc location=data/people.mp4 ! qtdemux ! h264parse ! nvh264dec ! cudaconvert ! cudascale ! capsfilter caps="video/x-raw(memory:CUDAMemory),format=RGBA,width=640,height=480" ! pyml_yolo model-name=yolo11n engine-name=pytorch device=cuda ! cudadownload ! pyml_tracker ! fakesink
+```
 
 ```
 python pyml-launch.py filesrc location=data/people.mp4 ! qtdemux ! h264parse ! nvh264dec ! cudaconvert ! capsfilter caps="video/x-raw(memory:CUDAMemory),format=RGBA" ! pyml_classifier model-name=resnet50 engine-name=pytorch device=cuda ! fakesink
