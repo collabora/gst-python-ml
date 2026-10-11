@@ -64,3 +64,36 @@ def test_a_second_box_on_a_matched_player_starts_no_track():
 def test_two_separate_players_get_two_ids():
     frames = [[detection(100 + i, 100), detection(500 - i, 400)] for i in range(FRAMES)]
     assert len(ids_over_frames(SortTracker(), frames)) == 2
+
+
+def tracked_labels(element, labels):
+    from backend import analytics
+
+    buffer = Gst.Buffer.new_allocate(None, 4, None)
+    meta = analytics.add_relation_meta(buffer)
+    for index, label in enumerate(labels):
+        analytics.add_object(meta, label, 10 * index, 10, BOX_W, BOX_H, 0.9)
+    element.process_in_place(None, "RGBA", buffer)
+    return [
+        obj["label"]
+        for obj in analytics.read_objects(analytics.get_relation_meta(buffer))
+    ]
+
+
+def test_detections_that_carry_track_ids_pass_through_untouched():
+    from tracker import TrackerTransform
+
+    labels = ["stream_0_id_4", "stream_0_person_id_9"]
+    assert tracked_labels(TrackerTransform(), labels) == labels
+
+
+def test_untracked_detections_still_get_tracked():
+    from tracker import TrackerTransform
+
+    element = TrackerTransform()
+    labels = [f"stream_0_{LABEL}"]
+    # a track is confirmed after min-hits frames
+    for _ in range(element.min_hits):
+        after = tracked_labels(element, labels)
+    assert len(after) == len(labels) + 1
+    assert after[-1].startswith(f"stream_0_{LABEL}_id_")

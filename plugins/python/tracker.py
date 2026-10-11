@@ -16,8 +16,13 @@
 # Free Software Foundation, Inc., 51 Franklin Street, Fifth Floor,
 # Boston, MA 02110-1301, USA.
 
+import re
+
 import backend
 from backend import analytics, GObject, InPlaceVideoTransform
+
+# a detector with track=true and this element both label tracked boxes this way
+TRACKED_LABEL = re.compile(r"_id_\d+$")
 
 
 def covered_fraction(boxes, by):
@@ -504,6 +509,7 @@ class TrackerTransform(InPlaceVideoTransform):
 
     def __init__(self):
         super().__init__()
+        self._passing_tracked_through = False
         self._tracker = None
 
     def _ensure_tracker(self):
@@ -538,6 +544,13 @@ class TrackerTransform(InPlaceVideoTransform):
     def process_in_place(self, frame, fmt, buf):
         tracker = self._ensure_tracker()
         detections = self._read_detections(buf)
+        if detections and all(TRACKED_LABEL.search(label) for *_, label in detections):
+            if not self._passing_tracked_through:
+                self.logger.warning(
+                    "detections arrive with track ids, pyml_tracker passes them through"
+                )
+                self._passing_tracked_through = True
+            return
         # an empty frame still ages the tracks
         tracked = tracker.update(detections)
         if not tracked:
