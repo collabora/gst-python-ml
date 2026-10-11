@@ -89,9 +89,14 @@ keypoints are mapped back to the frame, so the analytics metadata matches the
 system-memory path. Segmentation
 and oriented-box models refuse these frames, and `pyml_yolo_pose` needs
 `visualize=false` because it cannot draw into a CUDA buffer. `pyml_tracker`
-reads only the metadata, so it passes CUDA memory through. `pyml_overlay` takes
-system memory, so put `cudadownload` before it. Every other element takes frames
-in system memory.
+reads only the metadata, so it passes CUDA memory through, and `pyml_overlay`
+draws on CUDA frames in place with torch, so `nvh264dec ! cudaconvert !
+cudascale ! pyml_yolo engine-name=pytorch device=cuda ! pyml_tracker !
+pyml_overlay` never copies a frame to the host. On CUDA frames the overlay
+ignores the `renderer` property and draws boxes, labels, tracking squares and
+trails without antialiasing, with Pillow's default font. `cudadownload` drops
+the analytics metadata, so it goes after the last element that reads it. Every
+other element takes frames in system memory.
 
 Each pytorch element on `device=cuda` runs its inference on a CUDA stream of its
 own, so two elements on the branches of a `tee` overlap on the GPU. Set
