@@ -143,19 +143,31 @@ TASK_ENGINES = {
 }
 NCNN_ONE_FRAME = "ncnn runs one frame at a time"
 NCNN_BATCH_BROADCAST = "ncnn rejects the broadcast across the batch axis"
+NCNN_BATCH_RESHAPE = "ncnn rejects the reshape that indexes the batch"
+NCNN_RANK_5_PERMUTE = "ncnn cannot permute a 5-rank tensor"
 OWLV2_MEMORY = "converting owlv2 runs past 12 GB"
+ONNX2TF_CONVNEXT_SCALE = "onnx2tf scales convnext's layers along the wrong axis"
 # why an engine refuses a task, keyed by task and engine, with the model when only one model is refused
 REFUSALS = {
     ("depth", "ncnn"): NCNN_BATCH_BROADCAST,
     ("clip", "tensorflow", SIGLIP_MODEL): "onnx2tf splits a constant vector one off",
     ("clip", "tflite", SIGLIP_MODEL): "onnx2tf splits a constant vector one off",
-    ("clip", "ncnn", SIGLIP_MODEL): "ncnn rejects the reshape that indexes the batch",
+    ("clip", "ncnn", SIGLIP_MODEL): NCNN_BATCH_RESHAPE,
     ("classifier", "tinygrad", "convnext_tiny"): (
         "tinygrad's Gather rejects nested constant indices"
     ),
     ("classifier", "tinygrad", "swin_t"): (
         "tinygrad's ScatterND writes into a tensor with other uses"
     ),
+    ("classifier", "ncnn", "convnext_tiny"): "ncnn has no Gather layer",
+    ("classifier", "tensorflow", "convnext_tiny"): ONNX2TF_CONVNEXT_SCALE,
+    ("classifier", "tflite", "convnext_tiny"): ONNX2TF_CONVNEXT_SCALE,
+    ("classifier", "migraphx", "convnext_tiny"): (
+        "migraphx's convnext logits are uncorrelated with onnx's"
+    ),
+    ("classifier", "migraphx", "swin_t"): "migraphx's swin logits are off by up to 2",
+    ("classifier", "ncnn", "vit_b_16"): NCNN_BATCH_RESHAPE,
+    ("classifier", "ncnn", "swin_t"): NCNN_RANK_5_PERMUTE,
     ("embedding", "ncnn", DINOV2_MODEL): NCNN_BATCH_BROADCAST,
     ("action", "ncnn"): NCNN_ONE_FRAME,
     ("action", "executorch"): "executorch's convolution takes 3-d or 4-d input",
@@ -164,7 +176,7 @@ REFUSALS = {
     ("optical_flow", "ncnn"): NCNN_ONE_FRAME,
     ("optical_flow", "tensorflow"): "the onnx2tf raft flow is tens of pixels off",
     ("optical_flow", "tflite"): "the onnx2tf raft flow is tens of pixels off",
-    ("sam", "ncnn"): "ncnn cannot permute a 5-rank tensor",
+    ("sam", "ncnn"): NCNN_RANK_5_PERMUTE,
     ("sam", "tensorflow"): "onnx2tf tiles a 4-d tensor with one multiple",
     ("sam", "tflite"): "onnx2tf tiles a 4-d tensor with one multiple",
     ("sam", "migraphx"): "migraphx resizes only nearest and linear",

@@ -68,31 +68,37 @@ generated from `plugins/python/engine/support_matrix.py`, regenerate it with
 | depth | yes | yes | yes | yes | yes | yes | no [1] | yes | yes | yes | yes | yes | no | no |
 | clip | yes | yes | yes | yes | partial [2] | partial [2] | partial [3] | yes | yes | yes | yes | yes | no | no |
 | anomaly | yes | yes | yes | yes | yes | yes | yes | yes | yes | yes | yes | no | no | no |
-| classifier | yes | yes | yes | yes | yes | yes | yes | yes | yes | partial [4, 5] | yes | no | no | no |
-| embedding | yes | yes | yes | yes | yes | yes | partial [6] | yes | yes | yes | yes | no | no | no |
-| action | yes | yes | yes | yes | yes | yes | no [7] | no [8] | yes | yes | yes | no | no | no |
-| superres | yes | yes | yes | yes | no [9] | no [9] | yes | yes | yes | yes | yes | no | no | no |
-| optical_flow | yes | yes | yes | yes | no [10] | no [10] | no [7] | yes | yes | yes | yes | no | no | no |
-| sam | yes | yes | yes | yes | no [11] | no [11] | no [12] | yes | yes | yes | no [13] | no | no | no |
-| zero_shot | yes | yes | yes | yes | no [14] | no [14] | no [14] | yes | yes | no [15] | no [14] | no | no | no |
+| classifier | yes | yes | yes | yes | partial [4] | partial [4] | partial [5, 6, 7] | yes | yes | partial [8, 9] | partial [10, 11] | no | no | no |
+| embedding | yes | yes | yes | yes | yes | yes | partial [12] | yes | yes | yes | yes | no | no | no |
+| action | yes | yes | yes | yes | yes | yes | no [13] | no [14] | yes | yes | yes | no | no | no |
+| superres | yes | yes | yes | yes | no [15] | no [15] | yes | yes | yes | yes | yes | no | no | no |
+| optical_flow | yes | yes | yes | yes | no [16] | no [16] | no [13] | yes | yes | yes | yes | no | no | no |
+| sam | yes | yes | yes | yes | no [17] | no [17] | no [18] | yes | yes | yes | no [19] | no | no | no |
+| zero_shot | yes | yes | yes | yes | no [20] | no [20] | no [20] | yes | yes | no [21] | no [20] | no | no | no |
 | llm | yes | yes | yes | no | no | no | no | no | no | no | no | no | yes | yes |
 | whisper | yes | yes | yes | no | no | no | no | no | no | no | no | no | no | no |
 
 1. ncnn rejects the broadcast across the batch axis
 2. google/siglip-base-patch16-224: onnx2tf splits a constant vector one off
 3. google/siglip-base-patch16-224: ncnn rejects the reshape that indexes the batch
-4. convnext_tiny: tinygrad's Gather rejects nested constant indices
-5. swin_t: tinygrad's ScatterND writes into a tensor with other uses
-6. facebook/dinov2-small: ncnn rejects the broadcast across the batch axis
-7. ncnn runs one frame at a time
-8. executorch's convolution takes 3-d or 4-d input
-9. onnx2tf slices a shape with a negative size
-10. the onnx2tf raft flow is tens of pixels off
-11. onnx2tf tiles a 4-d tensor with one multiple
-12. ncnn cannot permute a 5-rank tensor
-13. migraphx resizes only nearest and linear
-14. converting owlv2 runs past 12 GB
-15. tinygrad's Gather rejects 2-d constant indices
+4. convnext_tiny: onnx2tf scales convnext's layers along the wrong axis
+5. convnext_tiny: ncnn has no Gather layer
+6. vit_b_16: ncnn rejects the reshape that indexes the batch
+7. swin_t: ncnn cannot permute a 5-rank tensor
+8. convnext_tiny: tinygrad's Gather rejects nested constant indices
+9. swin_t: tinygrad's ScatterND writes into a tensor with other uses
+10. convnext_tiny: migraphx's convnext logits are uncorrelated with onnx's
+11. swin_t: migraphx's swin logits are off by up to 2
+12. facebook/dinov2-small: ncnn rejects the broadcast across the batch axis
+13. ncnn runs one frame at a time
+14. executorch's convolution takes 3-d or 4-d input
+15. onnx2tf slices a shape with a negative size
+16. the onnx2tf raft flow is tens of pixels off
+17. onnx2tf tiles a 4-d tensor with one multiple
+18. ncnn cannot permute a 5-rank tensor
+19. migraphx resizes only nearest and linear
+20. converting owlv2 runs past 12 GB
+21. tinygrad's Gather rejects 2-d constant indices
 <!-- support matrix end -->
 
 `pyml-engines` reads the same tables for one model. It takes a Hugging Face id, a
