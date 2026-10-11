@@ -60,6 +60,13 @@ class ExportedDepthAnything:
         return DepthAnythingGraph(), example_input
 
     def do_forward(self, frames):
+        import numpy as np
+
+        if not isinstance(frames, np.ndarray):
+            raise TypeError(
+                "exported depth models take frames in system memory, "
+                "put cudadownload before pyml_depth or use engine-name=pytorch"
+            )
         if frames.ndim == BATCH_DIMENSIONS:
             return [self._depth_map(frame) for frame in frames]
         return self._depth_map(frames)
@@ -106,29 +113,31 @@ class DepthAnythingEngine(PyTorchEngine):
             raise ValueError(f"Failed to load depth model '{model_name}': {e}")
 
     def do_forward(self, frames):
+        if frames.ndim == BATCH_DIMENSIONS:
+            return [self._depth_map(frame) for frame in frames]
+        return self._depth_map(frames)
+
+    def _depth_map(self, frame):
         import numpy as np
         import torch
         import torch.nn.functional as F
         from PIL import Image
 
-        is_batch = isinstance(frames, np.ndarray) and frames.ndim == 4
-        if not is_batch:
-            frames = frames[np.newaxis]
-
-        results = []
-        for frame in frames:
-            pil_img = Image.fromarray(frame.astype(np.uint8))
-            H, W = frame.shape[:2]
-            inputs = self.image_processor(images=pil_img, return_tensors="pt")
-            inputs = {k: v.to(self.device) for k, v in inputs.items()}
-            with torch.no_grad():
-                outputs = self.model(**inputs)
-            # outputs.predicted_depth: [1, H', W']
-            depth_up = F.interpolate(
-                outputs.predicted_depth.unsqueeze(0),
-                size=(H, W),
-                mode="bicubic",
-                align_corners=False,
-            ).squeeze()
-            results.append(depth_up.cpu().numpy())
-        return results[0] if not is_batch else results
+        on_the_device = torch.is_tensor(frame)
+        # the image processor resizes a cuda tensor without leaving the device
+        image = frame if on_the_device else Image.fromarray(frame.astype(np.uint8))
+        height, width = frame.shape[:2]
+        inputs = self.image_processor(images=image, return_tensors="pt")
+        inputs = {k: v.to(self.device) for k, v in inputs.items()}
+        with torch.no_grad():
+            outputs = self.model(**inputs)
+        # outputs.predicted_depth: [1, H', W']
+        depth_map = F.interpolate(
+            outputs.predicted_depth.unsqueeze(0),
+            size=(height, width),
+            mode="bicubic",
+            align_corners=False,
+        ).squeeze()
+        if on_the_device:
+            return depth_map
+        return depth_map.cpu().numpy()

@@ -32,6 +32,7 @@ from backend.gst.cuda_memory import (  # noqa: E402
     is_cuda_buffer,
     map_device_frame,
     rgb_device_frame,
+    write_device_frame,
 )
 
 # memory 0 is the video frame
@@ -124,10 +125,9 @@ class GstFrameIO(FrameIO):
         import numpy as np
 
         if is_cuda_buffer(target):
-            raise NotImplementedError(
-                "an element that writes frames back into the buffer "
-                "cannot write to cuda memory yet, put cudadownload before it"
-            )
+            self.release_frames(target)
+            write_device_frame(target, frame)
+            return True
         read_memories = [
             np.frombuffer(map_info.data, dtype=np.uint8)
             for map_info in self.read_map_infos.get(target, [])

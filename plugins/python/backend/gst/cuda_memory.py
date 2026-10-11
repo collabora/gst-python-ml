@@ -39,6 +39,7 @@ GST_PADDING = 4
 
 CUDA_ARRAY_INTERFACE_VERSION = 3
 UNSIGNED_BYTE_TYPESTR = "|u1"
+COLOUR_CHANNEL_COUNT = 3
 
 CUDA_SUCCESS = 0
 CU_EVENT_DISABLE_TIMING = 0x2
@@ -238,14 +239,18 @@ class DeviceFrameMap:
         )
 
 
-# cuda memory pads rows to a pitch, the video meta carries it
-def row_pitch(buffer, width, channels):
+def gst_video_module():
     import gi
 
     gi.require_version("GstVideo", "1.0")
     from gi.repository import GstVideo
 
-    video_meta = GstVideo.buffer_get_video_meta(buffer)
+    return GstVideo
+
+
+# cuda memory pads rows to a pitch, the video meta carries it
+def row_pitch(buffer, width, channels):
+    video_meta = gst_video_module().buffer_get_video_meta(buffer)
     if video_meta is None:
         return width * channels
     return video_meta.stride[0]
@@ -295,3 +300,38 @@ def rgb_device_frame(frame, video_format):
         return frame[..., rgb_channels.start : rgb_channels.stop]
     # torch refuses negative strides
     return frame[..., list(rgb_channels)]
+
+
+def written_channels(frame_channel_count, video_format):
+    channel_count, rgb_slice = packed_format_layout(video_format)
+    leaves_alpha_as_is = frame_channel_count == COLOUR_CHANNEL_COUNT < channel_count
+    if not leaves_alpha_as_is:
+        return slice(None)
+    first_colour_channel = min(range(channel_count)[rgb_slice[-1]])
+    return slice(first_colour_channel, first_colour_channel + COLOUR_CHANNEL_COUNT)
+
+
+def write_device_frame(buffer, frame):
+    import torch
+
+    gst_video = gst_video_module()
+    video_meta = gst_video.buffer_get_video_meta(buffer)
+    if video_meta is None:
+        raise ValueError("a cuda buffer without a video meta has no known layout")
+    height, width, frame_channel_count = frame.shape
+    if (height, width) != (video_meta.height, video_meta.width):
+        raise ValueError(
+            f"a {width}x{height} frame does not fit a "
+            f"{video_meta.width}x{video_meta.height} buffer"
+        )
+    video_format = gst_video.VideoFormat.to_string(video_meta.format)
+    channel_count, _ = packed_format_layout(video_format)
+    channels = written_channels(frame_channel_count, video_format)
+    pixels = frame if torch.is_tensor(frame) else torch.from_numpy(frame)
+    device_map = map_device_frame(buffer, height, width, channel_count, writable=True)
+    try:
+        device_map.tensor[..., channels].copy_(pixels)
+        # downstream waits on the producer's stream, never on this one
+        torch.cuda.current_stream().synchronize()
+    finally:
+        device_map.unmap()

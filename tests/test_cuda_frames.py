@@ -112,17 +112,6 @@ def test_a_cuda_frame_reads_without_a_copy_as_the_system_frame(running_pipeline)
         assert len(frameio.read_map_infos.get(device_buffer, [])) == 0
 
 
-@needs_cuda
-@pytest.mark.parametrize("running_pipeline", [("RGBA", "RGBA")], indirect=True)
-def test_writing_a_frame_into_cuda_memory_is_refused(running_pipeline):
-    device_buffer = pull_buffer(running_pipeline.get_by_name("device_sink"))
-
-    with pytest.raises(NotImplementedError):
-        frameio.write_frame(
-            device_buffer, np.zeros((HEIGHT, WIDTH, RGB_CHANNELS), np.uint8)
-        )
-
-
 def write_then_read_back(buffer):
     writable_map = map_device_frame(buffer, HEIGHT, WIDTH, RGBA_CHANNELS, writable=True)
     writable_map.tensor[WRITTEN_ROW].fill_(WRITTEN_VALUE)

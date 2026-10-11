@@ -31,6 +31,8 @@ Contract expected from the host element:
   self.colormap   - str colormap name (a property)
 """
 
+from functools import cache
+
 # cv2 colormap IDs for depth visualization
 COLORMAP_IDS = {
     "inferno": 9,
@@ -39,6 +41,10 @@ COLORMAP_IDS = {
     "plasma": 18,
     "magma": 13,
 }
+
+
+MAXIMUM_DEPTH_LEVEL = 255
+DEPTH_LEVEL_COUNT = MAXIMUM_DEPTH_LEVEL + 1
 
 
 class DepthTask:
@@ -60,9 +66,13 @@ class DepthTask:
         import cv2
         import numpy as np
 
+        if not isinstance(depth_map, np.ndarray):
+            return self.decode_on_the_device(depth_map, fmt)
         d_min, d_max = depth_map.min(), depth_map.max()
         if d_max > d_min:
-            depth_norm = ((depth_map - d_min) / (d_max - d_min) * 255).astype(np.uint8)
+            depth_norm = (
+                (depth_map - d_min) / (d_max - d_min) * MAXIMUM_DEPTH_LEVEL
+            ).astype(np.uint8)
         else:
             depth_norm = np.zeros_like(depth_map, dtype=np.uint8)
 
@@ -78,6 +88,20 @@ class DepthTask:
         # Build uint8 depth map metadata bytes (payload only; header added by shell).
         depth_bytes = depth_norm.tobytes()
         return output, depth_bytes
+
+    def decode_on_the_device(self, depth_map, fmt):
+        import torch
+
+        depth_min, depth_max = depth_map.min(), depth_map.max()
+        depth_range = depth_max - depth_min
+        scaled = (depth_map - depth_min) / depth_range * MAXIMUM_DEPTH_LEVEL
+        normalized_depth = torch.where(depth_range > 0, scaled, 0).to(torch.uint8)
+        output = None
+        if self.visualize:
+            colormap_id = COLORMAP_IDS.get(self.colormap, COLORMAP_IDS["inferno"])
+            colours = colour_table(colormap_id, fmt, depth_map.device)
+            output = colours[normalized_depth.long()]
+        return output, normalized_depth.cpu().numpy().tobytes()
 
     @staticmethod
     def _convert_bgr_to_format(bgr, fmt):
@@ -101,3 +125,17 @@ class DepthTask:
             return np.roll(bgra, 1, axis=-1)  # BGRA -> ABGR
         else:
             return cv2.cvtColor(bgr, cv2.COLOR_BGR2RGB)
+
+
+# applyColorMap colours each depth level independently of its neighbours
+@cache
+def colour_table(colormap_id, fmt, device):
+    import cv2
+    import numpy as np
+    import torch
+
+    levels = np.arange(DEPTH_LEVEL_COUNT, dtype=np.uint8).reshape(DEPTH_LEVEL_COUNT, 1)
+    colours = DepthTask._convert_bgr_to_format(
+        cv2.applyColorMap(levels, colormap_id), fmt
+    )
+    return torch.from_numpy(colours.reshape(DEPTH_LEVEL_COUNT, -1)).to(device)

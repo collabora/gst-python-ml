@@ -101,8 +101,14 @@ cudascale ! pyml_yolo engine-name=pytorch device=cuda ! pyml_tracker !
 pyml_overlay` never copies a frame to the host. On CUDA frames the overlay
 ignores the `renderer` property and draws boxes, labels, tracking squares and
 trails without antialiasing, with Pillow's default font. `cudadownload` drops
-the analytics metadata, so it goes after the last element that reads it. Every
-other element takes frames in system memory.
+the analytics metadata, so it goes after the last element that reads it.
+
+`pyml_depth` takes CUDA memory with `engine-name=pytorch device=cuda` too: the
+image processor resizes and normalises the frame on the GPU and the colormap
+frame is written back into the CUDA buffer, with only the uint8 depth blob
+going to the host, about 5 ms a frame less than through system memory. Add
+`cudadownload` after it to save or show the colormap. Every other element
+takes frames in system memory.
 
 Each pytorch element on `device=cuda` runs its inference on a CUDA stream of its
 own, so two elements on the branches of a `tee` overlap on the GPU. Set

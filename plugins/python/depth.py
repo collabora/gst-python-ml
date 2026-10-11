@@ -63,6 +63,7 @@ class DepthTransform(VideoTransform, DepthTask):
     """
 
     META_HEADER = DEPTH_META_HEADER
+    ACCEPTS_DEVICE_FRAMES = True
 
     __gstmetadata__ = (
         "Depth",
