@@ -189,3 +189,12 @@ def test_the_depth_colours_written_on_the_device_match_the_system_colours(
     assert np.array_equal(device_frame, colours[blob_depth(device_buffer), 0])
     matching = (device_frame == system_frame).all(axis=-1)
     assert matching.mean() > MATCHING_COLOUR_FRACTION
+
+
+def test_the_colormap_table_names_the_opencv_colormaps():
+    import cv2
+
+    from tasks.depth import COLORMAP_IDS
+
+    for name, identifier in COLORMAP_IDS.items():
+        assert identifier == getattr(cv2, f"COLORMAP_{name.upper()}")
