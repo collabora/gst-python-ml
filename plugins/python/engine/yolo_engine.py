@@ -54,6 +54,7 @@ CONFIDENCE_COLUMN = 4
 PYTORCH_WEIGHTS_FORMAT = "pt"
 WARMUP_BATCH_AND_CHANNELS = (1, 3)
 TENSORRT_PACKAGE = "tensorrt"
+HALF_PRECISION_QUANTIZATION = 16
 TENSORRT_FORMAT = "engine"
 TENSORRT_SUFFIX = f".{TENSORRT_FORMAT}"
 TENSORRT_EXPORT_CACHE = MODEL_CACHE / "tensorrt"
@@ -104,7 +105,7 @@ def tensorrt_engine_path(model_name, imgsz, device):
     weights = YOLO(str(EXPORT_WORK_DIRECTORY / f"{model_name}.pt"))
     exported_path = weights.export(
         format=TENSORRT_FORMAT,
-        half=True,
+        quantize=HALF_PRECISION_QUANTIZATION,
         imgsz=imgsz,
         device=torch.device(device),
         dynamic=False,
@@ -213,7 +214,10 @@ class DirectDetector:
             weights, device=torch.device(device), fp16=is_tensorrt_engine, verbose=False
         )
         self.runs_pytorch = self.backend.format == PYTORCH_WEIGHTS_FORMAT
-        self.runs_tensorrt = self.backend.format == TENSORRT_FORMAT
+        # execute_v2 runs on a stream of its own, a captured engine replays on ours
+        self.waits_for_the_input = (
+            self.backend.format == TENSORRT_FORMAT and self.backend.graph is None
+        )
         self.input_size = imgsz if self.runs_pytorch else self.backend.imgsz
         self.keypoint_shape = getattr(self.backend, "kpt_shape", None)
         warmup_height, warmup_width = (
@@ -235,8 +239,7 @@ class DirectDetector:
             pads_to_stride=self.runs_pytorch,
         )
         with torch.inference_mode():
-            if self.runs_tensorrt:
-                # tensorrt runs on a stream of its own that does not wait for ours
+            if self.waits_for_the_input:
                 torch.cuda.current_stream().synchronize()
             predictions = self.backend(model_input)
             if isinstance(predictions, (list, tuple)):

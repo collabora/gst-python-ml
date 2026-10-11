@@ -47,6 +47,14 @@ yolo = [
 ]
 tensorrt = [
     "tensorrt",
+    # earlier releases build engines only with tensorrt 10, which has no python 3.14 wheel
+    "ultralytics>=8.4.175; sys_platform != 'darwin'",
+    # ultralytics casts the graph to fp16 with it before tensorrt 11 builds the engine
+    "nvidia-modelopt",
+    # what its fp16 cast imports, its onnx extra pins onnxruntime-gpu 1.24
+    "onnx-graphsurgeon",
+    "lief",
+    "polygraphy",
 ]
 llm = [
     "bitsandbytes>=0.49.2",

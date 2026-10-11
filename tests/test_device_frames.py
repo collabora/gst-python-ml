@@ -34,6 +34,7 @@ pytestmark = pytest.mark.skipif(
 )
 
 PULL_TIMEOUT = 10 * Gst.SECOND
+TENSORRT_INPUT_SIZE = 640
 # the device frame map ignores the cuda row pitch, these rows have none
 FRAME_WIDTH, FRAME_HEIGHT = 1280, 960
 
@@ -81,18 +82,14 @@ def loaded_element(element_class, model_name, track=False, tensorrt=False):
     return element
 
 
-def device_and_system_results(
-    element_class, model_name, frames, track=False, tensorrt=False
-):
+def device_and_system_results(element_class, model_name, frames, track=False):
     (_, device_frame), (_, system_frame) = frames
     assert device_frame.device.type == "cuda"
     # the direct detector hands back its results on the cpu
-    return (
-        loaded_element(element_class, model_name, track, tensorrt)
-        .do_forward(device_frame)
-        .cpu(),
-        loaded_element(element_class, model_name, track).do_forward(system_frame).cpu(),
-    )
+    return [
+        loaded_element(element_class, model_name, track).do_forward(frame).cpu()
+        for frame in (device_frame, system_frame)
+    ]
 
 
 @pytest.mark.parametrize("track", [False, True])
@@ -153,13 +150,23 @@ def test_yolo_on_a_cuda_frame_never_synchronizes_the_whole_device(
         ("pose", "YOLOPoseTransform", YOLO_POSE_MODEL),
     ],
 )
-def test_tensorrt_on_a_cuda_frame_finds_the_boxes_of_the_system_frame(
+def test_tensorrt_on_a_cuda_frame_finds_the_boxes_ultralytics_finds_with_the_engine(
     portrait_frames, module_name, class_name, model_name
 ):
-    element_class = getattr(importlib.import_module(module_name), class_name)
+    from engine.yolo_engine import tensorrt_engine_path
 
-    device_result, system_result = device_and_system_results(
-        element_class, model_name, portrait_frames, tensorrt=True
+    element_class = getattr(importlib.import_module(module_name), class_name)
+    (_, device_frame), (_, system_frame) = portrait_frames
+
+    device_result = (
+        loaded_element(element_class, model_name, tensorrt=True)
+        .do_forward(device_frame)
+        .cpu()
+    )
+    # the square fp16 engine input moves boxes 15 pixels from the pt weights
+    engine_path = tensorrt_engine_path(model_name, TENSORRT_INPUT_SIZE, "cuda")
+    system_result = (
+        loaded_element(element_class, engine_path).do_forward(system_frame).cpu()
     )
 
     assert_same_boxes(device_result, system_result)

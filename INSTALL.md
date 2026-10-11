@@ -148,8 +148,9 @@ uv sync --extra onnx
 - ExecuTorch has no Python 3.14 wheel.
 - TensorRT is `device=tensorrt` on the ONNX engine. It needs the `onnx-gpu` extra and the TensorRT 10 libraries:
   `uv pip install tensorrt-cu13-libs==10.16.1.11`, a 4 GB install. Tested with onnxruntime-gpu 1.30.
-- `tensorrt=true` on `pyml_yolo` and `pyml_yolo_pose` needs the `tensorrt` extra. On Python 3.14 that is TensorRT 11,
-  which replaces the TensorRT 10 libraries `device=tensorrt` on the ONNX engine loads, so keep the two in separate venvs.
+- `tensorrt=true` on `pyml_yolo` and `pyml_yolo_pose` needs the `tensorrt` extra, which installs TensorRT 11.
+  onnxruntime-gpu 1.30 loads `libnvinfer.so.10`, so the extra and `device=tensorrt` on the ONNX engine cannot share a venv today.
+  The fp16 conversion runs the model in onnxruntime, so add the `onnx` or `onnx-gpu` extra too.
 - LiteRT runs a `.tflite` file with the `litert` extra alone. Exporting one, or loading a Keras model by name, needs `tensorflow` too.
 - llama.cpp builds a CPU wheel. For CUDA: `CMAKE_ARGS="-DGGML_CUDA=on" pip install llama-cpp-python`.
   The extra also installs pywhispercpp, which runs `pyml_whispertranscribe` on the CPU. For CUDA:
