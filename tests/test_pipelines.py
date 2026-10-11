@@ -186,8 +186,8 @@ def skip_without_onnx_provider(pipeline):
     import onnxruntime
     from engine.onnx_engine import (
         DEVICE_PROVIDERS,
-        TENSORRT_LIBRARIES_PACKAGE,
         TENSORRT_PROVIDER,
+        tensorrt_provider_load_error,
     )
 
     wanted = next(
@@ -201,10 +201,10 @@ def skip_without_onnx_provider(pipeline):
     if wanted and not set(wanted) & set(onnxruntime.get_available_providers()):
         pytest.skip(f"onnxruntime has no provider for device={device.group(1)}")
     # onnxruntime-gpu lists the tensorrt provider without its libraries
-    if TENSORRT_PROVIDER in wanted and (
-        importlib.util.find_spec(TENSORRT_LIBRARIES_PACKAGE) is None
-    ):
-        pytest.skip("the tensorrt libraries are not installed")
+    if TENSORRT_PROVIDER in wanted:
+        load_error = tensorrt_provider_load_error()
+        if load_error is not None:
+            pytest.skip(f"the tensorrt provider does not load: {load_error}")
 
 
 def skip_without_server(pipeline):

@@ -56,6 +56,35 @@ TENSORRT_LIBRARY_PATTERNS = (
     "libnvinfer_plugin.so.*",
     "libnvonnxparser.so.*",
 )
+TENSORRT_PROVIDER_LIBRARY_PATTERN = "*onnxruntime_providers_tensorrt*"
+
+
+# the pip wheel's tensorrt is not on the library path
+def preload_tensorrt_libraries():
+    package = importlib.util.find_spec(TENSORRT_LIBRARIES_PACKAGE)
+    if package is None:
+        return
+    directory = Path(package.submodule_search_locations[0])
+    for pattern in TENSORRT_LIBRARY_PATTERNS:
+        for library in directory.glob(pattern):
+            ctypes.CDLL(str(library), mode=ctypes.RTLD_GLOBAL)
+
+
+# the provider is linked against one libnvinfer major, the installed one may differ
+def tensorrt_provider_load_error():
+    import onnxruntime as ort
+
+    ort.preload_dlls()
+    preload_tensorrt_libraries()
+    capi = Path(ort.__file__).parent / "capi"
+    library = next(capi.glob(TENSORRT_PROVIDER_LIBRARY_PATTERN), None)
+    if library is None:
+        return None
+    try:
+        ctypes.CDLL(str(library))
+    except OSError as error:
+        return str(error)
+    return None
 
 
 class ONNXEngine(MLEngine):
@@ -201,22 +230,12 @@ class ONNXEngine(MLEngine):
             ort.preload_dlls()
         options = {"device_id": int(device.split(":")[-1]) if ":" in device else 0}
         if provider == TENSORRT_PROVIDER:
-            self._preload_tensorrt_libraries()
+            preload_tensorrt_libraries()
             TENSORRT_ENGINE_CACHE.mkdir(parents=True, exist_ok=True)
             options["trt_engine_cache_enable"] = True
             options["trt_engine_cache_path"] = str(TENSORRT_ENGINE_CACHE)
             options["trt_fp16_enable"] = TENSORRT_HALF_PRECISION_SUFFIX in device
         return (provider, options)
-
-    # the pip wheel's tensorrt is not on the library path
-    def _preload_tensorrt_libraries(self):
-        package = importlib.util.find_spec(TENSORRT_LIBRARIES_PACKAGE)
-        if package is None:
-            return
-        directory = Path(package.submodule_search_locations[0])
-        for pattern in TENSORRT_LIBRARY_PATTERNS:
-            for library in directory.glob(pattern):
-                ctypes.CDLL(str(library), mode=ctypes.RTLD_GLOBAL)
 
     def do_forward(self, frames):
         """Handle inference for different types of models, supporting single frames or batches."""
