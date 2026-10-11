@@ -11,6 +11,8 @@ from gi.repository import Gst
 from .format_converter import FormatConverter
 from .metadata import BATCH_SOURCE_INDEX_METADATA
 
+MEMORIES_PER_FRAME = 1
+
 
 class MuxedBufferProcessor:
     """
@@ -36,6 +38,17 @@ class MuxedBufferProcessor:
         self.framerate_num = framerate_num
         self.framerate_denom = framerate_denom
         self.format_converter = FormatConverter()
+        # the caller unmaps these once it is done with the frames
+        self.map_infos = []
+
+    def read_memory(self, buf, index, format):
+        success, map_info = buf.map_range(index, MEMORIES_PER_FRAME, Gst.MapFlags.READ)
+        if not success:
+            return None
+        self.map_infos.append(map_info)
+        return self.format_converter.get_rgb_frame(
+            map_info, format, self.height, self.width
+        )
 
     def extract_frames(self, buf, sinkpad):
         """
@@ -75,14 +88,11 @@ class MuxedBufferProcessor:
         # a blob appended upstream is an extra memory too, only the muxer's trailing metadata means a batch
         if not BATCH_SOURCE_INDEX_METADATA.present(buf):
             self.logger.info("Single frame mode (no metadata)")
-            with buf.peek_memory(0).map(Gst.MapFlags.READ) as info:
-                frame = self.format_converter.get_rgb_frame(
-                    info, format, self.height, self.width
-                )
-                if frame is None or not isinstance(frame, np.ndarray):
-                    self.logger.error("Invalid frame")
-                    return None, None, None
-                return frame, 1, format
+            frame = self.read_memory(buf, 0, format)
+            if frame is None or not isinstance(frame, np.ndarray):
+                self.logger.error("Invalid frame")
+                return None, None, None
+            return frame, 1, format
 
         # Batch case: last chunk is metadata
         else:
@@ -90,14 +100,11 @@ class MuxedBufferProcessor:
             num_frames = num_chunks - 1
             frames = []
             for i in range(num_frames):
-                with buf.peek_memory(i).map(Gst.MapFlags.READ) as info:
-                    frame = self.format_converter.get_rgb_frame(
-                        info, format, self.height, self.width
-                    )
-                    if frame is None or not isinstance(frame, np.ndarray):
-                        self.logger.error(f"Invalid frame at index {i}")
-                        return None, None, None
-                    frames.append(frame)
+                frame = self.read_memory(buf, i, format)
+                if frame is None or not isinstance(frame, np.ndarray):
+                    self.logger.error(f"Invalid frame at index {i}")
+                    return None, None, None
+                frames.append(frame)
 
             # Read metadata from the last chunk
             num_sources = len(BATCH_SOURCE_INDEX_METADATA.read(buf))

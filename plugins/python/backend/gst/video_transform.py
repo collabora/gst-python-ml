@@ -123,3 +123,5 @@ class VideoTransform(BaseTransform, FrameProcessingMixin):
         except Exception as exception:
             post_error(self, "transform error", exception)
             return Gst.FlowReturn.ERROR
+        finally:
+            frameio.release_frames(buf)

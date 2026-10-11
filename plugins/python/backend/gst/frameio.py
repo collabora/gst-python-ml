@@ -16,13 +16,6 @@
 # Free Software Foundation, Inc., 51 Franklin Street, Fifth Floor,
 # Boston, MA 02110-1301, USA.
 
-"""GStreamer implementation of the frame buffer I/O interface.
-
-Reads use `MuxedBufferProcessor` (handles single and batched/muxed buffers);
-writes map the buffer for writing and memmove the frame bytes in place; blob
-append wraps the bytes in a new memory chunk on the buffer.
-"""
-
 import gi
 
 gi.require_version("Gst", "1.0")
@@ -47,35 +40,57 @@ class GstFrameIO(FrameIO):
     def __init__(self):
         self.logger = LoggerFactory.get(LoggerFactory.LOGGER_TYPE_GST)
         self.format_converter = FormatConverter()
+        # the frames read from a buffer are views into these maps
+        self.read_map_infos = {}
+
+    def keep_mapped(self, target, map_infos):
+        self.read_map_infos.setdefault(target, []).extend(map_infos)
 
     def read_frames(self, target, source, width, height, framerate=(30, 1)):
         processor = MuxedBufferProcessor(
             self.logger, width, height, framerate[0], framerate[1]
         )
-        return processor.extract_frames(target, source)
+        try:
+            return processor.extract_frames(target, source)
+        finally:
+            self.keep_mapped(target, processor.map_infos)
 
     def read_frame(self, target, source, width, height):
         success, map_info = map_video_memory(target, Gst.MapFlags.READ)
         if not success:
             return None
-        try:
-            return self.format_converter.to_rgb(
-                map_info.data, width, height, target, source
-            )
-        finally:
+        self.keep_mapped(target, [map_info])
+        video_format = self.format_converter.get_video_format(target, source)
+        return self.format_converter.get_rgb_frame(
+            map_info, video_format, height, width
+        )
+
+    def release_frames(self, target):
+        for map_info in self.read_map_infos.pop(target, []):
             target.unmap(map_info)
 
     def write_frame(self, target, frame):
-        import ctypes
         import numpy as np
 
+        read_memories = [
+            np.frombuffer(map_info.data, dtype=np.uint8)
+            for map_info in self.read_map_infos.get(target, [])
+        ]
+        if any(np.shares_memory(frame, memory) for memory in read_memories):
+            return True
+        # a write map over an open read map makes gstreamer copy the memory
+        self.release_frames(target)
         success, map_info = map_video_memory(target, Gst.MapFlags.WRITE)
         if not success:
             return False
         try:
-            frame_bytes = np.ascontiguousarray(frame).tobytes()
-            dst = (ctypes.c_char * map_info.size).from_buffer(map_info.data)
-            ctypes.memmove(dst, frame_bytes, min(len(frame_bytes), map_info.size))
+            memory = np.frombuffer(map_info.data, dtype=np.uint8)
+            if frame.size > memory.size:
+                raise ValueError(
+                    f"a frame of {frame.size} values does not fit in "
+                    f"{memory.size} bytes of video memory"
+                )
+            np.copyto(memory[: frame.size].reshape(frame.shape), frame)
             return True
         finally:
             target.unmap(map_info)

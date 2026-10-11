@@ -49,6 +49,9 @@ class FrameIO(ABC):
         Use this for plain (non-muxed) video buffers; use `read_frames` when the
         buffer may carry batched/muxed sources."""
 
+    def release_frames(self, target):
+        pass
+
     @abstractmethod
     def write_frame(self, target, frame):
         """Write an (H, W, C) uint8 numpy ``frame`` back into ``target`` in
