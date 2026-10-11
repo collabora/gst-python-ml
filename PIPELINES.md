@@ -1229,6 +1229,11 @@ overlapping a track that matched this frame by more than
 `new-track-max-overlap` starts no track, since both are second boxes on one
 object that NMS kept. `camera-motion` re-matches leftovers after a pan.
 
+Use it instead of `track=true` on the detector, not as well as it. `track=true`
+runs ultralytics' BOTSORT inside the detector, about 8 ms a frame on the CPU
+with its optical-flow motion compensation, while `pyml_tracker` costs about
+2 ms, so a pipeline with both tracks twice and pays for the slow one.
+
 #### YOLO + standalone SORT tracker
 
 ```
