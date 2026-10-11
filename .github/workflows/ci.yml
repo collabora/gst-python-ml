@@ -123,8 +123,9 @@ jobs:
           YOLO_AUTOINSTALL: "false"
           # tensorflow's onednn kernels segfault the depth model on the runner
           TF_ENABLE_ONEDNN_OPTS: "0"
+        # an engine with no test of its own makes pytest exit 5
         run: |
-          .venv/bin/python -m pytest tests/test_engines.py -q -k "${{ matrix.engine }}"
+          .venv/bin/python -m pytest tests/test_engines.py -q -k "${{ matrix.engine }}" || [ $? -eq 5 ]
           if [ "${{ matrix.engine }}" = "onnx" ]; then
             .venv/bin/python -m pytest tests/test_onnx_devices.py -q
           fi
