@@ -150,6 +150,8 @@ uv sync --extra onnx
   `uv pip install tensorrt-cu13-libs==10.16.1.11`, a 4 GB install. Tested with onnxruntime-gpu 1.30.
 - LiteRT runs a `.tflite` file with the `litert` extra alone. Exporting one, or loading a Keras model by name, needs `tensorflow` too.
 - llama.cpp builds a CPU wheel. For CUDA: `CMAKE_ARGS="-DGGML_CUDA=on" pip install llama-cpp-python`.
+  The extra also installs pywhispercpp, which runs `pyml_whispertranscribe` on the CPU. For CUDA:
+  `GGML_CUDA=1 pip install git+https://github.com/absadiki/pywhispercpp`.
 - MLX runs on Apple Silicon. On Linux use the `mlx-cpu` extra.
 - The JAX extras bring in `keras-hub`, which runs `pyml_depth` and `pyml_clip` on `engine-name=jax`.
   uv leaves out its `tensorflow-text` dependency. pip installs it, and with it TensorFlow, which has no 3.14 wheel,

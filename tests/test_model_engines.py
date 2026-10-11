@@ -24,6 +24,7 @@ DEPTH_MODEL = "depth-anything/Depth-Anything-V2-Small-hf"
 CAUSAL_LM_MODEL = "Qwen/Qwen3-0.6B"
 CLIP_MODEL = "openai/clip-vit-base-patch32"
 GROUNDING_MODEL = "IDEA-Research/grounding-dino-tiny"
+WHISPER_MODEL = "openai/whisper-tiny"
 TORCHVISION_CLASSIFIERS = ("resnet18", "mobilenet_v3_small")
 TORCHVISION_RESNETS = ("resnet18",)
 BENCHMARK_FRAMES = 5
@@ -43,6 +44,7 @@ def hub_configs(monkeypatch):
         CAUSAL_LM_MODEL: ["Qwen3ForCausalLM"],
         CLIP_MODEL: ["CLIPModel"],
         GROUNDING_MODEL: ["GroundingDinoForObjectDetection"],
+        WHISPER_MODEL: ["WhisperForConditionalGeneration"],
     }
     monkeypatch.setattr(model_engines, "hub_architectures", architectures.get)
 
@@ -83,6 +85,13 @@ def test_a_causal_lm_runs_on_llamacpp_and_not_on_tvm(hub_configs):
     llm = tasks_of(CAUSAL_LM_MODEL)["llm"]
     assert engine_of(llm, "llamacpp")["status"] == model_engines.STATUS_RUNS
     assert engine_of(llm, "tvm")["status"] == model_engines.STATUS_NOT_PORTED
+
+
+def test_a_hub_whisper_runs_on_llamacpp_and_mlx_and_not_on_tvm(hub_configs):
+    whisper = tasks_of(WHISPER_MODEL)["whisper"]
+    assert engine_of(whisper, "llamacpp")["status"] == model_engines.STATUS_RUNS
+    assert engine_of(whisper, "mlx")["status"] == model_engines.STATUS_RUNS
+    assert engine_of(whisper, "tvm")["status"] == model_engines.STATUS_NOT_PORTED
 
 
 def test_grounding_dino_runs_on_pytorch_only(hub_configs):

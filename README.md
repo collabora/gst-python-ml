@@ -76,7 +76,7 @@ generated from `plugins/python/engine/support_matrix.py`, regenerate it with
 | sam | yes | yes | yes | yes | no [19] | no [19] | no [20] | yes | yes | yes | no [21] | no | no | no |
 | zero_shot | yes | yes | yes | yes | no [22] | no [22] | no [22] | yes | yes | no [23] | no [22] | no | no | no |
 | llm | yes | yes | yes | no | no | no | no | no | no | no | no | no | yes | yes |
-| whisper | yes | yes | yes | no | no | no | no | no | no | no | no | no | no | no |
+| whisper | yes | yes | yes | no | no | no | no | no | no | no | no | no | yes | yes |
 
 1. yolo11n-seg: tvm's vm cannot emit the subtract from a constant
 2. yolo11n-seg: onnx2tf multiplies the segmentation boxes along the wrong axis

@@ -20,6 +20,8 @@ import os
 import numpy as np
 
 from .ml_engine import MLEngine
+from .whisper_cpp import WhisperCpp
+from .whisper_engine import OPENAI_WHISPER_PREFIX
 
 GGUF_SUFFIX = ".gguf"
 # model-name=repo:quant, the shorthand llama.cpp's own -hf flag takes
@@ -74,6 +76,13 @@ class LlamaCppEngine(MLEngine):
         self.model_name = model_name
         self.kwargs = kwargs
         self.n_ctx = kwargs.get("n_ctx", self.n_ctx)
+
+        # is_hub_whisper raises on a gguf name
+        if model_name.startswith(OPENAI_WHISPER_PREFIX):
+            self.model = WhisperCpp(model_name, use_gpu=self.n_gpu_layers != 0)
+            self.model_type = "whisper"
+            self.logger.info(f"whisper.cpp whisper downloaded and loaded: {model_name}")
+            return True
 
         from llama_cpp import Llama
 

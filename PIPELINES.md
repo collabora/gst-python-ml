@@ -191,7 +191,8 @@ again, and an engine that does not read ONNX converts
 it once more into `~/.cache/gst-python-ml/<engine>/`. ExecuTorch exports a
 `.pte` from the torch graph instead, and jax loads a keras-hub preset.
 `track=True` needs the PyTorch engine. `pyml_whispertranscribe` runs on onnx and
-openvino through their genai runtimes, see [Transcription](#transcription).
+openvino through their genai runtimes, on llamacpp through whisper.cpp and on mlx
+through mlx-whisper, see [Transcription](#transcription).
 
 Every engine runs depth, CLIP, SigLIP, YOLO and YOLO pose against the PyTorch
 results in `tests/test_exported_models.py`, except: ncnn rejects depth (a
@@ -749,8 +750,9 @@ Transcripts are logged at GStreamer info level. Run with `GST_DEBUG=python:4` to
 `pyml_whispertranscribe` runs faster-whisper on the PyTorch engine. With
 `engine-name=onnx` it builds the Hugging Face checkpoint for onnxruntime-genai,
 and with `engine-name=openvino` it exports it for openvino-genai, each once into
-`~/.cache/gst-python-ml/`. A size name such as `medium` means
-`openai/whisper-medium` on those engines.
+`~/.cache/gst-python-ml/`. `engine-name=llamacpp` downloads the whisper.cpp ggml
+file of the same size, and `engine-name=mlx` the mlx-community conversion. A size
+name such as `medium` means `openai/whisper-medium` on those engines.
 
 ```
 python pyml-launch.py filesrc location=data/air_traffic_korean_with_english.wav ! decodebin ! audioconvert ! pyml_whispertranscribe engine-name=onnx device=cpu language=ko ! fakesink

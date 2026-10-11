@@ -275,6 +275,16 @@ def test_openvino_transcribes_with_a_hub_whisper():
     assert WHISPER_EXPECTED_WORD in transcribed_with(engine)
 
 
+def test_llamacpp_transcribes_with_a_hub_whisper():
+    engine = engine_on_cpu("llamacpp", "pywhispercpp")
+    assert WHISPER_EXPECTED_WORD in transcribed_with(engine)
+
+
+def test_mlx_transcribes_with_a_hub_whisper():
+    engine = engine_on_cpu("mlx", "mlx_whisper")
+    assert WHISPER_EXPECTED_WORD in transcribed_with(engine)
+
+
 def test_onnx_refuses_a_model_path_that_does_not_exist():
     engine = engine_on_cpu("onnx", "onnxruntime")
     with pytest.raises(FileNotFoundError, match="yolo11m.onxx"):

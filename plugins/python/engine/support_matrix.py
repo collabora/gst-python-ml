@@ -139,7 +139,7 @@ TASK_ENGINES = {
     "sam": EXPORTED_MODEL_ENGINES,
     "zero_shot": EXPORTED_MODEL_ENGINES,
     "llm": ("onnx", "openvino", "llamacpp", "mlx"),
-    "whisper": ("onnx", "openvino"),
+    "whisper": ("onnx", "openvino", "llamacpp", "mlx"),
 }
 NCNN_ONE_FRAME = "ncnn runs one frame at a time"
 NCNN_BATCH_BROADCAST = "ncnn rejects the broadcast across the batch axis"

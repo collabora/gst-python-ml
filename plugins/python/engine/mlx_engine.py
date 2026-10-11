@@ -20,6 +20,8 @@ import os
 import numpy as np
 
 from .ml_engine import MLEngine
+from .mlx_whisper_model import MLX_WHISPER_PREFIX, MlxWhisper
+from .whisper_engine import OPENAI_WHISPER_PREFIX
 
 
 class MLXEngine(MLEngine):
@@ -63,6 +65,13 @@ class MLXEngine(MLEngine):
                 self.model = load(model_name)
             self.model_type = "custom"
             self.logger.info(f"MLX model loaded from local path: {model_name}")
+            return True
+
+        # is_hub_whisper misses an mlx-community whisper repo
+        if model_name.startswith((OPENAI_WHISPER_PREFIX, MLX_WHISPER_PREFIX)):
+            self.model = MlxWhisper(model_name)
+            self.model_type = "whisper"
+            self.logger.info(f"mlx-whisper whisper downloaded: {model_name}")
             return True
 
         # LLM via mlx-lm

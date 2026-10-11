@@ -99,16 +99,19 @@ tinygrad = [
 mlx = [
     "mlx>=0.20.0",
     "mlx-lm",
+    "mlx-whisper",
 ]
 # linux has no metal, the cpu backend is a separate wheel
 mlx-cpu = [
     "mlx[cpu]>=0.20.0",
+    "mlx-whisper",
 ]
 executorch = [
     "executorch; python_version < '3.14'",
 ]
 llamacpp = [
     "llama-cpp-python",
+    "pywhispercpp",
 ]
 jax-cpu = [
     "jax[cpu]",
