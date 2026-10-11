@@ -16,7 +16,8 @@
 # Free Software Foundation, Inc., 51 Franklin Street, Fifth Floor,
 # Boston, MA 02110-1301, USA.
 
-import inspect
+import sys
+
 import gi
 
 gi.require_version("Gst", "1.0")
@@ -27,6 +28,9 @@ from .logger import Logger  # noqa: E402
 if not hasattr(Gst, "info"):
     raise ImportError("Gst has no logging functions, gst-python is not installed")
 
+# the caller of error, warning, info or debug
+CALLER_DEPTH = 2
+
 
 class GstLogger(Logger):
     """Logger implementation using GStreamer with caller file and line number."""
@@ -35,9 +39,10 @@ class GstLogger(Logger):
         """
         Logs a message with the correct caller file and line number.
         """
-        frame = inspect.stack()[2]  # Get the caller (not this method)
-        filename = frame.filename.split("/")[-1]  # Get only filename
-        lineno = frame.lineno  # Get line number
+        # inspect.stack() reads source for every frame on each log call
+        frame = sys._getframe(CALLER_DEPTH)
+        filename = frame.f_code.co_filename.split("/")[-1]
+        lineno = frame.f_lineno
 
         # Format the message with caller info
         log_message = f"{filename}:{lineno} - {message % args if args else message}"
