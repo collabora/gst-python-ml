@@ -99,7 +99,7 @@ def test_an_ultralytics_pose_name_resolves_to_pose():
 
 
 def test_an_untested_ultralytics_variant_says_so():
-    (resolved,) = model_engines.resolve("yolo11n-seg")
+    (resolved,) = model_engines.resolve("yolo11n-cls")
     assert resolved.task == "yolo"
     assert resolved.note == UNTESTED_VARIANT_NOTE
 

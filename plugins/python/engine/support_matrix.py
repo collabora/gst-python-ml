@@ -215,7 +215,7 @@ ULTRALYTICS_VARIANT_TASKS = {
     "-obb": "yolo",
     "-cls": "yolo",
 }
-UNTESTED_ULTRALYTICS_VARIANTS = ("-seg", "-obb", "-cls")
+UNTESTED_ULTRALYTICS_VARIANTS = ("-cls",)
 UNTESTED_VARIANT_NOTE = "variant not in the parity tests"
 OPTICAL_FLOW_MODELS = ("raft_small", "raft_large")
 CLASSIFIER_TASK = "classifier"

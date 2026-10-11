@@ -39,6 +39,8 @@ BOX_COLUMNS = 4
 BOX_AND_CLASS_COLUMNS = 6
 # a pipeline frame has no file behind it
 FRAME_PATH = ""
+SEGMENT_TASK = "segment"
+ORIENTED_BOX_TASK = "obb"
 
 
 def exported_yolo_path(model_name):
@@ -96,6 +98,10 @@ class ExportedYolo:
             self.path = exported_yolo_executorch_path(model_name)
         self.names = ast.literal_eval(self.metadata["names"])
         self.end2end = ast.literal_eval(self.metadata["end2end"])
+        self.task_result = {
+            SEGMENT_TASK: self._segmentation_result,
+            ORIENTED_BOX_TASK: self._oriented_box_result,
+        }.get(self.metadata["task"], self._detection_result)
 
     def do_forward(self, frames):
         if self.track:
@@ -107,26 +113,85 @@ class ExportedYolo:
         return self._result(frames)
 
     def _result(self, frame):
-        import numpy as np
-        import torch
         from ultralytics.data.augment import LetterBox
-        from ultralytics.utils import nms, ops
 
         model_input = LetterBox(EXPORTED_INPUT_SHAPE, auto=False)(image=frame)
-        output = np.asarray(self.engine.do_forward(model_input), dtype=np.float32)
-        detections = nms.non_max_suppression(
-            torch.from_numpy(output),
+        return self.task_result(frame, self.engine.do_forward(model_input))
+
+    def _detections(self, predictions, rotated=False):
+        import numpy as np
+        import torch
+        from ultralytics.utils import nms
+
+        return nms.non_max_suppression(
+            torch.from_numpy(np.asarray(predictions, dtype=np.float32)),
             self.conf,
             self.iou,
             agnostic=self.agnostic_nms,
             max_det=MAXIMUM_DETECTIONS,
             nc=len(self.names),
             end2end=self.end2end,
+            rotated=rotated,
         )[0]
+
+    def _detection_result(self, frame, predictions):
+        from ultralytics.utils import ops
+
+        detections = self._detections(predictions)
         detections[:, :BOX_COLUMNS] = ops.scale_boxes(
             EXPORTED_INPUT_SHAPE, detections[:, :BOX_COLUMNS], frame.shape
         )
         return self._results(frame, detections)
+
+    def _segmentation_result(self, frame, outputs):
+        import numpy as np
+        import torch
+        from ultralytics.engine.results import Results
+        from ultralytics.utils import ops
+
+        predictions, prototypes = outputs
+        detections = self._detections(predictions)
+        detections[:, :BOX_COLUMNS] = ops.scale_boxes(
+            EXPORTED_INPUT_SHAPE, detections[:, :BOX_COLUMNS], frame.shape
+        )
+        if len(detections) == 0:
+            return self._results(frame, detections)
+        masks = ops.process_mask_native(
+            torch.from_numpy(np.asarray(prototypes, dtype=np.float32))[0],
+            detections[:, BOX_AND_CLASS_COLUMNS:],
+            detections[:, :BOX_COLUMNS],
+            frame.shape[:2],
+        )
+        has_mask = masks.amax((-2, -1)) > 0
+        return Results(
+            frame,
+            path=FRAME_PATH,
+            names=self.names,
+            boxes=detections[has_mask, :BOX_AND_CLASS_COLUMNS],
+            masks=masks[has_mask],
+        )
+
+    def _oriented_box_result(self, frame, predictions):
+        import torch
+        from ultralytics.engine.results import Results
+        from ultralytics.utils import ops
+
+        detections = self._detections(predictions, rotated=True)
+        rotated_boxes = torch.cat(
+            [detections[:, :BOX_COLUMNS], detections[:, -1:]], dim=-1
+        )
+        rotated_boxes[:, :BOX_COLUMNS] = ops.scale_boxes(
+            EXPORTED_INPUT_SHAPE, rotated_boxes[:, :BOX_COLUMNS], frame.shape, xywh=True
+        )
+        return Results(
+            frame,
+            path=FRAME_PATH,
+            names=self.names,
+            obb=torch.cat(
+                [rotated_boxes, detections[:, BOX_COLUMNS:BOX_AND_CLASS_COLUMNS]],
+                dim=-1,
+            ),
+        )
 
     def _results(self, frame, detections):
         from ultralytics.engine.results import Results

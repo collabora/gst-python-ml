@@ -123,7 +123,7 @@ class YoloTask(ObjectDetectorTask):
         self.logger.debug(
             f"Decoding YOLO result for buffer {hex(id(buf))}, stream {stream_idx}: {result}"
         )
-        boxes = result.boxes
+        boxes = result.boxes if result.boxes is not None else result.obb
         masks = None
         if not self.task_engine.track:
             masks = result.masks

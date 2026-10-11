@@ -66,7 +66,16 @@ SAM_SCORE_TOLERANCE = 1e-3
 SAM_MASK_AGREEMENT_FLOOR = 0.9999
 YOLO_MODEL = "yolo11n"
 YOLO_POSE_MODEL = "yolo11n-pose"
+YOLO_SEG_MODEL = "yolo11n-seg"
+YOLO_OBB_MODEL = "yolo11n-obb"
 YOLO_CONFIDENCE = 0.25
+# the portrait holds no aerial objects, only weak boxes
+YOLO_OBB_CONFIDENCE = 0.01
+# the network input size, so both engines letterbox it the same way
+YOLO_OBB_FRAME_SIZE = (640, 640)
+YOLO_OBB_ANGLE_TOLERANCE = 0.05
+RESIZED_MASK_THRESHOLD = 0.5
+MASK_IOU_FLOOR = 0.9
 # pytorch letterboxes the portrait to 640x480, the exported graph to 640x640
 YOLO_TOLERANCE_PIXELS = 12.0
 # an off-frame keypoint has a guessed position
@@ -322,13 +331,15 @@ def test_sam_on_a_builtin_engine_matches_sam_on_pytorch(builtin_engine, portrait
     assert agreement > SAM_MASK_AGREEMENT_FLOOR
 
 
-def detection_results(frame, builtin_engine):
+def detection_results(
+    frame, builtin_engine, model_name=YOLO_MODEL, confidence=YOLO_CONFIDENCE
+):
     pytest.importorskip("ultralytics")
     from yolo import YOLOTransform
 
     for engine_name in (ENGINE_NAMES[0], builtin_engine):
-        element = loaded_element(YOLOTransform, YOLO_MODEL, engine_name)
-        element.set_property("confidence", YOLO_CONFIDENCE)
+        element = loaded_element(YOLOTransform, model_name, engine_name)
+        element.set_property("confidence", confidence)
         yield element.do_forward(frame)
 
 
@@ -367,6 +378,63 @@ def test_yolo_on_a_builtin_engine_matches_yolo_on_pytorch(builtin_engine, portra
     assert_same_boxes(exported, reference)
     assert exported.names == reference.names
     assert exported.masks is None
+
+
+@pytest.mark.parametrize("builtin_engine", EXPORTED_MODEL_ENGINES)
+def test_yolo_segmentation_on_a_builtin_engine_matches_yolo_segmentation_on_pytorch(
+    builtin_engine, portrait_rgb
+):
+    require_engine(builtin_engine)
+    xfail_refused("yolo", builtin_engine, YOLO_SEG_MODEL)
+    reference, exported = detection_results(
+        portrait_rgb, builtin_engine, YOLO_SEG_MODEL
+    )
+    from ultralytics.utils import ops
+
+    exported_order, reference_order = assert_same_boxes(exported, reference)
+    frame_shape = portrait_rgb.shape[:2]
+    assert exported.masks.data.shape[1:] == frame_shape
+    # pytorch's masks cover its own letterboxed input
+    reference_masks = (
+        ops.scale_masks(reference.masks.data[None].float(), frame_shape)[0]
+        > RESIZED_MASK_THRESHOLD
+    )
+    exported_masks = exported.masks.data.bool()
+    for exported_index, reference_index in zip(exported_order, reference_order):
+        exported_mask = exported_masks[exported_index]
+        reference_mask = reference_masks[reference_index]
+        overlap = (exported_mask & reference_mask).sum()
+        union = (exported_mask | reference_mask).sum()
+        assert overlap / union > MASK_IOU_FLOOR
+
+
+@pytest.mark.parametrize("builtin_engine", EXPORTED_MODEL_ENGINES)
+def test_yolo_oriented_boxes_on_a_builtin_engine_match_yolo_oriented_boxes_on_pytorch(
+    builtin_engine, portrait_rgb
+):
+    require_engine(builtin_engine)
+    xfail_refused("yolo", builtin_engine, YOLO_OBB_MODEL)
+    import cv2
+    import torch
+
+    square_frame = cv2.resize(portrait_rgb, YOLO_OBB_FRAME_SIZE)
+    reference, exported = (
+        result.obb
+        for result in detection_results(
+            square_frame, builtin_engine, YOLO_OBB_MODEL, YOLO_OBB_CONFIDENCE
+        )
+    )
+
+    assert len(reference) > 0
+    assert len(exported) == len(reference)
+    reference_order = torch.argsort(reference.conf, descending=True)
+    exported_order = torch.argsort(exported.conf, descending=True)
+    assert torch.equal(exported.cls[exported_order], reference.cls[reference_order])
+    difference = (
+        exported.xywhr[exported_order] - reference.xywhr[reference_order]
+    ).abs()
+    assert difference[:, :-1].max() < YOLO_TOLERANCE_PIXELS
+    assert difference[:, -1].max() < YOLO_OBB_ANGLE_TOLERANCE
 
 
 @pytest.mark.parametrize("builtin_engine", EXPORTED_MODEL_ENGINES)
