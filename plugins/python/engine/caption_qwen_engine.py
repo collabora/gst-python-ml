@@ -41,17 +41,12 @@ class CaptionQwenEngine(PyTorchVisionEngine):
             model_name,
             config=config,
             dtype=torch.float16,
-            device_map="auto",
+            device_map=self.device,
         )
         self.processor = AutoProcessor.from_pretrained(model_name)
 
         self.logger.info(f"{model_name} model and processor loaded successfully.")
         self.model.eval()
-
-        # Skip .to() for quantized models
-        if not (hasattr(self.model, "is_quantized") and self.model.is_quantized):
-            self.model.to(self.device)
-            self.logger.info(f"Model moved to {self.device}")
 
     def _prepare_messages(self, images):
         content = [{"type": "image", "image": img} for img in images]
