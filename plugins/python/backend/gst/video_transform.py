@@ -32,25 +32,39 @@ from backend.gst.transform import BaseTransform  # noqa: E402
 # GST_BASE_TRANSFORM_FLOW_DROPPED, which pygobject does not expose
 FLOW_DROPPED = Gst.FlowReturn.CUSTOM_SUCCESS
 
+VIDEO_FIELDS = (
+    "format=(string){ RGB, RGBA, ARGB, BGRA, ABGR },"
+    "width=(int)[1,2147483647],height=(int)[1,2147483647]"
+)
+SYSTEM_MEMORY_CAPS = f"video/x-raw,{VIDEO_FIELDS}"
+CUDA_MEMORY_CAPS = f"video/x-raw(memory:CUDAMemory),{VIDEO_FIELDS}"
+
+
+def pad_templates(caps):
+    return (
+        Gst.PadTemplate.new("src", Gst.PadDirection.SRC, Gst.PadPresence.ALWAYS, caps),
+        Gst.PadTemplate.new(
+            "sink", Gst.PadDirection.SINK, Gst.PadPresence.ALWAYS, caps
+        ),
+    )
+
 
 class VideoTransform(BaseTransform, FrameProcessingMixin):
     """
     GStreamer element for video transformation using a PyTorch model.
     """
 
-    # Define VIDEO_CAPS to support multiple formats
-    VIDEO_CAPS = Gst.Caps.from_string(
-        "video/x-raw,format=(string){ RGB, RGBA, ARGB, BGRA, ABGR },"
-        "width=(int)[1,2147483647],height=(int)[1,2147483647]"
-    )
-    __gsttemplates__ = (
-        Gst.PadTemplate.new(
-            "src", Gst.PadDirection.SRC, Gst.PadPresence.ALWAYS, VIDEO_CAPS
-        ),
-        Gst.PadTemplate.new(
-            "sink", Gst.PadDirection.SINK, Gst.PadPresence.ALWAYS, VIDEO_CAPS
-        ),
-    )
+    VIDEO_CAPS = Gst.Caps.from_string(SYSTEM_MEMORY_CAPS)
+    __gsttemplates__ = pad_templates(VIDEO_CAPS)
+    ACCEPTS_DEVICE_FRAMES = False
+
+    # runs before pygobject registers the subclass and reads its templates
+    def __init_subclass__(cls, **kwargs):
+        super().__init_subclass__(**kwargs)
+        if cls.ACCEPTS_DEVICE_FRAMES:
+            cls.__gsttemplates__ = pad_templates(
+                Gst.Caps.from_string(f"{CUDA_MEMORY_CAPS};{SYSTEM_MEMORY_CAPS}")
+            )
 
     def __init__(self):
         super().__init__()

@@ -71,6 +71,16 @@ One or two lines per element. Paths are relative to the checkout.
 python pyml-launch.py  filesrc location=data/people.mp4 ! decodebin ! videoconvert ! videoscale ! video/x-raw,width=640,height=480 ! pyml_classifier model-name=resnet18 device=cuda !  videoconvert !  autovideosink
 ```
 
+`pyml_classifier` also takes frames in CUDA memory. On the pytorch engine with
+`device=cuda`, a frame decoded by `nvh264dec` and converted by `cudaconvert`
+reaches the model as a tensor on the GPU, with no copy to the host. The builtin
+engines refuse these frames, so put `cudadownload` before the classifier for
+them. Every other element takes frames in system memory.
+
+```
+python pyml-launch.py filesrc location=data/people.mp4 ! qtdemux ! h264parse ! nvh264dec ! cudaconvert ! capsfilter caps="video/x-raw(memory:CUDAMemory),format=RGBA" ! pyml_classifier model-name=resnet50 engine-name=pytorch device=cuda ! fakesink
+```
+
 
 ### Torch Compile
 

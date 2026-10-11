@@ -74,6 +74,13 @@ class ExportedClassifier:
         return ClassifierGraph(), example_input
 
     def do_forward(self, frames):
+        import numpy as np
+
+        if not isinstance(frames, np.ndarray):
+            raise TypeError(
+                "exported classifiers take frames in system memory, "
+                "put cudadownload before pyml_classifier or use engine-name=pytorch"
+            )
         if frames.ndim == BATCH_DIMENSIONS:
             return [self._classify(frame) for frame in frames]
         return self._classify(frames)
@@ -119,8 +126,10 @@ class ClassifierEngine(PyTorchEngine):
         import torch
         from PIL import Image
 
-        model_input = self.transforms(Image.fromarray(frame)).unsqueeze(0)
-        model_input = model_input.to(self.device)
+        image = (
+            frame.permute(2, 0, 1) if torch.is_tensor(frame) else Image.fromarray(frame)
+        )
+        model_input = self.transforms(image).unsqueeze(0).to(self.device)
         with torch.inference_mode():
             logits = self.model(model_input)[0]
         return top_class(logits.cpu().numpy(), self.categories)

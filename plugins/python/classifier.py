@@ -43,6 +43,7 @@ class Classifier(BaseClassifier):
         "Classifier",
         "Aaron Boxer <aaron.boxer@collabora.com>",
     )
+    ACCEPTS_DEVICE_FRAMES = True
 
     def __init__(self):
         super().__init__()

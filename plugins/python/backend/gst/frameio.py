@@ -23,8 +23,14 @@ from gi.repository import Gst  # noqa: E402
 
 from log.logger_factory import LoggerFactory  # noqa: E402
 from utils.muxed_buffer_processor import MuxedBufferProcessor  # noqa: E402
-from utils.format_converter import FormatConverter  # noqa: E402
+from utils.format_converter import FormatConverter, packed_format_layout  # noqa: E402
 from backend.frameio import FrameIO  # noqa: E402
+from backend.gst.cuda_memory import (  # noqa: E402
+    DeviceFrameMap,
+    is_cuda_buffer,
+    map_device_frame,
+    rgb_device_frame,
+)
 
 # memory 0 is the video frame
 VIDEO_MEMORY = 0
@@ -47,6 +53,8 @@ class GstFrameIO(FrameIO):
         self.read_map_infos.setdefault(target, []).extend(map_infos)
 
     def read_frames(self, target, source, width, height, framerate=(30, 1)):
+        if is_cuda_buffer(target):
+            return self.read_device_frame(target, source, width, height)
         processor = MuxedBufferProcessor(
             self.logger, width, height, framerate[0], framerate[1]
         )
@@ -54,6 +62,18 @@ class GstFrameIO(FrameIO):
             return processor.extract_frames(target, source)
         finally:
             self.keep_mapped(target, processor.map_infos)
+
+    def read_device_frame(self, target, source, width, height):
+        if target.n_memory() != MAPPED_MEMORY_COUNT:
+            raise ValueError(
+                f"a buffer of {target.n_memory()} cuda memories is a batch, "
+                "frames in cuda memory are read one per buffer"
+            )
+        video_format = self.format_converter.get_video_format(target, source)
+        channel_count, _ = packed_format_layout(video_format)
+        device_map = map_device_frame(target, height, width, channel_count)
+        self.keep_mapped(target, [device_map])
+        return rgb_device_frame(device_map.tensor, video_format), 1, video_format
 
     def read_frame(self, target, source, width, height):
         success, map_info = map_video_memory(target, Gst.MapFlags.READ)
@@ -67,11 +87,19 @@ class GstFrameIO(FrameIO):
 
     def release_frames(self, target):
         for map_info in self.read_map_infos.pop(target, []):
-            target.unmap(map_info)
+            if isinstance(map_info, DeviceFrameMap):
+                map_info.unmap()
+            else:
+                target.unmap(map_info)
 
     def write_frame(self, target, frame):
         import numpy as np
 
+        if is_cuda_buffer(target):
+            raise NotImplementedError(
+                "an element that writes frames back into the buffer "
+                "cannot write to cuda memory yet, put cudadownload before it"
+            )
         read_memories = [
             np.frombuffer(map_info.data, dtype=np.uint8)
             for map_info in self.read_map_infos.get(target, [])
