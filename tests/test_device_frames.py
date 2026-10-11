@@ -34,9 +34,18 @@ pytestmark = pytest.mark.skipif(
 )
 
 PULL_TIMEOUT = 10 * Gst.SECOND
-TENSORRT_INPUT_SIZE = 640
+ELEMENT_INPUT_SIZE = 640
+YOLO_STRIDE = 32
+# half precision moves the portrait boxes and keypoints about a pixel from fp32
+TENSORRT_TOLERANCE_PIXELS = 2.0
 # the device frame map ignores the cuda row pitch, these rows have none
 FRAME_WIDTH, FRAME_HEIGHT = 1280, 960
+SQUARE_COLUMNS = slice(
+    (FRAME_WIDTH - FRAME_HEIGHT) // 2, (FRAME_WIDTH + FRAME_HEIGHT) // 2
+)
+requires_tensorrt = pytest.mark.skipif(
+    importlib.util.find_spec("tensorrt") is None, reason="needs tensorrt"
+)
 
 
 @pytest.fixture(scope="module")
@@ -92,6 +101,27 @@ def device_and_system_results(element_class, model_name, frames, track=False):
     ]
 
 
+def assert_close_boxes(device_result, system_result, tolerance):
+    device_order, system_order = assert_same_boxes(device_result, system_result)
+    box_difference = (
+        device_result.boxes.xyxy[device_order] - system_result.boxes.xyxy[system_order]
+    )
+    assert box_difference.abs().max() < tolerance
+    return device_order, system_order
+
+
+def assert_close_keypoints(
+    device_result, system_result, device_order, system_order, tolerance
+):
+    system_keypoints = system_result.keypoints[system_order]
+    visible = system_keypoints.conf > VISIBLE_KEYPOINT_CONFIDENCE
+    assert visible.any()
+    keypoint_difference = (
+        device_result.keypoints[device_order].xy[visible] - system_keypoints.xy[visible]
+    )
+    assert keypoint_difference.abs().max() < tolerance
+
+
 @pytest.mark.parametrize("track", [False, True])
 def test_yolo_on_a_cuda_frame_finds_the_boxes_of_the_system_frame(
     portrait_frames, track
@@ -116,13 +146,9 @@ def test_pose_on_a_cuda_frame_finds_the_keypoints_of_the_system_frame(
     )
 
     device_order, system_order = assert_same_boxes(device_result, system_result)
-    system_keypoints = system_result.keypoints[system_order]
-    visible = system_keypoints.conf > VISIBLE_KEYPOINT_CONFIDENCE
-    assert visible.any()
-    keypoint_difference = (
-        device_result.keypoints[device_order].xy[visible] - system_keypoints.xy[visible]
+    assert_close_keypoints(
+        device_result, system_result, device_order, system_order, YOLO_TOLERANCE_PIXELS
     )
-    assert keypoint_difference.abs().max() < YOLO_TOLERANCE_PIXELS
 
 
 def test_yolo_on_a_cuda_frame_never_synchronizes_the_whole_device(
@@ -140,9 +166,7 @@ def test_yolo_on_a_cuda_frame_never_synchronizes_the_whole_device(
     assert len(element.do_forward(device_frame).boxes) > 0
 
 
-@pytest.mark.skipif(
-    importlib.util.find_spec("tensorrt") is None, reason="needs tensorrt"
-)
+@requires_tensorrt
 @pytest.mark.parametrize(
     "module_name, class_name, model_name",
     [
@@ -150,11 +174,9 @@ def test_yolo_on_a_cuda_frame_never_synchronizes_the_whole_device(
         ("pose", "YOLOPoseTransform", YOLO_POSE_MODEL),
     ],
 )
-def test_tensorrt_on_a_cuda_frame_finds_the_boxes_ultralytics_finds_with_the_engine(
+def test_tensorrt_on_a_cuda_frame_finds_the_boxes_of_the_system_frame(
     portrait_frames, module_name, class_name, model_name
 ):
-    from engine.yolo_engine import tensorrt_engine_path
-
     element_class = getattr(importlib.import_module(module_name), class_name)
     (_, device_frame), (_, system_frame) = portrait_frames
 
@@ -163,13 +185,64 @@ def test_tensorrt_on_a_cuda_frame_finds_the_boxes_ultralytics_finds_with_the_eng
         .do_forward(device_frame)
         .cpu()
     )
-    # the square fp16 engine input moves boxes 15 pixels from the pt weights
-    engine_path = tensorrt_engine_path(model_name, TENSORRT_INPUT_SIZE, "cuda")
     system_result = (
-        loaded_element(element_class, engine_path).do_forward(system_frame).cpu()
+        loaded_element(element_class, model_name).do_forward(system_frame).cpu()
+    )
+
+    device_order, system_order = assert_close_boxes(
+        device_result, system_result, TENSORRT_TOLERANCE_PIXELS
+    )
+    if system_result.keypoints is not None:
+        assert_close_keypoints(
+            device_result,
+            system_result,
+            device_order,
+            system_order,
+            TENSORRT_TOLERANCE_PIXELS,
+        )
+
+
+@requires_tensorrt
+def test_tensorrt_on_a_cuda_frame_finds_the_boxes_ultralytics_finds_with_the_engine(
+    portrait_frames,
+):
+    from engine.yolo_engine import letterboxed_shape, tensorrt_engine_path
+    from yolo import YOLOTransform
+
+    (_, device_frame), (_, system_frame) = portrait_frames
+
+    device_result = (
+        loaded_element(YOLOTransform, YOLO_MODEL, tensorrt=True)
+        .do_forward(device_frame)
+        .cpu()
+    )
+    input_shape = letterboxed_shape(
+        (FRAME_HEIGHT, FRAME_WIDTH), ELEMENT_INPUT_SIZE, YOLO_STRIDE
+    )
+    engine_path = tensorrt_engine_path(YOLO_MODEL, input_shape, "cuda")
+    system_result = (
+        loaded_element(YOLOTransform, engine_path).do_forward(system_frame).cpu()
     )
 
     assert_same_boxes(device_result, system_result)
+
+
+@requires_tensorrt
+def test_tensorrt_rebuilds_the_engine_when_the_frame_size_changes(portrait_frames):
+    from yolo import YOLOTransform
+
+    (_, device_frame), (_, system_frame) = portrait_frames
+    element = loaded_element(YOLOTransform, YOLO_MODEL, tensorrt=True)
+    element.do_forward(device_frame)
+
+    device_result = element.do_forward(device_frame[:, SQUARE_COLUMNS]).cpu()
+    system_result = (
+        loaded_element(YOLOTransform, YOLO_MODEL)
+        .do_forward(system_frame[:, SQUARE_COLUMNS])
+        .cpu()
+    )
+
+    assert_close_boxes(device_result, system_result, TENSORRT_TOLERANCE_PIXELS)
 
 
 def test_yolo_segmentation_refuses_a_cuda_frame(portrait_frames):

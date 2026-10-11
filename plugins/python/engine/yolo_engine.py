@@ -83,7 +83,7 @@ def exported_yolo_path(model_name):
     return str(path)
 
 
-def tensorrt_engine_path(model_name, imgsz, device):
+def tensorrt_engine_path(model_name, input_shape, device):
     import importlib.util
 
     import torch
@@ -97,7 +97,10 @@ def tensorrt_engine_path(model_name, imgsz, device):
         SLUG_SEPARATOR, torch.cuda.get_device_name(torch.device(device)).lower()
     ).strip(SLUG_SEPARATOR)
     stem = versioned_stem(model_name, TENSORRT_EXPORT_LIBRARIES)
-    path = TENSORRT_EXPORT_CACHE / f"{stem}-{gpu_name}-{imgsz}{TENSORRT_SUFFIX}"
+    height, width = input_shape
+    path = (
+        TENSORRT_EXPORT_CACHE / f"{stem}-{gpu_name}-{height}x{width}{TENSORRT_SUFFIX}"
+    )
     if path.exists():
         return str(path)
     EXPORT_WORK_DIRECTORY.mkdir(parents=True, exist_ok=True)
@@ -106,7 +109,7 @@ def tensorrt_engine_path(model_name, imgsz, device):
     exported_path = weights.export(
         format=TENSORRT_FORMAT,
         quantize=HALF_PRECISION_QUANTIZATION,
-        imgsz=imgsz,
+        imgsz=[height, width],
         device=torch.device(device),
         dynamic=False,
     )
@@ -131,20 +134,36 @@ def exported_yolo_executorch_path(model_name):
 
 
 # the LetterBox model.predict applies to a numpy frame, auto=True for pt weights
-def letterboxed_device_input(frame, imgsz, stride, pads_to_stride):
-    import torch
+def letterbox_layout(frame_size, imgsz, stride, pads_to_stride):
     from ultralytics.utils.checks import check_imgsz
 
     target_height, target_width = check_imgsz(
         imgsz, stride=stride, min_dim=HEIGHT_AND_WIDTH
     )
-    height, width = frame.shape[:2]
+    height, width = frame_size
     scale = min(target_height / height, target_width / width)
     resized_height, resized_width = round(height * scale), round(width * scale)
     pad_height = target_height - resized_height
     pad_width = target_width - resized_width
     if pads_to_stride:
         pad_height, pad_width = pad_height % stride, pad_width % stride
+    return (resized_height, resized_width), (pad_height, pad_width)
+
+
+def letterboxed_shape(frame_size, imgsz, stride):
+    (resized_height, resized_width), (pad_height, pad_width) = letterbox_layout(
+        frame_size, imgsz, stride, pads_to_stride=True
+    )
+    return resized_height + pad_height, resized_width + pad_width
+
+
+def letterboxed_device_input(frame, imgsz, stride, pads_to_stride):
+    import torch
+
+    height, width = frame.shape[:2]
+    (resized_height, resized_width), (pad_height, pad_width) = letterbox_layout(
+        (height, width), imgsz, stride, pads_to_stride
+    )
     pad_height, pad_width = pad_height / 2, pad_width / 2
     image = frame.permute(2, 0, 1).unsqueeze(0).float() / PIXEL_MAXIMUM
     if (resized_height, resized_width) != (height, width):
@@ -205,9 +224,10 @@ def track_device_frame(model, frame, **options):
 
 # runs the model and its nms on the gpu without the ultralytics predictor
 class DirectDetector:
-    def __init__(self, weights, device, imgsz):
+    def __init__(self, weights, device, imgsz, pads_to_stride):
         import torch
         from ultralytics.nn.autobackend import AutoBackend
+        from ultralytics.utils.checks import check_imgsz
 
         is_tensorrt_engine = str(weights).endswith(TENSORRT_SUFFIX)
         self.backend = AutoBackend(
@@ -218,12 +238,14 @@ class DirectDetector:
         self.waits_for_the_input = (
             self.backend.format == TENSORRT_FORMAT and self.backend.graph is None
         )
-        self.input_size = imgsz if self.runs_pytorch else self.backend.imgsz
+        self.pads_to_stride = pads_to_stride
+        # an engine file from the user pads every frame to the size it was built for
+        self.input_size = imgsz if pads_to_stride else self.backend.imgsz
         self.keypoint_shape = getattr(self.backend, "kpt_shape", None)
-        warmup_height, warmup_width = (
-            (self.input_size, self.input_size)
-            if isinstance(self.input_size, int)
-            else self.input_size
+        warmup_height, warmup_width = check_imgsz(
+            imgsz if self.runs_pytorch else self.backend.imgsz,
+            stride=self.backend.stride,
+            min_dim=HEIGHT_AND_WIDTH,
         )
         self.backend.warmup(
             imgsz=(*WARMUP_BATCH_AND_CHANNELS, warmup_height, warmup_width)
@@ -236,7 +258,7 @@ class DirectDetector:
             frame,
             self.input_size,
             self.backend.stride,
-            pads_to_stride=self.runs_pytorch,
+            self.pads_to_stride,
         )
         with torch.inference_mode():
             if self.waits_for_the_input:
@@ -438,6 +460,7 @@ class YoloEngine(PyTorchEngine):
         super().__init__(*args, **kwargs)
         self.tensorrt = False
         self.direct_detector = None
+        self.direct_detector_frame_size = None
 
     def do_load_model(self, model_name, **kwargs):
         try:
@@ -462,22 +485,36 @@ class YoloEngine(PyTorchEngine):
             )
         if track:
             return track_device_frame(model, frame, **options)
-        if self.direct_detector is None:
-            self.direct_detector = DirectDetector(
-                self._direct_detector_weights(options["imgsz"]),
-                self.device,
-                options["imgsz"],
-            )
+        frame_size = tuple(frame.shape[:2])
+        # a tensorrt engine takes the letterboxed shape of one frame size only
+        if frame_size != self.direct_detector_frame_size:
+            self._build_direct_detector(frame_size, options["imgsz"])
         return self.direct_detector.detect(
             frame, options["conf"], options["iou"], options["agnostic_nms"]
         )
 
-    def _direct_detector_weights(self, imgsz):
+    def _build_direct_detector(self, frame_size, imgsz):
+        if self.direct_detector is not None:
+            height, width = frame_size
+            self.logger.info(
+                f"rebuilding the yolo detector for {width}x{height} frames"
+            )
+        self.direct_detector_frame_size = frame_size
+        self.direct_detector = DirectDetector(
+            self._direct_detector_weights(frame_size, imgsz),
+            self.device,
+            imgsz,
+            pads_to_stride=not self.model_name.endswith(TENSORRT_SUFFIX),
+        )
+
+    def _direct_detector_weights(self, frame_size, imgsz):
         if self.model_name.endswith(TENSORRT_SUFFIX):
             return self.model_name
-        if self.tensorrt:
-            return tensorrt_engine_path(self.model_name, imgsz, self.device)
-        return self.get_model().model
+        model = self.get_model().model
+        if not self.tensorrt:
+            return model
+        input_shape = letterboxed_shape(frame_size, imgsz, int(model.stride.max()))
+        return tensorrt_engine_path(self.model_name, input_shape, self.device)
 
     def do_forward(self, frames):
         import numpy as np
