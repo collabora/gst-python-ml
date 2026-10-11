@@ -271,6 +271,8 @@ def map_device_frame(buffer, height, width, channels, writable=False):
         ctypes.byref(map_info),
         map_flags,
     )
+    if not mapped and writable:
+        raise ValueError("drawing in place needs a writable buffer, this one is shared")
     if not mapped:
         raise RuntimeError("could not map the cuda memory of the buffer")
     device_map = DeviceFrameMap(buffer, map_info, None)

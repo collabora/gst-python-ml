@@ -84,10 +84,6 @@ class GstFrameIO(FrameIO):
     def read_frame_for_drawing(self, target, width, height, video_format):
         import numpy as np
 
-        if not target.is_writable():
-            raise ValueError(
-                "drawing in place needs a writable buffer, this one is shared"
-            )
         channel_count, _ = packed_format_layout(video_format)
         if is_cuda_buffer(target):
             device_map = map_device_frame(
@@ -95,9 +91,12 @@ class GstFrameIO(FrameIO):
             )
             self.keep_mapped(target, [device_map])
             return device_map.tensor
+        # gstreamer 1.24's binding has no is_writable, a write map fails instead
         success, map_info = map_video_memory(target, Gst.MapFlags.WRITE)
         if not success:
-            raise RuntimeError("could not map the video memory for writing")
+            raise ValueError(
+                "drawing in place needs a writable buffer, this one is shared"
+            )
         self.keep_mapped(target, [map_info])
         frame = np.frombuffer(
             map_info.data, dtype=np.uint8, count=width * height * channel_count
