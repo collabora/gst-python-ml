@@ -25,10 +25,9 @@ gi.require_version("Gst", "1.0")
 from gi.repository import Gst  # noqa: E402
 
 from backend.analytics import AnalyticsBackend  # noqa: E402
+from utils.metadata import first_memory_with_prefix  # noqa: E402
 
 ANALYTICS_CHUNK_HEADER = b"GST-ANALYTICS:"
-# memory 0 is the video frame
-FIRST_METADATA_MEMORY = 1
 OBJECT_FIELDS = ("label", "x", "y", "w", "h", "score")
 
 ChunkEntry = namedtuple("ChunkEntry", "id")
@@ -54,22 +53,11 @@ class AnalyticsChunk:
         }
 
 
-def find_chunk_memory(buffer):
-    for index in range(FIRST_METADATA_MEMORY, buffer.n_memory()):
-        with buffer.peek_memory(index).map(Gst.MapFlags.READ) as info:
-            if (
-                bytes(info.data[: len(ANALYTICS_CHUNK_HEADER)])
-                == ANALYTICS_CHUNK_HEADER
-            ):
-                return index
-    return None
-
-
 def write_chunk(chunk):
     payload = ANALYTICS_CHUNK_HEADER + json.dumps(chunk.document()).encode()
     # Gst.Memory.new_wrapped aborts in pygobject
     memory = Gst.Buffer.new_wrapped(payload).get_memory(0)
-    index = find_chunk_memory(chunk.buffer)
+    index = first_memory_with_prefix(chunk.buffer, ANALYTICS_CHUNK_HEADER)
     if index is None:
         chunk.buffer.append_memory(memory)
         return
@@ -88,7 +76,7 @@ class ChunkAnalytics(AnalyticsBackend):
         return chunk
 
     def get_relation_meta(self, buf):
-        index = find_chunk_memory(buf)
+        index = first_memory_with_prefix(buf, ANALYTICS_CHUNK_HEADER)
         if index is None:
             return None
         with buf.peek_memory(index).map(Gst.MapFlags.READ) as info:
@@ -96,7 +84,7 @@ class ChunkAnalytics(AnalyticsBackend):
         return AnalyticsChunk(buf, json.loads(payload))
 
     def remove_relation_meta(self, buf):
-        index = find_chunk_memory(buf)
+        index = first_memory_with_prefix(buf, ANALYTICS_CHUNK_HEADER)
         if index is None:
             return False
         buf.remove_memory(index)

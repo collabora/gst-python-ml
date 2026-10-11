@@ -60,13 +60,7 @@ class ExportedDepthAnything:
         return DepthAnythingGraph(), example_input
 
     def do_forward(self, frames):
-        import numpy as np
 
-        if not isinstance(frames, np.ndarray):
-            raise TypeError(
-                "exported depth models take frames in system memory, "
-                "put cudadownload before pyml_depth or use engine-name=pytorch"
-            )
         if frames.ndim == BATCH_DIMENSIONS:
             return [self._depth_map(frame) for frame in frames]
         return self._depth_map(frames)

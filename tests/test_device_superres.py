@@ -24,7 +24,7 @@ from test_device_write import (  # noqa: E402
     pull_tee_buffers,
     system_pixels,
 )
-from test_exported_models import PORTRAIT  # noqa: E402
+from yolo_reference import PORTRAIT  # noqa: E402
 
 pytestmark = pytest.mark.skipif(
     not (torch.cuda.is_available() and Gst.ElementFactory.find("cudaupload")),

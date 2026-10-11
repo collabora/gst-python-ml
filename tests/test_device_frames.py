@@ -18,13 +18,12 @@ torch = pytest.importorskip("torch")
 pytest.importorskip("ultralytics")
 
 from backend import frameio  # noqa: E402
-from test_exported_models import (  # noqa: E402
+from yolo_reference import (  # noqa: E402
     PORTRAIT,
     VISIBLE_KEYPOINT_CONFIDENCE,
     YOLO_MODEL,
     YOLO_POSE_MODEL,
     YOLO_SEG_MODEL,
-    YOLO_TOLERANCE_PIXELS,
     assert_same_boxes,
 )
 
@@ -36,9 +35,10 @@ pytestmark = pytest.mark.skipif(
 PULL_TIMEOUT = 10 * Gst.SECOND
 ELEMENT_INPUT_SIZE = 640
 YOLO_STRIDE = 32
+# the device letterbox resizes on the gpu, the host one with opencv
+DEVICE_PATH_TOLERANCE_PIXELS = 2.0
 # half precision moves the portrait boxes and keypoints about a pixel from fp32
 TENSORRT_TOLERANCE_PIXELS = 2.0
-# the device frame map ignores the cuda row pitch, these rows have none
 FRAME_WIDTH, FRAME_HEIGHT = 1280, 960
 SQUARE_COLUMNS = slice(
     (FRAME_WIDTH - FRAME_HEIGHT) // 2, (FRAME_WIDTH + FRAME_HEIGHT) // 2
@@ -132,7 +132,7 @@ def test_yolo_on_a_cuda_frame_finds_the_boxes_of_the_system_frame(
         YOLOTransform, YOLO_MODEL, portrait_frames, track
     )
 
-    assert_same_boxes(device_result, system_result)
+    assert_close_boxes(device_result, system_result, DEVICE_PATH_TOLERANCE_PIXELS)
     assert device_result.boxes.is_track == system_result.boxes.is_track == track
 
 
@@ -145,9 +145,15 @@ def test_pose_on_a_cuda_frame_finds_the_keypoints_of_the_system_frame(
         YOLOPoseTransform, YOLO_POSE_MODEL, portrait_frames
     )
 
-    device_order, system_order = assert_same_boxes(device_result, system_result)
+    device_order, system_order = assert_close_boxes(
+        device_result, system_result, DEVICE_PATH_TOLERANCE_PIXELS
+    )
     assert_close_keypoints(
-        device_result, system_result, device_order, system_order, YOLO_TOLERANCE_PIXELS
+        device_result,
+        system_result,
+        device_order,
+        system_order,
+        DEVICE_PATH_TOLERANCE_PIXELS,
     )
 
 

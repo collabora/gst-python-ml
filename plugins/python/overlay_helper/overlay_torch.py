@@ -220,8 +220,7 @@ class TorchOverlayGraphics(OverlayGraphics):
                 self.square_row({"x": x, "y": y}, color, color.a)
                 for x, y in first + (last - first) * fractions
             )
-        if rows:
-            self.draw_squares(rows, width)
+        self.draw_squares(rows, width)
 
     def square_row(self, center, color, alpha):
         return (center["x"], center["y"], color.r, color.g, color.b, alpha)
@@ -230,6 +229,8 @@ class TorchOverlayGraphics(OverlayGraphics):
         import numpy as np
         import torch
 
+        if not rows:
+            return
         device = self.pixels.device
         table = torch.from_numpy(np.array(rows, dtype=np.float32)).to(device)
         centre_columns, centre_lines, colours, alphas = table.split(

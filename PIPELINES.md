@@ -57,8 +57,9 @@ on gst. pyml-launch does this only right after `nvdec`, so a line with
 `decodebin` keeps the element on system memory, spell `qtdemux ! h264parse !
 nvdec`. g2g has no GPU scaler, so the element sees the decoded size, and the
 frame leaves it still CUDA NV12, so put `videoconvert` after it ahead of
-`pyml_tracker` and `pyml_overlay`. An element that draws on the frame, such as
-`pyml_depth` with `visualize=true`, needs `videoconvert` between `nvdec` and it.
+`pyml_tracker` and `pyml_overlay`. An element that writes the frame, such as
+`pyml_depth` with `visualize=true` or `pyml_superres`, needs `videoconvert`
+between `nvdec` and it.
 Build `g2g-launch-py` with `--features ml,g2g-plugins/nvdec,g2g-plugins/cuda`
 for `nvdec`.
 

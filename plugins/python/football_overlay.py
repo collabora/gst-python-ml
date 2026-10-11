@@ -22,6 +22,7 @@ import re
 
 import backend
 from backend import analytics, frameio, GObject, InPlaceVideoTransform
+from utils.blob_headers import ALERT_META_HEADER
 from utils.kick_detector import KickDetector
 
 if backend.BACKEND == "gst":
@@ -552,9 +553,6 @@ class FootballOverlay(InPlaceVideoTransform):
         self._last_kick = json.dumps(kick._asdict())
         self._kick_flash_text = f"KICK #{kick.player}"
         self._kick_flash_until = self._frame + _KICK_FLASH_FRAMES
-        # alert.py needs gi
-        from alert import ALERT_META_HEADER
-
         payload = [
             {
                 "event": "kick",

@@ -229,10 +229,7 @@ class DirectDetector:
         from ultralytics.nn.autobackend import AutoBackend
         from ultralytics.utils.checks import check_imgsz
 
-        is_tensorrt_engine = str(weights).endswith(TENSORRT_SUFFIX)
-        self.backend = AutoBackend(
-            weights, device=torch.device(device), fp16=is_tensorrt_engine, verbose=False
-        )
+        self.backend = AutoBackend(weights, device=torch.device(device), verbose=False)
         self.runs_pytorch = self.backend.format == PYTORCH_WEIGHTS_FORMAT
         # execute_v2 runs on a stream of its own, a captured engine replays on ours
         self.waits_for_the_input = (
@@ -347,13 +344,7 @@ class ExportedYolo:
         }.get(self.metadata["task"], self._detection_result)
 
     def do_forward(self, frames):
-        import numpy as np
 
-        if not isinstance(frames, np.ndarray):
-            raise TypeError(
-                "exported yolo models take frames in system memory, "
-                "put cudadownload before the element or use engine-name=pytorch"
-            )
         if self.track:
             raise ValueError(
                 f"tracking runs only on the {EngineFactory.PYTORCH_ENGINE} engine"

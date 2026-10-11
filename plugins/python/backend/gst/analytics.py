@@ -21,7 +21,6 @@ import os
 import gi
 
 gi.require_version("Gst", "1.0")
-from gi.repository import Gst  # noqa: E402
 
 from log.logger_factory import LoggerFactory  # noqa: E402
 
@@ -74,9 +73,3 @@ def select_analytics():
         return relation_meta_analytics()
     logger.info("analytics in a buffer chunk, GstAnalytics missing")
     return chunk_analytics()
-
-
-# the gate for GstAnalytics features newer than 1.24
-def gst_at_least(major, minor):
-    running_major, running_minor, _micro, _nano = Gst.version()
-    return (running_major, running_minor) >= (major, minor)

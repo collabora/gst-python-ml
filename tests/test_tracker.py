@@ -83,8 +83,11 @@ def tracked_labels(element, labels):
 def test_detections_that_carry_track_ids_pass_through_untouched():
     from tracker import TrackerTransform
 
+    element = TrackerTransform()
     labels = ["stream_0_id_4", "stream_0_person_id_9"]
-    assert tracked_labels(TrackerTransform(), labels) == labels
+    for _ in range(element.min_hits + 1):
+        after = tracked_labels(element, labels)
+    assert after == labels
 
 
 def test_untracked_detections_still_get_tracked():

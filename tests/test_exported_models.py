@@ -17,6 +17,15 @@ gi.require_version("Gst", "1.0")
 from gi.repository import Gst  # noqa: E402
 
 from engine.benchmark import BENCHMARK_DRIVERS  # noqa: E402
+from yolo_reference import (  # noqa: E402
+    PORTRAIT,
+    VISIBLE_KEYPOINT_CONFIDENCE,
+    YOLO_MODEL,
+    YOLO_POSE_MODEL,
+    YOLO_SEG_MODEL,
+    YOLO_TOLERANCE_PIXELS,
+    assert_same_boxes,
+)
 from engine.support_matrix import (  # noqa: E402
     DINOV2_MODEL,
     ENGINE_PACKAGES,
@@ -28,7 +37,6 @@ from engine.support_matrix import (  # noqa: E402
 
 Gst.init(None)
 
-PORTRAIT = BASE_DIR / "data" / "Chinedu-Obasi_2684938.jpg"
 DEPTH_MODEL = "depth-anything/Depth-Anything-V2-Small-hf"
 # the exported graph takes a square frame
 DEPTH_CORRELATION_FLOOR = 0.98
@@ -64,9 +72,6 @@ SAM_MODEL = "facebook/sam2-hiera-tiny"
 SAM_SCORE_TOLERANCE = 1e-3
 # a handful of pixels on mask edges flip
 SAM_MASK_AGREEMENT_FLOOR = 0.9999
-YOLO_MODEL = "yolo11n"
-YOLO_POSE_MODEL = "yolo11n-pose"
-YOLO_SEG_MODEL = "yolo11n-seg"
 YOLO_OBB_MODEL = "yolo11n-obb"
 YOLO_CONFIDENCE = 0.25
 # the portrait holds no aerial objects, only weak boxes
@@ -76,10 +81,6 @@ YOLO_OBB_FRAME_SIZE = (640, 640)
 YOLO_OBB_ANGLE_TOLERANCE = 0.05
 RESIZED_MASK_THRESHOLD = 0.5
 MASK_IOU_FLOOR = 0.9
-# pytorch letterboxes the portrait to 640x480, the exported graph to 640x640
-YOLO_TOLERANCE_PIXELS = 12.0
-# an off-frame keypoint has a guessed position
-VISIBLE_KEYPOINT_CONFIDENCE = 0.5
 OWL_MODEL = "google/owlv2-base-patch16-ensemble"
 # its image encoder takes the text
 GROUNDING_MODEL = "IDEA-Research/grounding-dino-tiny"
@@ -350,23 +351,6 @@ def pose_results(frame, builtin_engine):
     for engine_name in (ENGINE_NAMES[0], builtin_engine):
         element = loaded_element(YOLOPoseTransform, YOLO_POSE_MODEL, engine_name)
         yield element.do_forward(frame)
-
-
-def assert_same_boxes(exported, reference):
-    import torch
-
-    assert len(reference.boxes) > 0
-    assert len(exported.boxes) == len(reference.boxes)
-    reference_order = torch.argsort(reference.boxes.conf, descending=True)
-    exported_order = torch.argsort(exported.boxes.conf, descending=True)
-    assert torch.equal(
-        exported.boxes.cls[exported_order], reference.boxes.cls[reference_order]
-    )
-    box_difference = (
-        exported.boxes.xyxy[exported_order] - reference.boxes.xyxy[reference_order]
-    )
-    assert box_difference.abs().max() < YOLO_TOLERANCE_PIXELS
-    return exported_order, reference_order
 
 
 @pytest.mark.parametrize("builtin_engine", EXPORTED_MODEL_ENGINES)

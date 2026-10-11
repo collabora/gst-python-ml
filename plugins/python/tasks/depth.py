@@ -33,7 +33,6 @@ Contract expected from the host element:
 
 from functools import cache
 
-# cv2 colormap IDs for depth visualization
 # cv2.COLORMAP_* values, kept as numbers so the module imports without cv2
 COLORMAP_IDS = {
     "inferno": 14,

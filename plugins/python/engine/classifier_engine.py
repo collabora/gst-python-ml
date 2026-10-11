@@ -74,13 +74,7 @@ class ExportedClassifier:
         return ClassifierGraph(), example_input
 
     def do_forward(self, frames):
-        import numpy as np
 
-        if not isinstance(frames, np.ndarray):
-            raise TypeError(
-                "exported classifiers take frames in system memory, "
-                "put cudadownload before pyml_classifier or use engine-name=pytorch"
-            )
         if frames.ndim == BATCH_DIMENSIONS:
             return [self._classify(frame) for frame in frames]
         return self._classify(frames)

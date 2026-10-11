@@ -28,16 +28,14 @@ from utils.muxed_buffer_processor import MuxedBufferProcessor  # noqa: E402
 from utils.format_converter import FormatConverter, packed_format_layout  # noqa: E402
 from backend.frameio import FrameIO  # noqa: E402
 from backend.gst.cuda_memory import (  # noqa: E402
+    MAPPED_MEMORY_COUNT,
+    VIDEO_MEMORY,
     DeviceFrameMap,
     is_cuda_buffer,
     map_device_frame,
     rgb_device_frame,
     write_device_frame,
 )
-
-# memory 0 is the video frame
-VIDEO_MEMORY = 0
-MAPPED_MEMORY_COUNT = 1
 
 
 # mapping the whole buffer merges the appended metadata into the frame

@@ -36,9 +36,7 @@ try:
 
     from log.logger_factory import LoggerFactory  # noqa: E402
     from backend import analytics, frameio, GObject, post_error  # noqa: E402
-
-    # Header prefix for alert buffer metadata
-    ALERT_META_HEADER = b"GST-ALERT:"
+    from utils.blob_headers import ALERT_META_HEADER  # noqa: E402
 
     # Building a Gst object needs Gst.init, which only the gst backend calls.
     if backend.BACKEND == "gst":

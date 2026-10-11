@@ -74,8 +74,6 @@ jobs:
           - engine: iree
             extra: iree,onnx
             exported-models: true
-          - engine: pytorch
-            extra: onnx
           - engine: llamacpp
             extra: llamacpp
           - engine: tvm

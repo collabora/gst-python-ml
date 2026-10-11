@@ -1,5 +1,4 @@
 import sys
-from concurrent.futures import ThreadPoolExecutor
 from pathlib import Path
 
 import numpy as np
@@ -18,7 +17,11 @@ torch = pytest.importorskip("torch")
 pytest.importorskip("cairo")
 
 from backend import analytics, frameio  # noqa: E402
-from backend.gst.cuda_memory import map_device_frame  # noqa: E402
+from test_device_write import (  # noqa: E402
+    device_pixels,
+    on_a_streaming_thread,
+    system_pixels,
+)
 
 needs_cuda = pytest.mark.skipif(
     not (torch.cuda.is_available() and Gst.ElementFactory.find("cudaupload")),
@@ -90,26 +93,6 @@ def draw(buffer, caps):
     return overlay.do_transform_ip(buffer)
 
 
-def device_pixels(buffer):
-    device_map = map_device_frame(buffer, HEIGHT, WIDTH, RGBA_CHANNELS)
-    try:
-        return device_map.tensor[..., :RGB_CHANNELS].cpu().numpy()
-    finally:
-        device_map.unmap()
-
-
-def system_pixels(buffer):
-    frame_size = WIDTH * HEIGHT * RGBA_CHANNELS
-    frame = np.frombuffer(buffer.extract_dup(0, frame_size), np.uint8)
-    return frame.reshape(HEIGHT, WIDTH, RGBA_CHANNELS)[..., :RGB_CHANNELS]
-
-
-def on_a_streaming_thread(function, *arguments):
-    # a streaming thread has no cuda context current
-    with ThreadPoolExecutor(max_workers=1) as streaming_thread:
-        return streaming_thread.submit(function, *arguments).result()
-
-
 @pytest.fixture(scope="module")
 def drawn_frames():
     samples = pull_tee_samples()
@@ -128,7 +111,10 @@ def drawn_frames():
     assert draw(system_buffer, SYSTEM_CAPS) == Gst.FlowReturn.OK
 
     device_frame = on_a_streaming_thread(device_pixels, device_buffer)
-    return device_frame, system_pixels(system_buffer)
+    return (
+        device_frame[..., :RGB_CHANNELS],
+        system_pixels(system_buffer)[..., :RGB_CHANNELS],
+    )
 
 
 @needs_cuda

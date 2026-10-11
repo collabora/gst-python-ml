@@ -261,7 +261,13 @@ def test_hosted_element_takes_the_format_the_caps_ahead_of_it_pin(shells):
 
 def test_the_elements_that_accept_device_frames_are_found(shells):
     reading = {name for name, shell in shells.items() if shell.reads_device_frames}
-    assert reading == {"pyml_classifier", "pyml_yolo", "pyml_yolo_pose", "pyml_depth"}
+    assert reading == {
+        "pyml_classifier",
+        "pyml_yolo",
+        "pyml_yolo_pose",
+        "pyml_depth",
+        "pyml_superres",
+    }
 
 
 def test_an_element_reading_device_frames_takes_them_straight_from_nvdec(shells):

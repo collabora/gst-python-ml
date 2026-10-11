@@ -17,13 +17,13 @@ torch = pytest.importorskip("torch")
 
 from backend import frameio  # noqa: E402
 from backend.gst.cuda_memory import map_device_frame  # noqa: E402
+from yolo_reference import PORTRAIT  # noqa: E402
 
 pytestmark = pytest.mark.skipif(
     not (torch.cuda.is_available() and Gst.ElementFactory.find("cudaupload")),
     reason="needs a cuda device and the cudaupload element",
 )
 
-PORTRAIT = BASE_DIR / "data" / "Chinedu-Obasi_2684938.jpg"
 DEPTH_MODEL = "depth-anything/Depth-Anything-V2-Small-hf"
 DEPTH_CORRELATION_FLOOR = 0.98
 # the cuda resize of the model input puts a fifth of the depth levels one off the cpu one

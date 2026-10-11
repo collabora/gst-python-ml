@@ -39,7 +39,6 @@ class GstLogger(Logger):
         """
         Logs a message with the correct caller file and line number.
         """
-        # inspect.stack() reads source for every frame on each log call
         frame = sys._getframe(CALLER_DEPTH)
         filename = frame.f_code.co_filename.split("/")[-1]
         lineno = frame.f_lineno
