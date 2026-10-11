@@ -16,6 +16,7 @@ gi = pytest.importorskip("gi")
 gi.require_version("Gst", "1.0")
 from gi.repository import Gst  # noqa: E402
 
+from engine.benchmark import BENCHMARK_DRIVERS  # noqa: E402
 from engine.support_matrix import (  # noqa: E402
     DINOV2_MODEL,
     ENGINE_PACKAGES,
@@ -406,3 +407,12 @@ def test_zero_shot_on_a_builtin_engine_matches_zero_shot_on_pytorch(
 def test_a_model_with_text_in_its_image_encoder_does_not_export():
     with pytest.raises(ValueError, match="pytorch engine"):
         zero_shot_detector(GROUNDING_MODEL, ENGINE_NAMES[1])
+
+
+@pytest.mark.parametrize("task", BENCHMARK_DRIVERS)
+def test_a_benchmark_driver_names_an_element_class(task):
+    driver = BENCHMARK_DRIVERS[task]
+    module = importlib.import_module(driver.module)
+    if getattr(module, "CAN_REGISTER_ELEMENT", True) is False:
+        pytest.skip(f"{driver.module} is missing a dependency")
+    assert isinstance(getattr(module, driver.element_class), type)

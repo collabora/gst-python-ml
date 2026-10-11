@@ -20,6 +20,7 @@ import argparse
 import json
 import sys
 
+from engine.benchmark import benchmark_rows, status_text
 from engine.model_engines import (
     available_devices,
     engine_options,
@@ -32,6 +33,8 @@ UNPROBED_MARK = "?"
 LEGEND = f"{REACHABLE_MARK} reachable on this machine, {UNPROBED_MARK} not probed"
 PACKAGE_NAME = "gst-python-ml"
 NO_PIP_EXTRA = "not on PyPI"
+DEFAULT_BENCHMARK_FRAMES = 20
+BENCHMARK_HEADER = ("task", "engine", "device", "load s", "ms/frame", "fps", "note")
 
 
 def marked_devices(engine, devices, reachable):
@@ -55,12 +58,6 @@ def install_hint(entry):
     return f"pip install {PACKAGE_NAME}[{first_extra}]{alternatives}"
 
 
-def status_text(entry):
-    if not entry["reason"]:
-        return entry["status"]
-    return f"{entry['status']}: {entry['reason']}"
-
-
 def task_lines(task, reachable_devices):
     heading = f"{task['task']}: {task['note']}" if task["note"] else task["task"]
     rows = [
@@ -76,17 +73,49 @@ def task_lines(task, reachable_devices):
         )
         for entry in task["engines"]
     ]
+    return [heading, *(f"  {line}" for line in aligned_lines(rows))]
+
+
+def aligned_lines(rows):
     aligned_columns = len(rows[0]) - 1
     widths = [
         max(len(row[column]) for row in rows) for column in range(aligned_columns)
     ]
-    lines = [
+    return [
         "  ".join(
             [*(cell.ljust(width) for cell, width in zip(row, widths)), row[-1]]
         ).rstrip()
         for row in rows
     ]
-    return [heading, *(f"  {line}" for line in lines)]
+
+
+def one_decimal(value):
+    return "" if value is None else f"{value:.1f}"
+
+
+def benchmark_lines(rows):
+    cells = [
+        (
+            row["task"],
+            row["engine"],
+            row["device"],
+            one_decimal(row["load_seconds"]),
+            one_decimal(row["latency_ms"]),
+            one_decimal(row["fps"]),
+            row["note"],
+        )
+        for row in rows
+    ]
+    return aligned_lines([BENCHMARK_HEADER, *cells])
+
+
+def print_benchmark(options, frames, as_json):
+    rows = benchmark_rows(options, frames)
+    if as_json:
+        report = {"model": options["model"], "frames": frames, "results": rows}
+        print(json.dumps(report, indent=2))
+        return
+    print("\n".join(benchmark_lines(rows)))
 
 
 def main(argv=None):
@@ -96,7 +125,20 @@ def main(argv=None):
     )
     parser.add_argument("model", help="a Hugging Face id, a model name or a file")
     parser.add_argument("--json", action="store_true", help="print JSON")
+    parser.add_argument(
+        "--benchmark",
+        action="store_true",
+        help="time each engine and device that runs the model here",
+    )
+    parser.add_argument(
+        "--frames",
+        type=int,
+        default=DEFAULT_BENCHMARK_FRAMES,
+        help="frames to time per engine and device",
+    )
     arguments = parser.parse_args(argv)
+    if arguments.frames < 1:
+        parser.error("--frames must be at least 1")
     try:
         options = engine_options(arguments.model)
     except OSError as error:
@@ -104,6 +146,9 @@ def main(argv=None):
         sys.exit(f"pyml-engines: cannot read {arguments.model}: {first_line}")
     if not options["tasks"]:
         sys.exit(f"pyml-engines: no task or engine matches {arguments.model}")
+    if arguments.benchmark:
+        print_benchmark(options, arguments.frames, arguments.json)
+        return
     if arguments.json:
         print(json.dumps(with_available_devices(options), indent=2))
         return

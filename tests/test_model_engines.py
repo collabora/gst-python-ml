@@ -1,3 +1,5 @@
+import json
+import subprocess
 import sys
 import tomllib
 from pathlib import Path
@@ -7,13 +9,14 @@ import pytest
 BASE_DIR = Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(BASE_DIR / "plugins" / "python"))
 
-from engine import model_engines  # noqa: E402
+from engine import benchmark, model_engines  # noqa: E402
 from engine.support_matrix import (  # noqa: E402
     ENGINE_DEVICES,
     ENGINE_EXTRAS,
     ENGINE_PACKAGES,
     FILE_ENGINES,
     NCNN_BATCH_BROADCAST,
+    TASK_ENGINES,
     UNTESTED_VARIANT_NOTE,
 )
 
@@ -23,6 +26,14 @@ CLIP_MODEL = "openai/clip-vit-base-patch32"
 GROUNDING_MODEL = "IDEA-Research/grounding-dino-tiny"
 TORCHVISION_CLASSIFIERS = ("resnet18", "mobilenet_v3_small")
 TORCHVISION_RESNETS = ("resnet18",)
+BENCHMARK_FRAMES = 5
+INSTALLED_ENGINES = ("pytorch", "onnx", "ncnn")
+REACHABLE_DEVICES = {"pytorch": ("cpu",), "onnx": ("cpu", "cuda"), "ncnn": ("cpu",)}
+CHILD_ERROR = "CUDAExecutionProvider is not available"
+MEASURED_RESULTS = {
+    "pytorch": {"load_seconds": 6.0, "latency_ms": 390.0, "fps": 2.5},
+    "onnx": {"load_seconds": 2.0, "latency_ms": 280.0, "fps": 3.5},
+}
 
 
 @pytest.fixture
@@ -122,3 +133,93 @@ def test_every_engine_extra_is_a_pyproject_extra():
         extras = tomllib.load(pyproject)["project"]["optional-dependencies"]
     for engine_extras in ENGINE_EXTRAS.values():
         assert set(engine_extras) <= set(extras)
+
+
+@pytest.fixture
+def mocked_children(monkeypatch):
+    monkeypatch.setattr(
+        model_engines, "is_installed", lambda engine: engine in INSTALLED_ENGINES
+    )
+    monkeypatch.setattr(model_engines, "available_devices", lambda: REACHABLE_DEVICES)
+
+    def benchmark_in_child(task, model, engine, device, frames):
+        if device == "cuda":
+            return {"error": CHILD_ERROR}
+        return MEASURED_RESULTS[engine]
+
+    monkeypatch.setattr(benchmark, "benchmark_in_child", benchmark_in_child)
+
+
+def benchmark_rows_of(model):
+    options = model_engines.engine_options(model)
+    rows = benchmark.benchmark_rows(options, BENCHMARK_FRAMES)
+    return {(row["engine"], row["device"]): row for row in rows}
+
+
+def test_a_benchmark_times_each_reachable_device_of_a_running_engine(
+    hub_configs, mocked_children
+):
+    rows = benchmark_rows_of(DEPTH_MODEL)
+    for engine in ("pytorch", "onnx"):
+        row = rows[(engine, "cpu")]
+        assert row["task"] == "depth"
+        assert row["note"] == ""
+        for name, value in MEASURED_RESULTS[engine].items():
+            assert row[name] == value
+
+
+def test_a_benchmark_reports_refused_and_missing_engines_without_running_them(
+    hub_configs, mocked_children
+):
+    rows = benchmark_rows_of(DEPTH_MODEL)
+    assert ("ncnn", "cpu") not in rows
+    assert NCNN_BATCH_BROADCAST in rows[("ncnn", "")]["note"]
+    assert rows[("openvino", "")]["note"] == benchmark.NOT_INSTALLED_NOTE
+    assert rows[("openvino", "")]["fps"] is None
+
+
+def test_a_benchmark_child_error_becomes_the_row_note(hub_configs, mocked_children):
+    row = benchmark_rows_of(DEPTH_MODEL)[("onnx", "cuda")]
+    assert row["note"] == CHILD_ERROR
+    assert (row["load_seconds"], row["latency_ms"], row["fps"]) == (None, None, None)
+
+
+def test_a_benchmark_of_a_causal_lm_has_no_driver(hub_configs, mocked_children):
+    (row,) = benchmark_rows_of(CAUSAL_LM_MODEL).values()
+    assert row["task"] == "llm"
+    assert row["note"] == benchmark.NO_DRIVER_NOTE
+
+
+def test_every_ported_vision_task_has_a_benchmark_driver():
+    text_tasks = {model_engines.LLM_TASK, model_engines.WHISPER_TASK}
+    assert set(TASK_ENGINES) - text_tasks <= set(benchmark.BENCHMARK_DRIVERS)
+
+
+def completed_child(returncode, stdout="", stderr=""):
+    return subprocess.CompletedProcess([], returncode, stdout, stderr)
+
+
+def test_a_child_result_is_the_last_stdout_line():
+    result = {"load_seconds": 1.0, "latency_ms": 2.0, "fps": 500.0}
+    stdout = f"Ultralytics 8.3 model summary\n{json.dumps(result)}\n\n"
+    assert benchmark.child_result(completed_child(0, stdout)) == result
+
+
+def test_a_crashed_child_becomes_an_error_note():
+    killed = completed_child(-9)
+    assert benchmark.child_result(killed) == {"error": "killed by SIGKILL"}
+    traceback = "Traceback (most recent call last):\nValueError: no graph\n"
+    failed = completed_child(1, "noise\n", traceback)
+    assert benchmark.child_result(failed) == {
+        "error": "exit code 1: ValueError: no graph"
+    }
+    assert benchmark.child_result(completed_child(0, "noise\n")) == {
+        "error": "exit code 0"
+    }
+
+
+def test_a_frame_count_under_one_is_rejected():
+    import pyml_engines
+
+    with pytest.raises(SystemExit):
+        pyml_engines.main(["yolo11n", "--benchmark", "--frames", "0"])

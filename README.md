@@ -106,6 +106,12 @@ depth
   openvino    runs                                                       cpu gpu npu                                     pip install gst-python-ml[openvino]
 ```
 
+`--benchmark` times the model on each installed engine that runs it, on each device
+marked `*`, and prints load time, milliseconds per frame and frames per second. Each
+engine and device runs in its own process on random frames, 20 by default, set with
+`--frames`. An engine that fails or crashes shows its error in the note column. For
+action, one frame is a 16-frame window.
+
 ## Install
 
 Ubuntu 24.04 or later:
