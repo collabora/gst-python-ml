@@ -39,7 +39,7 @@ sudo dnf install -y python3-pip \
 
 #### Windows
 
-1. Install Python 3.12 or later.
+1. Install Python 3.10 or later. JetPack 6 ships 3.10; the `jax` extras need 3.11.
 
 2. Install GStreamer and its Python bindings from the GStreamer project's
    wheels, in the same venv as this package:

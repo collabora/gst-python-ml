@@ -1,4 +1,3 @@
-import contextlib
 import os
 import shutil
 import sys
@@ -139,10 +138,14 @@ def exported_detector(detector, tmp_path_factory):
     def export(export_format):
         if export_format not in exported:
             # ultralytics drops onnx2tf's calibration file in the working directory
-            with contextlib.chdir(tmp_path_factory.mktemp("export")):
+            previous_directory = os.getcwd()
+            os.chdir(tmp_path_factory.mktemp("export"))
+            try:
                 exported[export_format] = Path(
                     detector.export(format=export_format, imgsz=DETECTOR_INPUT_SIZE)
                 )
+            finally:
+                os.chdir(previous_directory)
         return exported[export_format]
 
     return export

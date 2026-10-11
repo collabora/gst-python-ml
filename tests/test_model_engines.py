@@ -1,10 +1,14 @@
 import json
 import subprocess
 import sys
-import tomllib
 from pathlib import Path
 
 import pytest
+
+try:
+    import tomllib
+except ImportError:
+    import tomli as tomllib
 
 BASE_DIR = Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(BASE_DIR / "plugins" / "python"))
