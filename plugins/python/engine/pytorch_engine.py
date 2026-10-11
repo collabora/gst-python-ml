@@ -16,6 +16,7 @@
 # Free Software Foundation, Inc., 51 Franklin Street, Fifth Floor,
 # Boston, MA 02110-1301, USA.
 
+import functools
 import os
 import numpy as np
 
@@ -28,10 +29,55 @@ def projected(features):
     return getattr(features, "pooler_output", features)
 
 
+INFERENCE_METHOD_NAMES = ("do_forward", "do_generate")
+
+
+def on_the_engine_stream(method):
+    @functools.wraps(method)
+    def run_on_the_engine_stream(self, *args, **kwargs):
+        with self.stream_context():
+            return method(self, *args, **kwargs)
+
+    return run_on_the_engine_stream
+
+
 class PyTorchEngine(MLEngine):
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
         self.is_executorch = False
+
+    # a subclass's inference runs on the engine's stream without asking
+    def __init_subclass__(cls, **kwargs):
+        super().__init_subclass__(**kwargs)
+        for name in INFERENCE_METHOD_NAMES:
+            if name in cls.__dict__:
+                setattr(cls, name, on_the_engine_stream(cls.__dict__[name]))
+
+    @property
+    def stream_priority(self):
+        return self._stream_priority
+
+    # a cuda stream keeps the priority it was created with
+    @stream_priority.setter
+    def stream_priority(self, priority):
+        self._stream_priority = priority
+        self.stream = self.new_cuda_stream()
+
+    def new_cuda_stream(self):
+        if self.device is None or "cuda" not in self.device:
+            return None
+        import torch
+
+        return torch.cuda.Stream(
+            device=int(self.device_index), priority=self._stream_priority
+        )
+
+    def stream_context(self):
+        if self.stream is None:
+            return super().stream_context()
+        import torch
+
+        return torch.cuda.stream(self.stream)
 
     def do_load_model(self, model_name, **kwargs):
         """Load a pre-trained model by name from TorchVision, Transformers, or a local path (including .pte for ExecuTorch)."""
@@ -100,7 +146,7 @@ class PyTorchEngine(MLEngine):
 
         if not self.is_executorch:
             if hasattr(self.model, "to") and callable(getattr(self.model, "to")):
-                self.execute_with_stream(lambda: self.model.to(self.device))
+                self.model.to(self.device)
                 self.logger.info(f"Model moved to {self.device}")
 
             if compile_model:
@@ -110,7 +156,6 @@ class PyTorchEngine(MLEngine):
         return True
 
     def do_set_device(self, device):
-        """Set PyTorch device for the model (ExecuTorch handles devices via export/backends)."""
         import torch
 
         if "cuda" in device:
@@ -148,8 +193,10 @@ class PyTorchEngine(MLEngine):
         else:
             raise ValueError(f"Invalid device specified: {device}")
         self.device = device
+        self.stream = self.new_cuda_stream()
         self.logger.info(f"Setting device to {device}")
 
+    @on_the_engine_stream
     def do_forward(self, frames):
         """Handle inference for different types of models, supporting single frames or batches (with ExecuTorch adaptation)."""
         import torch
@@ -246,6 +293,7 @@ class PyTorchEngine(MLEngine):
         else:
             raise ValueError("Unsupported model type or missing processor/tokenizer.")
 
+    @on_the_engine_stream
     def do_generate(self, input_text, max_length=1000, system_prompt=None):
         import torch
 
@@ -288,14 +336,3 @@ class PyTorchEngine(MLEngine):
 
         self.logger.info(f"Generated text: {generated_text}")
         return generated_text
-
-    def execute_with_stream(self, func, *args, **kwargs):
-        import torch
-
-        if self.device_queue_id is not None and "cuda" in self.device:
-            s = torch.cuda.Stream(
-                device=self.device, priority=0, stream_id=self.device_queue_id
-            )
-            with torch.cuda.stream(s):
-                return func(*args, **kwargs)
-        return func(*args, **kwargs)

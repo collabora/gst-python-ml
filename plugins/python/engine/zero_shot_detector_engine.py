@@ -205,7 +205,7 @@ class ZeroShotDetectorEngine(PyTorchEngine):
 
             self.image_processor = AutoProcessor.from_pretrained(model_name)
             self.model = AutoModelForZeroShotObjectDetection.from_pretrained(model_name)
-            self.execute_with_stream(lambda: self.model.to(self.device))
+            self.model.to(self.device)
             self.model.eval()
             self.logger.info(
                 f"Zero-shot detection model '{model_name}' loaded on {self.device}"
@@ -238,7 +238,7 @@ class ZeroShotDetectorEngine(PyTorchEngine):
         ).to(self.device)
 
         with torch.no_grad():
-            outputs = self.execute_with_stream(lambda: self.model(**inputs))
+            outputs = self.model(**inputs)
 
         processed = self.image_processor.post_process_grounded_object_detection(
             outputs=outputs,

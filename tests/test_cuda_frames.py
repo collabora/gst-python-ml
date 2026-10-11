@@ -142,3 +142,22 @@ def test_only_an_engine_that_reads_device_frames_offers_cuda_caps(
     offered = element.do_transform_caps(direction, cuda_caps, None)
 
     assert offers_cuda_memory(offered) == offers_cuda
+
+
+@needs_cuda
+def test_the_tracker_passes_cuda_memory_through():
+    from tracker import TrackerTransform
+
+    Gst.Element.register(None, "trackerundertest", Gst.Rank.NONE, TrackerTransform)
+    pipeline = Gst.parse_launch(
+        f"videotestsrc num-buffers={FRAME_COUNT} "
+        f"! video/x-raw,format=RGBA,width={WIDTH},height={HEIGHT} ! cudaupload "
+        f"! {CUDA_MEMORY_CAPS} ! trackerundertest ! {CUDA_MEMORY_CAPS} ! fakesink"
+    )
+    pipeline.set_state(Gst.State.PLAYING)
+    message = pipeline.get_bus().timed_pop_filtered(
+        PULL_TIMEOUT, Gst.MessageType.EOS | Gst.MessageType.ERROR
+    )
+    pipeline.set_state(Gst.State.NULL)
+
+    assert message is not None and message.type == Gst.MessageType.EOS

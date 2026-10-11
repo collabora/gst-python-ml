@@ -130,7 +130,7 @@ class AnomalyEngine(PyTorchEngine):
             self.feature_layers = torch.nn.Sequential(
                 *list(self.backbone.children())[:-2]
             )
-            self.execute_with_stream(lambda: self.feature_layers.to(self.device))
+            self.feature_layers.to(self.device)
             self.feature_layers.eval()
 
             self.reference_features = None

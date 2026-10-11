@@ -44,7 +44,7 @@ class CaptionPhiEngine(PyTorchVisionEngine):
         if not (
             hasattr(self.model, "is_loaded_in_4bit") and self.model.is_loaded_in_4bit
         ):
-            self.execute_with_stream(lambda: self.model.to(self.device))
+            self.model.to(self.device)
             self.logger.info(f"Model moved to {self.device}")
 
         return True

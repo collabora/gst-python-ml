@@ -50,7 +50,7 @@ class CaptionQwenEngine(PyTorchVisionEngine):
 
         # Skip .to() for quantized models
         if not (hasattr(self.model, "is_quantized") and self.model.is_quantized):
-            self.execute_with_stream(lambda: self.model.to(self.device))
+            self.model.to(self.device)
             self.logger.info(f"Model moved to {self.device}")
 
     def _prepare_messages(self, images):

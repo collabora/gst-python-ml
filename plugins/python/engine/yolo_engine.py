@@ -297,7 +297,7 @@ class YoloEngine(PyTorchEngine):
             from ultralytics import YOLO
 
             self.model = YOLO(f"{model_name}.pt")
-            self.execute_with_stream(lambda: self.model.to(self.device))
+            self.model.to(self.device)
             self.logger.info(f"YOLO model '{model_name}' loaded on {self.device}")
         except Exception as e:
             raise ValueError(f"Failed to load YOLO model '{model_name}'. Error: {e}")
@@ -307,17 +307,15 @@ class YoloEngine(PyTorchEngine):
         import torch
 
         if torch.is_tensor(frames):
-            return self.execute_with_stream(
-                lambda: predict_device_frame(
-                    self.get_model(),
-                    frames.to(self.device),
-                    self.track,
-                    imgsz=self.imgsz,
-                    conf=self.conf,
-                    iou=self.iou,
-                    agnostic_nms=self.agnostic_nms,
-                    verbose=True,
-                )
+            return predict_device_frame(
+                self.get_model(),
+                frames.to(self.device),
+                self.track,
+                imgsz=self.imgsz,
+                conf=self.conf,
+                iou=self.iou,
+                agnostic_nms=self.agnostic_nms,
+                verbose=True,
             )
         is_batch = isinstance(frames, np.ndarray) and frames.ndim == 4
         # ultralytics reads a numpy frame as bgr
@@ -349,28 +347,24 @@ class YoloEngine(PyTorchEngine):
         imgsz = getattr(self, "imgsz", 640)
         if self.track:
             # Ensure tracker persists across batches
-            results = self.execute_with_stream(
-                lambda: model.track(
-                    source=img_list,
-                    persist=True,
-                    imgsz=imgsz,
-                    conf=conf,
-                    iou=iou,
-                    agnostic_nms=agnostic,
-                    verbose=True,
-                    tracker=TRACKER_CONFIGURATION,
-                )
+            results = model.track(
+                source=img_list,
+                persist=True,
+                imgsz=imgsz,
+                conf=conf,
+                iou=iou,
+                agnostic_nms=agnostic,
+                verbose=True,
+                tracker=TRACKER_CONFIGURATION,
             )
         else:
-            results = self.execute_with_stream(
-                lambda: model(
-                    img_list,
-                    imgsz=imgsz,
-                    conf=conf,
-                    iou=iou,
-                    agnostic_nms=agnostic,
-                    verbose=True,
-                )
+            results = model(
+                img_list,
+                imgsz=imgsz,
+                conf=conf,
+                iou=iou,
+                agnostic_nms=agnostic,
+                verbose=True,
             )
         end_inf = time.time()
 

@@ -112,7 +112,7 @@ class ClassifierEngine(PyTorchEngine):
         except Exception as error:
             raise ValueError(f"Failed to load classifier '{model_name}': {error}")
         self.model.eval()
-        self.execute_with_stream(lambda: self.model.to(self.device))
+        self.model.to(self.device)
         self.transforms = weights.transforms()
         self.categories = weights.meta["categories"]
         self.logger.info(f"Classifier '{model_name}' loaded on {self.device}")

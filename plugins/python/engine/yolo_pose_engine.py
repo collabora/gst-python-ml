@@ -61,7 +61,7 @@ class YoloPoseEngine(PyTorchEngine):
             from ultralytics import YOLO
 
             self.model = YOLO(f"{model_name}.pt")
-            self.execute_with_stream(lambda: self.model.to(self.device))
+            self.model.to(self.device)
             self.logger.info(f"YOLO pose model '{model_name}' loaded on {self.device}")
         except Exception as e:
             raise ValueError(f"Failed to load YOLO pose model '{model_name}': {e}")
@@ -71,13 +71,11 @@ class YoloPoseEngine(PyTorchEngine):
         import torch
 
         if torch.is_tensor(frames):
-            return self.execute_with_stream(
-                lambda: predict_device_frame(
-                    self.get_model(),
-                    frames.to(self.device),
-                    track=False,
-                    **POSE_PREDICTION_OPTIONS,
-                )
+            return predict_device_frame(
+                self.get_model(),
+                frames.to(self.device),
+                track=False,
+                **POSE_PREDICTION_OPTIONS,
             )
         is_batch = isinstance(frames, np.ndarray) and frames.ndim == 4
         # ultralytics reads a numpy frame as bgr
@@ -90,9 +88,7 @@ class YoloPoseEngine(PyTorchEngine):
             return None if not is_batch else [None] * batch_size
 
         img_list = [writable[i] for i in range(batch_size)] if is_batch else [writable]
-        results = self.execute_with_stream(
-            lambda: model(img_list, **POSE_PREDICTION_OPTIONS)
-        )
+        results = model(img_list, **POSE_PREDICTION_OPTIONS)
         if not results:
             return None if not is_batch else [None] * batch_size
         return results[0] if not is_batch else results

@@ -142,23 +142,25 @@ class VideoTransform(BaseTransform, FrameProcessingMixin):
         if self.is_qos_enabled() and self.would_reach_the_sink_late(buf):
             return FLOW_DROPPED
         try:
-            frames, num_sources, fmt = frameio.read_frames(
-                buf,
-                self.sinkpad,
-                self.width,
-                self.height,
-                (
-                    getattr(self, "framerate_num", 30),
-                    getattr(self, "framerate_denom", 1),
-                ),
-            )
-            if frames is None:
-                self.logger.error("Failed to extract frames")
-                return Gst.FlowReturn.ERROR
-            started = time.monotonic_ns()
-            self.process_frames(frames, num_sources, fmt, buf)
-            self._last_run_ns = time.monotonic_ns() - started
-            return Gst.FlowReturn.OK
+            # a device frame's producer wait is queued on the current stream
+            with self.engine.stream_context():
+                frames, num_sources, fmt = frameio.read_frames(
+                    buf,
+                    self.sinkpad,
+                    self.width,
+                    self.height,
+                    (
+                        getattr(self, "framerate_num", 30),
+                        getattr(self, "framerate_denom", 1),
+                    ),
+                )
+                if frames is None:
+                    self.logger.error("Failed to extract frames")
+                    return Gst.FlowReturn.ERROR
+                started = time.monotonic_ns()
+                self.process_frames(frames, num_sources, fmt, buf)
+                self._last_run_ns = time.monotonic_ns() - started
+                return Gst.FlowReturn.OK
         except Exception as exception:
             post_error(self, "transform error", exception)
             return Gst.FlowReturn.ERROR

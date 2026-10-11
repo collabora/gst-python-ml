@@ -664,12 +664,12 @@ class YoloAdvancedEngine(PyTorchEngine):
 
         # YOLO load unchanged...
         self.det_model = YOLO(f"{model_name}.pt")
-        self.execute_with_stream(lambda: self.det_model.to(self.device))
+        self.det_model.to(self.device)
         self.logger.info(f"YOLO primary model '{model_name}' loaded on {self.device}")
 
         if self.hires_fallback:
             self.fb_model = YOLO(f"{model_name}.pt")
-            self.execute_with_stream(lambda: self.fb_model.to(self.device))
+            self.fb_model.to(self.device)
 
         self.model = self.det_model  # Alias for base compat
 
@@ -728,17 +728,15 @@ class YoloAdvancedEngine(PyTorchEngine):
         self.prev_gray = gray
 
         # Detection
-        det_res = self.execute_with_stream(
-            lambda: self.det_model.predict(
-                frame_bgr,
-                imgsz=self.imgsz,
-                conf=self.conf,
-                iou=self.iou,
-                classes=self.classes,
-                device=self.device,
-                verbose=False,
-            )[0]
-        )
+        det_res = self.det_model.predict(
+            frame_bgr,
+            imgsz=self.imgsz,
+            conf=self.conf,
+            iou=self.iou,
+            classes=self.classes,
+            device=self.device,
+            verbose=False,
+        )[0]
 
         dets_p, dets_b = classwise_keep(
             det_res, self.person_conf_keep, self.ball_conf_keep
@@ -779,17 +777,15 @@ class YoloAdvancedEngine(PyTorchEngine):
                     max_side=self.roi_max,
                 )
                 crop = frame_bgr[y1r:y2r, x1r:x2r]
-                pred = self.execute_with_stream(
-                    lambda: self.fb_model.predict(
-                        crop,
-                        imgsz=min(max(x2r - x1r, y2r - y1r), clamp_imgsz),
-                        conf=max(self.ball_conf_keep, 0.02),
-                        iou=max(self.iou, 0.50),
-                        classes=[32],
-                        device=self.device,
-                        verbose=False,
-                    )[0]
-                )
+                pred = self.fb_model.predict(
+                    crop,
+                    imgsz=min(max(x2r - x1r, y2r - y1r), clamp_imgsz),
+                    conf=max(self.ball_conf_keep, 0.02),
+                    iou=max(self.iou, 0.50),
+                    classes=[32],
+                    device=self.device,
+                    verbose=False,
+                )[0]
                 if pred.boxes is not None and len(pred.boxes) > 0:
                     b = pred.boxes
                     xyxy = b.xyxy.cpu().numpy()
@@ -804,17 +800,15 @@ class YoloAdvancedEngine(PyTorchEngine):
                     collected.append(np.c_[xyxy, conf, cls])
 
             if self.fb_model is not None and not collected:
-                pred = self.execute_with_stream(
-                    lambda: self.fb_model.predict(
-                        frame_bgr,
-                        imgsz=clamp_imgsz,
-                        conf=max(self.ball_conf_keep, 0.02),
-                        iou=max(self.iou, 0.50),
-                        classes=[32],
-                        device=self.device,
-                        verbose=False,
-                    )[0]
-                )
+                pred = self.fb_model.predict(
+                    frame_bgr,
+                    imgsz=clamp_imgsz,
+                    conf=max(self.ball_conf_keep, 0.02),
+                    iou=max(self.iou, 0.50),
+                    classes=[32],
+                    device=self.device,
+                    verbose=False,
+                )[0]
                 if pred.boxes is not None and len(pred.boxes) > 0:
                     b = pred.boxes
                     xyxy = b.xyxy.cpu().numpy()

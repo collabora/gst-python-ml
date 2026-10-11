@@ -42,7 +42,13 @@ from log.logger_factory import LoggerFactory
 ENGINE_TUNABLES = (
     ("batch_size", int, 1, "Number of items to process in a batch"),
     ("frame_stride", int, 1, "How often to process a frame"),
-    ("device_queue_id", int, 1, "ID of the DeviceQueue from the pool to use"),
+    (
+        "stream_priority",
+        int,
+        0,
+        "Priority of the CUDA stream the inference runs on, lower is more urgent "
+        "as in CUDA, clamped to the range the device allows",
+    ),
 )
 
 
@@ -290,7 +296,7 @@ class MLEngineMixin:
         self._batch_size = 1
         self._frame_stride = 1
         self._model_name = None
-        self._device_queue_id = 0
+        self._stream_priority = 0
         self._system_prompt = None
         self._prompt = None
         self._compile = False
@@ -320,8 +326,7 @@ class MLEngineMixin:
             self.mgr.initialize_engine()
             self.engine.batch_size = self._batch_size
             self.engine.frame_stride = self._frame_stride
-            if self._device_queue_id:
-                self.engine.device_queue_id = self._device_queue_id
+            self.engine.stream_priority = self._stream_priority
             # an engine like drpai starts with a layout of its own
             if self._input_format != ENGINE_CHOOSES:
                 self.engine.input_format = self._input_format

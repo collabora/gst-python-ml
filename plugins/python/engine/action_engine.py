@@ -105,7 +105,7 @@ class ActionEngine(PyTorchEngine):
 
             self.image_processor = AutoImageProcessor.from_pretrained(model_name)
             self.model = VideoMAEForVideoClassification.from_pretrained(model_name)
-            self.execute_with_stream(lambda: self.model.to(self.device))
+            self.model.to(self.device)
             self.model.eval()
             self.logger.info(f"VideoMAE model '{model_name}' loaded on {self.device}")
         except Exception as e:

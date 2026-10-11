@@ -137,7 +137,7 @@ class OpticalFlowEngine(PyTorchEngine):
                 self.model = raft_large(weights=weights)
 
             self.transforms = weights.transforms()
-            self.execute_with_stream(lambda: self.model.to(self.device))
+            self.model.to(self.device)
             self.model.eval()
             self.logger.info(f"RAFT model '{model_name}' loaded on {self.device}")
         except Exception as e:

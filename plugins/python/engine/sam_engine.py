@@ -142,7 +142,7 @@ class SamEngine(PyTorchEngine):
 
             self.processor = Sam2Processor.from_pretrained(model_name)
             self.model = Sam2Model.from_pretrained(model_name)
-            self.execute_with_stream(lambda: self.model.to(self.device))
+            self.model.to(self.device)
             self.model.eval()
             self.logger.info(f"SAM2 model '{model_name}' loaded on {self.device}")
         except Exception as e:

@@ -18,6 +18,7 @@
 
 import hashlib
 from abc import ABC, abstractmethod
+from contextlib import nullcontext
 from pathlib import Path
 
 from log.logger_factory import LoggerFactory
@@ -70,7 +71,7 @@ class MLEngine(ABC):
         self.frame_buffer = []  # For vision-text models or manual buffering
         self.frame_stride = None
         self.counter = 0
-        self.device_queue_id = None
+        self.stream_priority = 0
         self.track = False
         self.prompt = "What is shown in this image?"  # Default prompt
         self.input_format = "auto"  # "auto", "nhwc", "nchw"
@@ -92,6 +93,9 @@ class MLEngine(ABC):
 
     def do_generate(self, input_text, max_length=1000, system_prompt=None):
         raise NotImplementedError(f"{type(self).__name__} generates no text")
+
+    def stream_context(self):
+        return nullcontext()
 
     # Implementation #
     def _model_input_hw(self):

@@ -26,22 +26,28 @@ from gi.repository import Gst, GstBase, GstVideo  # noqa: E402
 
 from backend.gst.errors import post_error  # noqa: E402
 from backend.gst.frameio import map_video_memory  # noqa: E402
+from backend.gst.video_transform import CUDA_MEMORY_FEATURE, pad_templates  # noqa: E402
 from log.logger_factory import LoggerFactory  # noqa: E402
+
+ANY_VIDEO_CAPS = "video/x-raw"
 
 
 class InPlaceVideoTransform(GstBase.BaseTransform):
-    VIDEO_CAPS = Gst.Caps.from_string("video/x-raw")
-    __gsttemplates__ = (
-        Gst.PadTemplate.new(
-            "src", Gst.PadDirection.SRC, Gst.PadPresence.ALWAYS, VIDEO_CAPS
-        ),
-        Gst.PadTemplate.new(
-            "sink", Gst.PadDirection.SINK, Gst.PadPresence.ALWAYS, VIDEO_CAPS
-        ),
-    )
+    VIDEO_CAPS = Gst.Caps.from_string(ANY_VIDEO_CAPS)
+    __gsttemplates__ = pad_templates(VIDEO_CAPS)
 
     # an element that only reads and writes metadata leaves this False
     READS_PIXELS = True
+
+    # runs before pygobject registers the subclass and reads its templates
+    def __init_subclass__(cls, **kwargs):
+        super().__init_subclass__(**kwargs)
+        if not cls.READS_PIXELS:
+            cls.__gsttemplates__ = pad_templates(
+                Gst.Caps.from_string(
+                    f"{ANY_VIDEO_CAPS}({CUDA_MEMORY_FEATURE});{ANY_VIDEO_CAPS}"
+                )
+            )
 
     def __init__(self):
         super().__init__()

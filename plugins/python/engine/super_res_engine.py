@@ -109,7 +109,7 @@ class SuperResEngine(PyTorchEngine):
     def do_load_model(self, model_name, **kwargs):
         descriptor = load_upsampler(model_name)
 
-        self.execute_with_stream(lambda: descriptor.to(self.device))
+        descriptor.to(self.device)
         descriptor.eval()
         self.upsampler = descriptor
         self.logger.info(
