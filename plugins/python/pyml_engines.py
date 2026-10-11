@@ -109,8 +109,12 @@ def benchmark_lines(rows):
     return aligned_lines([BENCHMARK_HEADER, *cells])
 
 
+def print_progress(task, engine, device):
+    print(f"{task} {engine} {device}", file=sys.stderr, flush=True)
+
+
 def print_benchmark(options, frames, as_json):
-    rows = benchmark_rows(options, frames)
+    rows = benchmark_rows(options, frames, print_progress)
     if as_json:
         report = {"model": options["model"], "frames": frames, "results": rows}
         print(json.dumps(report, indent=2))

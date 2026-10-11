@@ -239,24 +239,25 @@ def measured_row(task, engine, device, result):
     }
 
 
-def engine_rows(task, model, entry, devices, frames):
+def engine_rows(task, model, entry, devices, frames, progress):
     engine = entry["engine"]
     if entry["status"] not in BENCHMARKED_STATUSES:
         return [unmeasured_row(task, engine, status_text(entry))]
     if not entry["installed"]:
         return [unmeasured_row(task, engine, NOT_INSTALLED_NOTE)]
-    return [
-        measured_row(
-            task,
-            engine,
-            device,
-            benchmark_in_child(task, model, engine, device, frames),
-        )
-        for device in devices.get(engine, ())
-    ]
+    rows = []
+    for device in devices.get(engine, ()):
+        progress(task, engine, device)
+        result = benchmark_in_child(task, model, engine, device, frames)
+        rows.append(measured_row(task, engine, device, result))
+    return rows
 
 
-def benchmark_rows(options, frames):
+def no_progress(task, engine, device):
+    pass
+
+
+def benchmark_rows(options, frames, progress=no_progress):
     devices = model_engines.available_devices()
     rows = []
     for task in options["tasks"]:
@@ -265,7 +266,9 @@ def benchmark_rows(options, frames):
             continue
         for entry in task["engines"]:
             rows.extend(
-                engine_rows(task["task"], options["model"], entry, devices, frames)
+                engine_rows(
+                    task["task"], options["model"], entry, devices, frames, progress
+                )
             )
     return rows
 
