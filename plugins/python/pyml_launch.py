@@ -19,7 +19,7 @@
 """Run one pipeline description on whichever backend `PYML_BACKEND` selects.
 
 `gst` hands the pipeline to `gst-launch-1.0` unchanged. `g2g` rewrites it for
-`g2g-launch-py`, which spells five things differently:
+`g2g-launch-py`, which spells six things differently:
 
   * a `pyml_*` element is the generic `pyelement` host plus the module and class
     to load;
@@ -33,7 +33,9 @@
     declares `INPUT_CAPS` / `OUTPUT_CAPS` hands them to its host as properties,
     which is the only way it can take audio in and give text out;
   * a sink takes no clock properties and the overlay no `wait-text`, because
-    g2g never does what those switch off.
+    g2g never does what those switch off;
+  * an element that reads frames in CUDA memory, right after `nvdec`, is hosted
+    on the decoder's NV12 frames with `cuda-frames=true`.
 
 Everything else is named the same on both: `filesrc`, `decodebin`,
 `videoconvert`, `videoscale`, `autovideosink`. Write the pipeline the way the
@@ -132,6 +134,13 @@ G2G_CAPS_PROPERTIES = {
     "OUTPUT_CAPS": "output-caps",
 }
 
+DEVICE_FRAMES_CONSTANT = "ACCEPTS_DEVICE_FRAMES"
+
+#: The g2g decoders that leave their frames in CUDA memory, and the host
+#: properties that take those frames as they are.
+CUDA_DECODERS = ("nvdec", "nvh264dec")
+CUDA_FRAME_PROPERTIES = ("cuda-frames=true", "format=NV12")
+
 
 class ElementShell(NamedTuple):
     """What hosting one gst-python-ml element on g2g takes: the module and class
@@ -140,6 +149,13 @@ class ElementShell(NamedTuple):
     module: str
     cls: str
     caps: tuple = ()
+    reads_device_frames: bool = False
+
+
+class ClassDeclaration(NamedTuple):
+    bases: list
+    caps: dict
+    accepts_device_frames: bool | None
 
 
 def plugin_dir():
@@ -187,7 +203,12 @@ def element_shells(directory=None):
             if element and isinstance(cls, ast.Name):
                 registered.append((element, path.stem, cls.id))
     for element, module, cls in registered:
-        shells[element] = ElementShell(module, cls, declared_caps(cls, declarations))
+        shells[element] = ElementShell(
+            module,
+            cls,
+            declared_caps(cls, declarations),
+            reads_device_frames(cls, declarations),
+        )
     return shells
 
 
@@ -205,8 +226,42 @@ def caps_declarations(tree):
             if f"{node.name}.{constant}" in constants
         }
         bases = [base.id for base in node.bases if isinstance(base, ast.Name)]
-        declarations[node.name] = (bases, caps)
+        declarations[node.name] = ClassDeclaration(
+            bases, caps, bool_constants(node).get(DEVICE_FRAMES_CONSTANT)
+        )
     return declarations
+
+
+def bool_constants(class_node):
+    return {
+        target.id: statement.value.value
+        for statement in class_node.body
+        if isinstance(statement, ast.Assign)
+        and isinstance(statement.value, ast.Constant)
+        and isinstance(statement.value.value, bool)
+        for target in statement.targets
+        if isinstance(target, ast.Name)
+    }
+
+
+def class_lineage(cls, declarations):
+    pending, seen = [cls], set()
+    while pending:
+        name = pending.pop(0)
+        if name in seen or name not in declarations:
+            continue
+        seen.add(name)
+        yield declarations[name]
+        pending.extend(declarations[name].bases)
+
+
+def reads_device_frames(cls, declarations):
+    stated = (
+        declaration.accepts_device_frames
+        for declaration in class_lineage(cls, declarations)
+        if declaration.accepts_device_frames is not None
+    )
+    return next(stated, False)
 
 
 def declared_caps(cls, declarations):
@@ -217,16 +272,9 @@ def declared_caps(cls, declarations):
     and giving audio out gets its input from the base and its output from itself.
     """
     caps = {}
-    pending, seen = [cls], set()
-    while pending:
-        name = pending.pop(0)
-        if name in seen or name not in declarations:
-            continue
-        seen.add(name)
-        bases, stated = declarations[name]
-        for property, value in stated.items():
+    for declaration in class_lineage(cls, declarations):
+        for property, value in declaration.caps.items():
             caps.setdefault(property, value)
-        pending.extend(bases)
     return tuple(
         (property, caps[property])
         for property in G2G_CAPS_PROPERTIES.values()
@@ -284,18 +332,27 @@ def rewrite_for_g2g(argv, shells):
     """
     rewritten = []
     raw_format = None
+    upstream = None
     parts = list(segments(argv))
     fan_in = fan_in_names(parts)
     for segment in parts:
         # Separators and references are carried through where they were
         # written: which chains link to which is the caller's, not ours.
-        if segment == [SEPARATOR] or is_reference(segment[0]):
+        if segment == [SEPARATOR]:
             rewritten.extend(segment)
             continue
+        if is_reference(segment[0]):
+            rewritten.extend(segment)
+            upstream = segment[0]
+            continue
         host = PY_AGGREGATOR if declared_name(segment) in fan_in else PY_ELEMENT
-        translated = rewrite_segment(segment, shells, raw_format, host)
+        after_cuda_decoder = upstream in CUDA_DECODERS
+        translated = rewrite_segment(
+            segment, shells, raw_format, host, after_cuda_decoder
+        )
         rewritten.extend(translated)
         raw_format = raw_video_format(translated[0]) or raw_format
+        upstream = segment[0]
     return rewritten
 
 
@@ -370,7 +427,9 @@ def is_reference(token):
     )
 
 
-def rewrite_segment(segment, shells, raw_format=None, host=None):
+def rewrite_segment(
+    segment, shells, raw_format=None, host=None, after_cuda_decoder=False
+):
     if isinstance(segment, str):
         segment = segment.split()
     if not segment:
@@ -394,13 +453,18 @@ def rewrite_segment(segment, shells, raw_format=None, host=None):
         # like a g2g element's (`pyml_kafkasink` and its `sync`).
         properties = [quoted(p) for p in properties]
         hosted = [host or PY_ELEMENT, f"module={shell.module}", f"class={shell.cls}"]
+        on_cuda_frames = (
+            hosted[0] == PY_ELEMENT and after_cuda_decoder and shell.reads_device_frames
+        )
         # `pyelement` takes RGBA unless told otherwise, so an upstream caps
         # filter naming another format has to reach the hosted element too.
         # `pyaggregator` negotiates from its inputs and takes no format.
         pin = raw_format not in (None, G2G_RAW_VIDEO_FORMAT)
-        if hosted[0] == PY_ELEMENT and pin:
-            if not any(p.startswith("format=") for p in properties):
-                hosted.append(f"format={raw_format}")
+        names_format = any(p.startswith("format=") for p in properties)
+        if on_cuda_frames:
+            hosted.extend(CUDA_FRAME_PROPERTIES)
+        elif hosted[0] == PY_ELEMENT and pin and not names_format:
+            hosted.append(f"format={raw_format}")
         hosted.extend(quoted(f"{property}={value}") for property, value in shell.caps)
         return [*hosted, *properties]
 

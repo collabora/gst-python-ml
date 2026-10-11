@@ -587,6 +587,108 @@ def test_a_packed_frame_is_reduced_to_rgb_in_channel_order():
     assert as_rgb(rgb, "BGR").tolist() == [[[30, 20, 10]]]
 
 
+#: BT.601 limited range as a matrix over (Y - 16, Cb - 128, Cr - 128).
+BT601_LIMITED_RANGE_TO_RGB = np.array(
+    [[1.164, 0.0, 1.596], [1.164, -0.392, -0.813], [1.164, 2.017, 0.0]]
+)
+BT601_LIMITED_RANGE_OFFSETS = np.array([16, 128, 128])
+#: Levels two independent rounding conversions may differ by.
+CONVERSION_TOLERANCE = 2
+LEGAL_LUMA_LEVELS = (16, 236)
+LEGAL_CHROMA_LEVELS = (16, 241)
+CHROMA_SUBSAMPLING = 2
+MAXIMUM_LEVEL = 255
+
+
+def synthetic_nv12(height, width):
+    generator = np.random.default_rng(0)
+    luma = generator.integers(*LEGAL_LUMA_LEVELS, (height, width), dtype=np.uint8)
+    chroma_height = -(-height // CHROMA_SUBSAMPLING)
+    chroma_width = -(-width // CHROMA_SUBSAMPLING)
+    chroma_shape = (chroma_height, chroma_width, CHROMA_SUBSAMPLING)
+    chroma = generator.integers(*LEGAL_CHROMA_LEVELS, chroma_shape, dtype=np.uint8)
+    return luma, chroma
+
+
+def reference_rgb(luma, chroma):
+    height, width = luma.shape
+    full_chroma = chroma.repeat(CHROMA_SUBSAMPLING, axis=0).repeat(
+        CHROMA_SUBSAMPLING, axis=1
+    )[:height, :width]
+    yuv = np.concatenate([luma[..., None], full_chroma], axis=-1).astype(float)
+    rgb = (yuv - BT601_LIMITED_RANGE_OFFSETS) @ BT601_LIMITED_RANGE_TO_RGB.T
+    return np.clip(np.round(rgb), 0, MAXIMUM_LEVEL).astype(np.uint8)
+
+
+def largest_difference(first, second):
+    return np.abs(first.astype(int) - second.astype(int)).max()
+
+
+def test_nv12_converts_to_rgb_like_the_bt601_formula():
+    torch = pytest.importorskip("torch")
+    from backend.g2g.cuda_frames import nv12_to_rgb
+
+    luma, chroma = synthetic_nv12(7, 9)
+    rgb = nv12_to_rgb(torch.from_numpy(luma), torch.from_numpy(chroma)).numpy()
+
+    assert rgb.shape == (7, 9, 3)
+    assert largest_difference(rgb, reference_rgb(luma, chroma)) <= CONVERSION_TOLERANCE
+
+
+def test_nv12_converts_to_rgb_like_opencv():
+    torch = pytest.importorskip("torch")
+    cv2 = pytest.importorskip("cv2")
+    from backend.g2g.cuda_frames import nv12_to_rgb
+
+    height, width = 16, 24
+    luma, chroma = synthetic_nv12(height, width)
+    rgb = nv12_to_rgb(torch.from_numpy(luma), torch.from_numpy(chroma)).numpy()
+    nv12 = np.concatenate([luma, chroma.reshape(height // CHROMA_SUBSAMPLING, width)])
+
+    expected = cv2.cvtColor(nv12, cv2.COLOR_YUV2RGB_NV12)
+    assert largest_difference(rgb, expected) <= CONVERSION_TOLERANCE
+
+
+def test_a_cuda_frame_reaches_process_frames_as_an_rgb_tensor_on_the_device():
+    torch = pytest.importorskip("torch")
+    if not torch.cuda.is_available():
+        pytest.skip("needs a CUDA device")
+    from backend.g2g.cuda_frames import nv12_to_rgb
+
+    class RecordFrame(VideoTransform):
+        def process_frames(self, frames, num_sources, fmt, target):
+            self.received = frames, num_sources, fmt
+            meta = analytics.add_relation_meta(target)
+            analytics.add_object(meta, "person", 0, 0, 10, 10, 0.9)
+
+    height, width = 6, 8
+    luma, chroma = synthetic_nv12(height, width)
+    element = RecordFrame()
+    element.device = "cuda"
+    sink = StubMetaSink()
+
+    element.g2g_process_cuda(
+        torch.from_numpy(luma).cuda(),
+        torch.from_numpy(chroma).cuda(),
+        width,
+        height,
+        sink,
+    )
+
+    frames, num_sources, fmt = element.received
+    assert frames.is_cuda and (num_sources, fmt) == (1, "RGB")
+    expected = nv12_to_rgb(torch.from_numpy(luma), torch.from_numpy(chroma))
+    assert torch.equal(frames.cpu(), expected)
+    assert len(sink.staged_objects) == 1
+
+
+def test_a_frame_read_from_cuda_memory_refuses_a_write():
+    from backend.g2g.frameio import DEVICE_FRAME
+
+    with pytest.raises(ValueError, match="read-only"):
+        frameio.write_frame(DEVICE_FRAME, np.zeros((2, 2, 3), dtype=np.uint8))
+
+
 def test_two_elements_on_their_own_threads_keep_their_own_sinks():
     """The host runs one thread per element, so a binding made on one thread must
     not redirect what another thread stages."""

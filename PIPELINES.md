@@ -49,6 +49,19 @@ and the file formats match, so `search_video` reads an index either backend
 wrote. g2g runs no MQTT, so `pyml_alert`'s `mqtt-broker` and `mqtt-topic` are
 refused rather than dropped.
 
+On g2g, `nvdec` decodes H.264, H.265 and AV1 into CUDA memory. Put it directly
+before `pyml_classifier`, `pyml_yolo`, `pyml_yolo_pose` or `pyml_depth` and
+pyml-launch hosts that element with `cuda-frames=true format=NV12`: the element
+converts the NV12 frame to RGB on the GPU and runs the same device-frame path as
+on gst. pyml-launch does this only right after `nvdec`, so a line with
+`decodebin` keeps the element on system memory, spell `qtdemux ! h264parse !
+nvdec`. g2g has no GPU scaler, so the element sees the decoded size, and the
+frame leaves it still CUDA NV12, so put `videoconvert` after it ahead of
+`pyml_tracker` and `pyml_overlay`. An element that draws on the frame, such as
+`pyml_depth` with `visualize=true`, needs `videoconvert` between `nvdec` and it.
+Build `g2g-launch-py` with `--features ml,g2g-plugins/nvdec,g2g-plugins/cuda`
+for `nvdec`.
+
 `analyticsoverlay` has its own properties (`show-label`, `show-track`,
 `show-score`, `show-trail`, `trail-length`, `thickness`, `mask-alpha`), so only
 `pyml_overlay`'s `tracking` carries over, as `show-track`.

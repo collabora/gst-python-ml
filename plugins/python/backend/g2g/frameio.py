@@ -37,6 +37,10 @@ _FORMATS = {
 }
 
 
+# the target of a frame read from a decoder's read-only cuda surface
+DEVICE_FRAME = object()
+
+
 def as_rgb(frames, fmt):
     """The RGB view of `frames` the ML elements infer over.
 
@@ -92,6 +96,11 @@ class G2gFrameIO(FrameIO):
         return frame, 1, self._fmt
 
     def write_frame(self, target, frame):
+        if target is DEVICE_FRAME:
+            raise ValueError(
+                "a frame read from cuda memory on g2g is read-only, put "
+                "videoconvert between the decoder and the element to draw on it"
+            )
         # The FrameBuffer is writable, so frombuffer yields a writable view we
         # overwrite in place (no copy back to the host).
         view = np.frombuffer(target, dtype=np.uint8)

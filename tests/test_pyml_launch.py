@@ -23,7 +23,9 @@ def shells():
 
 
 def test_element_shells_finds_the_hosted_elements(shells):
-    assert shells["pyml_yolo"] == pyml_launch.ElementShell("yolo", "YOLOTransform")
+    assert shells["pyml_yolo"] == pyml_launch.ElementShell(
+        "yolo", "YOLOTransform", reads_device_frames=True
+    )
     assert shells["pyml_objectdetector"].module == "objectdetector"
     assert shells["pyml_overlay"] == pyml_launch.ElementShell("overlay", "Overlay")
 
@@ -255,6 +257,39 @@ def test_hosted_element_takes_the_format_the_caps_ahead_of_it_pin(shells):
         "format=RGB",
         "engine-name=onnx",
     ]
+
+
+def test_the_elements_that_accept_device_frames_are_found(shells):
+    reading = {name for name, shell in shells.items() if shell.reads_device_frames}
+    assert reading == {"pyml_classifier", "pyml_yolo", "pyml_yolo_pose", "pyml_depth"}
+
+
+def test_an_element_reading_device_frames_takes_them_straight_from_nvdec(shells):
+    pipeline = (
+        "filesrc location=data/people.mp4 ! qtdemux ! h264parse ! nvdec "
+        "! pyml_yolo model-name=yolo11n device=cuda "
+        "! videoconvert ! pyml_tracker ! pyml_overlay ! fakesink"
+    )
+    assert (
+        pyml_launch.rewrite_for_g2g(pipeline.split(), shells)
+        == (
+            "filesrc location=data/people.mp4 ! qtdemux ! h264parse ! nvdec "
+            "! pyelement module=yolo class=YOLOTransform cuda-frames=true "
+            "format=NV12 model-name=yolo11n device=cuda "
+            "! videoconvert ! pyelement module=tracker class=TrackerTransform "
+            "! analyticsoverlay ! fakesink"
+        ).split()
+    )
+
+
+def test_a_converter_after_nvdec_keeps_the_element_on_system_memory(shells):
+    pipeline = "nvdec ! videoconvert ! pyml_yolo device=cuda".split()
+    assert "cuda-frames=true" not in pyml_launch.rewrite_for_g2g(pipeline, shells)
+
+
+def test_an_element_reading_host_frames_takes_no_cuda_frames_after_nvdec(shells):
+    pipeline = "nvdec ! pyml_inference engine-name=onnx".split()
+    assert "cuda-frames=true" not in pyml_launch.rewrite_for_g2g(pipeline, shells)
 
 
 def test_the_batching_host_takes_the_caps_of_an_audio_in_text_out_element(shells):

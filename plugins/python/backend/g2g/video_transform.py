@@ -18,9 +18,13 @@ gst backend drives from `do_transform_ip`).
 """
 
 from backend.g2g.analytics import analytics
-from backend.g2g.frameio import as_rgb, frameio
+from backend.g2g.cuda_frames import rgb_device_frame
+from backend.g2g.frameio import DEVICE_FRAME, as_rgb, frameio
 from backend.core import FrameProcessingMixin
 from backend.g2g.transform import BaseTransform
+
+
+DEVICE_FRAME_FORMAT = "RGB"
 
 
 class VideoTransform(BaseTransform, FrameProcessingMixin):
@@ -47,4 +51,24 @@ class VideoTransform(BaseTransform, FrameProcessingMixin):
             return None
         self.process_frames(as_rgb(frames, fmt), num_sources, fmt, buf)
         # Blobs/detections are staged on the sink; no return payload needed.
+        return None
+
+    def g2g_process_cuda(self, luma, chroma, width, height, sink):
+        import torch
+
+        self.width = width
+        self.height = height
+        frameio.bind(sink, DEVICE_FRAME_FORMAT)
+        analytics.bind(sink)
+        if self._only_on and not self.carries_only_on(DEVICE_FRAME):
+            return None
+        self._ensure_model()
+        self._ensure_started()
+        with self.engine.stream_context():
+            frame = rgb_device_frame(luma, chroma)
+            if self.runs_exported_model:
+                frame = frame.cpu().numpy()
+            self.process_frames(frame, 1, DEVICE_FRAME_FORMAT, DEVICE_FRAME)
+            # downstream may unmap the decoder's surface once this returns
+            torch.cuda.current_stream().synchronize()
         return None
