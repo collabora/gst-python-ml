@@ -16,22 +16,13 @@
 # Free Software Foundation, Inc., 51 Franklin Street, Fifth Floor,
 # Boston, MA 02110-1301, USA.
 
+import re
+
+from backend import analytics
+from log.logger_factory import LoggerFactory
+
 # zero-size objects sharing one such label are the points of a polyline, oldest first
 TRAIL_LABEL_SUFFIX = "_trail"
-
-ANALYTICS_UTILS_AVAILABLE = True
-try:
-    import re
-    import gi
-
-    gi.require_version("Gst", "1.0")
-    gi.require_version("GLib", "2.0")
-    gi.require_version("GstAnalytics", "1.0")
-    from gi.repository import GstAnalytics, GLib  # noqa: E402
-
-    from log.logger_factory import LoggerFactory  # noqa: E402
-except (ImportError, ValueError):
-    ANALYTICS_UTILS_AVAILABLE = False
 
 
 class AnalyticsUtils:
@@ -39,7 +30,7 @@ class AnalyticsUtils:
     Utility class for extracting analytics metadata from GStreamer buffers.
 
     This class provides methods to retrieve and parse object detection (OD) and tracking metadata
-    attached to video buffers using GStreamer's GstAnalytics API. It is designed to work with
+    attached to video buffers through `backend.analytics`. It is designed to work with
     metadata added by object detection and tracking elements, such as YOLO-based transformers.
 
     Supported Label Formats:
@@ -58,32 +49,25 @@ class AnalyticsUtils:
 
     def extract_analytics_metadata(self, buffer):
         metadata = []
-        meta = GstAnalytics.buffer_get_analytics_relation_meta(buffer)
+        meta = analytics.get_relation_meta(buffer)
         if not meta:
             self.logger.info("No analytics relation metadata found on buffer")
             return metadata
 
-        count = GstAnalytics.relation_get_length(meta)
+        count = analytics.relation_length(meta)
         self.logger.info(f"Found {count} analytics relations in metadata")
-        for index in range(count):
-            ret, od_mtd = meta.get_od_mtd(index)
-            if not ret or od_mtd is None:
-                continue
-            label_quark = od_mtd.get_obj_type()
-            full_label = GLib.quark_to_string(label_quark)
-            self.logger.debug(f"Index {index}: quark={full_label}")
+        for obj in analytics.read_objects(meta):
+            full_label = obj["label"]
 
             # CLIP/SigLIP zero-shot classification metadata (clip_<label>)
             clip_match = re.match(r"clip_(.+)", full_label)
             if clip_match:
                 label = clip_match.group(1).replace("_", " ")
-                location = od_mtd.get_location()
-                _, _x, _y, _w, _h, confidence = location
                 metadata.append(
                     {
                         "type": "classification",
                         "label": label,
-                        "confidence": confidence,
+                        "confidence": obj["score"],
                     }
                 )
                 self.logger.debug(f"Added classification entry: {metadata[-1]}")
@@ -91,18 +75,16 @@ class AnalyticsUtils:
 
             # Standard object detection metadata
             track_id, label = self.extract_id_from_label(full_label)
-            location = od_mtd.get_location()
-            presence, x, y, w, h, loc_conf_lvl = location
-            if presence:
-                metadata.append(
-                    {
-                        "label": label,
-                        "track_id": track_id,
-                        "confidence": loc_conf_lvl,
-                        "box": {"x1": x, "y1": y, "x2": x + w, "y2": y + h},
-                    }
-                )
-                self.logger.debug(f"Added detection entry: {metadata[-1]}")
+            x, y, w, h = obj["x"], obj["y"], obj["w"], obj["h"]
+            metadata.append(
+                {
+                    "label": label,
+                    "track_id": track_id,
+                    "confidence": obj["score"],
+                    "box": {"x1": x, "y1": y, "x2": x + w, "y2": y + h},
+                }
+            )
+            self.logger.debug(f"Added detection entry: {metadata[-1]}")
         return metadata
 
     def extract_id_from_label(self, full_label):

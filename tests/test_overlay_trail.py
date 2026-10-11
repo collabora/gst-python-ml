@@ -28,6 +28,7 @@ pytestmark = pytest.mark.skipif(
 )
 
 WIDTH, HEIGHT = 64, 32
+BYTES_PER_PIXEL = 4
 TRAIL_POINTS = ((8, 16), (56, 16))
 PIPELINE_TIMEOUT = 10 * Gst.SECOND
 
@@ -56,8 +57,10 @@ def overlaid_frame(labelled_points):
     pipeline.set_state(Gst.State.NULL)
     assert sample is not None, "overlay produced no frame"
     output = sample.get_buffer()
-    frame = np.frombuffer(output.extract_dup(0, output.get_size()), dtype=np.uint8)
-    return frame.reshape(HEIGHT, WIDTH, 4)
+    frame = np.frombuffer(
+        output.extract_dup(0, WIDTH * HEIGHT * BYTES_PER_PIXEL), dtype=np.uint8
+    )
+    return frame.reshape(HEIGHT, WIDTH, BYTES_PER_PIXEL)
 
 
 def test_trail_points_are_joined_into_a_line():

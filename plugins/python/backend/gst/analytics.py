@@ -1,4 +1,4 @@
-# GstAnalyticsBackend
+# Analytics store selection
 # Copyright (C) 2024-2026 Collabora Ltd.
 #
 # This library is free software; you can redistribute it and/or
@@ -16,87 +16,67 @@
 # Free Software Foundation, Inc., 51 Franklin Street, Fifth Floor,
 # Boston, MA 02110-1301, USA.
 
-"""GStreamer implementation of the analytics metadata interface.
-
-Wraps `GstAnalytics` relation metadata. The opaque `meta` handle is a
-`GstAnalytics.RelationMeta`; the opaque detection handle is the `*_mtd` object
-returned by `add_*_mtd` (it carries the `.id` used by `relate`).
-"""
+import os
 
 import gi
 
 gi.require_version("Gst", "1.0")
-gi.require_version("GstAnalytics", "1.0")
-gi.require_version("GLib", "2.0")
-from gi.repository import Gst, GstAnalytics, GLib  # noqa: E402
+from gi.repository import Gst  # noqa: E402
 
-from backend.analytics import AnalyticsBackend  # noqa: E402
+from log.logger_factory import LoggerFactory  # noqa: E402
+
+ANALYTICS_STORE_VARIABLE = "PYML_ANALYTICS"
+RELATION_META_STORE = "meta"
+CHUNK_STORE = "chunk"
 
 
-class GstAnalyticsBackend(AnalyticsBackend):
-    def add_relation_meta(self, buf):
-        return GstAnalytics.buffer_add_analytics_relation_meta(buf)
+def gstanalytics_importable():
+    try:
+        gi.require_version("GstAnalytics", "1.0")
+        from gi.repository import GstAnalytics  # noqa: F401
+    except (ImportError, ValueError):
+        return False
+    return True
 
-    def get_relation_meta(self, buf):
-        return GstAnalytics.buffer_get_analytics_relation_meta(buf)
 
-    def remove_relation_meta(self, buf):
-        meta = GstAnalytics.buffer_get_analytics_relation_meta(buf)
-        if meta is None:
-            return False
-        # GstAnalytics relation meta is an add-once accumulator: detections are
-        # added into it as *_mtd entries. The Python bindings expose no path to
-        # detach it (the RelationMeta wrapper is not a Gst.Meta, so it cannot be
-        # passed to Gst.Buffer.remove_meta). Attempt it for bindings that do
-        # accept it; otherwise report that nothing was removed.
-        try:
-            return bool(buf.remove_meta(meta))
-        except (TypeError, AttributeError):
-            return False
+def relation_meta_analytics():
+    from backend.gst.relation_meta import RelationMetaAnalytics
 
-    def relation_length(self, meta):
-        return GstAnalytics.relation_get_length(meta)
+    return RelationMetaAnalytics()
 
-    def quark(self, label):
-        if isinstance(label, int):
-            return label
-        return GLib.quark_from_string(str(label))
 
-    def add_object(self, meta, label, x, y, w, h, score):
-        qk = self.quark(label)
-        ret, mtd = meta.add_od_mtd(qk, x, y, w, h, score)
-        return mtd if ret else None
+def chunk_analytics():
+    from backend.gst.chunk_analytics import ChunkAnalytics
 
-    def add_classification(self, meta, index, label):
-        qk = self.quark(label)
-        ret, mtd = meta.add_one_cls_mtd(index, qk)
-        return mtd if ret else None
+    return ChunkAnalytics()
 
-    def add_tracking(self, meta, track_id, timestamp=None):
-        if timestamp is None:
-            timestamp = Gst.util_get_timestamp()
-        ret, mtd = meta.add_tracking_mtd(track_id, timestamp)
-        return mtd if ret else None
 
-    def relate(self, meta, src, dst):
-        return bool(
-            GstAnalytics.RelationMeta.set_relation(
-                meta, GstAnalytics.RelTypes.RELATE_TO, src.id, dst.id
-            )
+def select_analytics():
+    logger = LoggerFactory.get(LoggerFactory.LOGGER_TYPE_GST)
+    store = os.environ.get(ANALYTICS_STORE_VARIABLE, "").lower()
+    if store == RELATION_META_STORE:
+        logger.info(
+            f"analytics in the relation meta, forced by {ANALYTICS_STORE_VARIABLE}"
         )
+        return relation_meta_analytics()
+    if store == CHUNK_STORE:
+        logger.info(
+            f"analytics in a buffer chunk, forced by {ANALYTICS_STORE_VARIABLE}"
+        )
+        return chunk_analytics()
+    if store:
+        raise ImportError(
+            f"Unknown {ANALYTICS_STORE_VARIABLE}={store!r}, supported stores: "
+            f"{RELATION_META_STORE!r}, {CHUNK_STORE!r}"
+        )
+    if gstanalytics_importable():
+        logger.info("analytics in the relation meta, GstAnalytics found")
+        return relation_meta_analytics()
+    logger.info("analytics in a buffer chunk, GstAnalytics missing")
+    return chunk_analytics()
 
-    def read_objects(self, meta):
-        objects = []
-        count = GstAnalytics.relation_get_length(meta)
-        for index in range(count):
-            ret, od_mtd = meta.get_od_mtd(index)
-            if not ret or od_mtd is None:
-                continue
-            label = GLib.quark_to_string(od_mtd.get_obj_type())
-            presence, x, y, w, h, score = od_mtd.get_location()
-            if not presence:
-                continue
-            objects.append(
-                {"label": label, "x": x, "y": y, "w": w, "h": h, "score": score}
-            )
-        return objects
+
+# the gate for GstAnalytics features newer than 1.24
+def gst_at_least(major, minor):
+    running_major, running_minor, _micro, _nano = Gst.version()
+    return (running_major, running_minor) >= (major, minor)

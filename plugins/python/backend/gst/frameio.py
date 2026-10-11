@@ -33,6 +33,15 @@ from utils.muxed_buffer_processor import MuxedBufferProcessor  # noqa: E402
 from utils.format_converter import FormatConverter  # noqa: E402
 from backend.frameio import FrameIO  # noqa: E402
 
+# memory 0 is the video frame
+VIDEO_MEMORY = 0
+MAPPED_MEMORY_COUNT = 1
+
+
+# mapping the whole buffer merges the appended metadata into the frame
+def map_video_memory(buffer, flags):
+    return buffer.map_range(VIDEO_MEMORY, MAPPED_MEMORY_COUNT, flags)
+
 
 class GstFrameIO(FrameIO):
     def __init__(self):
@@ -46,7 +55,7 @@ class GstFrameIO(FrameIO):
         return processor.extract_frames(target, source)
 
     def read_frame(self, target, source, width, height):
-        success, map_info = target.map(Gst.MapFlags.READ)
+        success, map_info = map_video_memory(target, Gst.MapFlags.READ)
         if not success:
             return None
         try:
@@ -60,7 +69,7 @@ class GstFrameIO(FrameIO):
         import ctypes
         import numpy as np
 
-        success, map_info = target.map(Gst.MapFlags.WRITE)
+        success, map_info = map_video_memory(target, Gst.MapFlags.WRITE)
         if not success:
             return False
         try:

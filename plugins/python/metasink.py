@@ -32,7 +32,7 @@ try:
 
     from log.logger_factory import LoggerFactory  # noqa: E402
     from backend import analytics, GObject  # noqa: E402
-    from utils.blobs import read_blobs  # noqa: E402
+    from utils.blobs import blob_name, read_blobs  # noqa: E402
 except ImportError as e:
     CAN_REGISTER_ELEMENT = False
     GlobalLogger().warning(
@@ -46,6 +46,8 @@ TEXT_MEDIA_PREFIX = "text/"
 
 
 def buffer_record(buffer, media_type):
+    from backend.gst.chunk_analytics import ANALYTICS_CHUNK_HEADER
+
     record = {}
     if buffer.pts != Gst.CLOCK_TIME_NONE:
         record["pts"] = buffer.pts / Gst.SECOND
@@ -56,7 +58,10 @@ def buffer_record(buffer, media_type):
     meta = analytics.get_relation_meta(buffer)
     # an empty list tells a frame with no detections from a dropped frame
     record["detections"] = analytics.read_objects(meta) if meta else []
-    for name, payload in read_blobs(buffer).items():
+    blobs = read_blobs(buffer)
+    # the detections above already carry the analytics chunk
+    blobs.pop(blob_name(ANALYTICS_CHUNK_HEADER), None)
+    for name, payload in blobs.items():
         # embedding blobs are binary, not json
         try:
             record[name] = json.loads(payload)

@@ -19,10 +19,7 @@
 from log.global_logger import GlobalLogger
 import backend
 
-from utils.analytics_utils import ANALYTICS_UTILS_AVAILABLE, TRAIL_LABEL_SUFFIX
-
-if ANALYTICS_UTILS_AVAILABLE:
-    from utils.analytics_utils import AnalyticsUtils
+from utils.analytics_utils import AnalyticsUtils, TRAIL_LABEL_SUFFIX
 
 CAN_REGISTER_ELEMENT = True
 try:
@@ -279,8 +276,10 @@ class Overlay(GstBase.BaseTransform):
         self.height = height
 
     def do_transform_ip(self, buf):
+        from backend.gst.frameio import map_video_memory
+
         # First try to extract metadata from frame meta
-        if ANALYTICS_UTILS_AVAILABLE and not self.from_file:
+        if not self.from_file:
             analytics_utils = AnalyticsUtils()
             extracted = analytics_utils.extract_analytics_metadata(buf)
             self.logger.debug(f"Extracted buffer metadata: {extracted}")
@@ -447,7 +446,7 @@ class Overlay(GstBase.BaseTransform):
                 )
                 return Gst.FlowReturn.ERROR
 
-            success, map_info = buf.map(Gst.MapFlags.WRITE)
+            success, map_info = map_video_memory(buf, Gst.MapFlags.WRITE)
             if not success:
                 self.logger.error("Failed to map buffer for writing")
                 return Gst.FlowReturn.ERROR

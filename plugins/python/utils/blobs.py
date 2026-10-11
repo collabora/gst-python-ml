@@ -25,6 +25,10 @@ BLOB_PREFIX = b"GST-"
 BLOB_HEADER_END = b":"
 
 
+def blob_name(header):
+    return header[len(BLOB_PREFIX) :].partition(BLOB_HEADER_END)[0].decode().lower()
+
+
 def read_blobs(buffer, first_memory=1):
     # memory 0 is the video frame
     blobs = {}
@@ -36,5 +40,5 @@ def read_blobs(buffer, first_memory=1):
         header, separator, payload = data.partition(BLOB_HEADER_END)
         if not separator:
             continue
-        blobs[header[len(BLOB_PREFIX) :].decode().lower()] = payload
+        blobs[blob_name(header)] = payload
     return blobs

@@ -31,6 +31,14 @@ host, an element g2g implements itself becomes that one, and a raw-video caps
 filter with no format gains `format=RGBA`. An element it cannot map is an error,
 not a silent pass-through.
 
+Under `gst`, detections, classifications and tracking ids travel in the
+GstAnalytics relation meta when the Python bindings have GstAnalytics
+(GStreamer 1.24 or newer), and otherwise in a JSON chunk appended to the buffer
+as an extra memory. `PYML_ANALYTICS=meta` or `PYML_ANALYTICS=chunk` forces one.
+An element that writes a new buffer between the detector and the element
+reading it, such as a converting `videoconvert` or an encoder, drops the chunk,
+while the relation meta survives it.
+
 Seven elements are native on g2g rather than hosted: `pyml_overlay` becomes
 `analyticsoverlay`, `pyml_alert` becomes `analyticsalert`, `pyml_digest` becomes
 `textdigest`, and `pyml_metasink`, `pyml_metareplay`, `pyml_alertrecorder` and

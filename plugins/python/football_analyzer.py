@@ -837,8 +837,10 @@ class FootballAnalyzer(GstBase.BaseTransform):
     def do_transform_ip(self, buf):
         import numpy as np
 
+        from backend.gst.frameio import map_video_memory
+
         try:
-            ok, mapinfo = buf.map(Gst.MapFlags.READ)
+            ok, mapinfo = map_video_memory(buf, Gst.MapFlags.READ)
             if not ok:
                 self.logger.error("Failed to map incoming buffer for read")
                 return Gst.FlowReturn.ERROR

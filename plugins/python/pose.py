@@ -21,7 +21,6 @@ import backend
 
 CAN_REGISTER_ELEMENT = True
 try:
-    import ctypes
     import json
 
     import gi
@@ -31,7 +30,7 @@ try:
     gi.require_version("GstVideo", "1.0")
     from gi.repository import Gst
 
-    from backend import analytics, GObject
+    from backend import analytics, frameio, GObject
     from base_objectdetector import BaseObjectDetector
     from utils.format_converter import FormatConverter
     from engine.yolo_pose_engine import ExportedYoloPose, YoloPoseEngine
@@ -174,8 +173,6 @@ class YOLOPoseTransform(BaseObjectDetector):
                     }
                 )
 
-        # Draw skeleton first, before appending any read-only metadata memory.
-        # (A READONLY chunk on the buffer would prevent buf.map(WRITE) from succeeding.)
         if self.visualize:
             self._write_annotated_frame(buf, result)
 
@@ -200,21 +197,12 @@ class YOLOPoseTransform(BaseObjectDetector):
 
     def _write_annotated_frame(self, buf, result):
         """Write result.plot() (BGR) back into the GStreamer buffer."""
-        import numpy as np
-
         annotated_bgr = result.plot(kpt_line=True, kpt_radius=4)
         fmt = FormatConverter.get_video_format(buf, self.sinkpad)
         output = self._convert_bgr_to_format(annotated_bgr, fmt)
         if output is None:
             return
-        success, map_info = buf.map(Gst.MapFlags.WRITE)
-        if success:
-            try:
-                frame_bytes = np.ascontiguousarray(output).tobytes()
-                dst = (ctypes.c_char * map_info.size).from_buffer(map_info.data)
-                ctypes.memmove(dst, frame_bytes, min(len(frame_bytes), map_info.size))
-            finally:
-                buf.unmap(map_info)
+        frameio.write_frame(buf, output)
 
     @staticmethod
     def _convert_bgr_to_format(bgr, fmt):

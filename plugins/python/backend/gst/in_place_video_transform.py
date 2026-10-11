@@ -25,6 +25,7 @@ gi.require_version("GstVideo", "1.0")
 from gi.repository import Gst, GstBase, GstVideo  # noqa: E402
 
 from backend.gst.errors import post_error  # noqa: E402
+from backend.gst.frameio import map_video_memory  # noqa: E402
 from log.logger_factory import LoggerFactory  # noqa: E402
 
 
@@ -65,7 +66,7 @@ class InPlaceVideoTransform(GstBase.BaseTransform):
 
         if not self.READS_PIXELS:
             return self._run(None, buf)
-        ok, mapinfo = buf.map(Gst.MapFlags.WRITE)
+        ok, mapinfo = map_video_memory(buf, Gst.MapFlags.WRITE)
         if not ok:
             self.logger.error("failed to map buffer for writing")
             return Gst.FlowReturn.ERROR

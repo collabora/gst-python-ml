@@ -297,9 +297,11 @@ class AlertTransform(GstBase.BaseTransform):
         """Draw a red border and ALERT text on the frame."""
         import numpy as np
 
+        from backend.gst.frameio import map_video_memory
+
         if self.width == 0 or self.height == 0:
             return
-        success, mapinfo = buf.map(Gst.MapFlags.READ | Gst.MapFlags.WRITE)
+        success, mapinfo = map_video_memory(buf, Gst.MapFlags.READ | Gst.MapFlags.WRITE)
         if not success:
             return
         # Interpret as RGBA (4 channels)
