@@ -80,9 +80,13 @@ pipeline feeding it CUDA memory fails to link when it is built rather than at
 the first frame. Put `cudadownload` before the element for those engines.
 
 `pyml_yolo` and `pyml_yolo_pose` take CUDA memory on the pytorch engine too. The
-frame is scaled and padded to the model's input size on the GPU and handed to
-ultralytics as a tensor, and the boxes and keypoints are mapped back to the
-frame, so the analytics metadata matches the system-memory path. Segmentation
+frame is scaled and padded to the model's input size on the GPU, and with
+`track=false` the model and its non-maximum suppression run there without the
+ultralytics predictor, copying only the kept boxes back, which cuts the yolo
+element from about 15 ms to 9 ms a frame for yolo11n at 640x480 on an RTX 3060
+Laptop. `track=true` still goes through ultralytics' tracker. The boxes and
+keypoints are mapped back to the frame, so the analytics metadata matches the
+system-memory path. Segmentation
 and oriented-box models refuse these frames, and `pyml_yolo_pose` needs
 `visualize=false` because it cannot draw into a CUDA buffer. `pyml_tracker`
 reads only the metadata, so it passes CUDA memory through. `pyml_overlay` takes

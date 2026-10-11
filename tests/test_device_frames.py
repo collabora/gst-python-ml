@@ -1,3 +1,4 @@
+import importlib.util
 import os
 import sys
 from pathlib import Path
@@ -69,23 +70,29 @@ def read_frame(sink):
     return buffer, frame
 
 
-def loaded_element(element_class, model_name, track=False):
+def loaded_element(element_class, model_name, track=False, tensorrt=False):
     element = element_class()
     element.set_property("model-name", model_name)
     element.set_property("engine-name", "pytorch")
     element.set_property("device", "cuda")
     element.set_property("track", track)
+    element.set_property("tensorrt", tensorrt)
     element.do_load_model()
     return element
 
 
-def device_and_system_results(element_class, model_name, frames, track=False):
+def device_and_system_results(
+    element_class, model_name, frames, track=False, tensorrt=False
+):
     (_, device_frame), (_, system_frame) = frames
     assert device_frame.device.type == "cuda"
-    return [
-        loaded_element(element_class, model_name, track).do_forward(frame)
-        for frame in (device_frame, system_frame)
-    ]
+    # the direct detector hands back its results on the cpu
+    return (
+        loaded_element(element_class, model_name, track, tensorrt)
+        .do_forward(device_frame)
+        .cpu(),
+        loaded_element(element_class, model_name, track).do_forward(system_frame).cpu(),
+    )
 
 
 @pytest.mark.parametrize("track", [False, True])
@@ -119,6 +126,43 @@ def test_pose_on_a_cuda_frame_finds_the_keypoints_of_the_system_frame(
         device_result.keypoints[device_order].xy[visible] - system_keypoints.xy[visible]
     )
     assert keypoint_difference.abs().max() < YOLO_TOLERANCE_PIXELS
+
+
+def test_yolo_on_a_cuda_frame_never_synchronizes_the_whole_device(
+    portrait_frames, monkeypatch
+):
+    from yolo import YOLOTransform
+
+    (_, device_frame), _ = portrait_frames
+    element = loaded_element(YOLOTransform, YOLO_MODEL)
+
+    def refuse_to_synchronize(*args, **kwargs):
+        raise AssertionError("the direct detector synchronized the whole device")
+
+    monkeypatch.setattr(torch.cuda, "synchronize", refuse_to_synchronize)
+    assert len(element.do_forward(device_frame).boxes) > 0
+
+
+@pytest.mark.skipif(
+    importlib.util.find_spec("tensorrt") is None, reason="needs tensorrt"
+)
+@pytest.mark.parametrize(
+    "module_name, class_name, model_name",
+    [
+        ("yolo", "YOLOTransform", YOLO_MODEL),
+        ("pose", "YOLOPoseTransform", YOLO_POSE_MODEL),
+    ],
+)
+def test_tensorrt_on_a_cuda_frame_finds_the_boxes_of_the_system_frame(
+    portrait_frames, module_name, class_name, model_name
+):
+    element_class = getattr(importlib.import_module(module_name), class_name)
+
+    device_result, system_result = device_and_system_results(
+        element_class, model_name, portrait_frames, tensorrt=True
+    )
+
+    assert_same_boxes(device_result, system_result)
 
 
 def test_yolo_segmentation_refuses_a_cuda_frame(portrait_frames):

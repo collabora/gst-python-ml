@@ -115,6 +115,15 @@ class YOLOPoseTransform(BaseObjectDetector):
         blurb="Draw skeleton and keypoints directly on the video frame",
         flags=GObject.ParamFlags.READWRITE,
     )
+    tensorrt = GObject.Property(
+        type=bool,
+        default=False,
+        nick="TensorRT",
+        blurb="Run CUDA frames through a half precision TensorRT engine when "
+        "track is off. The engine is built from the weights on the first frame, "
+        "which takes a minute or two, and cached in ~/.cache/gst-python-ml/tensorrt",
+        flags=GObject.ParamFlags.READWRITE,
+    )
 
     def __init__(self):
         super().__init__()
@@ -123,6 +132,11 @@ class YOLOPoseTransform(BaseObjectDetector):
 
     def export_model(self, model_name):
         return ExportedYoloPose(model_name, self.mgr.engine_name)
+
+    def do_forward(self, frames):
+        if self.task_engine:
+            self.task_engine.tensorrt = self.tensorrt
+        return super().do_forward(frames)
 
     def do_decode(self, buf, result, stream_idx=0):
         boxes = result.boxes

@@ -17,10 +17,12 @@
 # Boston, MA 02110-1301, USA.
 
 import ast
+import re
 import time
 from pathlib import Path
 
 from .engine_factory import EngineFactory
+from .ml_engine import MODEL_CACHE
 from .onnx_export import ONNX_EXPORT_CACHE, executorch_export_path, versioned_stem
 from .pytorch_engine import PyTorchEngine
 
@@ -48,6 +50,17 @@ PIXEL_MAXIMUM = 255
 # LetterBox rounds this way so an odd padding pixel goes to the bottom and right
 PADDING_ROUNDING_OFFSET = 0.1
 HEIGHT_AND_WIDTH = 2
+CONFIDENCE_COLUMN = 4
+PYTORCH_WEIGHTS_FORMAT = "pt"
+WARMUP_BATCH_AND_CHANNELS = (1, 3)
+TENSORRT_PACKAGE = "tensorrt"
+TENSORRT_FORMAT = "engine"
+TENSORRT_SUFFIX = f".{TENSORRT_FORMAT}"
+TENSORRT_EXPORT_CACHE = MODEL_CACHE / "tensorrt"
+# an engine runs only on the tensorrt build and the gpu that built it
+TENSORRT_EXPORT_LIBRARIES = (*YOLO_EXPORT_LIBRARIES, TENSORRT_PACKAGE)
+NOT_SLUG_CHARACTERS = re.compile("[^a-z0-9]+")
+SLUG_SEPARATOR = "-"
 
 
 def exported_yolo_path(model_name):
@@ -69,6 +82,37 @@ def exported_yolo_path(model_name):
     return str(path)
 
 
+def tensorrt_engine_path(model_name, imgsz, device):
+    import importlib.util
+
+    import torch
+    from ultralytics import YOLO
+
+    if importlib.util.find_spec(TENSORRT_PACKAGE) is None:
+        raise ImportError(
+            "tensorrt=true needs the tensorrt package, install the tensorrt extra"
+        )
+    gpu_name = NOT_SLUG_CHARACTERS.sub(
+        SLUG_SEPARATOR, torch.cuda.get_device_name(torch.device(device)).lower()
+    ).strip(SLUG_SEPARATOR)
+    stem = versioned_stem(model_name, TENSORRT_EXPORT_LIBRARIES)
+    path = TENSORRT_EXPORT_CACHE / f"{stem}-{gpu_name}-{imgsz}{TENSORRT_SUFFIX}"
+    if path.exists():
+        return str(path)
+    EXPORT_WORK_DIRECTORY.mkdir(parents=True, exist_ok=True)
+    TENSORRT_EXPORT_CACHE.mkdir(parents=True, exist_ok=True)
+    weights = YOLO(str(EXPORT_WORK_DIRECTORY / f"{model_name}.pt"))
+    exported_path = weights.export(
+        format=TENSORRT_FORMAT,
+        half=True,
+        imgsz=imgsz,
+        device=torch.device(device),
+        dynamic=False,
+    )
+    Path(exported_path).rename(path)
+    return str(path)
+
+
 def exported_yolo_executorch_path(model_name):
     import torch
     from ultralytics import YOLO
@@ -85,8 +129,8 @@ def exported_yolo_executorch_path(model_name):
     return str(path)
 
 
-# the LetterBox(auto=True) model.predict applies to a numpy frame for pt weights
-def letterboxed_device_input(frame, imgsz, stride):
+# the LetterBox model.predict applies to a numpy frame, auto=True for pt weights
+def letterboxed_device_input(frame, imgsz, stride, pads_to_stride):
     import torch
     from ultralytics.utils.checks import check_imgsz
 
@@ -96,8 +140,11 @@ def letterboxed_device_input(frame, imgsz, stride):
     height, width = frame.shape[:2]
     scale = min(target_height / height, target_width / width)
     resized_height, resized_width = round(height * scale), round(width * scale)
-    pad_height = (target_height - resized_height) % stride / 2
-    pad_width = (target_width - resized_width) % stride / 2
+    pad_height = target_height - resized_height
+    pad_width = target_width - resized_width
+    if pads_to_stride:
+        pad_height, pad_width = pad_height % stride, pad_width % stride
+    pad_height, pad_width = pad_height / 2, pad_width / 2
     image = frame.permute(2, 0, 1).unsqueeze(0).float() / PIXEL_MAXIMUM
     if (resized_height, resized_width) != (height, width):
         image = torch.nn.functional.interpolate(
@@ -117,22 +164,19 @@ def letterboxed_device_input(frame, imgsz, stride):
     )
 
 
-def frame_result(result, model_input_shape, frame_shape):
+# scales in place
+def frame_result(boxes, keypoints, names, model_input_shape, frame_shape):
     import numpy as np
     from ultralytics.engine.results import Results
     from ultralytics.utils import ops
 
-    boxes = result.boxes.data.clone()
     boxes[:, :BOX_COLUMNS] = ops.scale_boxes(
         model_input_shape, boxes[:, :BOX_COLUMNS], frame_shape
     )
     # results only read its shape, the frame itself stays on the device
     frame_placeholder = np.zeros(frame_shape, np.uint8)
-    rescaled = Results(
-        frame_placeholder, path=FRAME_PATH, names=result.names, boxes=boxes
-    )
-    if result.keypoints is not None:
-        keypoints = result.keypoints.data.clone()
+    rescaled = Results(frame_placeholder, path=FRAME_PATH, names=names, boxes=boxes)
+    if keypoints is not None:
         rescaled.update(
             keypoints=ops.scale_coords(model_input_shape, keypoints, frame_shape)
         )
@@ -140,21 +184,116 @@ def frame_result(result, model_input_shape, frame_shape):
 
 
 # ultralytics reads a tensor as rgb in 0..1 and skips its own letterbox for it
-def predict_device_frame(model, frame, track, **options):
-    if model.task in HOST_FRAME_TASKS:
-        raise ValueError(
-            f"yolo {model.task} models take frames in system memory, "
-            "put cudadownload before the element"
-        )
+def track_device_frame(model, frame, **options):
     stride = int(model.model.stride.max())
-    model_input = letterboxed_device_input(frame, options["imgsz"], stride)
-    if track:
-        results = model.track(
-            model_input, persist=True, tracker=TRACKER_CONFIGURATION, **options
+    model_input = letterboxed_device_input(
+        frame, options["imgsz"], stride, pads_to_stride=True
+    )
+    result = model.track(
+        model_input, persist=True, tracker=TRACKER_CONFIGURATION, **options
+    )[0]
+    keypoints = None if result.keypoints is None else result.keypoints.data.clone()
+    return frame_result(
+        result.boxes.data.clone(),
+        keypoints,
+        result.names,
+        model_input.shape[2:],
+        frame.shape,
+    )
+
+
+# runs the model and its nms on the gpu without the ultralytics predictor
+class DirectDetector:
+    def __init__(self, weights, device, imgsz):
+        import torch
+        from ultralytics.nn.autobackend import AutoBackend
+
+        is_tensorrt_engine = str(weights).endswith(TENSORRT_SUFFIX)
+        self.backend = AutoBackend(
+            weights, device=torch.device(device), fp16=is_tensorrt_engine, verbose=False
         )
-    else:
-        results = model.predict(model_input, **options)
-    return frame_result(results[0], model_input.shape[2:], frame.shape)
+        self.runs_pytorch = self.backend.format == PYTORCH_WEIGHTS_FORMAT
+        self.runs_tensorrt = self.backend.format == TENSORRT_FORMAT
+        self.input_size = imgsz if self.runs_pytorch else self.backend.imgsz
+        self.keypoint_shape = getattr(self.backend, "kpt_shape", None)
+        warmup_height, warmup_width = (
+            (self.input_size, self.input_size)
+            if isinstance(self.input_size, int)
+            else self.input_size
+        )
+        self.backend.warmup(
+            imgsz=(*WARMUP_BATCH_AND_CHANNELS, warmup_height, warmup_width)
+        )
+
+    def detect(self, frame, confidence, iou, agnostic_nms):
+        import torch
+
+        model_input = letterboxed_device_input(
+            frame,
+            self.input_size,
+            self.backend.stride,
+            pads_to_stride=self.runs_pytorch,
+        )
+        with torch.inference_mode():
+            if self.runs_tensorrt:
+                # tensorrt runs on a stream of its own that does not wait for ours
+                torch.cuda.current_stream().synchronize()
+            predictions = self.backend(model_input)
+            if isinstance(predictions, (list, tuple)):
+                predictions = predictions[0]
+            detections = self._kept_detections(
+                predictions[0], confidence, iou, agnostic_nms
+            )
+        detections = detections.float().cpu()
+        keypoints = None
+        if self.keypoint_shape is not None:
+            keypoints = detections[:, BOX_AND_CLASS_COLUMNS:].view(
+                len(detections), *self.keypoint_shape
+            )
+        return frame_result(
+            detections[:, :BOX_AND_CLASS_COLUMNS],
+            keypoints,
+            self.backend.names,
+            model_input.shape[2:],
+            frame.shape,
+        )
+
+    # rows of x1 y1 x2 y2 confidence class then the keypoints, as non_max_suppression
+    def _kept_detections(self, predictions, confidence, iou, agnostic_nms):
+        import torch
+        import torchvision
+        from ultralytics.utils.ops import xywh2xyxy
+
+        if self.backend.end2end:
+            candidates = predictions[:, CONFIDENCE_COLUMN] > confidence
+            return predictions[candidates][:MAXIMUM_DETECTIONS]
+        class_count = len(self.backend.names)
+        extra_count = predictions.shape[0] - BOX_COLUMNS - class_count
+        boxes, class_scores, extras = predictions.transpose(0, 1).split(
+            (BOX_COLUMNS, class_count, extra_count), 1
+        )
+        scores, classes = class_scores.max(1)
+        candidates = scores > confidence
+        boxes = xywh2xyxy(boxes[candidates])
+        scores, classes, extras = (
+            scores[candidates],
+            classes[candidates],
+            extras[candidates],
+        )
+        if agnostic_nms:
+            kept = torchvision.ops.nms(boxes, scores, iou)
+        else:
+            kept = torchvision.ops.batched_nms(boxes, scores, classes, iou)
+        kept = kept[:MAXIMUM_DETECTIONS]
+        return torch.cat(
+            (
+                boxes[kept],
+                scores[kept, None],
+                classes[kept, None].to(boxes.dtype),
+                extras[kept],
+            ),
+            1,
+        )
 
 
 def exported_yolo_metadata(path):
@@ -292,23 +431,57 @@ class ExportedYolo:
 
 
 class YoloEngine(PyTorchEngine):
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        self.tensorrt = False
+        self.direct_detector = None
+
     def do_load_model(self, model_name, **kwargs):
         try:
             from ultralytics import YOLO
 
-            self.model = YOLO(f"{model_name}.pt")
-            self.model.to(self.device)
+            self.model_name = model_name
+            if model_name.endswith(TENSORRT_SUFFIX):
+                self.model = YOLO(model_name)
+            else:
+                self.model = YOLO(f"{model_name}.pt")
+                self.model.to(self.device)
             self.logger.info(f"YOLO model '{model_name}' loaded on {self.device}")
         except Exception as e:
             raise ValueError(f"Failed to load YOLO model '{model_name}'. Error: {e}")
+
+    def device_frame_result(self, frame, track, **options):
+        model = self.get_model()
+        if model.task in HOST_FRAME_TASKS:
+            raise ValueError(
+                f"yolo {model.task} models take frames in system memory, "
+                "put cudadownload before the element"
+            )
+        if track:
+            return track_device_frame(model, frame, **options)
+        if self.direct_detector is None:
+            self.direct_detector = DirectDetector(
+                self._direct_detector_weights(options["imgsz"]),
+                self.device,
+                options["imgsz"],
+            )
+        return self.direct_detector.detect(
+            frame, options["conf"], options["iou"], options["agnostic_nms"]
+        )
+
+    def _direct_detector_weights(self, imgsz):
+        if self.model_name.endswith(TENSORRT_SUFFIX):
+            return self.model_name
+        if self.tensorrt:
+            return tensorrt_engine_path(self.model_name, imgsz, self.device)
+        return self.get_model().model
 
     def do_forward(self, frames):
         import numpy as np
         import torch
 
         if torch.is_tensor(frames):
-            return predict_device_frame(
-                self.get_model(),
+            return self.device_frame_result(
                 frames.to(self.device),
                 self.track,
                 imgsz=self.imgsz,

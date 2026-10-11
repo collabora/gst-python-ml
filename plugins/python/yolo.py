@@ -89,6 +89,15 @@ class YOLOTransform(BaseObjectDetector, YoloTask):
         "(like football_analyzer) so two close players aren't merged",
         flags=GObject.ParamFlags.READWRITE,
     )
+    tensorrt = GObject.Property(
+        type=bool,
+        default=False,
+        nick="TensorRT",
+        blurb="Run CUDA frames through a half precision TensorRT engine when "
+        "track is off. The engine is built from the weights on the first frame, "
+        "which takes a minute or two, and cached in ~/.cache/gst-python-ml/tensorrt",
+        flags=GObject.ParamFlags.READWRITE,
+    )
 
     def __init__(self):
         super().__init__()
@@ -105,6 +114,7 @@ class YOLOTransform(BaseObjectDetector, YoloTask):
             self.task_engine.conf = self.confidence
             self.task_engine.iou = self.nms_iou
             self.task_engine.agnostic_nms = self.agnostic_nms
+            self.task_engine.tensorrt = self.tensorrt
         return super().do_forward(frames)
 
 

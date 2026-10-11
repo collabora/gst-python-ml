@@ -18,19 +18,21 @@
 
 import ast
 
-from .pytorch_engine import PyTorchEngine
 from .yolo_engine import (
     BOX_AND_CLASS_COLUMNS,
     DEFAULT_CONFIDENCE,
+    DEFAULT_IOU,
     EXPORTED_INPUT_SHAPE,
     ExportedYolo,
-    predict_device_frame,
+    YoloEngine,
 )
 
 POSE_INPUT_SIZE = 640
 POSE_PREDICTION_OPTIONS = {
     "imgsz": POSE_INPUT_SIZE,
     "conf": DEFAULT_CONFIDENCE,
+    "iou": DEFAULT_IOU,
+    "agnostic_nms": False,
     "verbose": False,
 }
 
@@ -53,29 +55,16 @@ class ExportedYoloPose(ExportedYolo):
         return results
 
 
-class YoloPoseEngine(PyTorchEngine):
+class YoloPoseEngine(YoloEngine):
     """PyTorch engine for YOLO pose estimation models."""
-
-    def do_load_model(self, model_name, **kwargs):
-        try:
-            from ultralytics import YOLO
-
-            self.model = YOLO(f"{model_name}.pt")
-            self.model.to(self.device)
-            self.logger.info(f"YOLO pose model '{model_name}' loaded on {self.device}")
-        except Exception as e:
-            raise ValueError(f"Failed to load YOLO pose model '{model_name}': {e}")
 
     def do_forward(self, frames):
         import numpy as np
         import torch
 
         if torch.is_tensor(frames):
-            return predict_device_frame(
-                self.get_model(),
-                frames.to(self.device),
-                track=False,
-                **POSE_PREDICTION_OPTIONS,
+            return self.device_frame_result(
+                frames.to(self.device), track=False, **POSE_PREDICTION_OPTIONS
             )
         is_batch = isinstance(frames, np.ndarray) and frames.ndim == 4
         # ultralytics reads a numpy frame as bgr
