@@ -108,9 +108,9 @@ depth
 
 `--benchmark` times the model on each installed engine that runs it, on each device
 marked `*`, and prints load time, milliseconds per frame and frames per second. Each
-engine and device runs in its own process on random frames, 20 by default, set with
-`--frames`. An engine that fails or crashes shows its error in the note column. For
-action, one frame is a 16-frame window.
+engine and device runs in its own process on random frames, two warmup frames and
+then 20 timed ones, set with `--frames`. An engine that fails or crashes shows its
+error in the note column. For action, one frame is a 16-frame window.
 
 ## Install
 

@@ -48,6 +48,8 @@ SUPERRES_FRAME_HEIGHT = 240
 FLOW_FRAME_WIDTH = 640
 FLOW_FRAME_HEIGHT = 360
 MILLISECONDS_PER_SECOND = 1000
+# a jit engine captures its kernels on the second call
+WARMUP_FRAMES = 2
 PLUGIN_DIRECTORY = Path(__file__).resolve().parent.parent
 
 
@@ -155,7 +157,8 @@ def measure(task, model, engine, device, frames):
     frame = np.random.default_rng(RANDOM_SEED).integers(
         0, PIXEL_VALUE_LIMIT, frame_shape, dtype=np.uint8
     )
-    driver.forward(element, frame)
+    for _ in range(WARMUP_FRAMES):
+        driver.forward(element, frame)
     run_start = time.perf_counter()
     for _ in range(frames):
         driver.forward(element, frame)
