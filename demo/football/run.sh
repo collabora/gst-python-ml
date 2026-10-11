@@ -35,6 +35,10 @@ SMOOTH="${SMOOTH:-0.6}"    # temporal EMA on circle positions (0=off, higher=smo
 TRAILS="${TRAILS:-false}"  # draw motion trails behind players
 BALL_TRAIL="${BALL_TRAIL:-false}"
 SHOW_BALL="${SHOW_BALL:-false}" # draw the ball marker
+KICKS="${KICKS:-false}"    # mark each kick and record a clip of it
+KICK_BEFORE="${KICK_BEFORE:-3}" # seconds of video kept before a kick
+KICK_AFTER="${KICK_AFTER:-1}"   # seconds of video kept after a kick
+KICK_DIR="demo/football/kicks"
 CLASSES="ball,goalkeeper,player,referee"
 if [[ "$HOST" == "g2g" ]]; then
   [[ "$BACKEND" == "pt" ]] || { echo "HOST=g2g runs the pt backend only" >&2; exit 1; }
@@ -60,7 +64,13 @@ TRACK="$TRACKER_ELEMENT tracker-type=bytetrack new-track-confidence=$NEWTRACK"
 # tracking drift/phantoms/doubles); merge collapses overlaps and
 # position-smoothing low-passes the positions. DRAWCONF defaults 0 so no
 # detection is hidden; the tracker still runs so the HUD keeps its stats.
-OVERLAY="$OVERLAY_ELEMENT class-names=$CLASSES team-colors=true trails=$TRAILS ball-trail=$BALL_TRAIL show-ball=$SHOW_BALL show-ids=false show-labels=false draw-from-detections=true min-confidence=$DRAWCONF merge-iou=$MERGE position-smoothing=$SMOOTH highlight-focal=false"
+OVERLAY="$OVERLAY_ELEMENT class-names=$CLASSES team-colors=true trails=$TRAILS ball-trail=$BALL_TRAIL show-ball=$SHOW_BALL show-ids=false show-labels=false draw-from-detections=true min-confidence=$DRAWCONF merge-iou=$MERGE position-smoothing=$SMOOTH highlight-focal=false detect-kicks=$KICKS"
+if [[ "$KICKS" == "true" ]]; then
+  # pyml_alertrecorder is a GStreamer element with no g2g counterpart
+  [[ "$HOST" == "gst" ]] || { echo "KICKS=true runs on HOST=gst only" >&2; exit 1; }
+  mkdir -p "$KICK_DIR"
+  OVERLAY="$OVERLAY ! pyml_alertrecorder seconds-before=$KICK_BEFORE seconds-after=$KICK_AFTER location=$KICK_DIR/kick-%s.webm"
+fi
 
 if [[ "$BACKEND" == "fp16" ]]; then
   # nvidia is a namespace package (no __file__), so walk __path__ for the pip CUDA libs.

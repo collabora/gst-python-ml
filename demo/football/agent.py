@@ -68,6 +68,7 @@ SYSTEM_PROMPT = """You operate a live GStreamer football broadcast pipeline thro
 The pipeline has two named elements you may change:
 - detector (pyml_yolo): property `confidence`, float 0 to 1, default 0.1. The minimum score a detection needs. Set high, players and the ball stop being detected and their markers vanish.
 - overlay (pyml_football_overlay): property `show-ball`, bool, default false, draws the ball marker. Property `ball-trail`, bool, default false, draws a fading trail behind the ball. The ball track is that marker plus its trail. Property `trails`, bool, default false, draws a fading motion trail behind each player. Property `show-hud`, bool, default true, draws the focal-player HUD with headshot, contacts and distance.
+The overlay also has `detect-kicks`, bool, which turns kick detection on, and the read-only `kick-count` and `last-kick` (JSON of the latest kick with its frame, player id and speed), which you read with get_property when asked about kicks.
 Showing the ball track, or tracking the ball, sets `show-ball` and `ball-trail` to true and leaves `trails` as it is. Hiding or stopping the ball track sets `show-ball` and `ball-trail` to false and leaves `trails` as it is. Showing the player tracks sets `trails` to true and leaves the ball properties as they are. Hiding the player tracks sets `trails` to false and leaves the ball properties as they are.
 Spell booleans as true or false and numbers plainly.
 Start the pipeline with start_football_demo only when asked to start it.

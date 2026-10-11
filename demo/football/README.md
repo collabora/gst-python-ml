@@ -52,6 +52,35 @@ demo/football/run.sh display 08fd33_4.mp4 1280x720
 demo/football/run.sh camera /dev/video0
 ```
 
+## Kicks
+
+```bash
+KICKS=true demo/football/run.sh
+KICKS=true KICK_BEFORE=5 KICK_AFTER=2 demo/football/run.sh display
+```
+
+`KICKS=true` turns on `detect-kicks` on the overlay and puts
+`pyml_alertrecorder` right after it. Each kick writes a clip of
+`KICK_BEFORE` seconds before it and `KICK_AFTER` seconds after it to
+`demo/football/kicks/kick-<time>.webm`. A kick inside a clip that is still
+recording extends that clip. The picture shows `KICK #<track id>` above the
+ball for 50 frames. It runs on `HOST=gst` only, since the recorder has no g2g
+counterpart.
+
+A kick is a ball contact by a player, not a referee, followed within 10
+frames by the ball speeding up past `kick-speed`. Speed is the ball centre's
+movement per frame in ball sizes, averaged over the last two steps, where the
+ball size is the median of its last 25 boxes. A step over 3 ball sizes is
+taken as the detector jumping to another object and resets the measurement.
+Kicks closer than 25 frames count once. All of these are in frames, so they
+were tuned on the 50 fps `data/soccer_tracking.mp4`.
+
+The overlay's read-only `kick-count` and `last-kick` (JSON with `frame`,
+`player`, `speed`, `direction` in degrees anticlockwise from screen right)
+report what it found, and `agent.py` answers "how many kicks so far" from
+them. Each kick also carries a `GST-ALERT:` blob shaped like `pyml_alert`'s,
+`[{"event": "kick", "player": ..., "frame": ..., "speed": ...}]`.
+
 ## Typed commands through pyml-mcp
 
 `agent.py` runs the display pipeline inside `pyml-mcp` and lets you change it
@@ -227,6 +256,9 @@ change is about 4 to 5 seconds: Whisper about 3, Qwen about 1 to 2.
 | `TRAILS`   | `false` | Draw motion trails behind the players. |
 | `BALL_TRAIL` | `false` | Draw a motion trail behind the ball. |
 | `SHOW_BALL` | `false` | Draw the ball marker. |
+| `KICKS` | `false` | Mark kicks and record a clip of each, see Kicks above. |
+| `KICK_BEFORE` | `3` | Seconds of video in a kick clip before the kick. |
+| `KICK_AFTER` | `1` | Seconds of video in a kick clip after the kick. |
 
 ```bash
 BACKEND=fp16 demo/football/run.sh display     # faster inference path

@@ -16,11 +16,13 @@
 # Free Software Foundation, Inc., 51 Franklin Street, Fifth Floor,
 # Boston, MA 02110-1301, USA.
 
+import json
 import os
 import re
 
 import backend
-from backend import analytics, GObject, InPlaceVideoTransform
+from backend import analytics, frameio, GObject, InPlaceVideoTransform
+from utils.kick_detector import KickDetector
 
 if backend.BACKEND == "gst":
     from backend.gst import Gst
@@ -66,6 +68,14 @@ _BLACK_RGBA = (0, 0, 0, 255)
 _HUD_BG_RGBA = (92, 41, 131, 255)
 _HUD_TEXT_RGBA = (64, 186, 47, 255)
 _HIGHLIGHT_RGBA = (255, 255, 255, 255)
+_KICK_RGBA = (255, 255, 0, 255)
+_KICK_SPEED = 0.8
+_KICK_WINDOW_FRAMES = 10
+_KICK_COOLDOWN_FRAMES = 25
+_KICK_FLASH_FRAMES = 50
+_KICK_TEXT_SCALE = 0.9
+_KICK_TEXT_THICKNESS = 2
+_KICK_TEXT_RISE = 12
 
 
 def _is_ball(label):
@@ -280,6 +290,53 @@ class FootballOverlay(InPlaceVideoTransform):
         "(the player tracked the most, with hysteresis so it stays stable)",
         flags=GObject.ParamFlags.READWRITE,
     )
+    detect_kicks = GObject.Property(
+        type=bool,
+        default=False,
+        nick="Detect Kicks",
+        blurb="Mark each kick on the picture and attach a GST-ALERT blob to its "
+        "frame, so a pyml_alertrecorder downstream records it",
+        flags=GObject.ParamFlags.READWRITE,
+    )
+
+    @GObject.Property(
+        type=float,
+        default=_KICK_SPEED,
+        minimum=0.0,
+        maximum=100.0,
+        nick="Kick Speed",
+        blurb="Ball speed, in ball sizes per frame, the ball must pass after a "
+        "player contact to count as a kick",
+        flags=GObject.ParamFlags.READWRITE,
+    )
+    def kick_speed(self):
+        return self._kick_detector.speed_threshold
+
+    @kick_speed.setter
+    def kick_speed(self, value):
+        self._kick_detector.speed_threshold = value
+
+    @GObject.Property(
+        type=int,
+        default=0,
+        minimum=0,
+        nick="Kick Count",
+        blurb="Kicks detected so far",
+        flags=GObject.ParamFlags.READABLE,
+    )
+    def kick_count(self):
+        return self._kick_count
+
+    @GObject.Property(
+        type=str,
+        default="",
+        nick="Last Kick",
+        blurb="JSON of the last kick (frame, player, speed, direction in degrees "
+        "anticlockwise from screen right), empty before the first",
+        flags=GObject.ParamFlags.READABLE,
+    )
+    def last_kick(self):
+        return self._last_kick
 
     def __init__(self):
         super().__init__()
@@ -310,6 +367,14 @@ class FootballOverlay(InPlaceVideoTransform):
         # Position-smoothing slots: {"box": np[x1,y1,x2,y2]} kept across frames
         # and matched by proximity, so the drawn ellipse can be low-passed.
         self._smooth_slots = []
+        self._kick_detector = KickDetector(
+            _KICK_SPEED, _KICK_WINDOW_FRAMES, _KICK_COOLDOWN_FRAMES
+        )
+        self._kick_count = 0
+        self._last_kick = ""
+        self._ball_box = None
+        self._kick_flash_text = ""
+        self._kick_flash_until = 0
 
     def _use_format(self, fmt):
         self._order = _FORMAT_ORDER.get(fmt, _FORMAT_ORDER["RGBA"])
@@ -450,8 +515,10 @@ class FootballOverlay(InPlaceVideoTransform):
             self._ball_trail = []
 
         # Ball contacts (debounced per player), like football_analyzer.
+        contact_track_id = None
         if ball_box is not None and players:
             tid = self._ball_contact(players, ball_box)
+            contact_track_id = tid
             if tid is not None:
                 last = self._last_contact_frame.get(tid)
                 if last is None or (self._frame - last) > self.contact_gap_frames:
@@ -464,7 +531,57 @@ class FootballOverlay(InPlaceVideoTransform):
                 self._last_pt.pop(tid, None)
                 self._last_centre.pop(tid, None)
                 self._ell_w.pop(tid, None)
-        return active
+        if ball_box is not None:
+            self._ball_box = ball_box
+        kick = None
+        if self.detect_kicks:
+            kicker = self._kicker(contact_track_id)
+            kick = self._kick_detector.update(self._frame, ball_box, kicker)
+        return active, kick
+
+    def _kicker(self, contact_track_id):
+        if contact_track_id is None:
+            return None
+        label = self._track_label.get(contact_track_id, "")
+        if self._is_referee_track(contact_track_id, label):
+            return None
+        return contact_track_id
+
+    def _record_kick(self, buf, kick):
+        self._kick_count += 1
+        self._last_kick = json.dumps(kick._asdict())
+        self._kick_flash_text = f"KICK #{kick.player}"
+        self._kick_flash_until = self._frame + _KICK_FLASH_FRAMES
+        # alert.py needs gi
+        from alert import ALERT_META_HEADER
+
+        payload = [
+            {
+                "event": "kick",
+                "player": kick.player,
+                "frame": kick.frame,
+                "speed": kick.speed,
+            }
+        ]
+        frameio.append_blob(buf, ALERT_META_HEADER, json.dumps(payload).encode())
+        self.logger.info(f"kick {self._last_kick}")
+
+    def _draw_kick_flash(self, frame):
+        import cv2
+
+        if self._frame > self._kick_flash_until or self._ball_box is None:
+            return
+        x1, y1, _, _ = self._ball_box
+        cv2.putText(
+            frame,
+            self._kick_flash_text,
+            (int(x1), max(_KICK_TEXT_RISE, int(y1) - _KICK_TEXT_RISE)),
+            cv2.FONT_HERSHEY_SIMPLEX,
+            _KICK_TEXT_SCALE,
+            self._c(_KICK_RGBA),
+            _KICK_TEXT_THICKNESS,
+            cv2.LINE_AA,
+        )
 
     def _follow_camera(self, entries):
         # a pan moves the pitch under the trails
@@ -1031,9 +1148,11 @@ class FootballOverlay(InPlaceVideoTransform):
                 best_ball, det_ball_box = e["confidence"], e["box"]
 
         # Per-track state (votes, contacts, distance, focal) from the tracker.
-        active = self._update_tracks(
+        active, kick = self._update_tracks(
             track_entries if track_entries else all_entries, det_ball_box
         )
+        if kick is not None:
+            self._record_kick(buf, kick)
 
         if self.draw_from_detections:
             draw_entries = list(det_entries)
@@ -1170,6 +1289,7 @@ class FootballOverlay(InPlaceVideoTransform):
                     hud_rgba,
                     self._load_headshot(cv2, np),
                 )
+        self._draw_kick_flash(frame)
 
 
 if backend.BACKEND == "gst":
