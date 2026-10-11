@@ -201,24 +201,27 @@ class TorchOverlayGraphics(OverlayGraphics):
         )
 
     def draw_line(self, start, end, color, width):
-        self.draw_polyline([start, end], color, width)
+        self.draw_segments([(start, end, color)], width)
 
     def draw_polyline(self, points, color, width):
+        pairs = list(zip(points, points[1:])) or [(points[0], points[0])]
+        self.draw_segments([(start, end, color) for start, end in pairs], width)
+
+    def draw_segments(self, segments, width):
         import numpy as np
 
-        corners = np.array([(point["x"], point["y"]) for point in points], float)
-        centres = [corners[:1]]
-        for start, end in zip(corners, corners[1:]):
-            steps = max(1, math.ceil(np.abs(end - start).max()))
-            fractions = np.arange(1, steps + 1)[:, None] / steps
-            centres.append(start + (end - start) * fractions)
-        self.draw_squares(
-            [
+        rows = []
+        for start, end, color in segments:
+            first = np.array((start["x"], start["y"]), float)
+            last = np.array((end["x"], end["y"]), float)
+            steps = max(1, math.ceil(np.abs(last - first).max()))
+            fractions = np.arange(0, steps + 1)[:, None] / steps
+            rows.extend(
                 self.square_row({"x": x, "y": y}, color, color.a)
-                for x, y in np.concatenate(centres)
-            ],
-            width,
-        )
+                for x, y in first + (last - first) * fractions
+            )
+        if rows:
+            self.draw_squares(rows, width)
 
     def square_row(self, center, color, alpha):
         return (center["x"], center["y"], color.r, color.g, color.b, alpha)

@@ -35,6 +35,8 @@ try:
     from utils.format_converter import FormatConverter
     from engine.yolo_pose_engine import ExportedYoloPose, YoloPoseEngine
     from engine.engine_factory import EngineFactory
+    from overlay_helper.overlay_torch import TorchOverlayGraphics
+    from overlay_helper.overlay_utils_interface import Color
 
 except ImportError as e:
     CAN_REGISTER_ELEMENT = False
@@ -43,46 +45,17 @@ except ImportError as e:
 # Header prefix for keypoints buffer metadata
 POSE_META_HEADER = b"GST-POSE:"
 
-# COCO 17-keypoint names
-COCO_KEYPOINT_NAMES = [
-    "nose",
-    "left_eye",
-    "right_eye",
-    "left_ear",
-    "right_ear",
-    "left_shoulder",
-    "right_shoulder",
-    "left_elbow",
-    "right_elbow",
-    "left_wrist",
-    "right_wrist",
-    "left_hip",
-    "right_hip",
-    "left_knee",
-    "right_knee",
-    "left_ankle",
-    "right_ankle",
-]
+KEYPOINT_RADIUS = 4
+# ultralytics draws a keypoint from this confidence
+DRAWN_KEYPOINT_CONFIDENCE = 0.25
+RGB_CHANNELS = 3
+FULL_INTENSITY = 255
+OPAQUE = 1.0
 
-# Skeleton connections as (keypoint_index_a, keypoint_index_b) pairs
-SKELETON = [
-    (0, 1),
-    (0, 2),
-    (1, 3),
-    (2, 4),  # face
-    (5, 6),  # shoulders
-    (5, 7),
-    (7, 9),  # left arm
-    (6, 8),
-    (8, 10),  # right arm
-    (5, 11),
-    (6, 12),  # torso sides
-    (11, 12),  # hips
-    (11, 13),
-    (13, 15),  # left leg
-    (12, 14),
-    (14, 16),  # right leg
-]
+
+# ultralytics paints its palette onto a bgr frame
+def palette_colour(bgr_row):
+    return Color(*(channel / FULL_INTENSITY for channel in bgr_row[::-1]))
 
 
 class YOLOPoseTransform(BaseObjectDetector):
@@ -95,7 +68,8 @@ class YOLOPoseTransform(BaseObjectDetector):
     by downstream elements.
 
     When visualize=True (default), the skeleton and keypoints are drawn
-    directly on the video frame using Ultralytics' built-in renderer.
+    directly on the video frame using Ultralytics' built-in renderer. On a
+    CUDA frame they are drawn in place on the GPU, without the boxes.
 
     Recommended model names: yolo11n-pose, yolo11s-pose, yolo11m-pose
     """
@@ -129,6 +103,10 @@ class YOLOPoseTransform(BaseObjectDetector):
         super().__init__()
         self.task_engine_name = self.mgr.engine_name = "pyml_yolo_pose_engine"
         EngineFactory.register(self.mgr.engine_name, YoloPoseEngine)
+        self.frames_on_the_device = False
+        self.device_drawing_key = None
+        self.device_renderer = None
+        self.pose_style = None
 
     def export_model(self, model_name):
         return ExportedYoloPose(model_name, self.mgr.engine_name)
@@ -136,6 +114,7 @@ class YOLOPoseTransform(BaseObjectDetector):
     def do_forward(self, frames):
         if self.task_engine:
             self.task_engine.tensorrt = self.tensorrt
+        self.frames_on_the_device = getattr(frames, "is_cuda", False)
         return super().do_forward(frames)
 
     def do_decode(self, buf, result, stream_idx=0):
@@ -212,12 +191,73 @@ class YOLOPoseTransform(BaseObjectDetector):
 
     def _write_annotated_frame(self, buf, result):
         """Write result.plot() (BGR) back into the GStreamer buffer."""
-        annotated_bgr = result.plot(kpt_line=True, kpt_radius=4)
+        if self.frames_on_the_device:
+            self._draw_on_the_device(buf, result)
+            return
+        annotated_bgr = result.plot(kpt_line=True, kpt_radius=KEYPOINT_RADIUS)
         fmt = FormatConverter.get_video_format(buf, self.sinkpad)
         output = self._convert_bgr_to_format(annotated_bgr, fmt)
         if output is None:
             return
         frameio.write_frame(buf, output)
+
+    def _draw_on_the_device(self, buf, result):
+        keypoints = result.keypoints
+        if keypoints is None or keypoints.conf is None:
+            return
+        fmt = FormatConverter.get_video_format(buf, self.sinkpad)
+        renderer, style = self._device_pose_drawing(fmt)
+        points = keypoints.xy.cpu().numpy()
+        visible = keypoints.conf.cpu().numpy() >= DRAWN_KEYPOINT_CONFIDENCE
+        keypoint_rows = [
+            renderer.square_row({"x": x, "y": y}, style.keypoint_colours[index], OPAQUE)
+            for person, seen in zip(points, visible)
+            for index, (x, y) in enumerate(person)
+            if seen[index]
+        ]
+        limbs = [
+            (
+                {"x": person[first][0], "y": person[first][1]},
+                {"x": person[second][0], "y": person[second][1]},
+                colour,
+            )
+            for person, seen in zip(points, visible)
+            for (first, second), colour in zip(style.skeleton, style.limb_colours)
+            if seen[first] and seen[second]
+        ]
+        # the inference map must close before the buffer is mapped for writing
+        frameio.release_frames(buf)
+        try:
+            with renderer.drawing_stream():
+                renderer.initialize(
+                    frameio.read_frame_for_drawing(buf, self.width, self.height, fmt)
+                )
+                renderer.draw_squares(keypoint_rows, 2 * KEYPOINT_RADIUS + 1)
+                renderer.draw_segments(limbs, style.line_width)
+                renderer.finalize()
+        finally:
+            frameio.release_frames(buf)
+
+    def _device_pose_drawing(self, fmt):
+        key = (self.width, self.height, fmt)
+        if self.device_drawing_key == key:
+            return self.device_renderer, self.pose_style
+        import numpy as np
+        from types import SimpleNamespace
+        from ultralytics.utils.plotting import Annotator
+
+        annotator = Annotator(
+            np.zeros((self.height, self.width, RGB_CHANNELS), np.uint8)
+        )
+        self.pose_style = SimpleNamespace(
+            line_width=annotator.lw,
+            skeleton=[(first - 1, second - 1) for first, second in annotator.skeleton],
+            keypoint_colours=[palette_colour(row) for row in annotator.kpt_color],
+            limb_colours=[palette_colour(row) for row in annotator.limb_color],
+        )
+        self.device_renderer = TorchOverlayGraphics(self.width, self.height, fmt)
+        self.device_drawing_key = key
+        return self.device_renderer, self.pose_style
 
     @staticmethod
     def _convert_bgr_to_format(bgr, fmt):

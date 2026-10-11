@@ -39,6 +39,10 @@ _FORMATS = {
 
 # the target of a frame read from a decoder's read-only cuda surface
 DEVICE_FRAME = object()
+DEVICE_FRAME_IS_READ_ONLY = (
+    "a frame read from cuda memory on g2g is read-only, put "
+    "videoconvert between the decoder and the element to draw on it"
+)
 
 
 def as_rgb(frames, fmt):
@@ -95,12 +99,12 @@ class G2gFrameIO(FrameIO):
             return None, 0, self._fmt
         return frame, 1, self._fmt
 
+    def read_frame_for_drawing(self, target, width, height, video_format):
+        raise ValueError(DEVICE_FRAME_IS_READ_ONLY)
+
     def write_frame(self, target, frame):
         if target is DEVICE_FRAME:
-            raise ValueError(
-                "a frame read from cuda memory on g2g is read-only, put "
-                "videoconvert between the decoder and the element to draw on it"
-            )
+            raise ValueError(DEVICE_FRAME_IS_READ_ONLY)
         # The FrameBuffer is writable, so frombuffer yields a writable view we
         # overwrite in place (no copy back to the host).
         view = np.frombuffer(target, dtype=np.uint8)

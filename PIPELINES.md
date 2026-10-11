@@ -107,8 +107,10 @@ The engine is built for the letterboxed shape of the frame, 480x640 for a
 and a new frame size builds another engine. The boxes and keypoints are
 mapped back to the frame, so the analytics metadata matches the system-memory
 path. Segmentation
-and oriented-box models refuse these frames, and `pyml_yolo_pose` needs
-`visualize=false` because it cannot draw into a CUDA buffer. `pyml_tracker`
+and oriented-box models refuse these frames. On a CUDA frame `pyml_yolo_pose`
+with `visualize=true` draws the keypoints and skeleton in place with torch, in
+ultralytics' colours but without the boxes and labels, so put `pyml_overlay`
+after it for those. `pyml_tracker`
 reads only the metadata, so it passes CUDA memory through, and `pyml_overlay`
 draws on CUDA frames in place with torch, so `nvh264dec ! cudaconvert !
 cudascale ! pyml_yolo engine-name=pytorch device=cuda ! pyml_tracker !
