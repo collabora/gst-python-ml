@@ -30,6 +30,7 @@ def projected(features):
 
 
 INFERENCE_METHOD_NAMES = ("do_forward", "do_generate")
+DEFAULT_STREAM_PRIORITY = 0
 
 
 def on_the_engine_stream(method):
@@ -45,6 +46,8 @@ class PyTorchEngine(MLEngine):
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
         self.is_executorch = False
+        self._stream_priority = DEFAULT_STREAM_PRIORITY
+        self._stream = None
 
     # a subclass's inference runs on the engine's stream without asking
     def __init_subclass__(cls, **kwargs):
@@ -61,7 +64,14 @@ class PyTorchEngine(MLEngine):
     @stream_priority.setter
     def stream_priority(self, priority):
         self._stream_priority = priority
-        self.stream = self.new_cuda_stream()
+        self._stream = None
+
+    # created on first use, a test may name cuda on a box without it
+    @property
+    def stream(self):
+        if self._stream is None:
+            self._stream = self.new_cuda_stream()
+        return self._stream
 
     def new_cuda_stream(self):
         if self.device is None or "cuda" not in self.device:
@@ -193,7 +203,7 @@ class PyTorchEngine(MLEngine):
         else:
             raise ValueError(f"Invalid device specified: {device}")
         self.device = device
-        self.stream = self.new_cuda_stream()
+        self._stream = None
         self.logger.info(f"Setting device to {device}")
 
     @on_the_engine_stream
