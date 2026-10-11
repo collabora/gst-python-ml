@@ -22,12 +22,7 @@ from pathlib import Path
 
 import numpy as np
 
-from .ml_engine import (
-    MLEngine,
-    TORCHVISION_WEIGHTS,
-    fixed_height_width,
-    is_torchvision_resnet,
-)
+from .ml_engine import MLEngine, fixed_height_width
 
 # tinygrad loads the nvrtc library this names
 NVRTC_PATH_VARIABLE = "NVRTC_PATH"
@@ -61,27 +56,7 @@ class TinyGradEngine(MLEngine):
             self.logger.info(f"ONNX model loaded with TinyGrad: {model_name}")
             return True
 
-        # TorchVision models
-        from torchvision import models as tv_models
-
-        if hasattr(tv_models, model_name):
-            if not is_torchvision_resnet(model_name):
-                raise ValueError(
-                    f"TinyGrad runs the torchvision resnet family, not '{model_name}'."
-                )
-            pt_model = getattr(tv_models, model_name)(weights=TORCHVISION_WEIGHTS)
-            from .tinygrad_resnet import tinygrad_resnet
-
-            self.model = tinygrad_resnet(pt_model.eval())
-            self.model_type = "classification"
-            self.logger.info(
-                f"Pre-trained vision model '{model_name}' loaded with TinyGrad."
-            )
-            return True
-
-        raise FileNotFoundError(
-            f"TinyGrad takes a .onnx file or a torchvision resnet name, got: {model_name}"
-        )
+        raise FileNotFoundError(f"TinyGrad takes a .onnx file, got: {model_name}")
 
     def do_set_device(self, device):
         """Set TinyGrad device for the model."""
@@ -125,22 +100,6 @@ class TinyGradEngine(MLEngine):
         os.environ[NVRTC_PATH_VARIABLE] = str(nvrtc)
         self.logger.info(f"TinyGrad compiles its CUDA kernels with {nvrtc}")
 
-    def _forward_classification(self, frames):
-        """Handle inference for classification models."""
-
-        is_batch = frames.ndim == 4
-        img_array = np.array(frames, dtype=np.float32) / 255.0
-        if is_batch:
-            img_array = np.transpose(img_array, (0, 3, 1, 2))
-        else:
-            img_array = np.transpose(img_array, (2, 0, 1))
-            img_array = np.expand_dims(img_array, 0)
-
-        from tinygrad import Tensor
-
-        preds = self.model(Tensor(img_array)).numpy()
-        return self._top_classes(preds, is_batch)
-
     def do_forward(self, frames):
         """Execute inference on a single frame or batch of frames."""
         is_batch = isinstance(frames, np.ndarray) and frames.ndim == 4
@@ -148,10 +107,7 @@ class TinyGradEngine(MLEngine):
             self.logger.error(f"Invalid input type for forward: {type(frames)}")
             return None
 
-        if self.model_type == "classification":
-            return self._forward_classification(frames)
-
-        elif self.model_type == "custom":
+        if self.model_type == "custom":
             return self._forward_onnx(frames, is_batch)
 
         else:

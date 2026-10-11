@@ -20,7 +20,7 @@ import importlib.util
 import os
 import numpy as np
 
-from .ml_engine import MLEngine, TORCHVISION_WEIGHTS, is_torchvision_resnet
+from .ml_engine import MLEngine
 
 KERAS_BACKEND = "jax"
 KERAS_HUB_MODEL_TYPE = "keras_hub"
@@ -87,23 +87,6 @@ class JAXEngine(MLEngine):
         # Local .msgpack file
         if os.path.isfile(model_name) and model_name.endswith(".msgpack"):
             return self._load_msgpack(model_name)
-
-        from torchvision import models as tv_models
-
-        if hasattr(tv_models, model_name):
-            if not is_torchvision_resnet(model_name):
-                raise ValueError(
-                    f"JAX runs the torchvision resnet family, not '{model_name}'."
-                )
-            pt_model = getattr(tv_models, model_name)(weights=TORCHVISION_WEIGHTS)
-            from .jax_resnet import jax_resnet
-
-            self.model = jax_resnet(pt_model.eval())
-            self.model_type = "classification"
-            self.logger.info(
-                f"Pre-trained vision model '{model_name}' compiled with JAX."
-            )
-            return True
 
         if (
             importlib.util.find_spec("keras_hub")
@@ -196,9 +179,6 @@ class JAXEngine(MLEngine):
 
         img = self._apply_input_format(frames.astype(np.float32) / 255.0, is_batch)
         jax_input = jnp.array(img)
-        if self.model_type == "classification":
-            preds = np.asarray(self.model(jax_input))
-            return self._top_classes(preds, is_batch)
         if self.apply_fn is None:
             self.logger.error(
                 "A bare Flax checkpoint has no graph to run, load a model."

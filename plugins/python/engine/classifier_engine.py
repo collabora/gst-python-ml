@@ -21,8 +21,6 @@ from .pytorch_engine import PyTorchEngine
 
 COLOR_CHANNELS = 3
 BATCH_DIMENSIONS = 4
-# the flax and mlx resnet ports run channels last
-PORTED_RESNET_INPUT_FORMAT = "nhwc"
 
 
 def default_weights(model_name):
@@ -95,32 +93,6 @@ class ExportedClassifier:
         crop = np.asarray(functional.center_crop(image, self.transforms.crop_size))
         logits = np.asarray(self.engine.do_forward(crop), dtype=np.float32).ravel()
         return top_class(logits, self.categories)
-
-
-class PortedResnetClassifier:
-    def __init__(self, model_name, engine_name):
-        self._engine = None
-        self.path = model_name
-        self.categories = default_weights(model_name).meta["categories"]
-
-    @property
-    def engine(self):
-        return self._engine
-
-    # the element sets the channels-first layout an exported graph takes
-    @engine.setter
-    def engine(self, engine):
-        engine.input_format = PORTED_RESNET_INPUT_FORMAT
-        self._engine = engine
-
-    def do_forward(self, frames):
-        result = self.engine.do_forward(frames)
-        if frames.ndim == BATCH_DIMENSIONS:
-            return [self._named(entry) for entry in result]
-        return self._named(result)
-
-    def _named(self, result):
-        return classification(self.categories, result["labels"][0], result["scores"][0])
 
 
 class ClassifierEngine(PyTorchEngine):

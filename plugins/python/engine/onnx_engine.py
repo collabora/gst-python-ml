@@ -129,17 +129,14 @@ class ONNXEngine(MLEngine):
         else:
             from torchvision import models as tv_models
 
-            if hasattr(tv_models, model_name):
-                pt_model = getattr(tv_models, model_name)(weights=TORCHVISION_WEIGHTS)
-                self.model_type = "classification"
-            elif hasattr(tv_models.detection, model_name):
+            if hasattr(tv_models.detection, model_name):
                 pt_model = getattr(tv_models.detection, model_name)(
                     weights=TORCHVISION_WEIGHTS
                 )
                 self.model_type = "detection"
             else:
                 raise FileNotFoundError(
-                    f"ONNX takes a .onnx file or a torchvision model name, got: {model_name}"
+                    f"ONNX takes a .onnx file or a torchvision detection model name, got: {model_name}"
                 )
 
             # For TorchVision models, export to ONNX
@@ -154,16 +151,7 @@ class ONNXEngine(MLEngine):
                     tmp_file.name,
                     opset_version=11,
                     input_names=["input"],
-                    output_names=(
-                        ["output"]
-                        if self.model_type == "classification"
-                        else ["boxes", "labels", "scores"]
-                    ),
-                    dynamic_axes=(
-                        {"input": {0: "batch_size"}, "output": {0: "batch_size"}}
-                        if self.model_type == "classification"
-                        else None
-                    ),
+                    output_names=["boxes", "labels", "scores"],
                 )
                 self.session = self._create_session(tmp_file.name)
             os.unlink(tmp_file.name)
@@ -230,22 +218,6 @@ class ONNXEngine(MLEngine):
             for library in directory.glob(pattern):
                 ctypes.CDLL(str(library), mode=ctypes.RTLD_GLOBAL)
 
-    def _forward_classification(self, frames):
-        """Handle inference for classification models."""
-        is_batch = frames.ndim == 4
-        img_array = np.array(frames, dtype=np.float32) / 255.0
-        if is_batch:
-            img_array = np.transpose(
-                img_array, (0, 3, 1, 2)
-            )  # (B, H, W, C) -> (B, C, H, W)
-        else:
-            img_array = np.transpose(img_array, (2, 0, 1))  # (H, W, C) -> (C, H, W)
-            img_array = np.expand_dims(img_array, 0)
-        inputs = {self.input_names[0]: img_array}
-        outputs = self.session.run(self.output_names, inputs)
-        preds = outputs[0]
-        return self._top_classes(preds, is_batch)
-
     def do_forward(self, frames):
         """Handle inference for different types of models, supporting single frames or batches."""
         is_batch = isinstance(frames, np.ndarray) and frames.ndim == 4
@@ -253,10 +225,7 @@ class ONNXEngine(MLEngine):
             self.logger.error(f"Invalid input type for forward: {type(frames)}")
             return None
 
-        if self.model_type == "classification":
-            return self._forward_classification(frames)
-
-        elif self.model_type == "detection":
+        if self.model_type == "detection":
             writable_frames = np.array(frames, copy=True, dtype=np.float32) / 255.0
             if is_batch:
                 img_array = np.transpose(

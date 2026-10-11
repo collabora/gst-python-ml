@@ -19,7 +19,7 @@
 import os
 import numpy as np
 
-from .ml_engine import MLEngine, TORCHVISION_WEIGHTS, is_torchvision_resnet
+from .ml_engine import MLEngine
 
 
 class MLXEngine(MLEngine):
@@ -46,7 +46,7 @@ class MLXEngine(MLEngine):
         self.device = device
 
     def do_load_model(self, model_name, **kwargs):
-        """Load a model via MLX from local files, HuggingFace via mlx-lm, or PyTorch conversion."""
+        """Load a model via MLX from local files or HuggingFace via mlx-lm."""
         self.model_name = model_name
         self.kwargs = kwargs
 
@@ -63,23 +63,6 @@ class MLXEngine(MLEngine):
                 self.model = load(model_name)
             self.model_type = "custom"
             self.logger.info(f"MLX model loaded from local path: {model_name}")
-            return True
-
-        from torchvision import models as tv_models
-
-        if hasattr(tv_models, model_name):
-            if not is_torchvision_resnet(model_name):
-                raise ValueError(
-                    f"MLX runs the torchvision resnet family, not '{model_name}'."
-                )
-            pt_model = getattr(tv_models, model_name)(weights=TORCHVISION_WEIGHTS)
-            from .mlx_resnet import mlx_resnet
-
-            self.model = mlx_resnet(pt_model.eval())
-            self.model_type = "classification"
-            self.logger.info(
-                f"Pre-trained vision model '{model_name}' loaded with MLX."
-            )
             return True
 
         # LLM via mlx-lm
@@ -107,9 +90,6 @@ class MLXEngine(MLEngine):
 
         img = self._apply_input_format(frames.astype(np.float32) / 255.0, is_batch)
         mx_input = mx.array(img)
-        if self.model_type == "classification":
-            preds = np.array(self.model(mx_input))
-            return self._top_classes(preds, is_batch)
         if self.model_type == "custom" and callable(self.model):
             return self._apply_post_process(np.array(self.model(mx_input)), is_batch)
         self.logger.error("A bare state dict has no graph to run, load a model.")

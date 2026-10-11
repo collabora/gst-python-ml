@@ -20,7 +20,7 @@ import os
 import numpy as np
 
 from .hub_causal_lm import chat_prompt
-from .ml_engine import MLEngine, TORCHVISION_WEIGHTS
+from .ml_engine import MLEngine
 
 
 # transformers 5 returns a model output from get_*_features, 4 returned the tensor
@@ -64,12 +64,7 @@ class PyTorchEngine(MLEngine):
                 self.model = torch.load(model_name)
                 self.logger.info(f"Model loaded from local path: {model_name}")
         else:
-            if hasattr(models, model_name):
-                self.model = getattr(models, model_name)(weights=TORCHVISION_WEIGHTS)
-                self.logger.info(
-                    f"Pre-trained vision model '{model_name}' loaded from TorchVision"
-                )
-            elif hasattr(models.detection, model_name):
+            if hasattr(models.detection, model_name):
                 self.model = getattr(models.detection, model_name)(weights="DEFAULT")
                 self.logger.info(
                     f"Pre-trained detection model '{model_name}' loaded from TorchVision.detection"
@@ -155,31 +150,6 @@ class PyTorchEngine(MLEngine):
         self.device = device
         self.logger.info(f"Setting device to {device}")
 
-    def _forward_classification(self, frames):
-        """Handle inference for classification models like ResNet (non-ExecuTorch only)."""
-        import torch
-
-        if self.is_executorch:
-            raise NotImplementedError("Classification not adapted for ExecuTorch yet")
-        self.model.eval()
-        is_batch = frames.ndim == 4  # (B, H, W, C) vs (H, W, C)
-        # Create tensor and normalize (moved here for consistency)
-        img_tensor = torch.from_numpy(np.array(frames, copy=True)).float() / 255.0
-
-        if is_batch:
-            img_tensor = img_tensor.permute(0, 3, 1, 2)  # (B, H, W, C) -> (B, C, H, W)
-        else:
-            img_tensor = img_tensor.permute(2, 0, 1)  # (H, W, C) -> (C, H, W)
-            img_tensor = img_tensor.unsqueeze(0)  # Add batch dim: (1, C, H, W)
-
-        img_tensor = img_tensor.to(self.device)
-
-        with torch.inference_mode():
-            results = self.model(img_tensor)
-        return (
-            results.squeeze(0) if not is_batch else results
-        )  # Squeeze batch dim if single
-
     def do_forward(self, frames):
         """Handle inference for different types of models, supporting single frames or batches (with ExecuTorch adaptation)."""
         import torch
@@ -232,19 +202,6 @@ class PyTorchEngine(MLEngine):
 
         elif not self.tokenizer:
             self.model.eval()
-            # torch.compile wraps the model in OptimizedModule; unwrap for name check
-            inner = getattr(self.model, "_orig_mod", self.model)
-            if "resnet" in inner.__class__.__name__.lower():
-                preds = self._forward_classification(frames)
-                preds = (
-                    preds.cpu().numpy() if isinstance(preds, torch.Tensor) else preds
-                )
-                if not is_batch:
-                    preds = np.expand_dims(preds, 0)
-                results = self._top_classes(preds, is_batch)
-                self.logger.info(f"Classification results: {results}")
-                return results
-
             # Detection models (e.g., Mask R-CNN) with true batch inference
             writable_frames = np.array(frames, copy=True)
             img_tensor = torch.from_numpy(writable_frames).float() / 255.0

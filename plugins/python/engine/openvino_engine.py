@@ -71,14 +71,7 @@ class OpenVinoEngine(MLEngine):
         else:
             from torchvision import models
 
-            if hasattr(models, model_name):
-                pt_model = getattr(models, model_name)(weights=TORCHVISION_WEIGHTS)
-                self.ov_model = ov.convert_model(pt_model)
-                self.model_type = "classification"
-                self.logger.info(
-                    f"Pre-trained vision model '{model_name}' converted to OpenVINO."
-                )
-            elif hasattr(models.detection, model_name):
+            if hasattr(models.detection, model_name):
                 pt_model = getattr(models.detection, model_name)(
                     weights=TORCHVISION_WEIGHTS
                 )
@@ -90,7 +83,7 @@ class OpenVinoEngine(MLEngine):
             else:
                 raise FileNotFoundError(
                     "OpenVINO takes an IR .xml with its .bin, an .onnx file "
-                    "or a torchvision model name, "
+                    "or a torchvision detection model name, "
                     f"got: {model_name}"
                 )
 
@@ -128,23 +121,6 @@ class OpenVinoEngine(MLEngine):
         if self.model_name:
             self.do_load_model(self.model_name, **self.kwargs)
 
-    def _forward_classification(self, frames):
-        """Handle inference for classification models."""
-        is_batch = frames.ndim == 4
-        img_array = np.array(frames, dtype=np.float32) / 255.0
-        if is_batch:
-            img_array = np.transpose(
-                img_array, (0, 3, 1, 2)
-            )  # (B, H, W, C) -> (B, C, H, W)
-        else:
-            img_array = np.transpose(img_array, (2, 0, 1))  # (H, W, C) -> (C, H, W)
-            img_array = np.expand_dims(img_array, 0)
-
-        infer_request = self.compiled_model.create_infer_request()
-        infer_request.infer({0: img_array})
-        preds = infer_request.get_output_tensor(0).data
-        return self._top_classes(preds, is_batch)
-
     def do_forward(self, frames):
         """Handle inference for different types of models, supporting single frames or batches."""
         is_batch = isinstance(frames, np.ndarray) and frames.ndim == 4
@@ -152,10 +128,7 @@ class OpenVinoEngine(MLEngine):
             self.logger.error(f"Invalid input type for forward: {type(frames)}")
             return None
 
-        if self.model_type == "classification":
-            return self._forward_classification(frames)
-
-        elif self.model_type == "detection":
+        if self.model_type == "detection":
             writable_frames = np.array(frames, copy=True, dtype=np.float32) / 255.0
             if is_batch:
                 img_array = np.transpose(

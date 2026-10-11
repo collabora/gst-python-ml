@@ -21,9 +21,8 @@ import numpy as np
 import tvm
 from tvm import relax
 
-from .ml_engine import MLEngine, TORCHVISION_WEIGHTS, converted_model_path
+from .ml_engine import MLEngine, converted_model_path
 
-CLASSIFIER_INPUT_SHAPE = (1, 3, 224, 224)
 # the torch and onnx importers both name the graph main
 ENTRY_FUNCTION = "main"
 COMPILED_LIBRARY_SUFFIX = ".so"
@@ -57,30 +56,9 @@ class TVMEngine(MLEngine):
             self.logger.info(f"ONNX model compiled with TVM from: {model_name}")
             return True
 
-        from torchvision import models as tv_models
-
-        if hasattr(tv_models, model_name):
-            pt_model = getattr(tv_models, model_name)(weights=TORCHVISION_WEIGHTS)
-            self._compile_pytorch_model(pt_model, CLASSIFIER_INPUT_SHAPE)
-            self.model_type = "classification"
-            self.logger.info(
-                f"Pre-trained vision model '{model_name}' compiled with TVM."
-            )
-            return True
-
         raise FileNotFoundError(
-            "TVM takes a compiled .so or .tar, an .onnx file or a torchvision model name, "
-            f"got: {model_name}"
+            f"TVM takes a compiled .so or .tar or an .onnx file, got: {model_name}"
         )
-
-    def _compile_pytorch_model(self, pt_model, input_shape):
-        import torch
-        from tvm.relax.frontend.torch import from_exported_program
-
-        pt_model.eval()
-        exported = torch.export.export(pt_model, (torch.randn(*input_shape),))
-        module = from_exported_program(exported)
-        self._start_vm(tvm.compile(module, self._get_target()))
 
     def _compile_onnx_model(self, onnx_path):
         target = self._get_target()
@@ -137,28 +115,13 @@ class TVMEngine(MLEngine):
         if self.model_name:
             self.do_load_model(self.model_name, **self.kwargs)
 
-    def _forward_classification(self, frames):
-        is_batch = frames.ndim == 4
-        img_array = np.array(frames, dtype=np.float32) / 255.0
-        if is_batch:
-            img_array = np.transpose(img_array, (0, 3, 1, 2))
-        else:
-            img_array = np.transpose(img_array, (2, 0, 1))
-            img_array = np.expand_dims(img_array, 0)
-
-        preds = self._run(img_array)[0]
-        return self._top_classes(preds, is_batch)
-
     def do_forward(self, frames):
         is_batch = isinstance(frames, np.ndarray) and frames.ndim == 4
         if not isinstance(frames, np.ndarray):
             self.logger.error(f"Invalid input type for forward: {type(frames)}")
             return None
 
-        if self.model_type == "classification":
-            return self._forward_classification(frames)
-
-        elif self.model_type == "custom":
+        if self.model_type == "custom":
             img = self._apply_input_format(frames.astype(np.float32) / 255.0, is_batch)
             outputs = self._run(img)
             raw = outputs if len(outputs) > 1 else outputs[0]

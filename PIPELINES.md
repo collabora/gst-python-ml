@@ -297,8 +297,7 @@ python pyml-launch.py filesrc location=data/people.mp4 ! decodebin name=d \
 
 #### tinygrad Engine
 
-tinygrad runs `.onnx` files, and the torchvision resnet family (resnet, resnext,
-wide_resnet) from torchvision weights.
+tinygrad runs `.onnx` files.
 
 ##### YOLO11m ONNX object detection with tinygrad
 
@@ -334,8 +333,7 @@ python pyml-launch.py filesrc location=data/people.mp4 ! decodebin name=d \
 
 #### TVM Engine
 
-TVM takes a compiled `.so` or `.tar`, or a torchvision model name, which it exports
-with torch.export and compiles through relax at load time.
+TVM takes a compiled `.so` or `.tar`, or an `.onnx` file.
 
 ##### TorchVision model compiled with TVM
 
@@ -354,18 +352,6 @@ python pyml-launch.py filesrc location=data/people.mp4 ! decodebin name=d \
   d. ! queue ! videoconvert ! videoscale \
   ! "video/x-raw,format=RGB,width=640,height=640" \
   ! pyml_inference engine-name=tvm model-name=compiled_model.so device=cuda \
-  ! fakesink
-```
-
-#### Apple MLX Engine
-
-MLX takes the torchvision resnet family, SafeTensors or `.npz` weights, and mlx-lm models.
-
-```
-python pyml-launch.py filesrc location=data/people.mp4 ! decodebin name=d \
-  d. ! queue ! videoconvert ! videoscale \
-  ! "video/x-raw,format=RGB,width=224,height=224" \
-  ! pyml_classifier model-name=resnet18 device=gpu engine-name=mlx \
   ! fakesink
 ```
 
@@ -393,16 +379,6 @@ python pyml-launch.py filesrc location=data/prompt_for_llm.txt \
 ```
 
 #### JAX/Flax Engine
-
-JAX takes the torchvision resnet family and Flax checkpoints.
-
-```
-python pyml-launch.py filesrc location=data/people.mp4 ! decodebin name=d \
-  d. ! queue ! videoconvert ! videoscale \
-  ! "video/x-raw,format=RGB,width=224,height=224" \
-  ! pyml_classifier model-name=resnet18 device=cpu engine-name=jax \
-  ! fakesink
-```
 
 `pyml_depth` and `pyml_clip` run the keras-hub port of their Hugging Face model
 on JAX. CLIP keeps its text tower on PyTorch.

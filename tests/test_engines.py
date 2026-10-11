@@ -17,7 +17,6 @@ from utils.box_matching import matched_box_fraction  # noqa: E402
 REQUIRED_ENGINE = os.environ.get("PYML_REQUIRE_ENGINE")
 
 VIDEO = BASE_DIR / "data" / "people.mp4"
-PORTRAIT = BASE_DIR / "data" / "Chinedu-Obasi_2684938.jpg"
 
 DETECTOR_WEIGHTS = "yolo11n.pt"
 DETECTOR_INPUT_SIZE = 640
@@ -27,9 +26,6 @@ CONFIDENCE_THRESHOLD = 0.25
 NMS_IOU_THRESHOLD = 0.45
 MATCH_IOU_THRESHOLD = 0.5
 MINIMUM_MATCHED_FRACTION = 0.8
-
-CLASSIFIER_MODEL = "resnet18"
-CLASSIFIER_INPUT_SIZE = 224
 
 GGUF_REPOSITORY = "ggml-org/models"
 GGUF_FILE = "tinyllamas/stories260K.gguf"
@@ -64,14 +60,6 @@ DETECTION_ENGINES = [
 CONVERSION_MODULES = {"tflite": "tensorflow"}
 
 DRPAI_EMULATION_DIR = BASE_DIR / "extern" / "rzv2h" / "emulation"
-
-CLASSIFICATION_ENGINES = [
-    pytest.param("pytorch", "torch", id="pytorch"),
-    pytest.param("tvm", "tvm", id="tvm"),
-    pytest.param("mlx", "mlx.core", id="mlx"),
-    pytest.param("jax", "jax", id="jax"),
-    pytest.param("tinygrad", "tinygrad", id="tinygrad"),
-]
 
 
 def require_module(engine_name, module_name):
@@ -227,37 +215,6 @@ def test_drpai_detections_match_reference_on_the_emulated_runtime(
     )
     assert fraction is not None, "the reference run found no people"
     assert fraction >= MINIMUM_MATCHED_FRACTION, f"matched {fraction:.2f}"
-
-
-@pytest.fixture(scope="session")
-def portrait_rgb():
-    import cv2
-
-    image = cv2.imread(str(PORTRAIT))
-    image = cv2.resize(image, (CLASSIFIER_INPUT_SIZE, CLASSIFIER_INPUT_SIZE))
-    return cv2.cvtColor(image, cv2.COLOR_BGR2RGB)
-
-
-@pytest.fixture(scope="session")
-def reference_class(portrait_rgb):
-    import torch
-    from torchvision import models
-
-    model = models.resnet18(weights=models.ResNet18_Weights.IMAGENET1K_V1).eval()
-    image = torch.from_numpy(portrait_rgb).float().permute(2, 0, 1)[None] / 255.0
-    with torch.inference_mode():
-        return int(model(image).argmax())
-
-
-@pytest.mark.parametrize("engine_name, module_name", CLASSIFICATION_ENGINES)
-def test_top_class_matches_reference(
-    engine_name, module_name, portrait_rgb, reference_class
-):
-    engine = engine_on_cpu(engine_name, module_name)
-    assert engine.do_load_model(CLASSIFIER_MODEL) is True
-    result = engine.do_forward(portrait_rgb)
-    assert isinstance(result, dict), f"classifier returned {type(result).__name__}"
-    assert result["labels"][0] == reference_class
 
 
 def test_llamacpp_generates_text():
