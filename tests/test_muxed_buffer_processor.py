@@ -17,11 +17,13 @@ from gi.repository import Gst  # noqa: E402
 
 Gst.init(None)
 
+from backend.gst.chunk_analytics import ChunkAnalytics  # noqa: E402
 from log.logger_factory import LoggerFactory  # noqa: E402
 from utils.metadata import BATCH_SOURCE_INDEX_METADATA  # noqa: E402
 from utils.muxed_buffer_processor import MuxedBufferProcessor  # noqa: E402
 
 WIDTH, HEIGHT = 4, 3
+PERSON = {"label": "stream_1_person", "x": 1, "y": 2, "w": 3, "h": 4, "score": 0.5}
 
 
 class RgbPad:
@@ -69,3 +71,15 @@ def test_a_one_source_batch_keeps_the_single_frame_shape():
         "RGB",
     )
     assert np.all(frames == 7)
+
+
+def test_an_analytics_chunk_after_the_batch_metadata_is_not_a_frame():
+    buf = muxed_buffer([1, 2])
+    analytics = ChunkAnalytics()
+    analytics.add_object(analytics.add_relation_meta(buf), *PERSON.values())
+
+    frames, num_sources, _ = extract(buf)
+
+    assert (frames.shape, num_sources) == ((2, HEIGHT, WIDTH, 3), 2)
+    assert np.all(frames[0] == 1) and np.all(frames[1] == 2)
+    assert BATCH_SOURCE_INDEX_METADATA.read(buf) == ((0,), (1,))

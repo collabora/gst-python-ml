@@ -19,6 +19,7 @@ from backend.gst.analytics import (  # noqa: E402
     select_analytics,
 )
 from backend.gst.chunk_analytics import ChunkAnalytics  # noqa: E402
+from utils.metadata import BATCH_SOURCE_INDEX_METADATA  # noqa: E402
 
 VIDEO_FRAME_SIZE = 640 * 480 * 3
 DEPTH_HEADER = b"GST-DEPTH:"
@@ -64,6 +65,23 @@ def test_the_chunk_carries_objects_beside_another_blob_until_removed():
     assert buffer.n_memory() == 2
     assert analytics.get_relation_meta(buffer) is None
     assert frameio.read_blobs(buffer) == {"depth": DEPTH_PAYLOAD}
+
+
+def test_a_chunk_appended_after_the_batch_metadata_is_found():
+    analytics = ChunkAnalytics()
+    buffer = Gst.Buffer.new_wrapped(bytes(VIDEO_FRAME_SIZE))
+    buffer.append_memory(Gst.Buffer.new_wrapped(bytes(VIDEO_FRAME_SIZE)).get_memory(0))
+    BATCH_SOURCE_INDEX_METADATA.write(buffer, [(0,), (1,)])
+
+    add(analytics, analytics.add_relation_meta(buffer), PERSON)
+    add(analytics, analytics.get_relation_meta(buffer), BALL)
+
+    assert buffer.n_memory() == 4
+    assert analytics.read_objects(analytics.get_relation_meta(buffer)) == [
+        PERSON,
+        BALL,
+    ]
+    assert BATCH_SOURCE_INDEX_METADATA.read(buffer) == ((0,), (1,))
 
 
 def test_the_environment_picks_the_store(monkeypatch):

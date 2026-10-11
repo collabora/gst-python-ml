@@ -37,7 +37,8 @@ VIDEO_FIELDS = (
     "width=(int)[1,2147483647],height=(int)[1,2147483647]"
 )
 SYSTEM_MEMORY_CAPS = f"video/x-raw,{VIDEO_FIELDS}"
-CUDA_MEMORY_CAPS = f"video/x-raw(memory:CUDAMemory),{VIDEO_FIELDS}"
+CUDA_MEMORY_FEATURE = "memory:CUDAMemory"
+CUDA_MEMORY_CAPS = f"video/x-raw({CUDA_MEMORY_FEATURE}),{VIDEO_FIELDS}"
 
 
 def pad_templates(caps):
@@ -47,6 +48,18 @@ def pad_templates(caps):
             "sink", Gst.PadDirection.SINK, Gst.PadPresence.ALWAYS, caps
         ),
     )
+
+
+def caps_without_cuda_memory(caps):
+    system_caps = Gst.Caps.new_empty()
+    for index in range(caps.get_size()):
+        features = caps.get_features(index)
+        if features.contains(CUDA_MEMORY_FEATURE):
+            continue
+        system_caps.append_structure_full(
+            caps.get_structure(index).copy(), features.copy()
+        )
+    return system_caps
 
 
 class VideoTransform(BaseTransform, FrameProcessingMixin):
@@ -96,6 +109,18 @@ class VideoTransform(BaseTransform, FrameProcessingMixin):
         elapsed_ns = self.get_clock().get_time() - self._sink_clock_then_ns
         due_by = self._sink_running_time_ns + elapsed_ns + self._last_run_ns
         return running_time < due_by
+
+    def do_transform_caps(self, direction, caps, filter_caps):
+        # the identity transform, the gi chain-up refuses a None filter
+        transformed = (
+            caps
+            if filter_caps is None
+            else filter_caps.intersect_full(caps, Gst.CapsIntersectMode.FIRST)
+        )
+        # an exported model reads host arrays only
+        if not self.runs_exported_model:
+            return transformed
+        return caps_without_cuda_memory(transformed)
 
     def do_set_caps(self, incaps, outcaps):
         struct = incaps.get_structure(0)

@@ -8,8 +8,9 @@
 
 from gi.repository import Gst
 
+from .blobs import BLOB_PREFIX
 from .format_converter import FormatConverter
-from .metadata import BATCH_SOURCE_INDEX_METADATA
+from .metadata import BATCH_SOURCE_INDEX_METADATA, first_memory_with_prefix
 
 MEMORIES_PER_FRAME = 1
 
@@ -18,7 +19,7 @@ class MuxedBufferProcessor:
     """
     Utility class to handle GStreamer buffers containing single or multiplexed streams.
     Extracts frames and metadata from single-frame buffers (no metadata) or batch buffers
-    (metadata in last chunk). Does not perform any processing or metadata attachment.
+    (metadata after the frames). Does not perform any processing or metadata attachment.
     """
 
     def __init__(self, logger, width, height, framerate_num=30, framerate_denom=1):
@@ -85,7 +86,7 @@ class MuxedBufferProcessor:
             self.logger.error("Buffer has no memory chunks")
             return None, None, None
 
-        # a blob appended upstream is an extra memory too, only the muxer's trailing metadata means a batch
+        # a blob appended upstream is an extra memory too, only the muxer's metadata means a batch
         if not BATCH_SOURCE_INDEX_METADATA.present(buf):
             self.logger.info("Single frame mode (no metadata)")
             frame = self.read_memory(buf, 0, format)
@@ -94,10 +95,10 @@ class MuxedBufferProcessor:
                 return None, None, None
             return frame, 1, format
 
-        # Batch case: last chunk is metadata
+        # Batch case: the frames come before the muxer metadata and any appended blob
         else:
             self.logger.info(f"Batch mode with {num_chunks} chunks")
-            num_frames = num_chunks - 1
+            num_frames = first_memory_with_prefix(buf, BLOB_PREFIX)
             frames = []
             for i in range(num_frames):
                 frame = self.read_memory(buf, i, format)
@@ -106,7 +107,6 @@ class MuxedBufferProcessor:
                     return None, None, None
                 frames.append(frame)
 
-            # Read metadata from the last chunk
             num_sources = len(BATCH_SOURCE_INDEX_METADATA.read(buf))
             self.logger.info(f"Metadata: num_sources={num_sources}")
             if num_sources != num_frames:

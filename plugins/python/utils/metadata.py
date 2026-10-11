@@ -22,6 +22,17 @@ import gi
 gi.require_version("Gst", "1.0")
 from gi.repository import Gst  # noqa: E402
 
+# memory 0 is a video frame
+FIRST_METADATA_MEMORY = 1
+
+
+def first_memory_with_prefix(buffer: Gst.Buffer, prefix: bytes):
+    for index in range(FIRST_METADATA_MEMORY, buffer.n_memory()):
+        with buffer.peek_memory(index).map(Gst.MapFlags.READ) as map_info:
+            if bytes(map_info.data[: len(prefix)]) == prefix:
+                return index
+    return None
+
 
 class Metadata:
     HEADER = b"GST-PYTHON-ML"
@@ -102,29 +113,16 @@ class Metadata:
         buffer.append_memory(Gst.Buffer.new_wrapped(metadata_bytes).get_memory(0))
 
     def present(self, buffer: Gst.Buffer) -> bool:
-        if buffer.n_memory() < 1:
-            return False
-        last_memory = buffer.peek_memory(buffer.n_memory() - 1)
-        with last_memory.map(Gst.MapFlags.READ) as map_info:
-            return bytes(map_info.data[: len(self.HEADER)]) == self.HEADER
+        return first_memory_with_prefix(buffer, self.HEADER) is not None
 
     def read(self, buffer: Gst.Buffer) -> tuple:
-        """Read values from the last memory chunk, verifying the header."""
-        if buffer.n_memory() < 1:
-            raise ValueError("No memory chunks in buffer")
+        index = first_memory_with_prefix(buffer, self.HEADER)
+        if index is None:
+            raise ValueError("No metadata memory in buffer")
 
-        last_memory = buffer.peek_memory(buffer.n_memory() - 1)
-        with last_memory.map(Gst.MapFlags.READ) as map_info:
+        with buffer.peek_memory(index).map(Gst.MapFlags.READ) as map_info:
             data_bytes = bytes(map_info.data)  # Convert memoryview to bytes
-            header_len = len(self.HEADER)
-            if len(data_bytes) < header_len:
-                raise ValueError(f"Memory chunk too short: {len(data_bytes)} bytes")
-            if data_bytes[:header_len] != self.HEADER:
-                raise ValueError(
-                    f"Invalid metadata header: {data_bytes[:header_len].hex()}"
-                )
-
-            offset = header_len
+            offset = len(self.HEADER)
             if self.is_list:
                 list_len = struct.unpack("I", data_bytes[offset : offset + 4])[0]
                 offset += 4

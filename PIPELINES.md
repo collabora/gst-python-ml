@@ -73,9 +73,12 @@ python pyml-launch.py  filesrc location=data/people.mp4 ! decodebin ! videoconve
 
 `pyml_classifier` also takes frames in CUDA memory. On the pytorch engine with
 `device=cuda`, a frame decoded by `nvh264dec` and converted by `cudaconvert`
-reaches the model as a tensor on the GPU, with no copy to the host. The builtin
-engines refuse these frames, so put `cudadownload` before the classifier for
-them. Every other element takes frames in system memory.
+reaches the model as a tensor on the GPU, with no copy to the host. The element
+offers CUDA memory only when its engine reads tensors, which is the pytorch
+engine. With an exported-model engine such as onnx it drops those caps, so a
+pipeline feeding it CUDA memory fails to link when it is built rather than at
+the first frame. Put `cudadownload` before the element for those engines.
+Every other element takes frames in system memory.
 
 ```
 python pyml-launch.py filesrc location=data/people.mp4 ! qtdemux ! h264parse ! nvh264dec ! cudaconvert ! capsfilter caps="video/x-raw(memory:CUDAMemory),format=RGBA" ! pyml_classifier model-name=resnet50 engine-name=pytorch device=cuda ! fakesink
@@ -143,6 +146,12 @@ python pyml-launch.py   filesrc location=data/people.mp4 ! decodebin ! videoconv
 ```
 python pyml-launch.py   filesrc location=data/soccer_tracking.mp4 ! decodebin !  videoconvertscale ! video/x-raw,width=640,height=480 ! pyml_yolo model-name=yolo11m device=cuda:0 track=True ! pyml_overlay  ! videoconvert ! autovideosink
 ```
+
+A batch from `pyml_streammux` is the source frames in order, then a
+`GST-PYTHON-ML` memory with each frame's source index. A detector between the
+mux and `pyml_streamdemux` appends its analytics chunk or a blob after that
+memory, and the demux finds the source indices by their header, so batching
+works under both `PYML_ANALYTICS` stores.
 
 ```
 python pyml-launch.py   filesrc location=data/soccer_tracking.mp4 ! decodebin ! videoconvertscale ! video/x-raw,width=640,height=480,format=RGB ! pyml_streammux name=mux   filesrc location=data/soccer_tracking.mp4 ! decodebin ! videoconvertscale ! video/x-raw,width=640,height=480,format=RGB ! mux.   mux. ! pyml_yolo model-name=yolo11m device=cuda:0 track=True ! pyml_streamdemux name=demux   demux. ! queue ! videoconvert ! pyml_overlay ! videoconvert ! autovideosink sync=false   demux. ! queue ! videoconvert ! pyml_overlay ! videoconvert !  autovideosink sync=false
