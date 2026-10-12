@@ -599,6 +599,12 @@ LEGAL_LUMA_LEVELS = (16, 236)
 LEGAL_CHROMA_LEVELS = (16, 241)
 CHROMA_SUBSAMPLING = 2
 MAXIMUM_LEVEL = 255
+BT601_LIMITED_RANGE = (0.299, 0.114, False)
+BT709_LIMITED_RANGE = (0.2126, 0.0722, False)
+BT709_RED_SAMPLE = (63, 102, 240)
+PURE_RED = (MAXIMUM_LEVEL, 0, 0)
+RED_SAMPLE_TOLERANCE = 1
+BT601_RED_CEILING = 240
 
 
 def synthetic_nv12(height, width):
@@ -630,7 +636,9 @@ def test_nv12_converts_to_rgb_like_the_bt601_formula():
     from backend.g2g.cuda_frames import nv12_to_rgb
 
     luma, chroma = synthetic_nv12(7, 9)
-    rgb = nv12_to_rgb(torch.from_numpy(luma), torch.from_numpy(chroma)).numpy()
+    rgb = nv12_to_rgb(
+        torch.from_numpy(luma), torch.from_numpy(chroma), BT601_LIMITED_RANGE
+    ).numpy()
 
     assert rgb.shape == (7, 9, 3)
     assert largest_difference(rgb, reference_rgb(luma, chroma)) <= CONVERSION_TOLERANCE
@@ -643,11 +651,41 @@ def test_nv12_converts_to_rgb_like_opencv():
 
     height, width = 16, 24
     luma, chroma = synthetic_nv12(height, width)
-    rgb = nv12_to_rgb(torch.from_numpy(luma), torch.from_numpy(chroma)).numpy()
+    rgb = nv12_to_rgb(
+        torch.from_numpy(luma), torch.from_numpy(chroma), BT601_LIMITED_RANGE
+    ).numpy()
     nv12 = np.concatenate([luma, chroma.reshape(height // CHROMA_SUBSAMPLING, width)])
 
     expected = cv2.cvtColor(nv12, cv2.COLOR_YUV2RGB_NV12)
     assert largest_difference(rgb, expected) <= CONVERSION_TOLERANCE
+
+
+def nv12_sample_to_rgb(sample, yuv_conversion):
+    import torch
+    from backend.g2g.cuda_frames import nv12_to_rgb
+
+    luma_level, blue_level, red_level = sample
+    luma = torch.full((CHROMA_SUBSAMPLING, CHROMA_SUBSAMPLING), luma_level)
+    chroma = torch.tensor([[[blue_level, red_level]]])
+    return nv12_to_rgb(
+        luma.to(torch.uint8), chroma.to(torch.uint8), yuv_conversion
+    ).numpy()[0, 0]
+
+
+def test_bt709_converts_its_red_sample_to_pure_red():
+    pytest.importorskip("torch")
+
+    rgb = nv12_sample_to_rgb(BT709_RED_SAMPLE, BT709_LIMITED_RANGE)
+
+    assert largest_difference(rgb, np.array(PURE_RED)) <= RED_SAMPLE_TOLERANCE
+
+
+def test_bt601_reads_the_bt709_red_sample_as_a_duller_red():
+    pytest.importorskip("torch")
+
+    red, _, _ = nv12_sample_to_rgb(BT709_RED_SAMPLE, BT601_LIMITED_RANGE)
+
+    assert red < BT601_RED_CEILING
 
 
 CHROMA_CHANNELS = 2
@@ -664,16 +702,26 @@ def smooth_rgb(height, width):
     return np.round(np.stack((red, green, blue), axis=-1)).astype(np.uint8)
 
 
-def test_rgb_converts_to_nv12_and_back_within_rounding():
+BT709_ROUND_TRIP_TOLERANCE = 3
+
+
+@pytest.mark.parametrize(
+    "yuv_conversion, tolerance",
+    [
+        (BT601_LIMITED_RANGE, CONVERSION_TOLERANCE),
+        (BT709_LIMITED_RANGE, BT709_ROUND_TRIP_TOLERANCE),
+    ],
+)
+def test_rgb_converts_to_nv12_and_back_within_rounding(yuv_conversion, tolerance):
     torch = pytest.importorskip("torch")
     from backend.g2g.cuda_frames import nv12_to_rgb, rgb_to_nv12
 
     rgb = smooth_rgb(128, 192)
-    luma, chroma = rgb_to_nv12(torch.from_numpy(rgb))
-    round_trip = nv12_to_rgb(luma, chroma).numpy()
+    luma, chroma = rgb_to_nv12(torch.from_numpy(rgb), yuv_conversion)
+    round_trip = nv12_to_rgb(luma, chroma, yuv_conversion).numpy()
 
     assert luma.shape == (128, 192) and chroma.shape == (64, 96, CHROMA_CHANNELS)
-    assert largest_difference(round_trip, rgb) <= CONVERSION_TOLERANCE
+    assert largest_difference(round_trip, rgb) <= tolerance
 
 
 def test_rgb_converts_to_nv12_like_opencv():
@@ -683,7 +731,7 @@ def test_rgb_converts_to_nv12_like_opencv():
 
     height, width = 16, 24
     rgb = smooth_rgb(height, width)
-    luma, chroma = rgb_to_nv12(torch.from_numpy(rgb))
+    luma, chroma = rgb_to_nv12(torch.from_numpy(rgb), BT601_LIMITED_RANGE)
 
     i420 = cv2.cvtColor(rgb, cv2.COLOR_RGB2YUV_I420)
     chroma_height, chroma_width = (
@@ -727,12 +775,15 @@ def test_a_cuda_frame_reaches_process_frames_as_an_rgb_tensor_on_the_device():
         torch.from_numpy(chroma).cuda(),
         width,
         height,
+        BT601_LIMITED_RANGE,
         sink,
     )
 
     frames, num_sources, fmt = element.received
     assert frames.is_cuda and (num_sources, fmt) == (1, "RGB")
-    expected = nv12_to_rgb(torch.from_numpy(luma), torch.from_numpy(chroma))
+    expected = nv12_to_rgb(
+        torch.from_numpy(luma), torch.from_numpy(chroma), BT601_LIMITED_RANGE
+    )
     assert torch.equal(frames.cpu(), expected)
     assert len(sink.staged_objects) == 1
 
@@ -774,7 +825,9 @@ def football_overlay_on_a_cuda_frame():
     player = {"label": "player_id_3", "x": 600, "y": 300, "w": 40, "h": 120}
     luma, chroma = black_cuda_planes(height, width)
     sink = StubMetaSink(upstream_objects=[{**player, "score": 1.0}])
-    drawn_planes = overlay.g2g_process_cuda(luma, chroma, width, height, sink)
+    drawn_planes = overlay.g2g_process_cuda(
+        luma, chroma, width, height, BT601_LIMITED_RANGE, sink
+    )
     return overlay, (luma, chroma), drawn_planes
 
 
@@ -788,8 +841,8 @@ def test_football_overlay_draws_on_a_cuda_frame_and_hands_back_nv12_planes():
     assert drawn_chroma.is_cuda and drawn_chroma.is_contiguous()
     assert drawn_luma.shape == luma.shape and drawn_chroma.shape == chroma.shape
     assert drawn_luma.dtype == drawn_chroma.dtype == luma.dtype
-    before = nv12_to_rgb(luma, chroma).cpu().numpy()
-    after = nv12_to_rgb(drawn_luma, drawn_chroma).cpu().numpy()
+    before = nv12_to_rgb(luma, chroma, BT601_LIMITED_RANGE).cpu().numpy()
+    after = nv12_to_rgb(drawn_luma, drawn_chroma, BT601_LIMITED_RANGE).cpu().numpy()
     changed = np.any(before != after, axis=-1)
     assert changed[PLAYER_FEET_REGION].any(), "the ellipse at the player's feet"
     assert changed[HUD_REGION].any(), "the focal player's hud"
@@ -820,7 +873,8 @@ def test_tracker_on_a_cuda_frame_tracks_and_leaves_the_frame_alone():
     sinks = [StubMetaSink(upstream_objects=[box]) for _ in range(2)]
     # the tracker never reads the planes
     returned = [
-        tracker.g2g_process_cuda(None, None, width, height, sink) for sink in sinks
+        tracker.g2g_process_cuda(None, None, width, height, BT601_LIMITED_RANGE, sink)
+        for sink in sinks
     ]
 
     assert returned == [None, None]

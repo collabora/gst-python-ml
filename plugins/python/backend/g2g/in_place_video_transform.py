@@ -55,7 +55,7 @@ class InPlaceVideoTransform:
         self.process_in_place(frame, self.format, buf)
         return None
 
-    def g2g_process_cuda(self, luma, chroma, width, height, sink):
+    def g2g_process_cuda(self, luma, chroma, width, height, yuv_conversion, sink):
         import torch
 
         self.width = width
@@ -71,9 +71,9 @@ class InPlaceVideoTransform:
                 f"{type(self).__name__} draws only on system memory, put "
                 "videoconvert between the decoder and it"
             )
-        frame = rgba_device_frame(luma, chroma)
+        frame = rgba_device_frame(luma, chroma, yuv_conversion)
         self.process_in_place(frame, self.format, DEVICE_FRAME)
-        drawn_planes = rgb_to_nv12(frame[..., :COLOUR_CHANNEL_COUNT])
+        drawn_planes = rgb_to_nv12(frame[..., :COLOUR_CHANNEL_COUNT], yuv_conversion)
         self.cuda_device = frame.device.index
         self.cuda_context = primary_cuda_context(self.cuda_device)
         # downstream reads the drawn planes on its own stream once this returns

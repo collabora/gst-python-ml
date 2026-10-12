@@ -53,7 +53,7 @@ class VideoTransform(BaseTransform, FrameProcessingMixin):
         # Blobs/detections are staged on the sink; no return payload needed.
         return None
 
-    def g2g_process_cuda(self, luma, chroma, width, height, sink):
+    def g2g_process_cuda(self, luma, chroma, width, height, yuv_conversion, sink):
         import torch
 
         self.width = width
@@ -65,7 +65,7 @@ class VideoTransform(BaseTransform, FrameProcessingMixin):
         self._ensure_model()
         self._ensure_started()
         with self.engine.stream_context():
-            frame = rgb_device_frame(luma, chroma)
+            frame = rgb_device_frame(luma, chroma, yuv_conversion)
             if self.runs_exported_model:
                 frame = frame.cpu().numpy()
             self.process_frames(frame, 1, DEVICE_FRAME_FORMAT, DEVICE_FRAME)
