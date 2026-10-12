@@ -11,6 +11,7 @@ The payload tests at the end drive one text element through both backend
 drivers, so they need GStreamer for the gst half and skip without it.
 """
 
+import ctypes
 import importlib
 import os
 import subprocess
@@ -649,6 +650,60 @@ def test_nv12_converts_to_rgb_like_opencv():
     assert largest_difference(rgb, expected) <= CONVERSION_TOLERANCE
 
 
+CHROMA_CHANNELS = 2
+SMOOTH_IMAGE_LEVELS = (40, 200)
+
+
+def smooth_rgb(height, width):
+    low, high = SMOOTH_IMAGE_LEVELS
+    rows = np.linspace(low, high, height)[:, None]
+    columns = np.linspace(low, high, width)[None, :]
+    red = np.broadcast_to(rows, (height, width))
+    green = np.broadcast_to(columns, (height, width))
+    blue = (red + green) / 2
+    return np.round(np.stack((red, green, blue), axis=-1)).astype(np.uint8)
+
+
+def test_rgb_converts_to_nv12_and_back_within_rounding():
+    torch = pytest.importorskip("torch")
+    from backend.g2g.cuda_frames import nv12_to_rgb, rgb_to_nv12
+
+    rgb = smooth_rgb(128, 192)
+    luma, chroma = rgb_to_nv12(torch.from_numpy(rgb))
+    round_trip = nv12_to_rgb(luma, chroma).numpy()
+
+    assert luma.shape == (128, 192) and chroma.shape == (64, 96, CHROMA_CHANNELS)
+    assert largest_difference(round_trip, rgb) <= CONVERSION_TOLERANCE
+
+
+def test_rgb_converts_to_nv12_like_opencv():
+    torch = pytest.importorskip("torch")
+    cv2 = pytest.importorskip("cv2")
+    from backend.g2g.cuda_frames import rgb_to_nv12
+
+    height, width = 16, 24
+    rgb = smooth_rgb(height, width)
+    luma, chroma = rgb_to_nv12(torch.from_numpy(rgb))
+
+    i420 = cv2.cvtColor(rgb, cv2.COLOR_RGB2YUV_I420)
+    chroma_height, chroma_width = (
+        height // CHROMA_SUBSAMPLING,
+        width // CHROMA_SUBSAMPLING,
+    )
+    chroma_plane_rows = chroma_height // CHROMA_SUBSAMPLING
+    blue_plane = i420[height : height + chroma_plane_rows]
+    red_plane = i420[height + chroma_plane_rows :]
+    expected_chroma = np.stack(
+        (
+            blue_plane.reshape(chroma_height, chroma_width),
+            red_plane.reshape(chroma_height, chroma_width),
+        ),
+        axis=-1,
+    )
+    assert largest_difference(luma.numpy(), i420[:height]) <= CONVERSION_TOLERANCE
+    assert largest_difference(chroma.numpy(), expected_chroma) <= CONVERSION_TOLERANCE
+
+
 def test_a_cuda_frame_reaches_process_frames_as_an_rgb_tensor_on_the_device():
     torch = pytest.importorskip("torch")
     if not torch.cuda.is_available():
@@ -680,6 +735,98 @@ def test_a_cuda_frame_reaches_process_frames_as_an_rgb_tensor_on_the_device():
     expected = nv12_to_rgb(torch.from_numpy(luma), torch.from_numpy(chroma))
     assert torch.equal(frames.cpu(), expected)
     assert len(sink.staged_objects) == 1
+
+
+#: A decoder surface pads each row out to a pitch wider than the frame.
+DECODER_ROW_PADDING = 64
+BLACK_LUMA = 16
+NEUTRAL_CHROMA = 128
+PLAYER_FEET_REGION = (slice(405, 435), slice(580, 660))
+HUD_REGION = (slice(0, 130), slice(0, 400))
+EMPTY_PITCH_REGION = (slice(550, 700), slice(900, 1200))
+
+
+def black_cuda_planes(height, width):
+    import torch
+
+    padded_luma = torch.full(
+        (height, width + DECODER_ROW_PADDING), BLACK_LUMA, dtype=torch.uint8
+    )
+    chroma_shape = (
+        height // CHROMA_SUBSAMPLING,
+        width // CHROMA_SUBSAMPLING,
+        CHROMA_CHANNELS,
+    )
+    chroma = torch.full(chroma_shape, NEUTRAL_CHROMA, dtype=torch.uint8)
+    return padded_luma.cuda()[:, :width], chroma.cuda()
+
+
+def football_overlay_on_a_cuda_frame():
+    torch = pytest.importorskip("torch")
+    if not torch.cuda.is_available():
+        pytest.skip("needs a CUDA device")
+    pytest.importorskip("cv2")
+    from football_overlay import FootballOverlay
+
+    overlay = FootballOverlay()
+    overlay.team_colors = False
+    width, height = 1280, 720
+    player = {"label": "player_id_3", "x": 600, "y": 300, "w": 40, "h": 120}
+    luma, chroma = black_cuda_planes(height, width)
+    sink = StubMetaSink(upstream_objects=[{**player, "score": 1.0}])
+    drawn_planes = overlay.g2g_process_cuda(luma, chroma, width, height, sink)
+    return overlay, (luma, chroma), drawn_planes
+
+
+def test_football_overlay_draws_on_a_cuda_frame_and_hands_back_nv12_planes():
+    from backend.g2g.cuda_frames import nv12_to_rgb
+
+    _, (luma, chroma), drawn_planes = football_overlay_on_a_cuda_frame()
+
+    drawn_luma, drawn_chroma = drawn_planes
+    assert drawn_luma.is_cuda and drawn_luma.is_contiguous()
+    assert drawn_chroma.is_cuda and drawn_chroma.is_contiguous()
+    assert drawn_luma.shape == luma.shape and drawn_chroma.shape == chroma.shape
+    assert drawn_luma.dtype == drawn_chroma.dtype == luma.dtype
+    before = nv12_to_rgb(luma, chroma).cpu().numpy()
+    after = nv12_to_rgb(drawn_luma, drawn_chroma).cpu().numpy()
+    changed = np.any(before != after, axis=-1)
+    assert changed[PLAYER_FEET_REGION].any(), "the ellipse at the player's feet"
+    assert changed[HUD_REGION].any(), "the focal player's hud"
+    assert not changed[EMPTY_PITCH_REGION].any(), "nothing drawn on the empty pitch"
+
+
+def test_football_overlay_names_the_context_its_drawn_planes_live_in():
+    from backend.cuda_driver import cuda_driver_library
+
+    overlay, _, (drawn_luma, _) = football_overlay_on_a_cuda_frame()
+
+    torch_context = ctypes.c_void_p()
+    cuda_driver_library().cuCtxGetCurrent(ctypes.byref(torch_context))
+    assert overlay.cuda_device == drawn_luma.device.index
+    assert isinstance(overlay.cuda_context, int) and overlay.cuda_context != 0
+    assert overlay.cuda_context == torch_context.value
+
+
+def test_tracker_on_a_cuda_frame_tracks_and_leaves_the_frame_alone():
+    pytest.importorskip("scipy")
+    pytest.importorskip("torch")
+    from tracker import TrackerTransform
+
+    tracker = TrackerTransform()
+    tracker.min_hits = 1
+    width, height = 64, 48
+    box = {"label": "player", "x": 10, "y": 10, "w": 8, "h": 16, "score": 0.9}
+    sinks = [StubMetaSink(upstream_objects=[box]) for _ in range(2)]
+    # the tracker never reads the planes
+    returned = [
+        tracker.g2g_process_cuda(None, None, width, height, sink) for sink in sinks
+    ]
+
+    assert returned == [None, None]
+    label = sinks[1].staged_class_names[sinks[1].staged_objects[0][0]]
+    assert label.startswith("player_id_")
+    assert sinks[1].staged_objects[0][1:5] == (10.0, 10.0, 8.0, 16.0)
 
 
 def test_a_frame_read_from_cuda_memory_refuses_a_write():

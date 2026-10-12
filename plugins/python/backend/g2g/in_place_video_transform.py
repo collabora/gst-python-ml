@@ -17,15 +17,22 @@
 # Boston, MA 02110-1301, USA.
 
 
+from backend.cuda_driver import primary_cuda_context
 from backend.g2g.analytics import analytics
-from backend.g2g.frameio import frameio
+from backend.g2g.cuda_frames import rgb_to_nv12, rgba_device_frame
+from backend.g2g.frameio import DEVICE_FRAME, frameio
 from backend.g2g.shims import declared_property_names
 from log.logger_factory import LoggerFactory
+
+DEVICE_DRAWING_FORMAT = "RGBA"
+COLOUR_CHANNEL_COUNT = 3
 
 
 class InPlaceVideoTransform:
     # an element that only reads and writes metadata leaves this False
     READS_PIXELS = True
+    # process_in_place then also gets a cuda frame as a torch tensor
+    DRAWS_ON_DEVICE_FRAMES = False
 
     def __init__(self):
         self.logger = LoggerFactory.get(LoggerFactory.LOGGER_TYPE_GST)
@@ -47,3 +54,28 @@ class InPlaceVideoTransform:
             frame = frameio.read_frame(buf, None, width, height)
         self.process_in_place(frame, self.format, buf)
         return None
+
+    def g2g_process_cuda(self, luma, chroma, width, height, sink):
+        import torch
+
+        self.width = width
+        self.height = height
+        self.format = DEVICE_DRAWING_FORMAT
+        frameio.bind(sink, self.format)
+        analytics.bind(sink)
+        if not self.READS_PIXELS:
+            self.process_in_place(None, self.format, DEVICE_FRAME)
+            return None
+        if not self.DRAWS_ON_DEVICE_FRAMES:
+            raise ValueError(
+                f"{type(self).__name__} draws only on system memory, put "
+                "videoconvert between the decoder and it"
+            )
+        frame = rgba_device_frame(luma, chroma)
+        self.process_in_place(frame, self.format, DEVICE_FRAME)
+        drawn_planes = rgb_to_nv12(frame[..., :COLOUR_CHANNEL_COUNT])
+        self.cuda_device = frame.device.index
+        self.cuda_context = primary_cuda_context(self.cuda_device)
+        # downstream reads the drawn planes on its own stream once this returns
+        torch.cuda.current_stream().synchronize()
+        return drawn_planes

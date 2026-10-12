@@ -17,16 +17,19 @@
 # Boston, MA 02110-1301, USA.
 
 import ctypes
-from contextlib import contextmanager
 from dataclasses import dataclass
 from functools import cache
 from types import SimpleNamespace
 
+from backend.cuda_driver import (
+    call_cuda_driver,
+    current_cuda_context,
+    primary_cuda_context,
+)
 from utils.format_converter import packed_format_layout
 
 GSTREAMER_LIBRARY = "libgstreamer-1.0.so.0"
 GST_CUDA_LIBRARY = "libgstcuda-1.0.so.0"
-CUDA_DRIVER_LIBRARY = "libcuda.so.1"
 
 GST_MAP_READ = 1
 VIDEO_MEMORY = 0
@@ -41,20 +44,8 @@ CUDA_ARRAY_INTERFACE_VERSION = 3
 UNSIGNED_BYTE_TYPESTR = "|u1"
 COLOUR_CHANNEL_COUNT = 3
 
-CUDA_SUCCESS = 0
 CU_EVENT_DISABLE_TIMING = 0x2
 STREAM_WAIT_EVENT_FLAGS = 0
-CUDA_DRIVER_SIGNATURES = {
-    "cuCtxPushCurrent_v2": [ctypes.c_void_p],
-    "cuCtxPopCurrent_v2": [ctypes.POINTER(ctypes.c_void_p)],
-    "cuEventCreate": [ctypes.POINTER(ctypes.c_void_p), ctypes.c_uint],
-    "cuEventRecord": [ctypes.c_void_p, ctypes.c_void_p],
-    "cuStreamWaitEvent": [ctypes.c_void_p, ctypes.c_void_p, ctypes.c_uint],
-    "cuEventDestroy_v2": [ctypes.c_void_p],
-    "cuGetErrorName": [ctypes.c_int, ctypes.POINTER(ctypes.c_char_p)],
-    "cuDeviceGet": [ctypes.POINTER(ctypes.c_int), ctypes.c_int],
-    "cuDevicePrimaryCtxRetain": [ctypes.POINTER(ctypes.c_void_p), ctypes.c_int],
-}
 
 
 class GstMapInfo(ctypes.Structure):
@@ -129,45 +120,6 @@ def gst_cuda_library():
     library.gst_cuda_context_get_handle.argtypes = [ctypes.c_void_p]
     library.gst_cuda_context_get_handle.restype = ctypes.c_void_p
     return library
-
-
-@cache
-def cuda_driver_library():
-    library = ctypes.CDLL(CUDA_DRIVER_LIBRARY)
-    for function_name, argument_types in CUDA_DRIVER_SIGNATURES.items():
-        function = getattr(library, function_name)
-        function.argtypes = argument_types
-        function.restype = ctypes.c_int
-    return library
-
-
-def call_cuda_driver(function_name, *arguments):
-    library = cuda_driver_library()
-    result = getattr(library, function_name)(*arguments)
-    if result == CUDA_SUCCESS:
-        return
-    error_name = ctypes.c_char_p()
-    library.cuGetErrorName(result, ctypes.byref(error_name))
-    raise RuntimeError(f"{function_name} failed with {error_name.value.decode()}")
-
-
-@contextmanager
-def current_cuda_context(context_handle):
-    call_cuda_driver("cuCtxPushCurrent_v2", context_handle)
-    try:
-        yield
-    finally:
-        call_cuda_driver("cuCtxPopCurrent_v2", ctypes.byref(ctypes.c_void_p()))
-
-
-# never released, torch keeps the primary context for the life of the process
-@cache
-def primary_cuda_context(device_index):
-    device = ctypes.c_int()
-    call_cuda_driver("cuDeviceGet", ctypes.byref(device), device_index)
-    context = ctypes.c_void_p()
-    call_cuda_driver("cuDevicePrimaryCtxRetain", ctypes.byref(context), device)
-    return context.value
 
 
 def wait_for_the_producer_stream(memory):
