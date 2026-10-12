@@ -9,7 +9,8 @@
 #   demo/football/run.sh display [INPUT.mp4] [WxH]           # file -> live on-screen
 #   demo/football/run.sh camera [/dev/videoN] [WxH]          # live camera -> on-screen
 #   demo/football/run.sh print [INPUT.mp4] [WxH]             # echo the display pipeline for pyml-mcp
-#   HOST=g2g demo/football/run.sh ...                         # same, hosted on g2g-launch-py
+#   HOST=gst demo/football/run.sh ...                         # same, on gst-launch-1.0
+#   HOST=gst CUDA=true demo/football/run.sh ...               # same, frames stay in cuda memory up to the sink
 set -euo pipefail
 
 REPO="$(cd "$(dirname "$0")/../.." && pwd)"
@@ -21,7 +22,12 @@ VENV_SITE="$(python -c 'import site; print(":".join(site.getsitepackages()))')"
 export PYTHONPATH="$REPO/plugins/python:$VENV_SITE:${PYTHONPATH:-}"
 
 BACKEND="${BACKEND:-pt}"
-HOST="${HOST:-gst}"        # gst = gst-launch-1.0, g2g = g2g-launch-py hosting the same python elements
+HOST="${HOST:-g2g}"        # g2g = g2g-launch-py hosting the python elements, gst = gst-launch-1.0
+CUDA="${CUDA:-false}"      # decode, detect, track and draw on cuda memory, download only at the sink (HOST=gst, BACKEND=pt)
+if [[ "$CUDA" == "true" ]]; then
+  [[ "$HOST" == "gst" ]] || { echo "CUDA=true runs on HOST=gst only" >&2; exit 1; }
+  [[ "$BACKEND" == "pt" ]] || { echo "CUDA=true runs the pt backend only" >&2; exit 1; }
+fi
 # The weights live on the Hugging Face Hub; this is a no-op once cached.
 python demo/football/fetch_models.py "$BACKEND" >&2
 INTERVAL="${INTERVAL:-1}"   # run detection every Nth frame; the ball trail needs every frame
@@ -49,16 +55,23 @@ if [[ "$HOST" == "g2g" ]]; then
   DECODE="qtdemux ! ffmpegdec ! $CONVERT"
   DISPLAY_SINK="videoconvertscale ! waylandsink"
   CAMERA_SINK="videoconvertscale ! waylandsink"
-  ENCODE="x264enc ! mp4mux"
+  ENCODE="videoconvertscale ! x264enc ! mp4mux"
   LAUNCH="g2g-launch-py"
 else
   DETECTOR_ELEMENT="pyml_yolo name=detector"
   TRACKER_ELEMENT="pyml_tracker"
   OVERLAY_ELEMENT="pyml_football_overlay name=overlay"
   CONVERT="videoconvert ! videoscale"
+  DOWNLOAD=""
+  if [[ "$CUDA" == "true" ]]; then
+    CONVERT="cudaupload ! cudaconvertscale"
+    DOWNLOAD="cudadownload ! "
+  fi
   DECODE="decodebin ! $CONVERT"
   LAUNCH="gst-launch-1.0 -e"
 fi
+RAW_CAPS="video/x-raw"
+[[ "$CUDA" == "true" ]] && RAW_CAPS="video/x-raw(memory:CUDAMemory)"
 TRACK="$TRACKER_ELEMENT tracker-type=bytetrack new-track-confidence=$NEWTRACK"
 # Detection-based overlay: circles sit on the raw per-frame detections (no
 # tracking drift/phantoms/doubles); merge collapses overlaps and
@@ -96,9 +109,9 @@ else
   # no min-threshold: it blocks output whenever the level dips below it
   PREROLL="queue max-size-buffers=100 max-size-time=0 max-size-bytes=0"
   CHAIN="$Q ! $DETECT ! $Q ! $POST_DETECT ! $Q ! $OVERLAY"
-  DISPLAY_SINK="$PREROLL ! videoconvert ! autovideosink sync=true"
-  CAMERA_SINK="$Q ! videoconvert ! autovideosink sync=false"
-  ENCODE="$Q ! videoconvert ! openh264enc ! h264parse ! mp4mux"
+  DISPLAY_SINK="$PREROLL ! ${DOWNLOAD}videoconvert ! autovideosink sync=true"
+  CAMERA_SINK="$Q ! ${DOWNLOAD}videoconvert ! autovideosink sync=false"
+  ENCODE="$Q ! ${DOWNLOAD}videoconvert ! openh264enc ! h264parse ! mp4mux"
 fi
 
 MODE="${1:-file}"
@@ -108,7 +121,7 @@ if [[ "$MODE" == "camera" ]]; then
   echo "[$HOST/$BACKEND] live camera $DEV @ ${W}x${H} -> display"
   exec $LAUNCH \
     v4l2src device="$DEV" ! $CONVERT \
-    ! "video/x-raw,width=${W},height=${H},format=${IN_FMT}" \
+    ! "${RAW_CAPS},width=${W},height=${H},format=${IN_FMT}" \
     ! $CHAIN \
     ! $CAMERA_SINK
 elif [[ "$MODE" == "display" || "$MODE" == "print" ]]; then
@@ -117,7 +130,7 @@ elif [[ "$MODE" == "display" || "$MODE" == "print" ]]; then
   W="${SIZE%x*}"; H="${SIZE#*x}"
   [[ -f "$IN" ]] || { echo "input not found: $IN" >&2; exit 1; }
   PIPELINE="filesrc location=$IN ! $DECODE \
-    ! video/x-raw,width=${W},height=${H},format=${IN_FMT} \
+    ! ${RAW_CAPS},width=${W},height=${H},format=${IN_FMT} \
     ! $CHAIN \
     ! $DISPLAY_SINK"
   if [[ "$MODE" == "print" ]]; then
@@ -135,7 +148,7 @@ else
   echo "[$HOST/$BACKEND] '$IN' @ ${W}x${H} -> '$OUT'"
   $LAUNCH \
     filesrc location="$IN" ! $DECODE \
-    ! "video/x-raw,width=${W},height=${H},format=${IN_FMT}" \
+    ! "${RAW_CAPS},width=${W},height=${H},format=${IN_FMT}" \
     ! $CHAIN \
     ! $ENCODE ! filesink location="$OUT"
   echo "Done: $OUT"

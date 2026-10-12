@@ -22,6 +22,11 @@ import re
 
 import backend
 from backend import analytics, frameio, GObject, InPlaceVideoTransform
+from football_overlay_drawing import (
+    OpenCVFootballDrawing,
+    TorchFootballDrawing,
+    channel_order,
+)
 from utils.blob_headers import ALERT_META_HEADER
 from utils.kick_detector import KickDetector
 
@@ -32,13 +37,6 @@ if backend.BACKEND == "gst":
         "video/x-raw, format=(string){ RGBA, ARGB, BGRA, ABGR }"
     )
 
-
-_FORMAT_ORDER = {
-    "RGBA": (0, 1, 2, 3),
-    "ARGB": (3, 0, 1, 2),
-    "BGRA": (2, 1, 0, 3),
-    "ABGR": (3, 2, 1, 0),
-}
 
 _PALETTE = [
     (239, 71, 111, 255),
@@ -77,6 +75,15 @@ _KICK_FLASH_FRAMES = 50
 _KICK_TEXT_SCALE = 0.9
 _KICK_TEXT_THICKNESS = 2
 _KICK_TEXT_RISE = 12
+_HUD_LEFT = 10
+_HUD_TOP = 10
+_HUD_BORDER_THICKNESS = 2
+# a thick opencv border reaches this far outside its rectangle
+_HUD_BORDER_OVERHANG = _HUD_BORDER_THICKNESS // 2
+_RGBA_CHANNELS = 4
+_ELLIPSE_START_ANGLE = -45
+_ELLIPSE_END_ANGLE = 235
+_ELLIPSE_HEIGHT_RATIO = 0.35
 
 
 def _is_ball(label):
@@ -113,6 +120,8 @@ class FootballOverlay(InPlaceVideoTransform):
             "sink", Gst.PadDirection.SINK, Gst.PadPresence.ALWAYS, OVERLAY_CAPS.copy()
         )
         __gsttemplates__ = (src_template, sink_template)
+
+    DRAWS_ON_DEVICE_FRAMES = True
 
     show_labels = GObject.Property(
         type=bool,
@@ -342,7 +351,7 @@ class FootballOverlay(InPlaceVideoTransform):
     def __init__(self):
         super().__init__()
         self._format_seen = None
-        self._order = _FORMAT_ORDER["RGBA"]
+        self._order = channel_order("RGBA")
         # per-track state, accumulated across frames
         self._trail = {}
         self._ball_trail = []
@@ -364,7 +373,10 @@ class FootballOverlay(InPlaceVideoTransform):
         self._focal = None  # current focal track id (sticky, for hysteresis)
         self._headshot = None
         self._headshot_loaded = False
-        self._inv_order = [0, 1, 2, 3]  # buffer-channel -> logical RGBA index
+        self._hud_bitmap = None
+        self._hud_bitmap_key = None
+        # (implementation, width, height, format) -> drawing
+        self._drawings = {}
         # Position-smoothing slots: {"box": np[x1,y1,x2,y2]} kept across frames
         # and matched by proximity, so the drawn ellipse can be low-passed.
         self._smooth_slots = []
@@ -378,10 +390,7 @@ class FootballOverlay(InPlaceVideoTransform):
         self._kick_flash_until = 0
 
     def _use_format(self, fmt):
-        self._order = _FORMAT_ORDER.get(fmt, _FORMAT_ORDER["RGBA"])
-        # buffer channel j holds logical[self._order[j]]; invert so we can pull
-        # logical R,G,B out of the buffer for jersey colour classification.
-        self._inv_order = [self._order.index(c) for c in range(4)]
+        self._order = channel_order(fmt)
         self._headshot_loaded = False  # re-load in the new channel order
         self._format_seen = fmt
 
@@ -564,21 +573,16 @@ class FootballOverlay(InPlaceVideoTransform):
         frameio.append_blob(buf, ALERT_META_HEADER, json.dumps(payload).encode())
         self.logger.info(f"kick {self._last_kick}")
 
-    def _draw_kick_flash(self, frame):
-        import cv2
-
+    def _draw_kick_flash(self, drawing):
         if self._frame > self._kick_flash_until or self._ball_box is None:
             return
         x1, y1, _, _ = self._ball_box
-        cv2.putText(
-            frame,
+        drawing.draw_text(
             self._kick_flash_text,
             (int(x1), max(_KICK_TEXT_RISE, int(y1) - _KICK_TEXT_RISE)),
-            cv2.FONT_HERSHEY_SIMPLEX,
             _KICK_TEXT_SCALE,
-            self._c(_KICK_RGBA),
+            _KICK_RGBA,
             _KICK_TEXT_THICKNESS,
-            cv2.LINE_AA,
         )
 
     def _follow_camera(self, entries):
@@ -681,9 +685,6 @@ class FootballOverlay(InPlaceVideoTransform):
         if not votes:
             return fallback
         return max(votes, key=votes.get)
-
-    def _c(self, rgba):
-        return tuple(rgba[i] for i in self._order)
 
     def _team_color(self, track_id):
         # Confident kit colour from a track's accumulated jersey votes, else
@@ -864,7 +865,7 @@ class FootballOverlay(InPlaceVideoTransform):
         self._smooth_slots = [s for i, s in enumerate(self._smooth_slots) if i in used]
         return out
 
-    def _detection_color(self, cv2, np, frame, label, box):
+    def _detection_color(self, drawing, label, box):
         # Colour a raw detection box (no track id) by its jersey team, classified
         # from this frame -- referees included. When the jersey isn't clearly a
         # team colour, a referee falls back to gold (so real refs stay visible)
@@ -872,7 +873,7 @@ class FootballOverlay(InPlaceVideoTransform):
         ref = _is_referee(label)
         if not self.team_colors:
             return _REFEREE_RGBA if ref else _PLAYER_RGBA
-        vote = self._classify_jersey(cv2, np, frame, box)
+        vote = drawing.classify_jersey(box)
         if vote == "red":
             return _RED_TEAM_RGBA
         if vote == "blue":
@@ -880,42 +881,6 @@ class FootballOverlay(InPlaceVideoTransform):
         if vote == "ref":
             return _REFEREE_RGBA
         return _REFEREE_RGBA if ref else None
-
-    def _classify_jersey(self, cv2, np, frame, box):
-        # Dominant jersey colour in the torso patch -> "red"/"blue"/"ref"/None
-        # (HSV). "ref" is a distinctive non-team kit colour (yellow/orange or
-        # pink/magenta) -- chosen to avoid grass-green and the red/blue teams --
-        # so the referee is identified by its kit colour, not the class label.
-        import cv2
-        import numpy as np
-
-        x1, y1, x2, y2 = (int(v) for v in box)
-        h_box, w_box = y2 - y1, x2 - x1
-        if h_box <= 0 or w_box <= 0:
-            return None
-        jy1, jy2 = y1 + int(0.15 * h_box), y1 + int(0.55 * h_box)
-        jx1, jx2 = x1 + int(0.25 * w_box), x1 + int(0.75 * w_box)
-        H, W = frame.shape[:2]
-        jy1, jy2 = max(0, jy1), min(H, jy2)
-        jx1, jx2 = max(0, jx1), min(W, jx2)
-        if jy2 - jy1 < 3 or jx2 - jx1 < 3:
-            return None
-        # logical RGB from the buffer's channel order, then HSV
-        rgb = np.ascontiguousarray(frame[jy1:jy2, jx1:jx2][:, :, self._inv_order[:3]])
-        hsv = cv2.cvtColor(rgb, cv2.COLOR_RGB2HSV)
-        s_v = (hsv[..., 1] > 80) & (hsv[..., 2] > 50)
-        h = hsv[..., 0]
-        red = int((((h <= 10) | (h >= 170)) & s_v).sum())
-        blue = int(((h >= 100) & (h <= 130) & s_v).sum())
-        # Referee kit: yellow/orange (~18-34) or pink/magenta (~145-165). These
-        # bands skip grass-green (~40-90) and the red/blue team bands.
-        ref = int(((((h >= 18) & (h <= 34)) | ((h >= 145) & (h <= 165))) & s_v).sum())
-        min_pixels = max(20, int(0.02 * rgb.shape[0] * rgb.shape[1]))
-        counts = {"red": red, "blue": blue, "ref": ref}
-        best = max(counts, key=counts.get)
-        if counts[best] < min_pixels:
-            return None
-        return best
 
     def _load_headshot(self, cv2, np):
         import cv2
@@ -965,18 +930,12 @@ class FootballOverlay(InPlaceVideoTransform):
         steps = min(elapsed, _BALL_TRAIL_MAX_STEPS_PER_GAP)
         return jump <= _BALL_TRAIL_MAX_STEP * self.width * steps
 
-    def _draw_trail(self, cv2, np, frame, points, rgba):
-        import cv2
-        import numpy as np
-
+    def _draw_trail(self, drawing, points, rgba):
         if len(points) < 2:
             return
-        pts = np.array(points, dtype=np.int32).reshape(-1, 1, 2)
-        cv2.polylines(frame, [pts], False, self._c(rgba), 2, cv2.LINE_AA)
+        drawing.draw_polyline(points, rgba, 2)
 
-    def _draw_ellipse(self, cv2, frame, box, rgba, track_id):
-        import cv2
-
+    def _draw_ellipse(self, drawing, box, rgba, track_id):
         x1, y1, x2, y2 = box
         y_bottom = int(y2)
         x_center = int((x1 + x2) / 2)
@@ -984,17 +943,13 @@ class FootballOverlay(InPlaceVideoTransform):
         # when a single detection box is momentarily oversized.
         smoothed = self._ell_w.get(track_id)
         width = max(1, int(smoothed if smoothed is not None else x2 - x1))
-        color = self._c(rgba)
-        cv2.ellipse(
-            frame,
+        drawing.draw_ellipse_arc(
             (x_center, y_bottom),
-            (width, max(1, int(0.35 * width))),
-            0.0,
-            -45,
-            235,
-            color,
+            (width, max(1, int(_ELLIPSE_HEIGHT_RATIO * width))),
+            _ELLIPSE_START_ANGLE,
+            _ELLIPSE_END_ANGLE,
+            rgba,
             2,
-            cv2.LINE_AA,
         )
         if self.show_ids and track_id is not None:
             rect_w, rect_h = 40, 18
@@ -1002,85 +957,70 @@ class FootballOverlay(InPlaceVideoTransform):
             x2r = x_center + rect_w // 2
             y1r = y_bottom - rect_h // 2 + 15
             y2r = y_bottom + rect_h // 2 + 15
-            cv2.rectangle(frame, (x1r, y1r), (x2r, y2r), color, cv2.FILLED)
+            drawing.fill_rectangle((x1r, y1r), (x2r, y2r), rgba)
             tx = x1r + 12 - (10 if track_id > 99 else 0)
-            cv2.putText(
-                frame,
-                str(track_id),
-                (tx, y1r + 14),
-                cv2.FONT_HERSHEY_SIMPLEX,
-                0.5,
-                self._c(_BLACK_RGBA),
-                2,
-                cv2.LINE_AA,
-            )
+            drawing.draw_text(str(track_id), (tx, y1r + 14), 0.5, _BLACK_RGBA, 2)
 
-    def _draw_triangle(self, cv2, np, frame, box, rgba):
-        import cv2
-        import numpy as np
-
+    def _draw_triangle(self, drawing, box, rgba):
         x1, y1, x2, y2 = box
         x = int((x1 + x2) / 2)
         y = int(y1)
-        pts = np.array([[x, y], [x - 10, y - 20], [x + 10, y - 20]], dtype=np.int32)
-        cv2.drawContours(frame, [pts], 0, self._c(rgba), cv2.FILLED)
-        cv2.drawContours(frame, [pts], 0, self._c(_BLACK_RGBA), 2)
+        drawing.draw_triangle(
+            [(x, y), (x - 10, y - 20), (x + 10, y - 20)], rgba, _BLACK_RGBA, 2
+        )
 
-    def _draw_focal_marker(self, cv2, np, frame, box):
+    def _draw_focal_marker(self, drawing, box):
         # Broadcast-style "selected player" chevron floating above the head,
         # plus a bolder ellipse, to flag the focal (HUD) player on the pitch.
-        import cv2
-        import numpy as np
-
         x1, y1, x2, y2 = box
         cx = int((x1 + x2) / 2)
         tip_y = int(y1) - 10
         s = 16
-        pts = np.array(
+        drawing.draw_triangle(
             [
-                [cx, tip_y],
-                [cx - s, tip_y - int(s * 1.5)],
-                [cx + s, tip_y - int(s * 1.5)],
+                (cx, tip_y),
+                (cx - s, tip_y - int(s * 1.5)),
+                (cx + s, tip_y - int(s * 1.5)),
             ],
-            dtype=np.int32,
+            _HIGHLIGHT_RGBA,
+            _BLACK_RGBA,
+            2,
         )
-        cv2.drawContours(frame, [pts], 0, self._c(_HIGHLIGHT_RGBA), cv2.FILLED)
-        cv2.drawContours(frame, [pts], 0, self._c(_BLACK_RGBA), 2)
         # Bolder ring at the feet to reinforce the selection.
         x_center = int((x1 + x2) / 2)
         width = max(1, int(x2 - x1))
-        cv2.ellipse(
-            frame,
+        drawing.draw_ellipse_arc(
             (x_center, int(y2)),
-            (width, max(1, int(0.35 * width))),
-            0.0,
-            -45,
-            235,
-            self._c(_HIGHLIGHT_RGBA),
+            (width, max(1, int(_ELLIPSE_HEIGHT_RATIO * width))),
+            _ELLIPSE_START_ANGLE,
+            _ELLIPSE_END_ANGLE,
+            _HIGHLIGHT_RGBA,
             4,
-            cv2.LINE_AA,
         )
 
-    def _draw_label(self, cv2, frame, box, label, rgba):
-        import cv2
-
+    def _draw_label(self, drawing, box, label, rgba):
         x1, y1, _, _ = box
-        cv2.putText(
-            frame,
-            label,
-            (int(x1), max(12, int(y1) - 6)),
-            cv2.FONT_HERSHEY_SIMPLEX,
-            0.5,
-            self._c(rgba),
-            1,
-            cv2.LINE_AA,
+        drawing.draw_text(label, (int(x1), max(12, int(y1) - 6)), 0.5, rgba, 1)
+
+    def _hud_pixels(self, contacts, distance_m, rgba, headshot):
+        distance_text = f"{distance_m:.1f}"
+        key = (
+            self.player_label,
+            contacts,
+            distance_text,
+            rgba,
+            self._format_seen,
+            id(headshot),
         )
+        if key != self._hud_bitmap_key:
+            self._hud_bitmap = self._render_hud(contacts, distance_text, rgba, headshot)
+            self._hud_bitmap_key = key
+        return self._hud_bitmap
 
-    def _draw_hud(self, cv2, frame, contacts, distance_m, rgba, headshot):
-        import cv2
+    def _render_hud(self, contacts, distance_text, rgba, headshot):
+        import numpy as np
 
-        font = cv2.FONT_HERSHEY_SIMPLEX
-        x, y = 10, 10
+        x = y = _HUD_BORDER_OVERHANG
         if headshot is not None:
             hh, hw = headshot.shape[:2]
             w, h = hw + 280, max(110, hh + 20)
@@ -1088,40 +1028,46 @@ class FootballOverlay(InPlaceVideoTransform):
         else:
             w, h = 320, 100
             text_x = x + 12
-        cv2.rectangle(frame, (x, y), (x + w, y + h), self._c(_HUD_BG_RGBA), cv2.FILLED)
-        cv2.rectangle(frame, (x, y), (x + w, y + h), self._c(rgba), 2)
-        if headshot is not None:
-            hy, hx = y + 10, x + 10
-            fh, fw = frame.shape[:2]
-            hh = min(hh, fh - hy)
-            hw = min(hw, fw - hx)
-            if hh > 0 and hw > 0:
-                frame[hy : hy + hh, hx : hx + hw] = headshot[:hh, :hw]
-                cv2.rectangle(frame, (hx, hy), (hx + hw, hy + hh), self._c(rgba), 2)
-        tc = self._c(_HUD_TEXT_RGBA)
-        cv2.putText(
-            frame, self.player_label, (text_x, y + 28), font, 0.7, tc, 2, cv2.LINE_AA
+        bitmap_size = (
+            h + 1 + 2 * _HUD_BORDER_OVERHANG,
+            w + 1 + 2 * _HUD_BORDER_OVERHANG,
+            _RGBA_CHANNELS,
         )
-        cv2.putText(
-            frame,
-            f"Ball contacts: {contacts}",
-            (text_x, y + 58),
-            font,
-            0.6,
-            tc,
-            1,
-            cv2.LINE_AA,
-        )
-        cv2.putText(
-            frame,
-            f"Distance: {distance_m:.1f} m",
-            (text_x, y + 85),
-            font,
-            0.6,
-            tc,
-            1,
-            cv2.LINE_AA,
-        )
+        drawing = OpenCVFootballDrawing(self._format_seen)
+        # the thick border leaves its corner pixels unpainted
+        bitmap = np.empty(bitmap_size, dtype=np.uint8)
+        bitmap[:] = drawing.buffer_colour(rgba)
+        with drawing.drawing_on(bitmap):
+            drawing.fill_rectangle((x, y), (x + w, y + h), _HUD_BG_RGBA)
+            drawing.draw_rectangle((x, y), (x + w, y + h), rgba, _HUD_BORDER_THICKNESS)
+            if headshot is not None:
+                hy, hx = y + 10, x + 10
+                drawing.blit(headshot, hx, hy)
+                drawing.draw_rectangle((hx, hy), (hx + hw, hy + hh), rgba, 2)
+            drawing.draw_text(
+                self.player_label, (text_x, y + 28), 0.7, _HUD_TEXT_RGBA, 2
+            )
+            drawing.draw_text(
+                f"Ball contacts: {contacts}", (text_x, y + 58), 0.6, _HUD_TEXT_RGBA, 1
+            )
+            drawing.draw_text(
+                f"Distance: {distance_text} m", (text_x, y + 85), 0.6, _HUD_TEXT_RGBA, 1
+            )
+        return bitmap
+
+    def _drawing_for(self, frame, fmt):
+        import numpy as np
+
+        height, width = frame.shape[:2]
+        if isinstance(frame, np.ndarray):
+            key = (OpenCVFootballDrawing, width, height, fmt)
+            if key not in self._drawings:
+                self._drawings[key] = OpenCVFootballDrawing(fmt)
+            return self._drawings[key]
+        key = (TorchFootballDrawing, width, height, fmt)
+        if key not in self._drawings:
+            self._drawings[key] = TorchFootballDrawing(width, height, fmt)
+        return self._drawings[key]
 
     def process_in_place(self, frame, fmt, buf):
         import cv2
@@ -1188,7 +1134,11 @@ class FootballOverlay(InPlaceVideoTransform):
         draw_entries = self._smooth_boxes(np, draw_entries)
         if not all_entries:
             return
+        drawing = self._drawing_for(frame, fmt)
+        with drawing.drawing_on(frame):
+            self._draw_frame(cv2, np, drawing, active, track_entries, draw_entries)
 
+    def _draw_frame(self, cv2, np, drawing, active, track_entries, draw_entries):
         # Jersey team voting first, so trails/ellipses use this frame's
         # vote (track mode; detection mode classifies per box at draw).
         # Referees are voted on too -- their colour comes from the jersey
@@ -1199,7 +1149,7 @@ class FootballOverlay(InPlaceVideoTransform):
                 lab = self._stable_label(tid, e["label"])
                 if _is_ball(lab):
                     continue
-                vote = self._classify_jersey(cv2, np, frame, e["box"])
+                vote = drawing.classify_jersey(e["box"])
                 if vote:
                     tv = self._team_votes.setdefault(
                         tid, {"red": 0, "blue": 0, "ref": 0}
@@ -1211,9 +1161,9 @@ class FootballOverlay(InPlaceVideoTransform):
                 rgba = self._color_for(self._track_label.get(tid, ""), tid)
                 if rgba is None:
                     continue
-                self._draw_trail(cv2, np, frame, self._trail.get(tid, []), rgba)
+                self._draw_trail(drawing, self._trail.get(tid, []), rgba)
         if self.ball_trail:
-            self._draw_trail(cv2, np, frame, self._ball_trail, _BALL_RGBA)
+            self._draw_trail(drawing, self._ball_trail, _BALL_RGBA)
 
         # Which drawn box is the focal (HUD) player? Match the focal
         # track's box to the nearest drawn box so we can highlight it
@@ -1256,19 +1206,19 @@ class FootballOverlay(InPlaceVideoTransform):
                 label = e["label"]
             if _is_ball(label):
                 if self.show_ball:
-                    self._draw_triangle(cv2, np, frame, box, _BALL_RGBA)
+                    self._draw_triangle(drawing, box, _BALL_RGBA)
                 continue
             if color_tid is not None:
                 rgba = self._color_for(label, color_tid)
             else:
-                rgba = self._detection_color(cv2, np, frame, label, box)
+                rgba = self._detection_color(drawing, label, box)
             if rgba is None:
                 continue
-            self._draw_ellipse(cv2, frame, box, rgba, badge_id)
+            self._draw_ellipse(drawing, box, rgba, badge_id)
             if i == focal_idx:
-                self._draw_focal_marker(cv2, np, frame, box)
+                self._draw_focal_marker(drawing, box)
             if self.show_labels:
-                self._draw_label(cv2, frame, box, label, rgba)
+                self._draw_label(drawing, box, label, rgba)
 
         if self.show_hud:
             focal = self._focal_track()
@@ -1279,15 +1229,18 @@ class FootballOverlay(InPlaceVideoTransform):
                     self._color_for(self._track_label.get(focal, ""), focal)
                     or _DEFAULT_RGBA
                 )
-                self._draw_hud(
-                    cv2,
-                    frame,
+                hud = self._hud_pixels(
                     self._contacts.get(focal, 0),
                     dist_m,
                     hud_rgba,
                     self._load_headshot(cv2, np),
                 )
-        self._draw_kick_flash(frame)
+                drawing.blit(
+                    hud,
+                    _HUD_LEFT - _HUD_BORDER_OVERHANG,
+                    _HUD_TOP - _HUD_BORDER_OVERHANG,
+                )
+        self._draw_kick_flash(drawing)
 
 
 if backend.BACKEND == "gst":
