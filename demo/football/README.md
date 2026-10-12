@@ -197,7 +197,7 @@ picture, and silence had restarted it. The typed REPL still has both tools.
 Ctrl-C runs `stop_pipeline`, so the recording is finalized.
 
 Ask "which element has the most latency?" and the model calls
-`element_latencies`, which `agent.py` builds from `pyml-mcp`'s `buffer_flow`:
+`pyml-mcp`'s `element_latencies`:
 each element's average time per frame, slowest first, queues left out. The
 answer replaces the transcript on the picture. A phrase that only changes
 properties gets no answer, as before.

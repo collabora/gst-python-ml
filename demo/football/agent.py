@@ -45,21 +45,13 @@ PASSTHROUGH_TOOLS = (
     "get_property",
     "pipeline_status",
     "stop_pipeline",
+    "element_latencies",
 )
 START_TOOL = {
     "type": "function",
     "function": {
         "name": "start_football_demo",
         "description": "Start the football broadcast overlay pipeline on the demo video.",
-        "parameters": {"type": "object", "properties": {}},
-    },
-}
-ELEMENT_LATENCIES_TOOL = {
-    "type": "function",
-    "function": {
-        "name": "element_latencies",
-        "description": "Each element's average time per frame in milliseconds, "
-        "slowest first. Queues are left out.",
         "parameters": {"type": "object", "properties": {}},
     },
 }
@@ -153,7 +145,7 @@ async def model_tools(mcp):
     passthrough = [
         openai_tool(tool) for tool in listed.tools if tool.name in PASSTHROUGH_TOOLS
     ]
-    return [START_TOOL, ELEMENT_LATENCIES_TOOL, *passthrough]
+    return [START_TOOL, *passthrough]
 
 
 DEMO_VIDEO = "data/iStock-1446288409.mp4"
@@ -206,31 +198,16 @@ def demo_pipeline():
     return pipeline.replace(sink, display if LOOP_CLIP else record)
 
 
-async def element_latencies(mcp):
-    result = await mcp.call_tool("buffer_flow", {})
-    slowest = {}
-    for block in result.content:
-        flow = json.loads(block.text)
-        element = flow["pad"].split(".")[0]
-        # a queue's latency is time spent waiting for the element after it
-        if "latency_ms" not in flow or element.startswith("queue"):
-            continue
-        slowest[element] = max(slowest.get(element, 0), flow["latency_ms"])
-    ranked = sorted(slowest.items(), key=lambda item: item[1], reverse=True)
-    return [{"element": element, "latency_ms": ms} for element, ms in ranked]
-
-
 async def run_tool(mcp, name, arguments):
-    if name == "element_latencies":
-        return json.dumps(await element_latencies(mcp))
     if name == "start_football_demo":
         name, arguments = "start_pipeline", {
             "pipeline": demo_pipeline(),
             "loop": LOOP_CLIP,
         }
     result = await mcp.call_tool(name, arguments)
-    text = "\n".join(block.text for block in result.content if hasattr(block, "text"))
-    return compact_json(text)
+    return "\n".join(
+        compact_json(block.text) for block in result.content if hasattr(block, "text")
+    )
 
 
 def compact_json(text):

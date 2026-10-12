@@ -159,6 +159,26 @@ def test_buffer_flow_measures_how_long_each_element_holds_a_buffer():
     assert "latency_ms" not in flows["source.src"]
 
 
+def test_element_latencies_ranks_elements_slowest_first_without_queues():
+    pyml_mcp.start_pipeline(
+        "videotestsrc name=source ! video/x-raw,framerate=30/1 ! identity name=fast "
+        f"! queue ! identity name=slow sleep-time={SLOW_ELEMENT_MICROSECONDS} "
+        "! fakesink"
+    )
+    time.sleep(FLOW_SETTLE_SECONDS)
+    flows = pyml_mcp.buffer_flow()
+    latencies = pyml_mcp.element_latencies()
+    pyml_mcp.stop_pipeline()
+    assert any(
+        flow["pad"].startswith("queue") and "latency_ms" in flow for flow in flows
+    )
+    elements = [latency["element"] for latency in latencies]
+    assert not any(element.startswith("queue") for element in elements)
+    assert elements[0] == "slow"
+    milliseconds = [latency["latency_ms"] for latency in latencies]
+    assert milliseconds == sorted(milliseconds, reverse=True)
+
+
 def test_buffer_flow_counts_a_pad_decodebin_adds(video_file):
     pyml_mcp.start_pipeline(
         f"filesrc location={video_file} ! decodebin name=decoder ! fakesink"

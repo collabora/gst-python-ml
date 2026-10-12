@@ -66,6 +66,7 @@ RECENT_RECORDS = 1000
 RECENT_BUS_MESSAGES = 1000
 RECENT_LATENCIES = 30
 PENDING_LATENCY_BUFFERS = 64
+QUEUE_NAME_PREFIX = "queue"
 SNAPSHOT_IMAGE_FORMAT = "jpeg"
 FRAME_CONVERT_SECONDS = 5
 RGB_CAPS = "video/x-raw,format=RGB"
@@ -440,6 +441,25 @@ def buffer_flow() -> list[dict]:
     running_pipeline()
     now = time.monotonic()
     return [flow.report(pad, now) for pad, flow in list(session.buffer_flows.items())]
+
+
+@server.tool(
+    description="The elements of the running pipeline ranked by their recent average time "
+    "from a buffer entering to it leaving, slowest first, each with latency_ms. An "
+    "element with no latency_ms in buffer_flow is absent, and queues are left out."
+)
+def element_latencies() -> list[dict]:
+    slowest = {}
+    for flow in buffer_flow():
+        element = flow["pad"].rpartition(".")[0]
+        # a queue's latency is time spent waiting for the element after it
+        if "latency_ms" not in flow or element.startswith(QUEUE_NAME_PREFIX):
+            continue
+        slowest[element] = max(slowest.get(element, 0), flow["latency_ms"])
+    ranked = sorted(slowest.items(), key=lambda item: item[1], reverse=True)
+    return [
+        {"element": element, "latency_ms": latency_ms} for element, latency_ms in ranked
+    ]
 
 
 @server.tool(
