@@ -26,10 +26,11 @@ python demo/football/fetch_models.py all
 
 ## Local setup
 
-`run.sh` expects the repo venv at `.venv` and the system `gst-launch-1.0` with
-the gst-python loader. It puts `plugins/` on `GST_PLUGIN_PATH` and the venv's
-site-packages on `PYTHONPATH` itself, so nothing needs exporting first. On an
-NVIDIA host `decodebin` picks `nvh264dec` and the detector runs on `cuda:0`.
+`run.sh` expects the repo venv at `.venv` and `g2g-launch-py` on `PATH`.
+`HOST=gst` uses the system `gst-launch-1.0` with the gst-python loader instead.
+It puts `plugins/` on `GST_PLUGIN_PATH` and the venv's site-packages on
+`PYTHONPATH` itself, so nothing needs exporting first. On an NVIDIA host
+`decodebin` picks `nvh264dec` and the detector runs on `cuda:0`.
 
 ```bash
 cd gst-python-ml
@@ -55,8 +56,8 @@ demo/football/run.sh camera /dev/video0
 ## Kicks
 
 ```bash
-KICKS=true demo/football/run.sh
-KICKS=true KICK_BEFORE=5 KICK_AFTER=2 demo/football/run.sh display
+KICKS=true HOST=gst demo/football/run.sh
+KICKS=true KICK_BEFORE=5 KICK_AFTER=2 HOST=gst demo/football/run.sh display
 ```
 
 `KICKS=true` turns on `detect-kicks` on the overlay and puts
@@ -196,11 +197,10 @@ a call to a hidden tool is refused. A misheard "go back" had stopped the
 picture, and silence had restarted it. The typed REPL still has both tools.
 Ctrl-C runs `stop_pipeline`, so the recording is finalized.
 
-Ask "which element has the most latency?" and the model calls
-`pyml-mcp`'s `element_latencies`:
-each element's average time per frame, slowest first, queues left out. The
-answer replaces the transcript on the picture. A phrase that only changes
-properties gets no answer, as before.
+Ask "which element has the most latency?" and the model calls `pyml-mcp`'s
+`element_latencies`: each element's average time per frame, slowest first,
+queues left out. The answer replaces the transcript on the picture. A phrase
+that only changes properties gets no answer, as before.
 
 Property rules in the system prompt:
 
@@ -250,7 +250,8 @@ change is about 4 to 5 seconds: Whisper about 3, Qwen about 1 to 2.
 | Var        | Default | Meaning |
 |------------|---------|---------|
 | `BACKEND`  | `pt`    | `pt` = PyTorch `pyml_yolo`; `fp16` = ONNX FP16 via `pyml_objectdetector` (CUDA). |
-| `HOST`     | `gst`   | `gst` runs `gst-launch-1.0`. `g2g` runs the same three Python elements hosted by `g2g-launch-py` (needs it on `PATH`, `pt` backend only). |
+| `HOST`     | `g2g`   | `g2g` runs the three Python elements hosted by `g2g-launch-py` (needs it on `PATH`, `pt` backend only). `gst` runs the same pipeline on `gst-launch-1.0`, which `fp16` and `KICKS` need. |
+| `CUDA`     | `false` | `true` decodes and detects on CUDA memory (`pt` backend only). On `gst` the frame stays on the card up to the sink. On `g2g` it decodes a file with `nvdec`, runs the detector on CUDA frames and converts to system memory before the tracker. |
 | `INTERVAL` | `1`     | Run detection every Nth frame; the tracker/overlay still update every frame, so it stays smooth at ~N× less inference cost. The main real-time lever. The ball trail needs 1. |
 | `IMGSZ`    | `640`   | Network input size for the `pt` backend. `1280` finds the ball on about half the frames instead of a third, at three times the inference cost. |
 | `TRAILS`   | `false` | Draw motion trails behind the players. |
@@ -261,11 +262,11 @@ change is about 4 to 5 seconds: Whisper about 3, Qwen about 1 to 2.
 | `KICK_AFTER` | `1` | Seconds of video in a kick clip after the kick. |
 
 ```bash
-BACKEND=fp16 demo/football/run.sh display     # faster inference path
+BACKEND=fp16 HOST=gst demo/football/run.sh display     # faster inference path
 INTERVAL=5   demo/football/run.sh display     # detect every 5th frame
 INTERVAL=3   demo/football/run.sh             # detect every 3rd frame (cheaper, sparse ball trail)
 TRAILS=true SHOW_BALL=true BALL_TRAIL=true demo/football/run.sh display data/soccer_tracking.mp4
-HOST=g2g demo/football/run.sh display              # same pipeline on the g2g host
+HOST=gst demo/football/run.sh display              # same pipeline on gst-launch-1.0
 ```
 
 

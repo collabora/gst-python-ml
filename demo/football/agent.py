@@ -169,6 +169,8 @@ MIC_ICON_OVERLAY = (
 def demo_pipeline():
     pipeline = subprocess.run(
         [str(RUN_SCRIPT), "print", DEMO_VIDEO],
+        # pyml-mcp hosts gstreamer pipelines
+        env={**os.environ, "HOST": "gst"},
         check=True,
         capture_output=True,
         text=True,

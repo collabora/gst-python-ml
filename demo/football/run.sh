@@ -10,7 +10,7 @@
 #   demo/football/run.sh camera [/dev/videoN] [WxH]          # live camera -> on-screen
 #   demo/football/run.sh print [INPUT.mp4] [WxH]             # echo the display pipeline for pyml-mcp
 #   HOST=gst demo/football/run.sh ...                         # same, on gst-launch-1.0
-#   HOST=gst CUDA=true demo/football/run.sh ...               # same, frames stay in cuda memory up to the sink
+#   CUDA=true demo/football/run.sh ...                        # nvdec feeds the detector on cuda memory
 set -euo pipefail
 
 REPO="$(cd "$(dirname "$0")/../.." && pwd)"
@@ -23,9 +23,8 @@ export PYTHONPATH="$REPO/plugins/python:$VENV_SITE:${PYTHONPATH:-}"
 
 BACKEND="${BACKEND:-pt}"
 HOST="${HOST:-g2g}"        # g2g = g2g-launch-py hosting the python elements, gst = gst-launch-1.0
-CUDA="${CUDA:-false}"      # decode, detect, track and draw on cuda memory, download only at the sink (HOST=gst, BACKEND=pt)
+CUDA="${CUDA:-false}"      # decode and detect on cuda memory; gst keeps the frame there up to the sink, g2g brings it down before the tracker (BACKEND=pt)
 if [[ "$CUDA" == "true" ]]; then
-  [[ "$HOST" == "gst" ]] || { echo "CUDA=true runs on HOST=gst only" >&2; exit 1; }
   [[ "$BACKEND" == "pt" ]] || { echo "CUDA=true runs the pt backend only" >&2; exit 1; }
 fi
 # The weights live on the Hugging Face Hub; this is a no-op once cached.
@@ -57,6 +56,12 @@ if [[ "$HOST" == "g2g" ]]; then
   CAMERA_SINK="videoconvertscale ! waylandsink"
   ENCODE="videoconvertscale ! x264enc ! mp4mux"
   LAUNCH="g2g-launch-py"
+  if [[ "$CUDA" == "true" ]]; then
+    # the python host reads a cuda frame read-only and g2g has no gpu scaler
+    DECODE="qtdemux ! h264parse ! nvdec"
+    DETECTOR_ELEMENT="$DETECTOR_ELEMENT cuda-frames=true format=NV12"
+    TRACKER_ELEMENT="videoconvert ! $TRACKER_ELEMENT"
+  fi
 else
   DETECTOR_ELEMENT="pyml_yolo name=detector"
   TRACKER_ELEMENT="pyml_tracker"
@@ -70,8 +75,13 @@ else
   DECODE="decodebin ! $CONVERT"
   LAUNCH="gst-launch-1.0 -e"
 fi
-RAW_CAPS="video/x-raw"
-[[ "$CUDA" == "true" ]] && RAW_CAPS="video/x-raw(memory:CUDAMemory)"
+# nvdec decodes at the clip's own size and format, nothing to ask for
+input_caps() {
+  [[ "$HOST" == "g2g" && "$CUDA" == "true" ]] && return
+  local caps="video/x-raw"
+  [[ "$CUDA" == "true" ]] && caps="video/x-raw(memory:CUDAMemory)"
+  echo "! $caps,width=$1,height=$2,format=$IN_FMT"
+}
 TRACK="$TRACKER_ELEMENT tracker-type=bytetrack new-track-confidence=$NEWTRACK"
 # Detection-based overlay: circles sit on the raw per-frame detections (no
 # tracking drift/phantoms/doubles); merge collapses overlaps and
@@ -116,12 +126,13 @@ fi
 
 MODE="${1:-file}"
 if [[ "$MODE" == "camera" ]]; then
+  [[ "$HOST" == "g2g" && "$CUDA" == "true" ]] && { echo "CUDA=true on g2g decodes a file with nvdec, camera mode runs without it" >&2; exit 1; }
   DEV="${2:-/dev/video0}"; SIZE="${3:-1280x720}"
   W="${SIZE%x*}"; H="${SIZE#*x}"
   echo "[$HOST/$BACKEND] live camera $DEV @ ${W}x${H} -> display"
   exec $LAUNCH \
     v4l2src device="$DEV" ! $CONVERT \
-    ! "${RAW_CAPS},width=${W},height=${H},format=${IN_FMT}" \
+    $(input_caps "$W" "$H") \
     ! $CHAIN \
     ! $CAMERA_SINK
 elif [[ "$MODE" == "display" || "$MODE" == "print" ]]; then
@@ -130,7 +141,7 @@ elif [[ "$MODE" == "display" || "$MODE" == "print" ]]; then
   W="${SIZE%x*}"; H="${SIZE#*x}"
   [[ -f "$IN" ]] || { echo "input not found: $IN" >&2; exit 1; }
   PIPELINE="filesrc location=$IN ! $DECODE \
-    ! ${RAW_CAPS},width=${W},height=${H},format=${IN_FMT} \
+    $(input_caps "$W" "$H") \
     ! $CHAIN \
     ! $DISPLAY_SINK"
   if [[ "$MODE" == "print" ]]; then
@@ -148,7 +159,7 @@ else
   echo "[$HOST/$BACKEND] '$IN' @ ${W}x${H} -> '$OUT'"
   $LAUNCH \
     filesrc location="$IN" ! $DECODE \
-    ! "${RAW_CAPS},width=${W},height=${H},format=${IN_FMT}" \
+    $(input_caps "$W" "$H") \
     ! $CHAIN \
     ! $ENCODE ! filesink location="$OUT"
   echo "Done: $OUT"
