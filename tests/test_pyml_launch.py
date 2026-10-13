@@ -520,6 +520,17 @@ def test_the_one_in_host_takes_the_text_caps_a_remote_llm_inherits(shells):
     ]
 
 
+def test_the_one_in_host_takes_the_text_caps_of_coalescehistory(shells):
+    assert pyml_launch.rewrite_segment("coalescehistory history-length=10", shells) == [
+        "pyelement",
+        "module=coalescehistory",
+        "class=CoalesceHistory",
+        "input-caps=text/x-raw,format=utf8",
+        "output-caps=text/x-raw,format=utf8",
+        "history-length=10",
+    ]
+
+
 def test_the_one_in_host_takes_the_caps_of_a_text_in_video_out_element(shells):
     assert pyml_launch.rewrite_segment("pyml_stablediffusion device=cuda", shells) == [
         "pyelement",

@@ -11,16 +11,7 @@ tracked in that repo's `design/TODO.md`, not here.
   the environment. The suite holds the GPU for about 20 minutes per backend, so
   run one backend at a time with the machine otherwise idle: a model still
   resident from the previous run fails the next one at preroll. `G2G_CAPS_TRACE=1`
-  prints the caps solve, `RUST_LOG` does nothing. The gaps left on this side:
-  - `pyml_caption_qwen` with `cap.text_src` and `overlay.text_sink` is wired
-    wrongly: the hosted element has one output and the launcher ignores pad
-    names, so textdigest receives video and textoverlay is treated as a muxer.
-  - The elements in the next bullet.
-
-- **Two elements have no per-frame seam, so they cannot run on g2g at all.**
-  `kafkasink` and `coalescehistory` subclass a GStreamer base directly.
-  Reparenting a family onto `process_frames` or `process_payload` in
-  `backend/core.py` is what makes its pipelines runnable.
+  prints the caps solve, `RUST_LOG` does nothing.
 
 - **`g2g-mcp` takes a g2g-spelled pipeline only**, so a gst-spelled one has to
   go through the launcher's rewrite before it can be started there.

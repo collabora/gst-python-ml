@@ -1668,6 +1668,20 @@ def test_g2g_llm_remote_emits_the_server_reply(monkeypatch):
     assert leaf.engine is None
 
 
+def test_g2g_coalescehistory_emits_the_last_messages_joined():
+    from coalescehistory import CoalesceHistory
+
+    leaf = CoalesceHistory()
+    leaf.history_length = 2
+    sink = StubMetaSink()
+
+    for message in (b"one", b"two", b"three"):
+        leaf.g2g_process_payload([bytearray(message)], "text/x-raw,format=utf8", sink)
+
+    assert sink.emitted == [b"one\n\n", b"one\n\ntwo\n\n", b"two\n\nthree\n\n"]
+    assert leaf.engine is None
+
+
 def test_gst_llm_pushes_out_of_the_src_pad_rather_than_the_aggregator():
     Gst = gst()
     leaf = llm_leaf()

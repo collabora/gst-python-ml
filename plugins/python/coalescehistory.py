@@ -17,25 +17,23 @@
 # Boston, MA 02110-1301, USA.
 
 
+import collections
+
 import backend
+from backend import GObject
+from base_aggregator import BaseAggregator
 
-CAN_REGISTER_ELEMENT = True
-try:
-    import collections
-
+if backend.BACKEND == "gst":
     import gi
 
     gi.require_version("Gst", "1.0")
-    gi.require_version("GObject", "2.0")
+    gi.require_version("GstBase", "1.0")
+    from gi.repository import Gst, GstBase  # noqa: E402
 
-    from gi.repository import GObject, Gst  # noqa: E402
-
-except ImportError as e:
-    CAN_REGISTER_ELEMENT = False
-    print(f"The 'coalescehistory' element will not be available. Error {e}")
+DEFAULT_HISTORY_LENGTH = 10
 
 
-class CoalesceHistory(Gst.Element):
+class CoalesceHistory(BaseAggregator):
     __gstmetadata__ = (
         "Coalesce History",
         "Text/Transform",
@@ -43,87 +41,52 @@ class CoalesceHistory(Gst.Element):
         "Olivier Crête <olivier.crete@collabora.com>",
     )
 
+    INPUT_CAPS = "text/x-raw,format=utf8"
+    OUTPUT_CAPS = "text/x-raw,format=utf8"
+
     # Building a Gst object needs Gst.init, which only the gst backend calls.
     if backend.BACKEND == "gst":
         __gsttemplates__ = (
-            Gst.PadTemplate.new(
+            Gst.PadTemplate.new_with_gtype(
+                "sink",
+                Gst.PadDirection.SINK,
+                Gst.PadPresence.REQUEST,
+                Gst.Caps.from_string(INPUT_CAPS),
+                GstBase.AggregatorPad.__gtype__,
+            ),
+            Gst.PadTemplate.new_with_gtype(
                 "src",
                 Gst.PadDirection.SRC,
                 Gst.PadPresence.ALWAYS,
-                Gst.Caps.from_string("text/x-raw,format=utf8"),
-            ),
-            Gst.PadTemplate.new(
-                "sink",
-                Gst.PadDirection.SINK,
-                Gst.PadPresence.ALWAYS,
-                Gst.Caps.from_string("text/x-raw,format=utf8"),
+                Gst.Caps.from_string(OUTPUT_CAPS),
+                GstBase.AggregatorPad.__gtype__,
             ),
         )
 
-    @GObject.Property(type=GObject.TYPE_UINT)
+    @GObject.Property(type=int, default=DEFAULT_HISTORY_LENGTH, minimum=1)
     def history_length(self):
         """How many messages to coalesce"""
-        return self.history_maxlen
+        return self.history.maxlen
 
     @history_length.setter
     def history_length(self, value):
-        self.history_maxlen = value
+        self.history = collections.deque(self.history, maxlen=value)
 
     def __init__(self):
         super().__init__()
+        # this element loads no model
+        self.engine_name = None
+        self.history = collections.deque(maxlen=DEFAULT_HISTORY_LENGTH)
 
-        self.srcpad = Gst.Pad.new_from_template(self.__gsttemplates__[0], "src")
-        self.add_pad(self.srcpad)
+    def do_load_model(self):
+        pass
 
-        self.sinkpad = Gst.Pad.new_from_template(self.__gsttemplates__[1], "sink")
-        self.sinkpad.set_chain_function(self.sink_chain)
-        self.sinkpad.set_event_function(self.sink_event)
-        self.add_pad(self.sinkpad)
-
-        self.history_maxlen = 10
-
-    def sink_chain(self, _pad, buf):
-        print("got buffer : " + str(buf))
-        success, map_info_in = buf.map(Gst.MapFlags.READ)
-        if not success:
-            # printerr("Could not map buffer")
-            return Gst.FlowReturn.ERROR
-
-        self.history.append(
-            "At time %s:\n%s\n\n"
-            % (Gst.TIME_ARGS(buf.pts), bytes(map_info_in.data).decode("utf-8"))
-        )
-
-        coalesced_history = "".join(self.history)
-        coalesced_buf = Gst.Buffer.new_wrapped(coalesced_history.encode("utf-8"))
-        # buf.copy_into(coalesced_buf, Gst.BufferCopyFlags.TIMESTAMPS | Gst.BufferCopyFlags.META, 0, GLib.MAXUINT64)
-        coalesced_buf.pts = buf.pts
-        coalesced_buf.dts = buf.dts
-        coalesced_buf.duration = 60 * Gst.SECOND
-
-        print("pushing")
-        ret = self.srcpad.push(coalesced_buf)
-        print("pushed")
-        return ret
-
-    def sink_event(self, pad, parent, event):
-        if event.type in [Gst.EventType.FLUSH_STOP, Gst.EventType.EOS]:
-            self.history.clear()
-        return pad.event_default(parent, event)
-
-    def do_change_state(self, state_change):
-        if state_change == Gst.StateChange.READY_TO_PAUSED:
-            self.history = collections.deque(maxlen=self.history_maxlen)
-
-        ret = Gst.Element.do_change_state(self, state_change)
-
-        if state_change == Gst.StateChange.PAUSED_TO_READY:
-            del self.history
-
-        return ret
+    def process_payload(self, payload: bytes) -> list[bytes]:
+        self.history.append(payload.decode("utf-8") + "\n\n")
+        return ["".join(self.history).encode("utf-8")]
 
 
-if CAN_REGISTER_ELEMENT and backend.BACKEND == "gst":
+if backend.BACKEND == "gst":
     __gstelementfactory__ = backend.register_gst_element(
         "coalescehistory", CoalesceHistory
     )
