@@ -1042,11 +1042,11 @@ docker exec -it kafka kafka-console-consumer --bootstrap-server kafka:9092 --top
 
 ### Overlay from a metadata file
 
-`pyml_overlay` and `pyml_overlay_counter` draw the detections in `meta-path` with no model in the pipeline.
+`pyml_metareplay` attaches the detections a `pyml_metasink` recorded, so `pyml_overlay` and `pyml_overlay_counter` draw them with no model in the pipeline.
 
-`python pyml-launch.py videotestsrc ! video/x-raw,width=1280,height=720 ! pyml_overlay meta-path=data/sample_metadata.json tracking=true ! videoconvert ! autovideosink`
+`python pyml-launch.py filesrc location=data/people.mp4 ! decodebin ! videoconvert ! videoscale ! video/x-raw,width=640,height=480 ! pyml_metareplay location=data/people.jsonl ! pyml_tracker tracker-type=sort ! pyml_overlay tracking=true ! videoconvert ! autovideosink`
 
-`python pyml-launch.py videotestsrc ! video/x-raw,width=1280,height=720 ! pyml_overlay_counter meta-path=data/sample_metadata.json tracking=true ! videoconvert ! autovideosink`
+`python pyml-launch.py filesrc location=data/people.mp4 ! decodebin ! videoconvert ! videoscale ! video/x-raw,width=640,height=480 ! pyml_metareplay location=data/people.jsonl ! pyml_tracker tracker-type=sort ! pyml_overlay_counter tracking=true ! videoconvert ! autovideosink`
 
 
 ### Stream Mux and Demux

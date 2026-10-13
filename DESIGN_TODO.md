@@ -11,21 +11,7 @@ tracked in that repo's `design/TODO.md`, not here.
   the environment. The suite holds the GPU for about 20 minutes per backend, so
   run one backend at a time with the machine otherwise idle: a model still
   resident from the previous run fails the next one at preroll. `G2G_CAPS_TRACE=1`
-  prints the caps solve, `RUST_LOG` does nothing. The gaps fixed on this side:
-  - The launcher has no rewrite for the gst CUDA chain `nvh264dec ! cudaconvert
-    ! cudascale`, so the yolo and classifier CUDA pipelines fail with `unknown
-    element: cudaconvert`. g2g spells it `nvdec`, `cudaupload !
-    cudaconvertscale`, `cudadownload`.
-  - `pyml_yolo engine-name=onnx` keeps a view of the frame after the hook
-    returns: `BufferError: g2g_process retained a frame buffer view past return`.
-  - `pyml_yolo_pose` with the default `visualize` reads `self.sinkpad`, which a
-    hosted element does not have. `visualize=false` passes.
-  - `initial_prompt = "..."` with spaces round `=` is accepted by gst and refused
-    by the g2g host as `malformed property 'initial_prompt'`.
-  - `pipewiresrc do-timestamp=true` has no g2g property, a candidate for
-    `DEFAULTED_PROPERTIES`.
-  - `pyml_overlay meta-path=` has no counterpart on `analyticsoverlay`, so the
-    launcher refuses the pipeline.
+  prints the caps solve, `RUST_LOG` does nothing. The gaps left on this side:
   - `pyml_caption_qwen` with `cap.text_src` and `overlay.text_sink` is wired
     wrongly: the hosted element has one output and the launcher ignores pad
     names, so textdigest receives video and textoverlay is treated as a muxer.
