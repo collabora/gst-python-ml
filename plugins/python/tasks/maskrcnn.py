@@ -54,7 +54,7 @@ class MaskRCNNTask(ObjectDetectorTask):
             )
 
             # Use stream_idx in the quark string to differentiate streams
-            qk_string = f"stream_{stream_idx}_label_{label}"
+            qk_string = f"stream_{stream_idx}_{self.class_label(label)}"
             mtd = analytics.add_object(meta, qk_string, x1, y1, x2 - x1, y2 - y1, score)
             if mtd is not None:
                 self.logger.info(

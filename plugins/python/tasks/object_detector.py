@@ -51,6 +51,12 @@ class ObjectDetectorTask:
             return result
         return None
 
+    def class_label(self, label):
+        categories = self.engine.categories if self.engine else None
+        if categories is None:
+            return f"label_{label}"
+        return categories[int(label)]
+
     def do_decode(self, buf, output, stream_idx=0):
         self.logger.info(
             f"Decoding for stream {stream_idx}: {output} (type: {type(output)})"
@@ -88,7 +94,7 @@ class ObjectDetectorTask:
         self.logger.info(f"Stream {stream_idx} - Adding {len(boxes)} detections")
         for i, (box, label, score) in enumerate(zip(boxes, labels, scores)):
             x1, y1, x2, y2 = box
-            qk_string = f"stream_{stream_idx}_label_{label}"
+            qk_string = f"stream_{stream_idx}_{self.class_label(label)}"
             od_mtd = analytics.add_object(
                 meta, qk_string, x1, y1, x2 - x1, y2 - y1, score
             )

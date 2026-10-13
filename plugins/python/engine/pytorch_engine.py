@@ -121,7 +121,9 @@ class PyTorchEngine(MLEngine):
                 self.logger.info(f"Model loaded from local path: {model_name}")
         else:
             if hasattr(models.detection, model_name):
-                self.model = getattr(models.detection, model_name)(weights="DEFAULT")
+                weights = models.get_model_weights(model_name).DEFAULT
+                self.model = getattr(models.detection, model_name)(weights=weights)
+                self.categories = weights.meta["categories"]
                 self.logger.info(
                     f"Pre-trained detection model '{model_name}' loaded from TorchVision.detection"
                 )

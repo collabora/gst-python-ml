@@ -322,6 +322,23 @@ def test_class_names_are_published_so_a_consumer_can_name_a_label():
     assert names[sink.staged[handbag][1]] == "handbag"
 
 
+def test_a_torchvision_detection_is_named_from_the_model_categories():
+    pytest.importorskip("torch")
+    from engine.pytorch_engine import PyTorchEngine
+    from objectdetector import ObjectDetector
+
+    detector = ObjectDetector()
+    detector.mgr.engine = PyTorchEngine()
+    detector.engine.categories = ["__background__", "person", "bicycle"]
+    sink = StubMetaSink()
+    analytics.bind(sink)
+
+    detector.do_decode(None, {"boxes": [[1, 2, 4, 6]], "labels": [1], "scores": [0.9]})
+
+    (detection,) = sink.staged_objects
+    assert sink.staged_class_names[detection[0]] == "stream_0_person"
+
+
 def test_class_names_are_resent_for_each_frames_sink():
     """Each frame gets a fresh sink, so a name interned on an earlier frame has
     to be published again rather than assumed already known."""
