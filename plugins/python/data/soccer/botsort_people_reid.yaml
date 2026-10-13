@@ -1,0 +1,20 @@
+# botsort_people_reid.yaml
+tracker_type: botsort
+with_reid: true
+fuse_score: true
+
+model: yolo11x.pt
+device: 0
+half: false
+
+track_high_thresh: 0.6
+track_low_thresh: 0.1
+new_track_thresh: 0.7
+match_thresh: 0.8
+proximity_thresh: 0.5
+appearance_thresh: 0.25
+track_buffer: 80
+
+gmc_method: none
+
+frame_rate: 30

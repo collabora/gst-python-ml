@@ -1,0 +1,6 @@
+tracker_type: bytetrack
+track_thresh: 0.25
+high_thresh: 0.45
+match_thresh: 0.7
+track_buffer: 90
+frame_rate: 30
