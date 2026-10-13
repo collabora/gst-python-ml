@@ -56,7 +56,6 @@ HEAVY_ELEMENTS = (
     "pyml_vlm",
     "pyml_sam",
     "pyml_kafkasink",
-    "demo_soccer",
     "pyml_demucs",
     "pyml_sepformer",
     "pyml_superres",
