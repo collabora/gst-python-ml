@@ -1010,22 +1010,25 @@ to the `docker run` line above so a containerised pipeline reaches it:
 docker network create kafka-network
 ```
 
-#### Set up kafka and zookeeper
+#### Set up kafka
 
-From the host the broker is `localhost:29092` instead of `kafka:9092`.
+From the host the broker is `localhost:29092` instead of `kafka:9092`. The broker
+runs in KRaft mode, the current `cp-kafka` image has no ZooKeeper support.
 
 ```
-docker stop kafka zookeeper
-docker rm kafka zookeeper
-docker run -d --name zookeeper --network kafka-network -e ZOOKEEPER_CLIENT_PORT=2181 confluentinc/cp-zookeeper:latest
+docker stop kafka
+docker rm kafka
 docker run -d --name kafka --network kafka-network \
-  -e KAFKA_ZOOKEEPER_CONNECT=zookeeper:2181 \
+  -e KAFKA_NODE_ID=1 \
+  -e KAFKA_PROCESS_ROLES=broker,controller \
+  -e KAFKA_CONTROLLER_QUORUM_VOTERS=1@kafka:9093 \
+  -e KAFKA_CONTROLLER_LISTENER_NAMES=CONTROLLER \
+  -e KAFKA_LISTENERS=INSIDE://0.0.0.0:9092,OUTSIDE://0.0.0.0:29092,CONTROLLER://0.0.0.0:9093 \
   -e KAFKA_ADVERTISED_LISTENERS=INSIDE://kafka:9092,OUTSIDE://localhost:29092 \
-  -e KAFKA_LISTENER_SECURITY_PROTOCOL_MAP=INSIDE:PLAINTEXT,OUTSIDE:PLAINTEXT \
-  -e KAFKA_LISTENERS=INSIDE://0.0.0.0:9092,OUTSIDE://0.0.0.0:29092 \
+  -e KAFKA_LISTENER_SECURITY_PROTOCOL_MAP=INSIDE:PLAINTEXT,OUTSIDE:PLAINTEXT,CONTROLLER:PLAINTEXT \
   -e KAFKA_INTER_BROKER_LISTENER_NAME=INSIDE \
-  -e KAFKA_BROKER_ID=1 \
   -e KAFKA_OFFSETS_TOPIC_REPLICATION_FACTOR=1 \
+  -e CLUSTER_ID=MkU3OEVBNTcwNTJENDM2Qk \
   -p 9092:9092 \
   -p 29092:29092 \
   confluentinc/cp-kafka:latest
