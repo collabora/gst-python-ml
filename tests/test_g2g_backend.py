@@ -1131,6 +1131,43 @@ def test_g2g_payload_driver_emits_the_translated_bytes():
     assert sink.emitted_durations == [None], "text keeps the input buffer's timing"
 
 
+SD_IMAGE_SIDE = 512
+
+
+def stablediffusion_leaf():
+    """A real `StableDiffusion` whose pipeline is a canned image generator."""
+    from types import SimpleNamespace
+
+    from PIL import Image
+
+    driver = gst_payload_driver()
+    from stablediffusion import StableDiffusion
+
+    def fake_pipeline(prompt):
+        image = Image.new("RGB", (SD_IMAGE_SIDE, SD_IMAGE_SIDE), "red")
+        return SimpleNamespace(images=[image])
+
+    class FakeStableDiffusion(StableDiffusion, driver):
+        def get_model(self):
+            return fake_pipeline
+
+    leaf = FakeStableDiffusion()
+    leaf.engine_name = None
+    return leaf
+
+
+def test_g2g_stablediffusion_emits_one_rgba_image():
+    leaf = stablediffusion_leaf()
+    sink = StubMetaSink()
+
+    leaf.g2g_process_payload([bytearray(b"a cat")], "text/x-raw,format=utf8", sink)
+
+    assert [len(payload) for payload in sink.emitted] == [
+        SD_IMAGE_SIDE * SD_IMAGE_SIDE * 4
+    ]
+    assert sink.emitted_durations == [None]
+
+
 def test_g2g_payload_driver_emits_nothing_when_the_element_has_no_output():
     leaf = translate_leaf(lambda text: "")
     sink = StubMetaSink()

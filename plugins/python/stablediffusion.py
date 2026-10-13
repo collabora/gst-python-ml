@@ -21,13 +21,6 @@ import backend
 
 CAN_REGISTER_ELEMENT = True
 try:
-    import asyncio
-    import gi
-
-    gi.require_version("Gst", "1.0")
-    gi.require_version("GstBase", "1.0")
-    gi.require_version("GObject", "2.0")
-    from gi.repository import Gst, GstBase  # noqa: E402
     from base_aggregator import BaseAggregator
 except ImportError as e:
     CAN_REGISTER_ELEMENT = False
@@ -35,9 +28,12 @@ except ImportError as e:
         f"The 'pyml_stablediffusion' element will not be available. Error: {e}"
     )
 
-# Building a Gst object needs Gst.init, which only the gst backend calls.
 if backend.BACKEND == "gst":
-    ICAPS = Gst.Caps(Gst.Structure("text/plain", format="utf8"))
+    import gi
+
+    gi.require_version("Gst", "1.0")
+    gi.require_version("GstBase", "1.0")
+    from gi.repository import Gst, GstBase  # noqa: E402
 
 
 class StableDiffusion(BaseAggregator):
@@ -48,29 +44,31 @@ class StableDiffusion(BaseAggregator):
         "Aaron Boxer <aaron.boxer@collabora.com>",
     )
 
+    PUSH_FROM_SRC_PAD = True
+
+    # the caps each pad negotiates, stated once for both backends
+    INPUT_CAPS = "text/x-raw,format=utf8"
+    OUTPUT_CAPS = "video/x-raw,width=512,height=512,format=RGBA,framerate=0/1"
+
+    # Building a Gst object needs Gst.init, which only the gst backend calls.
     if backend.BACKEND == "gst":
         __gsttemplates__ = (
             Gst.PadTemplate.new_with_gtype(
                 "sink",
                 Gst.PadDirection.SINK,
                 Gst.PadPresence.REQUEST,
-                ICAPS,
+                Gst.Caps.from_string(INPUT_CAPS),
                 GstBase.AggregatorPad.__gtype__,
             ),
             Gst.PadTemplate.new(
                 "src",
                 Gst.PadDirection.SRC,
                 Gst.PadPresence.ALWAYS,
-                Gst.Caps.from_string(
-                    "video/x-raw, width=512, height=512, format=RGBA, framerate=0/1"
-                ),
+                Gst.Caps.from_string(OUTPUT_CAPS),
             ),
         )
 
     def do_load_model(self):
-        """
-        Initialize the Stable Diffusion model
-        """
         import torch
         from diffusers import StableDiffusionPipeline
 
@@ -84,68 +82,13 @@ class StableDiffusion(BaseAggregator):
         )
         self.get_model().to(self.device)
 
-    def do_process(self, buf):
-        success, map_info = buf.map(Gst.MapFlags.READ)
-        if not success:
-            self.logger.error("Failed to map input buffer")
-            return Gst.FlowReturn.ERROR
-
-        byte_data = bytes(map_info.data)
-        if not byte_data:
-            buf.unmap(map_info)
-            return Gst.FlowReturn.OK
-
-        try:
-            byte_data = byte_data.decode("utf-8", errors="replace")
-        except Exception as e:
-            self.logger.error(f"Error decoding text data: {e}")
-            buf.unmap(map_info)
-            return Gst.FlowReturn.ERROR
-
-        self.logger.info(f"Text to Image: received text: {byte_data}")
-
-        # Generate the image asynchronously
-        self.convert_text_to_image_async(byte_data)
-
-        buf.unmap(map_info)
-
-    async def process_text(self, text):
-        image_data = self.generate_image(text)
-
-        # Push the raw image buffer downstream
-        self.push_image_to_pipeline(image_data)
-
-    def convert_text_to_image_async(self, text):
-        asyncio.run(self.process_text(text))
-
-    def generate_image(self, prompt):
-        """
-        Generate image from text prompt using Stable Diffusion.
-        """
-        import numpy as np
-
+    def process_payload(self, payload: bytes) -> list[bytes]:
+        prompt = payload.decode("utf-8", errors="replace")
+        if not prompt:
+            return []
         self.logger.info(f"Generating image for prompt: {prompt}")
-        image = self.get_model()(prompt).images[0]  # Generate image for the prompt
-
-        # Convert the PIL image to raw RGBA format
-        image = image.convert("RGBA")  # Convert to RGBA format
-        image_data = np.array(image)  # Convert to a NumPy array (RGBA format)
-        return image_data
-
-    def push_image_to_pipeline(self, image_data):
-        # Create a new GStreamer buffer with the raw RGBA image data
-        buffer = Gst.Buffer.new_wrapped(image_data.tobytes())
-
-        # Set buffer PTS and duration
-        buffer.pts = Gst.CLOCK_TIME_NONE
-        buffer.duration = Gst.CLOCK_TIME_NONE
-
-        # Push the buffer downstream to the next element (e.g., pngenc for encoding)
-        ret = self.srcpad.push(buffer)
-        if ret != Gst.FlowReturn.OK:
-            raise RuntimeError(f"Error pushing image to pipeline: {ret}")
-
-        self.logger.info("Raw image generated and pushed downstream successfully.")
+        image = self.get_model()(prompt).images[0]
+        return [image.convert("RGBA").tobytes()]
 
 
 if CAN_REGISTER_ELEMENT and backend.BACKEND == "gst":

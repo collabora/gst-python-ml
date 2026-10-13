@@ -447,6 +447,17 @@ def test_the_one_in_host_takes_the_text_caps_a_remote_llm_inherits(shells):
     ]
 
 
+def test_the_one_in_host_takes_the_caps_of_a_text_in_video_out_element(shells):
+    assert pyml_launch.rewrite_segment("pyml_stablediffusion device=cuda", shells) == [
+        "pyelement",
+        "module=stablediffusion",
+        "class=StableDiffusion",
+        "input-caps=text/x-raw,format=utf8",
+        "output-caps=video/x-raw,width=512,height=512,format=RGBA,framerate=0/1",
+        "device=cuda",
+    ]
+
+
 def test_a_leaf_that_restates_a_rate_wins_over_the_base_it_inherits_from(shells):
     # Demucs runs at the base class's 44100, Sepformer restates both pads at 8000.
     assert shells["pyml_demucs"].caps == (
