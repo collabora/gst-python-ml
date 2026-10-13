@@ -55,7 +55,7 @@ if [[ "$HOST" == "g2g" ]]; then
   DISPLAY_SINK="videoconvertscale ! waylandsink"
   CAMERA_SINK="videoconvertscale ! waylandsink"
   ENCODE="videoconvertscale ! x264enc ! mp4mux"
-  LAUNCH="g2g-launch-py"
+  LAUNCH="g2g-launch-py --threads"
   if [[ "$CUDA" == "true" ]]; then
     # the python host reads a cuda frame read-only and g2g has no gpu scaler
     DECODE="qtdemux ! h264parse ! nvdec"
