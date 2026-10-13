@@ -20,7 +20,6 @@ from video_transform import VideoTransform
 from utils.format_converter import FormatConverter
 from backend import analytics, GObject
 from tasks.object_detector import ObjectDetectorTask
-from utils.metadata import Metadata
 
 
 class BaseObjectDetector(VideoTransform, ObjectDetectorTask):
@@ -37,7 +36,6 @@ class BaseObjectDetector(VideoTransform, ObjectDetectorTask):
         self.framerate_num = 30
         self.framerate_denom = 1
         self.format_converter = FormatConverter()
-        self.metadata = Metadata("si")
         self.logger.info("Initialized BaseObjectDetector")
         self.__track = False
         self.__interval = 1
