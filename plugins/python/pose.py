@@ -25,7 +25,6 @@ try:
 
     from backend import analytics, frameio, GObject
     from base_objectdetector import BaseObjectDetector
-    from utils.format_converter import FormatConverter
     from engine.yolo_pose_engine import ExportedYoloPose, YoloPoseEngine
     from engine.engine_factory import EngineFactory
     from overlay_helper.overlay_torch import TorchOverlayGraphics
@@ -97,12 +96,18 @@ class YOLOPoseTransform(BaseObjectDetector):
         self.task_engine_name = self.mgr.engine_name = "pyml_yolo_pose_engine"
         EngineFactory.register(self.mgr.engine_name, YoloPoseEngine)
         self.frames_on_the_device = False
+        self.frame_format = None
         self.device_drawing_key = None
         self.device_renderer = None
         self.pose_style = None
 
     def export_model(self, model_name):
         return ExportedYoloPose(model_name, self.mgr.engine_name)
+
+    # a hosted element has no pad to read the format from
+    def process_frames(self, frames, num_sources, fmt, target):
+        self.frame_format = fmt
+        super().process_frames(frames, num_sources, fmt, target)
 
     def do_forward(self, frames):
         if self.task_engine:
@@ -178,7 +183,7 @@ class YOLOPoseTransform(BaseObjectDetector):
             self._draw_on_the_device(buf, result)
             return
         annotated_bgr = result.plot(kpt_line=True, kpt_radius=KEYPOINT_RADIUS)
-        fmt = FormatConverter.get_video_format(buf, self.sinkpad)
+        fmt = self.frame_format
         output = self._convert_bgr_to_format(annotated_bgr, fmt)
         if output is None:
             return
@@ -188,7 +193,7 @@ class YOLOPoseTransform(BaseObjectDetector):
         keypoints = result.keypoints
         if keypoints is None or keypoints.conf is None:
             return
-        fmt = FormatConverter.get_video_format(buf, self.sinkpad)
+        fmt = self.frame_format
         renderer, style = self._device_pose_drawing(fmt)
         points = keypoints.xy.cpu().numpy()
         visible = keypoints.conf.cpu().numpy() >= DRAWN_KEYPOINT_CONFIDENCE
