@@ -1135,10 +1135,9 @@ SD_IMAGE_SIDE = 512
 
 
 def stablediffusion_leaf():
-    """A real `StableDiffusion` whose pipeline is a canned image generator."""
     from types import SimpleNamespace
 
-    from PIL import Image
+    Image = pytest.importorskip("PIL.Image")
 
     driver = gst_payload_driver()
     from stablediffusion import StableDiffusion
