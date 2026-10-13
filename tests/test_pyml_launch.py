@@ -190,6 +190,29 @@ def test_a_property_value_with_spaces_keeps_them(shells):
     ]
 
 
+def test_spaces_round_a_property_equals_sign_are_closed_up(shells):
+    rewritten = pyml_launch.rewrite_for_g2g(
+        ["pyml_whispertranscribe", "initial_prompt", "=", "Air Traffic Control"],
+        shells,
+    )
+    assert rewritten[-1] == 'initial-prompt="Air Traffic Control"'
+
+
+def test_a_property_name_is_written_with_dashes(shells):
+    assert (
+        pyml_launch.rewrite_segment(
+            ["pyml_whispertranscribe", "initial_prompt=Air_Traffic"], shells
+        )[-1]
+        == "initial-prompt=Air_Traffic"
+    )
+
+
+def test_a_value_after_a_spaced_equals_sign_is_not_read_as_a_reference(shells):
+    assert pyml_launch.rewrite_for_g2g(
+        ["pyml_yolo", "model-name", "=", "yolo11m.pt", "!", "fakesink"], shells
+    )[-3:] == ["model-name=yolo11m.pt", "!", "fakesink"]
+
+
 def test_a_property_value_keeps_the_quotes_inside_it(shells):
     assert (
         pyml_launch.rewrite_segment(["pyml_alert", 'rules={"class":"person"}'], shells)[

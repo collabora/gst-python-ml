@@ -333,7 +333,7 @@ def rewrite_for_g2g(argv, shells):
     rewritten = []
     raw_format = None
     upstream = None
-    parts = list(segments(argv))
+    parts = list(segments(joined_assignments(argv)))
     fan_in = fan_in_names(parts)
     for segment in parts:
         # Separators and references are carried through where they were
@@ -354,6 +354,28 @@ def rewrite_for_g2g(argv, shells):
         raw_format = raw_video_format(translated[0]) or raw_format
         upstream = segment[0]
     return rewritten
+
+
+# gst-launch allows spaces round the `=` of a property, the g2g parser does not.
+def joined_assignments(argv):
+    joined = []
+    for token in argv:
+        previous = joined[-1] if joined else ""
+        _, separator, value = previous.partition("=")
+        dangling = bool(separator) and not value
+        starts_value = token.startswith("=") and previous and not separator
+        crosses_link = SEPARATOR in (previous, token)
+        if (dangling or starts_value) and not crosses_link:
+            joined[-1] = previous + token
+        else:
+            joined.append(token)
+    return joined
+
+
+# GObject reads `_` in a property name as `-`, g2g knows only the dashed name.
+def dashed_name(property):
+    key, separator, value = property.partition("=")
+    return f"{key.replace('_', '-')}{separator}{value}"
 
 
 def declared_name(segment):
@@ -434,7 +456,7 @@ def rewrite_segment(
         segment = segment.split()
     if not segment:
         return []
-    head, properties = segment[0], segment[1:]
+    head, properties = segment[0], [dashed_name(p) for p in segment[1:]]
 
     # A caps filter is the one segment whose first token is a media type; no
     # element name contains a slash. Caps carry no spaces, so a caps written
