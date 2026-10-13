@@ -18,7 +18,7 @@
 
 
 import backend
-from backend import GObject, analytics
+from backend import GObject, analytics, frameio
 from video_transform import VideoTransform
 
 # The text pad is a GStreamer request pad: a hosted element on g2g has one
@@ -35,6 +35,7 @@ if backend.BACKEND == "gst":
 #: How long a caption stays on screen. Long enough that the subtitle is still up
 #: when the next frame's caption arrives.
 CAPTION_DURATION_SECONDS = 60
+NANOSECONDS_PER_SECOND = 1_000_000_000
 
 
 class BaseCaption(VideoTransform):
@@ -130,8 +131,15 @@ class BaseCaption(VideoTransform):
 
         The caption is staged as metadata either way, so the pad is an extra:
         nothing to do unless something asked for it, which is also what makes
-        this a no-op on a backend that has no request pads.
+        this a no-op when no text pad is linked.
         """
+        if backend.BACKEND == "g2g":
+            for caption in captions:
+                if caption:
+                    frameio.emit_text(
+                        caption, CAPTION_DURATION_SECONDS * NANOSECONDS_PER_SECOND
+                    )
+            return
         if self.text_src_pad is None:
             return
 

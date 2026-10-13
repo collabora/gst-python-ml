@@ -129,6 +129,13 @@ class G2gFrameIO(FrameIO):
         self._sink.add_blob(hdr, bytes(payload))
         return True
 
+    def emit_text(self, text, duration_ns):
+        sink = self._sink
+        if sink is None or not sink.text_output:
+            return False
+        sink.emit(text.encode("utf-8"), duration_ns=duration_ns, output="text_src")
+        return True
+
 
 #: Defined here rather than in the package __init__ so the element bases can
 #: import it without a circular import through `backend`.

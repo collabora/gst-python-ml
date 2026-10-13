@@ -56,7 +56,10 @@ class StubMetaSink:
         upstream_blobs=None,
         upstream_class_names=(),
         upstream_tracking_ids=(),
+        text_output=False,
     ):
+        self.text_output = text_output
+        self.emitted_outputs = []
         self.staged = []
         self.relations = []
         self.staged_class_names = None
@@ -79,9 +82,10 @@ class StubMetaSink:
     def tracking_ids(self):
         return list(self._tracking_ids)
 
-    def emit(self, payload, duration_ns=None):
+    def emit(self, payload, duration_ns=None, output=None):
         self.emitted.append(payload)
         self.emitted_durations.append(duration_ns)
+        self.emitted_outputs.append(output)
 
     def set_class_names(self, names):
         self.staged_class_names = list(names)
@@ -632,6 +636,36 @@ def test_g2g_caption_stages_the_caption_on_the_frame():
     captions = [record for record in sink.staged if record[0] == "classification"]
     assert len(captions) == 1, "the caption was not staged"
     assert sink.staged_class_names[captions[0][1]] == "a cat on a mat"
+
+
+def caption_into(sink):
+    from base_caption import BaseCaption
+
+    class FakeCaption(BaseCaption):
+        def forward(self, frames):
+            return "a cat on a mat"
+
+    leaf = FakeCaption()
+    leaf.mgr.engine_name = None
+    width, height = 4, 3
+    leaf.g2g_process(bytearray(width * height * 4), width, height, "RGBA", sink)
+
+
+def test_g2g_caption_goes_out_text_src_when_it_is_linked():
+    sink = StubMetaSink(text_output=True)
+
+    caption_into(sink)
+
+    assert sink.emitted == [b"a cat on a mat"]
+    assert sink.emitted_outputs == ["text_src"]
+
+
+def test_g2g_caption_emits_nothing_without_a_text_src_link():
+    sink = StubMetaSink(text_output=False)
+
+    caption_into(sink)
+
+    assert sink.emitted == []
 
 
 def test_a_packed_frame_is_reduced_to_rgb_in_channel_order():
