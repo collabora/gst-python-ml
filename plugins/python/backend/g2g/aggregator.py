@@ -23,14 +23,7 @@ from backend.g2g.frameio import as_rgb, frameio
 from backend.g2g.transform import BaseTransform
 
 
-class BaseAggregator(BaseTransform, FrameProcessingMixin):
-    """Base for g2g ML aggregator elements (input format may differ from output)."""
-
-    def __init__(self):
-        super().__init__()
-        self.width = 0
-        self.height = 0
-
+class FrameBatchProcessingMixin:
     def g2g_process_batch(self, buffers, width, height, fmt, sink):
         self.width = width
         self.height = height
@@ -50,3 +43,12 @@ class BaseAggregator(BaseTransform, FrameProcessingMixin):
         batch = frames[0] if len(frames) == 1 else np.stack(frames, axis=0)
         self.process_frames(as_rgb(batch, fmt), len(frames), fmt, buffers[0])
         return None
+
+
+class BaseAggregator(BaseTransform, FrameProcessingMixin, FrameBatchProcessingMixin):
+    """Base for g2g ML aggregator elements (input format may differ from output)."""
+
+    def __init__(self):
+        super().__init__()
+        self.width = 0
+        self.height = 0

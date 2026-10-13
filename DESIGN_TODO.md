@@ -15,16 +15,12 @@ tracked in that repo's `design/TODO.md`, not here.
   - `pyml_caption_qwen` with `cap.text_src` and `overlay.text_sink` is wired
     wrongly: the hosted element has one output and the launcher ignores pad
     names, so textdigest receives video and textoverlay is treated as a muxer.
-  - `pyml_streammux` is refused with `pyelement: more than one input links here,
-    but it is not a registered muxer`, and `pyml_streamdemux` fails with
-    CapsMismatch. Waits on native `streammux` and `streamdemux` in glass2glass,
-    then `NATIVE_EQUIVALENTS` entries for both.
   - The elements in the next bullet.
 
-- **Four elements have no per-frame seam, so they cannot run on g2g at all.**
-  `kafkasink`, `streammux`, `streamdemux` and `coalescehistory` subclass a
-  GStreamer base directly. Reparenting a family onto `process_frames` or
-  `process_payload` in `backend/core.py` is what makes its pipelines runnable.
+- **Two elements have no per-frame seam, so they cannot run on g2g at all.**
+  `kafkasink` and `coalescehistory` subclass a GStreamer base directly.
+  Reparenting a family onto `process_frames` or `process_payload` in
+  `backend/core.py` is what makes its pipelines runnable.
 
 - **`g2g-mcp` takes a g2g-spelled pipeline only**, so a gst-spelled one has to
   go through the launcher's rewrite before it can be started there.

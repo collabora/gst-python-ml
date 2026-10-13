@@ -17,6 +17,7 @@ the framework-agnostic per-frame hook the leaf element supplies (the same hook t
 gst backend drives from `do_transform_ip`).
 """
 
+from backend.g2g.aggregator import FrameBatchProcessingMixin
 from backend.g2g.analytics import analytics
 from backend.g2g.cuda_frames import rgb_device_frame
 from backend.g2g.frameio import DEVICE_FRAME, as_rgb, frameio
@@ -27,7 +28,7 @@ from backend.g2g.transform import BaseTransform
 DEVICE_FRAME_FORMAT = "RGB"
 
 
-class VideoTransform(BaseTransform, FrameProcessingMixin):
+class VideoTransform(BaseTransform, FrameProcessingMixin, FrameBatchProcessingMixin):
     """Base for g2g video transform elements."""
 
     def __init__(self):

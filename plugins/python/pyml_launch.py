@@ -23,10 +23,11 @@
 
   * a `pyml_*` element is the generic `pyelement` host, or `pysink` for a sink,
     plus the module and class to load;
-  * seven elements are g2g's own rather than hosted ones: `pyml_overlay` is
+  * nine elements are g2g's own rather than hosted ones: `pyml_overlay` is
     `analyticsoverlay`, `pyml_alert` is `analyticsalert`, `pyml_digest` is
     `textdigest`, and `pyml_metasink` / `pyml_metareplay` / `pyml_alertrecorder`
-    / `pyml_embeddingsink` drop the prefix;
+    / `pyml_embeddingsink` / `pyml_streammux` / `pyml_streamdemux` drop the
+    prefix;
   * `pyelement` and `analyticsoverlay` both work on RGBA, so a raw-video caps
     filter that leaves the format open has to pin it;
   * a hosted element carries no pad templates into g2g, so an element that
@@ -81,6 +82,8 @@ NATIVE_EQUIVALENTS = {
     "pyml_alertrecorder": "alertrecorder",
     "pyml_digest": "textdigest",
     "pyml_embeddingsink": "embeddingsink",
+    "pyml_streammux": "streammux",
+    "pyml_streamdemux": "streamdemux",
 }
 
 #: What each native element calls the properties it shares with the one it
@@ -112,6 +115,9 @@ NATIVE_PROPERTIES = {
 
 #: What separates two elements, on both spellings.
 SEPARATOR = "!"
+
+#: The property every element on both backends takes as its handle for links.
+NAME_PROPERTY = "name"
 
 
 class DefaultedProperty(NamedTuple):
@@ -450,7 +456,7 @@ def declared_name(segment):
     """The handle a segment gives itself with `name=`, if any."""
     for token in segment[1:]:
         key, separator, value = token.partition("=")
-        if separator and key == "name":
+        if separator and key == NAME_PROPERTY:
             return value
     return None
 
@@ -500,6 +506,10 @@ def segments(argv):
                 yield segment
             yield [token]
             segment = []
+        # a word with no `=` after an element is the next chain's first element
+        elif segment and "=" not in token:
+            yield segment
+            segment = [token]
         else:
             segment.append(token)
     if segment:
@@ -578,7 +588,7 @@ def renamed_properties(head, properties):
     than a guess, because dropping it would run a pipeline that quietly does
     something else.
     """
-    renames = NATIVE_PROPERTIES.get(head, {})
+    renames = {NAME_PROPERTY: NAME_PROPERTY, **NATIVE_PROPERTIES.get(head, {})}
     renamed = []
     for property in properties:
         key, _, value = property.partition("=")

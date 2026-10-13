@@ -32,9 +32,9 @@ def test_element_shells_finds_the_hosted_elements(shells):
 
 def test_an_element_several_chains_feed_becomes_the_batching_host(shells):
     pipeline = (
-        "videotestsrc ! pyml_streammux name=mux "
-        "videotestsrc ! mux. videotestsrc ! mux. "
-        "mux. ! fakesink"
+        "videotestsrc ! pyml_yolo name=detector "
+        "videotestsrc ! detector. videotestsrc ! detector. "
+        "detector. ! fakesink"
     ).split()
     rewritten = pyml_launch.rewrite_for_g2g(pipeline, shells)
     assert "pyaggregator" in rewritten
@@ -317,6 +317,54 @@ def test_whole_documented_pipeline_rewrites(shells):
     )
 
 
+def test_the_two_stream_detector_rewrites_onto_the_native_mux_and_demux(shells):
+    source = (
+        "filesrc location=data/soccer_tracking.mp4 ! decodebin ! videoconvertscale "
+        "! video/x-raw,width=640,height=480,format=RGB"
+    )
+    branch = "queue ! videoconvert ! {} ! videoconvert ! autovideosink"
+    pipeline = (
+        f"{source} ! pyml_streammux name=mux {source} ! mux. "
+        "mux. ! pyml_yolo model-name=yolo11m device=cuda:0 track=True "
+        "! pyml_streamdemux name=demux "
+        f"demux. ! {branch.format('pyml_overlay')} sync=false "
+        f"demux. ! {branch.format('pyml_overlay')} sync=false"
+    )
+    assert (
+        pyml_launch.rewrite_for_g2g(pipeline.split(), shells)
+        == (
+            f"{source} ! streammux name=mux {source} ! mux. "
+            "mux. ! pyelement module=yolo class=YOLOTransform format=RGB "
+            "model-name=yolo11m device=cuda:0 track=True "
+            "! streamdemux name=demux "
+            f"demux. ! {branch.format('analyticsoverlay')} "
+            f"demux. ! {branch.format('analyticsoverlay')}"
+        ).split()
+    )
+
+
+def test_the_mux_and_demux_keep_the_pad_names_they_are_linked_by(shells):
+    source = "videotestsrc ! video/x-raw,width=320,height=240 ! queue"
+    pipeline = (
+        f"{source} ! pyml_streammux name=mux "
+        f"{source} ! mux.sink_1 {source} ! mux.sink_2 "
+        "mux.src ! queue ! pyml_streamdemux name=demux "
+        "demux.src_0 ! queue ! fakesink demux.src_1 ! queue ! fakesink "
+        "demux.src_2 ! queue ! fakesink"
+    )
+    pinned = "videotestsrc ! video/x-raw,width=320,height=240,format=RGBA ! queue"
+    assert (
+        pyml_launch.rewrite_for_g2g(pipeline.split(), shells)
+        == (
+            f"{pinned} ! streammux name=mux "
+            f"{pinned} ! mux.sink_1 {pinned} ! mux.sink_2 "
+            "mux.src ! queue ! streamdemux name=demux "
+            "demux.src_0 ! queue ! fakesink demux.src_1 ! queue ! fakesink "
+            "demux.src_2 ! queue ! fakesink"
+        ).split()
+    )
+
+
 def test_hosted_element_takes_the_format_the_caps_ahead_of_it_pin(shells):
     pipeline = (
         "videoconvert ! video/x-raw,format=RGB,width=640,height=640 "
@@ -523,9 +571,9 @@ def test_a_leaf_inherits_the_pad_it_does_not_restate(shells):
 
 def test_an_element_declaring_no_caps_gets_no_caps_properties(shells):
     pipeline = (
-        "videotestsrc ! pyml_streammux name=mux "
-        "videotestsrc ! mux. videotestsrc ! mux. "
-        "mux. ! fakesink"
+        "videotestsrc ! pyml_yolo name=detector "
+        "videotestsrc ! detector. videotestsrc ! detector. "
+        "detector. ! fakesink"
     ).split()
     rewritten = pyml_launch.rewrite_for_g2g(pipeline, shells)
     assert "pyaggregator" in rewritten
@@ -625,6 +673,20 @@ NATIVE_PROBES = {
         ("!", "fakesink"),
     ),
     "pyml_digest": (("window-seconds=5",), G2G_TEXT_SOURCE, ("!", "fakesink")),
+    "pyml_streammux": ((), G2G_VIDEO_SOURCE, ("!", "fakesink")),
+    "pyml_streamdemux": (
+        ("name=demux",),
+        (
+            *G2G_VIDEO_SOURCE,
+            "streammux",
+            "name=mux",
+            *G2G_VIDEO_SOURCE,
+            "mux.",
+            "mux.",
+            "!",
+        ),
+        ("demux.", "!", "fakesink", "demux.", "!", "fakesink"),
+    ),
     "pyml_embeddingsink": (
         (
             "location={directory}/index.db",
@@ -654,7 +716,9 @@ def test_the_native_element_and_the_names_it_renames_to_still_exist(shells, tmp_
 
     for element, native in pyml_launch.NATIVE_EQUIVALENTS.items():
         properties, source, tail = NATIVE_PROBES[element]
-        assert {property.partition("=")[0] for property in properties} == set(
+        assert {property.partition("=")[0] for property in properties} - {
+            pyml_launch.NAME_PROPERTY
+        } == set(
             pyml_launch.NATIVE_PROPERTIES.get(element, {})
         ), f"{element} carries a property no sample value here covers"
         rewritten = pyml_launch.rewrite_segment(

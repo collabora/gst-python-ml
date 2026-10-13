@@ -581,6 +581,38 @@ def test_aggregator_drives_the_same_hook_a_transform_fills_in():
     ]
 
 
+class ScriptedDetectionEngine:
+    categories = ["__background__", "person"]
+    model = "model"
+    track = False
+
+    def __init__(self):
+        self.batches = []
+
+    def do_forward(self, frames):
+        self.batches.append(frames.shape)
+        return [
+            {"boxes": [[1, 1, 3, 3]], "labels": [1], "scores": [0.9]} for _ in frames
+        ]
+
+
+def test_a_detector_given_a_batch_stages_each_streams_detections_under_its_prefix():
+    from objectdetector import ObjectDetector
+
+    detector = ObjectDetector()
+    engine = ScriptedDetectionEngine()
+    detector.mgr.engine = engine
+    sink = StubMetaSink()
+    width, height = 4, 3
+    buffers = [bytearray(width * height * 4) for _ in range(2)]
+
+    detector.g2g_process_batch(buffers, width, height, "RGBA", sink)
+
+    assert engine.batches == [(2, height, width, 3)]
+    labels = [sink.staged_class_names[label] for label, *_ in sink.staged_objects]
+    assert sorted(labels) == ["stream_0_person", "stream_1_person"]
+
+
 def test_g2g_caption_stages_the_caption_on_the_frame():
     """The caption family runs on the shared per-frame seam, so it works with no
     text pad and no GStreamer: the caption is staged as a classification."""
