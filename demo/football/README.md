@@ -251,7 +251,7 @@ change is about 4 to 5 seconds: Whisper about 3, Qwen about 1 to 2.
 |------------|---------|---------|
 | `BACKEND`  | `pt`    | `pt` = PyTorch `pyml_yolo`; `fp16` = ONNX FP16 via `pyml_objectdetector` (CUDA). |
 | `HOST`     | `g2g`   | `g2g` runs the three Python elements hosted by `g2g-launch-py` (needs it on `PATH`, `pt` backend only). `gst` runs the same pipeline on `gst-launch-1.0`, which `fp16` and `KICKS` need. |
-| `CUDA`     | `false` | `true` decodes and detects on CUDA memory (`pt` backend only). On `gst` the frame stays on the card up to the sink. On `g2g` it decodes a file with `nvdec`, runs the detector on CUDA frames and converts to system memory before the tracker. |
+| `CUDA`     | `false` | `true` decodes, detects, tracks and draws on CUDA memory (`pt` backend only). On `gst` the frame stays on the card up to the sink. On `g2g` it decodes a file with `nvdec`, keeps the frame on the card through the overlay, and shows it with `cudaglsink` or encodes it with `nvenc`. |
 | `INTERVAL` | `1`     | Run detection every Nth frame; the tracker/overlay still update every frame, so it stays smooth at ~N× less inference cost. The main real-time lever. The ball trail needs 1. |
 | `IMGSZ`    | `640`   | Network input size for the `pt` backend. `1280` finds the ball on about half the frames instead of a third, at three times the inference cost. |
 | `TRAILS`   | `false` | Draw motion trails behind the players. |

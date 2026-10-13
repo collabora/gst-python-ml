@@ -736,6 +736,18 @@ def test_rgb_converts_to_nv12_and_back_within_rounding(yuv_conversion, tolerance
     assert largest_difference(round_trip, rgb) <= tolerance
 
 
+def test_rgb_converts_to_nv12_with_chroma_right_after_luma():
+    torch = pytest.importorskip("torch")
+    from backend.g2g.cuda_frames import rgb_to_nv12
+
+    luma, chroma = rgb_to_nv12(
+        torch.from_numpy(smooth_rgb(16, 24)), BT601_LIMITED_RANGE
+    )
+
+    assert luma.is_contiguous() and chroma.is_contiguous()
+    assert chroma.data_ptr() == luma.data_ptr() + luma.numel()
+
+
 def test_rgb_converts_to_nv12_like_opencv():
     torch = pytest.importorskip("torch")
     cv2 = pytest.importorskip("cv2")

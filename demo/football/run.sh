@@ -10,7 +10,7 @@
 #   demo/football/run.sh camera [/dev/videoN] [WxH]          # live camera -> on-screen
 #   demo/football/run.sh print [INPUT.mp4] [WxH]             # echo the display pipeline for pyml-mcp
 #   HOST=gst demo/football/run.sh ...                         # same, on gst-launch-1.0
-#   CUDA=true demo/football/run.sh ...                        # nvdec feeds the detector on cuda memory
+#   CUDA=true demo/football/run.sh ...                        # decode, detect, track, draw and sink on cuda memory
 set -euo pipefail
 
 REPO="$(cd "$(dirname "$0")/../.." && pwd)"
@@ -23,7 +23,7 @@ export PYTHONPATH="$REPO/plugins/python:$VENV_SITE:${PYTHONPATH:-}"
 
 BACKEND="${BACKEND:-pt}"
 HOST="${HOST:-g2g}"        # g2g = g2g-launch-py hosting the python elements, gst = gst-launch-1.0
-CUDA="${CUDA:-false}"      # decode and detect on cuda memory; gst keeps the frame there up to the sink, g2g brings it down before the tracker (BACKEND=pt)
+CUDA="${CUDA:-false}"      # decode, detect, track and draw on cuda memory (BACKEND=pt)
 if [[ "$CUDA" == "true" ]]; then
   [[ "$BACKEND" == "pt" ]] || { echo "CUDA=true runs the pt backend only" >&2; exit 1; }
 fi
@@ -57,10 +57,13 @@ if [[ "$HOST" == "g2g" ]]; then
   ENCODE="videoconvertscale ! x264enc ! mp4mux"
   LAUNCH="g2g-launch-py --threads"
   if [[ "$CUDA" == "true" ]]; then
-    # the python host reads a cuda frame read-only and g2g has no gpu scaler
+    CUDA_FRAMES="cuda-frames=true format=NV12"
     DECODE="qtdemux ! h264parse ! nvdec"
-    DETECTOR_ELEMENT="$DETECTOR_ELEMENT cuda-frames=true format=NV12"
-    TRACKER_ELEMENT="videoconvert ! $TRACKER_ELEMENT"
+    DETECTOR_ELEMENT="$DETECTOR_ELEMENT $CUDA_FRAMES"
+    TRACKER_ELEMENT="$TRACKER_ELEMENT $CUDA_FRAMES"
+    OVERLAY_ELEMENT="$OVERLAY_ELEMENT $CUDA_FRAMES"
+    DISPLAY_SINK="cudaglsink"
+    ENCODE="nvenc ! mp4mux"
   fi
 else
   DETECTOR_ELEMENT="pyml_yolo name=detector"

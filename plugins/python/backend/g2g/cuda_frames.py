@@ -95,6 +95,8 @@ def as_levels(values):
 
 
 def rgb_to_nv12(rgb, yuv_conversion):
+    import torch
+
     height, width, _ = rgb.shape
     ycbcr = rgb.float() @ ycbcr_from_rgb_matrix(rgb.device, yuv_conversion).T
     luma = ycbcr[..., 0] + luma_offset(yuv_conversion)
@@ -106,7 +108,15 @@ def rgb_to_nv12(rgb, yuv_conversion):
         CHROMA_CHANNELS,
     )
     chroma = chroma_blocks.mean(dim=(1, 3)) + CHROMA_OFFSET
-    return as_levels(luma), as_levels(chroma)
+    # nvenc registers the luma pointer alone and reads chroma right after it
+    surface = torch.empty(
+        (height + height // CHROMA_SUBSAMPLING, width),
+        dtype=torch.uint8,
+        device=rgb.device,
+    )
+    surface[:height] = as_levels(luma)
+    surface[height:].view(chroma.shape).copy_(as_levels(chroma))
+    return surface[:height], surface[height:].view(chroma.shape)
 
 
 def rgba_device_frame(luma_plane, chroma_plane, yuv_conversion):
