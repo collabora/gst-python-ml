@@ -28,10 +28,6 @@
               "type": "string",
               "description": "The label of the detected object"
             },
-            "track_id": {
-              "type": "integer",
-              "description": "The tracker's id for the object, present when a tracker ran upstream"
-            },
             "score": {
               "type": "number",
               "description": "Confidence score of the detection",

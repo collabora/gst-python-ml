@@ -143,14 +143,12 @@ class KafkaSink(BaseSink):
         try:
             for obj in analytics.read_objects(meta):
                 x, y, w, h = obj["x"], obj["y"], obj["w"], obj["h"]
-                track_id, label = self.label_parser.extract_id_from_label(obj["label"])
+                _, label = self.label_parser.extract_id_from_label(obj["label"])
                 detection = {
                     "label": label,
                     "score": obj["score"],
                     "box": {"x1": x, "y1": y, "x2": x + w, "y2": y + h},
                 }
-                if track_id is not None:
-                    detection["track_id"] = track_id
                 metadata.append(detection)
 
         except Exception as e:

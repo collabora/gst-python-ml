@@ -997,7 +997,7 @@ class RecordingProducer:
 
 
 KAFKA_DETECTIONS = [
-    {"label": "stream_0_person_id_3", "x": 1, "y": 2, "w": 3, "h": 4, "score": 0.9},
+    {"label": "stream_0_person", "x": 1, "y": 2, "w": 3, "h": 4, "score": 0.9},
     {"label": "stream_0_car", "x": 10, "y": 20, "w": 30, "h": 40, "score": 0.5},
 ]
 
@@ -1036,7 +1036,6 @@ def test_kafkasink_sends_the_upstream_detections_and_flushes_at_eos(monkeypatch)
     assert json.loads(value)["detections"] == [
         {
             "label": "person",
-            "track_id": 3,
             "score": 0.9,
             "box": {"x1": 1, "y1": 2, "x2": 4, "y2": 6},
         },
