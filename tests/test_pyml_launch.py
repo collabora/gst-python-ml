@@ -432,6 +432,21 @@ def test_the_one_in_host_takes_the_caps_of_a_text_in_audio_out_element(shells):
     )
 
 
+def test_the_one_in_host_takes_the_text_caps_a_remote_llm_inherits(shells):
+    assert pyml_launch.rewrite_segment(
+        "pyml_llm_remote url=http://localhost:11434/api/generate model-name=llama3",
+        shells,
+    ) == [
+        "pyelement",
+        "module=llm_remote",
+        "class=LlmRemote",
+        "input-caps=text/x-raw,format=utf8",
+        "output-caps=text/x-raw,format=utf8",
+        "url=http://localhost:11434/api/generate",
+        "model-name=llama3",
+    ]
+
+
 def test_a_leaf_that_restates_a_rate_wins_over_the_base_it_inherits_from(shells):
     # Demucs runs at the base class's 44100, Sepformer restates both pads at 8000.
     assert shells["pyml_demucs"].caps == (

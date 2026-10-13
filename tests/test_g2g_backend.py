@@ -1434,6 +1434,44 @@ def test_g2g_llm_emits_the_generated_text():
     assert sink.emitted == [b"answered question"]
 
 
+class FakeOllamaResponse:
+    def __init__(self, body):
+        self.body = body
+
+    def __enter__(self):
+        return self
+
+    def __exit__(self, *exc_info):
+        return False
+
+    def read(self):
+        return json.dumps(self.body).encode("utf-8")
+
+
+def test_g2g_llm_remote_emits_the_server_reply(monkeypatch):
+    import urllib.request
+
+    from llm_remote import LlmRemote
+
+    requests = []
+
+    def fake_urlopen(request, timeout):
+        requests.append(json.loads(request.data))
+        return FakeOllamaResponse({"response": "<reply>"})
+
+    monkeypatch.setattr(urllib.request, "urlopen", fake_urlopen)
+    leaf = LlmRemote()
+    sink = StubMetaSink()
+
+    leaf.g2g_process_payload([bytearray(b"question")], "text/x-raw,format=utf8", sink)
+
+    assert sink.emitted == [b"<reply>"]
+    assert [(request["prompt"], request["model"]) for request in requests] == [
+        ("question", "llama3")
+    ]
+    assert leaf.engine is None
+
+
 def test_gst_llm_pushes_out_of_the_src_pad_rather_than_the_aggregator():
     Gst = gst()
     leaf = llm_leaf()
