@@ -18,19 +18,8 @@
 
 
 from .logger import Logger, PythonLogger
+from utils.selected_backend import BACKEND
 import logging
-
-GST_LOGGER_AVAILABLE = False
-
-# Try importing GstLogger, set the flag if successful
-try:
-    from .gst_logger import GstLogger
-
-    GST_LOGGER_AVAILABLE = True
-# gi without gstreamer raises ValueError from require_version
-except (ImportError, ValueError):
-    GstLogger = None  # Avoid NameError if accessed
-    GST_LOGGER_AVAILABLE = False
 
 
 class LoggerFactory:
@@ -45,14 +34,18 @@ class LoggerFactory:
 
         If 'gst' is requested but unavailable, warns and falls back to PythonLogger.
         """
+        if logger_type == LoggerFactory.LOGGER_TYPE_GST and BACKEND != "gst":
+            return PythonLogger()
         if logger_type == LoggerFactory.LOGGER_TYPE_GST:
-            if GST_LOGGER_AVAILABLE:
-                return GstLogger()
-            else:
+            try:
+                from .gst_logger import GstLogger
+            # gi without gstreamer raises ValueError from require_version
+            except (ImportError, ValueError):
                 logging.warning(
                     "GStreamer logging is unavailable. Falling back to PythonLogger."
                 )
                 return PythonLogger()
+            return GstLogger()
 
         elif logger_type == LoggerFactory.LOGGER_TYPE_PYTHON:
             return PythonLogger()

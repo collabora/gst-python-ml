@@ -20,13 +20,11 @@ the same names (reusing `backend.core.MLEngineMixin` and implementing
 `backend.analytics.AnalyticsBackend`) and add a branch below.
 """
 
-import os
-
 from backend.analytics import AnalyticsBackend  # noqa: F401  (re-exported)
 from backend.frameio import FrameIO  # noqa: F401  (re-exported)
 from backend.core import MLEngineMixin  # noqa: F401  (re-exported)
 
-BACKEND = os.environ.get("PYML_BACKEND", "gst").lower()
+from utils.selected_backend import BACKEND
 
 if BACKEND == "gst":
     from backend.gst import (
@@ -34,6 +32,7 @@ if BACKEND == "gst":
         BaseAggregator,
         VideoTransform,
         InPlaceVideoTransform,
+        InPlaceAudioTransform,
         analytics,
         frameio,
         FlowReturn,
@@ -47,6 +46,7 @@ elif BACKEND == "g2g":
         BaseAggregator,
         VideoTransform,
         InPlaceVideoTransform,
+        InPlaceAudioTransform,
         analytics,
         frameio,
         FlowReturn,
@@ -79,6 +79,7 @@ __all__ = [
     "BaseAggregator",
     "VideoTransform",
     "InPlaceVideoTransform",
+    "InPlaceAudioTransform",
     "analytics",
     "frameio",
     "FlowReturn",

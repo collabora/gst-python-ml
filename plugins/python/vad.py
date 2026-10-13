@@ -21,17 +21,9 @@ import backend
 
 CAN_REGISTER_ELEMENT = True
 try:
-    import ctypes
     import struct
 
-    import gi
-
-    gi.require_version("Gst", "1.0")
-    gi.require_version("GstBase", "1.0")
-    from gi.repository import Gst, GstBase
-    from backend import GObject, post_model_load_error
-
-    from log.logger_factory import LoggerFactory
+    from backend import GObject, InPlaceAudioTransform, frameio
 
 except ImportError as e:
     CAN_REGISTER_ELEMENT = False
@@ -43,7 +35,7 @@ VAD_SAMPLE_RATE = 16000
 VAD_META_HEADER = b"GST-VAD:"
 
 
-class VoiceActivityDetector(GstBase.BaseTransform):
+class VoiceActivityDetector(InPlaceAudioTransform):
     """
     GStreamer element for standalone Voice Activity Detection (VAD).
 
@@ -74,19 +66,7 @@ class VoiceActivityDetector(GstBase.BaseTransform):
         "Aaron Boxer <aaron.boxer@collabora.com>",
     )
 
-    # Building a Gst object needs Gst.init, which only the gst backend calls.
-    if backend.BACKEND == "gst":
-        AUDIO_CAPS = Gst.Caps.from_string(
-            "audio/x-raw,format=S16LE,layout=interleaved,rate=16000,channels=1"
-        )
-
-        sink_template = Gst.PadTemplate.new(
-            "sink", Gst.PadDirection.SINK, Gst.PadPresence.ALWAYS, AUDIO_CAPS
-        )
-        src_template = Gst.PadTemplate.new(
-            "src", Gst.PadDirection.SRC, Gst.PadPresence.ALWAYS, AUDIO_CAPS
-        )
-        __gsttemplates__ = (sink_template, src_template)
+    INPUT_CAPS = "audio/x-raw,format=S16LE,layout=interleaved,rate=16000,channels=1"
 
     threshold = GObject.Property(
         type=float,
@@ -108,47 +88,23 @@ class VoiceActivityDetector(GstBase.BaseTransform):
 
     def __init__(self):
         super().__init__()
-        self.logger = LoggerFactory.get(LoggerFactory.LOGGER_TYPE_GST)
-        self.set_in_place(True)
         self._vad = None
         self._chunk_size = None
 
-    def do_start(self):
-        try:
-            from pysilero_vad import SileroVoiceActivityDetector
+    def on_start(self):
+        from pysilero_vad import SileroVoiceActivityDetector
 
-            self._vad = SileroVoiceActivityDetector()
-            self._chunk_size = self._vad.chunk_samples()
-            self.logger.info(
-                f"Silero VAD initialized (chunk_size={self._chunk_size} samples "
-                f"at {VAD_SAMPLE_RATE} Hz)"
-            )
-        except Exception as exception:
-            post_model_load_error(self, "silero vad", exception)
-            return False
-        return True
+        self._vad = SileroVoiceActivityDetector()
+        self._chunk_size = self._vad.chunk_samples()
+        self.logger.info(
+            f"Silero VAD initialized (chunk_size={self._chunk_size} samples "
+            f"at {VAD_SAMPLE_RATE} Hz)"
+        )
 
-    def do_stop(self):
-        self._vad = None
-        self._chunk_size = None
-        return True
-
-    def do_transform_ip(self, buf):
+    def process_in_place(self, samples, buf):
         import numpy as np
 
-        if self._vad is None:
-            return Gst.FlowReturn.OK
-
-        # Read audio samples
-        success, map_info = buf.map(Gst.MapFlags.READ)
-        if not success:
-            self.logger.error("Failed to map audio buffer for reading")
-            return Gst.FlowReturn.ERROR
-
-        try:
-            audio = np.frombuffer(bytes(map_info.data), dtype=np.int16)
-        finally:
-            buf.unmap(map_info)
+        audio = samples.view(np.int16)
 
         # Compute average speech probability across VAD chunks
         speech_scores = []
@@ -161,34 +117,17 @@ class VoiceActivityDetector(GstBase.BaseTransform):
 
         if not speech_scores:
             # Buffer too short for a full chunk; pass through without metadata
-            return Gst.FlowReturn.OK
+            return
 
         avg_score = float(np.mean(speech_scores))
         is_speech = avg_score >= self.threshold
 
         self.logger.debug(f"VAD score={avg_score:.3f} speech={is_speech}")
 
-        # Gate: mute audio BEFORE appending read-only metadata memory.
-        # (A READONLY chunk on the buffer would prevent buf.map(WRITE) from succeeding.)
         if self.gate and not is_speech:
-            success_w, map_info_w = buf.map(Gst.MapFlags.WRITE)
-            if success_w:
-                try:
-                    dst = (ctypes.c_char * map_info_w.size).from_buffer(map_info_w.data)
-                    ctypes.memset(dst, 0, map_info_w.size)
-                finally:
-                    buf.unmap(map_info_w)
+            samples[:] = 0
 
-        # Append VAD metadata: header + 4-byte float32 speech probability.
-        # Use new_allocate+fill: PyGI hides the maxsize arg in new_wrapped
-        # (it derives it from data length), so passing it explicitly shifts
-        # all subsequent args and causes a GI assertion crash.
-        vad_bytes = VAD_META_HEADER + struct.pack("f", avg_score)
-        tmp = Gst.Buffer.new_allocate(None, len(vad_bytes), None)
-        tmp.fill(0, vad_bytes)
-        buf.append_memory(tmp.get_memory(0))
-
-        return Gst.FlowReturn.OK
+        frameio.append_blob(buf, VAD_META_HEADER, struct.pack("f", avg_score))
 
 
 if CAN_REGISTER_ELEMENT and backend.BACKEND == "gst":

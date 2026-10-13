@@ -23,14 +23,7 @@ CAN_REGISTER_ELEMENT = True
 try:
     import json
 
-    import gi
-
-    gi.require_version("Gst", "1.0")
-    gi.require_version("GstBase", "1.0")
-    from gi.repository import Gst, GstBase
-    from backend import GObject, post_model_load_error
-
-    from log.logger_factory import LoggerFactory
+    from backend import GObject, InPlaceAudioTransform, frameio
     from engine.clap_engine import ClapEngine
     from engine.engine_factory import EngineFactory
 
@@ -42,7 +35,7 @@ except ImportError as e:
 CLAP_META_HEADER = b"GST-CLAP:"
 
 
-class ClapTransform(GstBase.BaseTransform):
+class ClapTransform(InPlaceAudioTransform):
     """
     GStreamer element for audio event classification using CLAP.
 
@@ -70,19 +63,7 @@ class ClapTransform(GstBase.BaseTransform):
         "Aaron Boxer <aaron.boxer@collabora.com>",
     )
 
-    # Building a Gst object needs Gst.init, which only the gst backend calls.
-    if backend.BACKEND == "gst":
-        AUDIO_CAPS = Gst.Caps.from_string(
-            "audio/x-raw,format=F32LE,layout=interleaved,rate=48000,channels=1"
-        )
-
-        sink_template = Gst.PadTemplate.new(
-            "sink", Gst.PadDirection.SINK, Gst.PadPresence.ALWAYS, AUDIO_CAPS
-        )
-        src_template = Gst.PadTemplate.new(
-            "src", Gst.PadDirection.SRC, Gst.PadPresence.ALWAYS, AUDIO_CAPS
-        )
-        __gsttemplates__ = (sink_template, src_template)
+    INPUT_CAPS = "audio/x-raw,format=F32LE,layout=interleaved,rate=48000,channels=1"
 
     model_name = GObject.Property(
         type=str,
@@ -120,8 +101,6 @@ class ClapTransform(GstBase.BaseTransform):
 
     def __init__(self):
         super().__init__()
-        self.logger = LoggerFactory.get(LoggerFactory.LOGGER_TYPE_GST)
-        self.set_in_place(True)
         self._engine = None
         self._labels_str = "gunshot,siren,baby crying,music,speech"
         self._labels = [label.strip() for label in self._labels_str.split(",")]
@@ -139,43 +118,22 @@ class ClapTransform(GstBase.BaseTransform):
         if self._engine is not None and self._engine.processor is not None:
             self._engine._precompute_text_embeddings(self._labels)
 
-    def do_start(self):
-        try:
-            self._engine = EngineFactory.create("pyml_clap_engine")
-            self._engine.do_set_device(self.device)
-            self._engine.do_load_model(self.model_name, labels=self._labels)
-            self.logger.info(f"CLAP element started with {len(self._labels)} labels")
-        except Exception as exception:
-            post_model_load_error(self, self.model_name, exception)
-            return False
-        return True
+    def on_start(self):
+        self._engine = EngineFactory.create("pyml_clap_engine")
+        self._engine.do_set_device(self.device)
+        self._engine.do_load_model(self.model_name, labels=self._labels)
+        self.logger.info(f"CLAP element started with {len(self._labels)} labels")
 
-    def do_stop(self):
-        self._engine = None
-        return True
-
-    def do_transform_ip(self, buf):
+    def process_in_place(self, samples, buf):
         import numpy as np
 
-        if self._engine is None:
-            return Gst.FlowReturn.OK
-
-        success, map_info = buf.map(Gst.MapFlags.READ)
-        if not success:
-            self.logger.error("Failed to map audio buffer for reading")
-            return Gst.FlowReturn.ERROR
-
-        try:
-            audio = np.frombuffer(bytes(map_info.data), dtype=np.float32)
-        finally:
-            buf.unmap(map_info)
-
+        audio = samples.view(np.float32)
         if len(audio) == 0:
-            return Gst.FlowReturn.OK
+            return
 
         results = self._engine.do_forward(audio)
         if results is None:
-            return Gst.FlowReturn.OK
+            return
 
         # Filter by threshold
         filtered = [
@@ -190,20 +148,11 @@ class ClapTransform(GstBase.BaseTransform):
                 top_label, top_score = results[0]
                 filtered = [{"label": top_label, "score": round(top_score, 4)}]
 
-        # Append classification metadata as a JSON memory chunk.
-        # Use new_allocate+fill: PyGI hides the maxsize arg in new_wrapped
-        # (it derives it from data length), so passing it explicitly shifts
-        # all subsequent args and causes a GI assertion crash.
-        meta_bytes = CLAP_META_HEADER + json.dumps(filtered).encode("utf-8")
-        tmp = Gst.Buffer.new_allocate(None, len(meta_bytes), None)
-        tmp.fill(0, meta_bytes)
-        buf.append_memory(tmp.get_memory(0))
+        frameio.append_blob(buf, CLAP_META_HEADER, json.dumps(filtered).encode("utf-8"))
 
         if filtered:
             top = filtered[0]
             self.logger.debug(f"CLAP top match: {top['label']} ({top['score']:.3f})")
-
-        return Gst.FlowReturn.OK
 
 
 if CAN_REGISTER_ELEMENT and backend.BACKEND == "gst":

@@ -13,7 +13,9 @@ drivers, so they need GStreamer for the gst half and skip without it.
 
 import ctypes
 import importlib
+import json
 import os
+import struct
 import subprocess
 import sys
 from pathlib import Path
@@ -135,6 +137,14 @@ HOSTED_ELEMENT_MODULES = [
     "whisperspeechtts",
     "caption_phi",
     "caption_qwen",
+    "classifier",
+    "yolo",
+    "pose",
+    "face",
+    "tracker",
+    "football_overlay",
+    "clap",
+    "vad",
 ]
 
 
@@ -1517,3 +1527,85 @@ def test_error_helpers_raise_to_the_host():
         backend.post_model_load_error(None, "m.pt", ValueError("no weights"))
     with pytest.raises(ValueError, match="no weights"):
         backend.post_error(None, "summary", ValueError("no weights"))
+
+
+def test_vad_gate_mutes_a_buffer_below_the_speech_threshold_in_place(monkeypatch):
+    stub_vad(monkeypatch)
+    from vad import VoiceActivityDetector
+
+    vad = VoiceActivityDetector()
+    vad.gate = True
+    buf = bytearray(silence() + speech())
+    sink = StubMetaSink()
+
+    vad.g2g_process_payload([buf], vad.INPUT_CAPS, sink)
+
+    assert not any(buf), "half speech scores 0.5, under the 0.7 threshold"
+    assert sink.staged_blobs == [("GST-VAD:", struct.pack("f", 0.5))]
+
+
+def test_vad_gate_leaves_speech_alone(monkeypatch):
+    stub_vad(monkeypatch)
+    from vad import VoiceActivityDetector
+
+    vad = VoiceActivityDetector()
+    vad.gate = True
+    buf = bytearray(speech(2))
+    sink = StubMetaSink()
+
+    vad.g2g_process_payload([buf], vad.INPUT_CAPS, sink)
+
+    assert bytes(buf) == speech(2)
+    assert sink.staged_blobs == [("GST-VAD:", struct.pack("f", 1.0))]
+
+
+class ScriptedClapEngine:
+    def do_set_device(self, device):
+        pass
+
+    def do_load_model(self, model_name, labels):
+        pass
+
+    def do_forward(self, audio):
+        return [("siren", 0.9), ("music", 0.2)]
+
+
+def test_clap_stages_the_labels_scoring_over_its_threshold(monkeypatch):
+    import clap
+
+    monkeypatch.setattr(clap, "ClapEngine", ScriptedClapEngine)
+    element = clap.ClapTransform()
+    sink = StubMetaSink()
+    audio = bytearray(np.ones(480, dtype=np.float32).tobytes())
+
+    element.g2g_process_payload([audio], element.INPUT_CAPS, sink)
+
+    assert sink.staged_blobs == [
+        ("GST-CLAP:", json.dumps([{"label": "siren", "score": 0.9}]).encode())
+    ]
+
+
+def test_gst_in_place_audio_writes_the_samples_and_appends_the_blob_after_them():
+    Gst = gst()
+    from backend.gst.frameio import GstFrameIO
+    from backend.gst.in_place_audio_transform import (
+        InPlaceAudioTransform as GstInPlaceAudioTransform,
+    )
+
+    class MutingTransform(GstInPlaceAudioTransform):
+        def process_in_place(self, samples, buf):
+            samples[:] = 0
+            GstFrameIO().append_blob(buf, b"GST-TEST:", b"muted")
+
+    buf = Gst.Buffer.new_allocate(None, 4, None)
+    buf.fill(0, b"\x01\x02\x03\x04")
+
+    assert MutingTransform().do_transform_ip(buf) == Gst.FlowReturn.OK
+
+    memories = []
+    for index in range(buf.n_memory()):
+        success, map_info = buf.peek_memory(index).map(Gst.MapFlags.READ)
+        assert success
+        memories.append(bytes(map_info.data))
+        buf.peek_memory(index).unmap(map_info)
+    assert memories == [bytes(4), b"GST-TEST:muted"]

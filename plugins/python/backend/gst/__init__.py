@@ -22,6 +22,7 @@ from backend.gst.transform import BaseTransform  # noqa: E402
 from backend.gst.aggregator import BaseAggregator  # noqa: E402
 from backend.gst.video_transform import VideoTransform  # noqa: E402
 from backend.gst.in_place_video_transform import InPlaceVideoTransform  # noqa: E402
+from backend.gst.in_place_audio_transform import InPlaceAudioTransform  # noqa: E402
 from backend.gst.analytics import select_analytics  # noqa: E402
 from backend.gst.frameio import GstFrameIO  # noqa: E402
 from backend.gst.errors import post_error, post_model_load_error  # noqa: E402,F401
@@ -42,6 +43,7 @@ __all__ = [
     "BaseAggregator",
     "VideoTransform",
     "InPlaceVideoTransform",
+    "InPlaceAudioTransform",
     "analytics",
     "frameio",
     "FlowReturn",

@@ -23,14 +23,7 @@ CAN_REGISTER_ELEMENT = True
 try:
     import json
 
-    import gi
-
-    gi.require_version("Gst", "1.0")
-    gi.require_version("GstBase", "1.0")
-    gi.require_version("GstVideo", "1.0")
-    from gi.repository import Gst
-
-    from backend import analytics, GObject
+    from backend import analytics, frameio, GObject
     from base_objectdetector import BaseObjectDetector
     from engine.face_engine import FaceEngine
     from engine.engine_factory import EngineFactory
@@ -148,10 +141,9 @@ class FaceTransform(BaseObjectDetector):
 
         # Append face identity metadata as a custom memory chunk
         if face_data:
-            meta_bytes = FACE_META_HEADER + json.dumps(face_data).encode("utf-8")
-            tmp = Gst.Buffer.new_allocate(None, len(meta_bytes), None)
-            tmp.fill(0, meta_bytes)
-            buf.append_memory(tmp.get_memory(0))
+            frameio.append_blob(
+                buf, FACE_META_HEADER, json.dumps(face_data).encode("utf-8")
+            )
             self.logger.debug(
                 f"Stream {stream_idx}: appended metadata for {len(face_data)} faces"
             )

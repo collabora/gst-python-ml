@@ -84,5 +84,5 @@ Free threading doesn't speed this pipeline up. yolo spends about 22 ms per frame
 ## Not working yet
 
 - `track=true` on the yolo element: the ultralytics trackers import `lap`, which turns the GIL back on. Use pyml_tracker.
-- Elements that import gi, directly or through `GstBase` or `utils.metadata`, fail to load. pyml_yolo_pose, pyml_face, pyml_vad and pyml_clap are among them.
+- gst-only elements, the ones that subclass `GstBase` or `Gst.Element` such as pyml_vad and pyml_clap, don't run on g2g.
 - Two elements can call cv2 at the same moment. The author of opencv#30134 stress-tested 8 threads on `resize`, `cvtColor`, `warpPerspective` and drawing calls. pyml_tracker's `estimateAffinePartial2D` was not in that set.
