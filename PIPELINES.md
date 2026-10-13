@@ -54,13 +54,15 @@ On g2g, `nvdec` decodes H.264, H.265 and AV1 into CUDA memory. Put it directly
 before `pyml_classifier`, `pyml_yolo`, `pyml_yolo_pose` or `pyml_depth` and
 pyml-launch hosts that element with `cuda-frames=true format=NV12`: the element
 converts the NV12 frame to RGB on the GPU and runs the same device-frame path as
-on gst. pyml-launch does this only right after `nvdec`, so a line with
-`decodebin` keeps the element on system memory, spell `qtdemux ! h264parse !
-nvdec`. g2g has no GPU scaler, so the element sees the decoded size, and the
-frame leaves it still CUDA NV12, so put `videoconvert` after it ahead of
-`pyml_tracker` and `pyml_overlay`. An element that writes the frame, such as
-`pyml_depth` with `visualize=true` or `pyml_superres`, needs `videoconvert`
-between `nvdec` and it.
+on gst. The frame leaves it still CUDA NV12, so a `pyml_tracker` straight after
+it takes `cuda-frames=true` too. pyml-launch does this only from `nvdec` on, so
+a line with `decodebin` keeps the element on system memory, spell `qtdemux !
+h264parse ! nvdec`. g2g has no GPU scaler or RGBA conversion, so pyml-launch
+drops gst's `cudaconvert`, `cudascale` and `video/x-raw(memory:CUDAMemory)` caps
+filter after `nvdec`, and the element sees the decoded size. Put `videoconvert`
+ahead of `pyml_overlay`. An element that writes the frame, such as `pyml_depth`
+with `visualize=true` or `pyml_superres`, needs `videoconvert` between `nvdec`
+and it.
 Build `g2g-launch-py` with `--features ml,g2g-plugins/nvdec,g2g-plugins/cuda`
 for `nvdec`.
 

@@ -150,12 +150,22 @@ G2G_CAPS_PROPERTIES = {
     "OUTPUT_CAPS": "output-caps",
 }
 
-DEVICE_FRAMES_CONSTANT = "ACCEPTS_DEVICE_FRAMES"
+#: The class constants that say an element takes CUDA frames, and the value
+#: that says so.
+DEVICE_FRAME_CONSTANTS = {
+    "ACCEPTS_DEVICE_FRAMES": True,
+    "DRAWS_ON_DEVICE_FRAMES": True,
+    "READS_PIXELS": False,
+}
 
 #: The g2g decoders that leave their frames in CUDA memory, and the host
 #: properties that take those frames as they are.
 CUDA_DECODERS = ("nvdec", "nvh264dec")
 CUDA_FRAME_PROPERTIES = ("cuda-frames=true", "format=NV12")
+
+#: gst's CUDA converters, which g2g has no counterpart for.
+CUDA_CONVERTERS = ("cudaconvert", "cudascale", "cudaconvertscale")
+CUDA_MEMORY_FEATURE = "memory:CUDAMemory"
 
 
 class ElementShell(NamedTuple):
@@ -242,8 +252,14 @@ def caps_declarations(tree):
             if f"{node.name}.{constant}" in constants
         }
         bases = [base.id for base in node.bases if isinstance(base, ast.Name)]
+        stated = bool_constants(node)
+        takes_device_frames = [
+            stated[name] == value
+            for name, value in DEVICE_FRAME_CONSTANTS.items()
+            if name in stated
+        ]
         declarations[node.name] = ClassDeclaration(
-            bases, caps, bool_constants(node).get(DEVICE_FRAMES_CONSTANT)
+            bases, caps, any(takes_device_frames) if takes_device_frames else None
         )
     return declarations
 
@@ -348,7 +364,7 @@ def rewrite_for_g2g(argv, shells):
     """
     rewritten = []
     raw_format = None
-    upstream = None
+    upstream_on_cuda = False
     parts = list(segments(joined_assignments(argv)))
     fan_in = fan_in_names(parts)
     for segment in parts:
@@ -359,16 +375,22 @@ def rewrite_for_g2g(argv, shells):
             continue
         if is_reference(segment[0]):
             rewritten.extend(segment)
-            upstream = segment[0]
+            upstream_on_cuda = False
+            continue
+        # g2g has no GPU scaler or RGBA conversion, the element takes nvdec's frame
+        if upstream_on_cuda and converts_cuda_frames(segment):
+            rewritten.pop()
             continue
         host = PY_AGGREGATOR if declared_name(segment) in fan_in else PY_ELEMENT
-        after_cuda_decoder = upstream in CUDA_DECODERS
         translated = rewrite_segment(
-            segment, shells, raw_format, host, after_cuda_decoder
+            segment, shells, raw_format, host, upstream_on_cuda
         )
         rewritten.extend(translated)
         raw_format = raw_video_format(translated[0]) or raw_format
-        upstream = segment[0]
+        # a hosted element leaves the frame where it found it
+        upstream_on_cuda = (
+            segment[0] in CUDA_DECODERS or CUDA_FRAME_PROPERTIES[0] in translated
+        )
     return rewritten
 
 
@@ -392,6 +414,16 @@ def joined_assignments(argv):
 def dashed_name(property):
     key, separator, value = property.partition("=")
     return f"{key.replace('_', '-')}{separator}{value}"
+
+
+def converts_cuda_frames(segment):
+    head = segment[0]
+    if head in CUDA_CONVERTERS:
+        return True
+    if "/" in head:
+        return CUDA_MEMORY_FEATURE in "".join(segment)
+    caps = next((p for p in segment[1:] if p.startswith("caps=")), "")
+    return head == "capsfilter" and CUDA_MEMORY_FEATURE in caps
 
 
 def declared_name(segment):
@@ -466,7 +498,7 @@ def is_reference(token):
 
 
 def rewrite_segment(
-    segment, shells, raw_format=None, host=None, after_cuda_decoder=False
+    segment, shells, raw_format=None, host=None, upstream_on_cuda=False
 ):
     if isinstance(segment, str):
         segment = segment.split()
@@ -492,7 +524,7 @@ def rewrite_segment(
         properties = [quoted(p) for p in properties]
         hosted = [host or PY_ELEMENT, f"module={shell.module}", f"class={shell.cls}"]
         on_cuda_frames = (
-            hosted[0] == PY_ELEMENT and after_cuda_decoder and shell.reads_device_frames
+            hosted[0] == PY_ELEMENT and upstream_on_cuda and shell.reads_device_frames
         )
         # `pyelement` takes RGBA unless told otherwise, so an upstream caps
         # filter naming another format has to reach the hosted element too.

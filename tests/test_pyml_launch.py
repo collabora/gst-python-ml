@@ -301,6 +301,8 @@ def test_the_elements_that_accept_device_frames_are_found(shells):
         "pyml_yolo_pose",
         "pyml_depth",
         "pyml_superres",
+        "pyml_tracker",
+        "pyml_football_overlay",
     }
 
 
@@ -318,6 +320,33 @@ def test_an_element_reading_device_frames_takes_them_straight_from_nvdec(shells)
             "format=NV12 model-name=yolo11n device=cuda "
             "! videoconvert ! pyelement module=tracker class=TrackerTransform "
             "! analyticsoverlay ! fakesink"
+        ).split()
+    )
+
+
+def test_gst_cuda_converters_after_nvdec_are_dropped(shells):
+    pipeline = [
+        *"qtdemux ! h264parse ! nvh264dec ! cudaconvert ! cudascale ! capsfilter".split(),
+        "caps=video/x-raw(memory:CUDAMemory),format=RGBA,width=640,height=480",
+        *"! pyml_classifier device=cuda".split(),
+    ]
+    assert (
+        pyml_launch.rewrite_for_g2g(pipeline, shells)
+        == (
+            "qtdemux ! h264parse ! nvh264dec ! pyelement module=classifier "
+            "class=Classifier cuda-frames=true format=NV12 device=cuda"
+        ).split()
+    )
+
+
+def test_an_element_after_one_on_cuda_frames_takes_them_too(shells):
+    pipeline = "nvdec ! pyml_yolo device=cuda ! pyml_tracker ! fakesink".split()
+    assert (
+        pyml_launch.rewrite_for_g2g(pipeline, shells)
+        == (
+            "nvdec ! pyelement module=yolo class=YOLOTransform cuda-frames=true "
+            "format=NV12 device=cuda ! pyelement module=tracker "
+            "class=TrackerTransform cuda-frames=true format=NV12 ! fakesink"
         ).split()
     )
 
