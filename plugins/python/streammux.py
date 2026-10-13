@@ -59,6 +59,7 @@ class StreamMux(GstBase.Aggregator):
         self.batch_buffer = []
         self.batch_source_indices = []
         self.timestamps = []
+        self.segment_pushed = False
 
     def do_request_new_pad(self, templ, name, caps):
         """Handles requests for new sink pads."""
@@ -155,15 +156,17 @@ class StreamMux(GstBase.Aggregator):
         else:
             self.logger.error("No input caps available in StreamMux!")
 
-        # 🚨 Log segment event
-        segment = Gst.Segment()
-        segment.init(Gst.Format.TIME)
-        segment.start = min(self.timestamps) if self.timestamps else 0
-        self.logger.info(f"Sending SEGMENT event with start={segment.start}")
-        self.srcpad.push_event(Gst.Event.new_segment(segment))
+        # a segment per batch made every running time zero
+        if not self.segment_pushed:
+            segment = Gst.Segment()
+            segment.init(Gst.Format.TIME)
+            segment.start = min(self.timestamps)
+            self.logger.info(f"Sending SEGMENT event with start={segment.start}")
+            self.srcpad.push_event(Gst.Event.new_segment(segment))
+            self.segment_pushed = True
 
         # 🚨 Log buffer push
-        batch_buffer.pts = segment.start
+        batch_buffer.pts = min(self.timestamps)
         self.logger.debug("Pushing buffer from StreamMux")
 
         # Debug metadata

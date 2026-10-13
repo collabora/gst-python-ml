@@ -58,3 +58,30 @@ def test_the_longer_source_keeps_its_frames_after_the_shorter_one_ends():
         pytest.fail(f"{error.message}\n{debug}")
 
     assert tuple(frames_received) == FRAMES_PER_SOURCE
+
+
+BATCH_COUNT = 5
+
+
+def test_each_batch_runs_later_than_the_one_before():
+    caps = "video/x-raw,width=16,height=8,format=RGB,framerate=50/1"
+    pipeline = Gst.parse_launch(
+        f"videotestsrc num-buffers={BATCH_COUNT} ! {caps} ! pyml_streammux name=mux "
+        "! fakesink name=sink signal-handoffs=true"
+    )
+    running_times = []
+
+    def record(sink, buffer, pad):
+        segment = pad.get_sticky_event(Gst.EventType.SEGMENT, 0).parse_segment()
+        running_times.append(segment.to_running_time(Gst.Format.TIME, buffer.pts))
+
+    pipeline.get_by_name("sink").connect("handoff", record)
+    pipeline.set_state(Gst.State.PLAYING)
+    message = pipeline.get_bus().timed_pop_filtered(
+        PIPELINE_TIMEOUT, Gst.MessageType.EOS | Gst.MessageType.ERROR
+    )
+    pipeline.set_state(Gst.State.NULL)
+    assert message is not None and message.type == Gst.MessageType.EOS
+
+    assert len(running_times) == BATCH_COUNT
+    assert running_times == sorted(set(running_times)), running_times
