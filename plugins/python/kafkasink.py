@@ -17,7 +17,6 @@
 # Boston, MA 02110-1301, USA.
 
 import json
-import os
 
 import backend
 from backend import BaseSink, GObject, analytics
@@ -49,7 +48,7 @@ class KafkaSink(BaseSink):
         type=str,
         default=None,
         nick="Schema File",
-        blurb="Path to the JSON schema file to format metadata",
+        blurb="Unused, kept so existing pipelines still parse",
     )
 
     source_id = GObject.Property(
@@ -106,63 +105,6 @@ class KafkaSink(BaseSink):
         super().__init__()
         self.producer = None
 
-    def do_set_property(self, prop: GObject.GParamSpec, value):
-        if prop.name == "broker":
-            self.broker = value
-            self.logger.info(f"Setting Kafka broker to: {self.broker}")
-            self.initialize_producer()
-        elif prop.name == "topic":
-            self.topic = value
-            self.logger.info(f"Setting Kafka topic to: {self.topic}")
-            self.initialize_producer()
-        elif prop.name == "schema-file":
-            self.schema_file_path = value
-            self.load_schema_from_file(value)
-        elif prop.name == "source-id":
-            self.source_id = value
-            self.logger.info(f"Setting source ID to: {self.source_id}")
-        elif prop.name == "linger-ms":
-            self.linger_ms = value if value is not None else 0
-            self.logger.info(f"Setting Kafka producer linger-ms to: {self.linger_ms}")
-        elif prop.name == "batch-size":
-            self.batch_size = value if value is not None else 10000
-            self.logger.info(f"Setting Kafka producer batch size to: {self.batch_size}")
-        elif prop.name == "message-timeout-ms":
-            self.message_timeout_ms = value if value is not None else 30000
-            self.logger.info(
-                f"Setting Kafka producer message timeout to: {self.message_timeout_ms}"
-            )
-        elif prop.name == "compression-type":
-            self.compression_type = value if value is not None else "none"
-            self.logger.info(
-                f"Setting Kafka producer compression type to: {self.compression_type}"
-            )
-        elif prop.name == "acks":
-            self.acks = value if value is not None else 1
-            self.logger.info(f"Setting Kafka producer acks to: {self.acks}")
-
-    def do_get_property(self, prop: GObject.GParamSpec):
-        if prop.name == "broker":
-            return self.broker
-        elif prop.name == "topic":
-            return self.topic
-        elif prop.name == "schema-file":
-            return self.schema_file_path
-        elif prop.name == "source-id":
-            return self.source_id
-        elif prop.name == "linger-ms":
-            return self.linger_ms
-        elif prop.name == "batch-size":
-            return self.batch_size
-        elif prop.name == "message-timeout-ms":
-            return self.message_timeout_ms
-        elif prop.name == "compression-type":
-            return self.compression_type
-        elif prop.name == "acks":
-            return self.acks
-        else:
-            raise AttributeError(f"Unknown property {prop.name}")
-
     def initialize_producer(self):
         if self.broker and self.topic:
             try:
@@ -185,21 +127,6 @@ class KafkaSink(BaseSink):
         else:
             self.logger.warning(
                 "Kafka broker or topic is not set, producer not initialized."
-            )
-
-    def load_schema_from_file(self, file_path):
-        """Load schema from a JSON file on disk."""
-        if os.path.exists(file_path) and os.path.isfile(file_path):
-            try:
-                with open(file_path, "r") as f:
-                    self.schema = json.load(f)
-                self.logger.info(f"Loaded schema from {file_path}")
-            except (OSError, json.JSONDecodeError) as e:
-                self.logger.error(f"Failed to load or parse schema file: {e}")
-                self.schema = None
-        else:
-            self.logger.error(
-                f"Schema file {file_path} does not exist or is not a file."
             )
 
     def render(self, frame, fmt, buffer):
@@ -244,7 +171,6 @@ class KafkaSink(BaseSink):
         return metadata
 
     def format_metadata(self, metadata, timestamp):
-        """Format metadata according to the loaded schema or default schema."""
         timestamp_iso = self.convert_timestamp_to_iso(timestamp)
 
         formatted_metadata = {
