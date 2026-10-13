@@ -21,8 +21,8 @@
 `gst` hands the pipeline to `gst-launch-1.0` unchanged. `g2g` rewrites it for
 `g2g-launch-py`, which spells six things differently:
 
-  * a `pyml_*` element is the generic `pyelement` host plus the module and class
-    to load;
+  * a `pyml_*` element is the generic `pyelement` host, or `pysink` for a sink,
+    plus the module and class to load;
   * seven elements are g2g's own rather than hosted ones: `pyml_overlay` is
     `analyticsoverlay`, `pyml_alert` is `analyticsalert`, `pyml_digest` is
     `textdigest`, and `pyml_metasink` / `pyml_metareplay` / `pyml_alertrecorder`
@@ -63,10 +63,14 @@ USAGE = "usage: pyml-launch <element> [key=value ...] ! <element> ! ..."
 G2G_LAUNCH_NAME = "g2g-launch-py"
 G2G_CHECKOUT_NAME = "glass2glass"
 
-#: The g2g elements that host a gst-python-ml one: a transform, and the N-in
-#: batching host an aggregator needs.
+#: The g2g elements that host a gst-python-ml one: a transform, the N-in
+#: batching host an aggregator needs, and a sink.
 PY_ELEMENT = "pyelement"
 PY_AGGREGATOR = "pyaggregator"
+PY_SINK = "pysink"
+
+#: The base class a gst-python-ml element hosted on `pysink` derives from.
+SINK_BASE_CLASS = "BaseSink"
 
 #: gst-python-ml elements that g2g implements natively instead of hosting.
 NATIVE_EQUIVALENTS = {
@@ -159,9 +163,16 @@ DEVICE_FRAME_CONSTANTS = {
 }
 
 #: The g2g decoders that leave their frames in CUDA memory, and the host
-#: properties that take those frames as they are.
+#: property and format that take those frames as they are.
 CUDA_DECODERS = ("nvdec", "nvh264dec")
-CUDA_FRAME_PROPERTIES = ("cuda-frames=true", "format=NV12")
+CUDA_FRAMES_PROPERTY = "cuda-frames=true"
+CUDA_FRAME_FORMAT = "NV12"
+
+#: How each host that takes one raw video format is told which.
+FORMAT_PROPERTIES = {
+    PY_ELEMENT: "format={}",
+    PY_SINK: "input-caps=video/x-raw,format={}",
+}
 
 #: gst's CUDA converters, which g2g has no counterpart for.
 CUDA_CONVERTERS = ("cudaconvert", "cudascale", "cudaconvertscale")
@@ -176,6 +187,7 @@ class ElementShell(NamedTuple):
     cls: str
     caps: tuple = ()
     reads_device_frames: bool = False
+    is_sink: bool = False
 
 
 class ClassDeclaration(NamedTuple):
@@ -234,6 +246,7 @@ def element_shells(directory=None):
             cls,
             declared_caps(cls, declarations),
             reads_device_frames(cls, declarations),
+            derives_from_sink(cls, declarations),
         )
     return shells
 
@@ -294,6 +307,13 @@ def reads_device_frames(cls, declarations):
         if declaration.accepts_device_frames is not None
     )
     return next(stated, False)
+
+
+def derives_from_sink(cls, declarations):
+    return any(
+        SINK_BASE_CLASS in declaration.bases
+        for declaration in class_lineage(cls, declarations)
+    )
 
 
 def declared_caps(cls, declarations):
@@ -389,7 +409,7 @@ def rewrite_for_g2g(argv, shells):
         raw_format = raw_video_format(translated[0]) or raw_format
         # a hosted element leaves the frame where it found it
         upstream_on_cuda = (
-            segment[0] in CUDA_DECODERS or CUDA_FRAME_PROPERTIES[0] in translated
+            segment[0] in CUDA_DECODERS or CUDA_FRAMES_PROPERTY in translated
         )
     return rewritten
 
@@ -522,19 +542,25 @@ def rewrite_segment(
         # defaulted-property table must not touch one whose name happens to end
         # like a g2g element's (`pyml_kafkasink` and its `sync`).
         properties = [quoted(p) for p in properties]
+        if shell.is_sink:
+            host = PY_SINK
         hosted = [host or PY_ELEMENT, f"module={shell.module}", f"class={shell.cls}"]
+        # `pyaggregator` negotiates from its inputs and takes no format.
+        format_property = FORMAT_PROPERTIES.get(hosted[0])
         on_cuda_frames = (
-            hosted[0] == PY_ELEMENT and upstream_on_cuda and shell.reads_device_frames
+            format_property is not None
+            and upstream_on_cuda
+            and shell.reads_device_frames
         )
         # `pyelement` takes RGBA unless told otherwise, so an upstream caps
         # filter naming another format has to reach the hosted element too.
-        # `pyaggregator` negotiates from its inputs and takes no format.
         pin = raw_format not in (None, G2G_RAW_VIDEO_FORMAT)
         names_format = any(p.startswith("format=") for p in properties)
         if on_cuda_frames:
-            hosted.extend(CUDA_FRAME_PROPERTIES)
-        elif hosted[0] == PY_ELEMENT and pin and not names_format:
-            hosted.append(f"format={raw_format}")
+            hosted.append(CUDA_FRAMES_PROPERTY)
+            hosted.append(format_property.format(CUDA_FRAME_FORMAT))
+        elif format_property and pin and not names_format:
+            hosted.append(format_property.format(raw_format))
         hosted.extend(quoted(f"{property}={value}") for property, value in shell.caps)
         return [*hosted, *properties]
 

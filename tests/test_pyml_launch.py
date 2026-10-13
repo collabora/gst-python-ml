@@ -53,7 +53,7 @@ def test_a_single_input_element_stays_on_the_one_in_host(shells):
 def test_element_shells_resolves_a_name_given_as_a_class_constant(shells):
     # kafkasink registers under `KafkaSink.GST_PLUGIN_NAME`, not a literal.
     assert shells["pyml_kafkasink"] == pyml_launch.ElementShell(
-        "kafkasink", "KafkaSink"
+        "kafkasink", "KafkaSink", reads_device_frames=True, is_sink=True
     )
 
 
@@ -261,10 +261,35 @@ def test_a_hosted_element_named_like_a_sink_keeps_its_own_properties(shells):
     # `sync` on a g2g sink names a clock wait that does not exist there, but on
     # `pyml_kafkasink` it is the Kafka producer's own knob.
     assert pyml_launch.rewrite_segment("pyml_kafkasink sync=true", shells) == [
-        "pyelement",
+        "pysink",
         "module=kafkasink",
         "class=KafkaSink",
         "sync=true",
+    ]
+
+
+def test_a_hosted_sink_becomes_pysink_keeping_its_properties(shells):
+    pipeline = "pyml_kafkasink schema-file=x broker=localhost:29092 topic=t".split()
+    assert pyml_launch.rewrite_for_g2g(pipeline, shells) == [
+        "pysink",
+        "module=kafkasink",
+        "class=KafkaSink",
+        "schema-file=x",
+        "broker=localhost:29092",
+        "topic=t",
+    ]
+
+
+def test_a_hosted_sink_after_one_on_cuda_frames_states_nv12_in_its_caps(shells):
+    # pysink has no `format` property, it takes the format in its input caps.
+    pipeline = "nvdec ! pyml_yolo device=cuda ! pyml_kafkasink topic=t".split()
+    assert pyml_launch.rewrite_for_g2g(pipeline, shells)[-6:] == [
+        "pysink",
+        "module=kafkasink",
+        "class=KafkaSink",
+        "cuda-frames=true",
+        "input-caps=video/x-raw,format=NV12",
+        "topic=t",
     ]
 
 
@@ -317,6 +342,7 @@ def test_the_elements_that_accept_device_frames_are_found(shells):
         "pyml_tracker",
         "pyml_football_overlay",
         "pyml_overlay_counter",
+        "pyml_kafkasink",
     }
 
 

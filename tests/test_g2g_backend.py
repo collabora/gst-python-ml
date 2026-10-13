@@ -146,6 +146,7 @@ HOSTED_ELEMENT_MODULES = [
     "overlay_counter",
     "clap",
     "vad",
+    "kafkasink",
 ]
 
 
@@ -962,6 +963,73 @@ def test_a_frame_read_from_cuda_memory_refuses_a_write():
 
     with pytest.raises(ValueError, match="read-only"):
         frameio.write_frame(DEVICE_FRAME, np.zeros((2, 2, 3), dtype=np.uint8))
+
+
+class RecordingProducer:
+    def __init__(self, config):
+        self.config = config
+        self.produced = []
+        self.flush_count = 0
+
+    def produce(self, topic, value, callback=None):
+        self.produced.append((topic, value))
+
+    def flush(self):
+        self.flush_count += 1
+
+
+KAFKA_DETECTIONS = [
+    {"label": "person", "x": 1, "y": 2, "w": 3, "h": 4, "score": 0.9},
+    {"label": "car", "x": 10, "y": 20, "w": 30, "h": 40, "score": 0.5},
+]
+
+
+def test_kafkasink_sends_the_upstream_detections_and_flushes_at_eos(monkeypatch):
+    import types
+
+    producers = []
+
+    def recording_producer(config):
+        producers.append(RecordingProducer(config))
+        return producers[-1]
+
+    kafka_client = types.ModuleType("confluent_kafka")
+    kafka_client.Producer = recording_producer
+    monkeypatch.setitem(sys.modules, "confluent_kafka", kafka_client)
+    from kafkasink import KafkaSink
+
+    sink = KafkaSink()
+    sink.broker = "localhost:29092"
+    sink.topic = "detections"
+    width, height = 4, 4
+    result = sink.g2g_process(
+        bytearray(width * height * 4),
+        width,
+        height,
+        "RGBA",
+        StubMetaSink(upstream_objects=KAFKA_DETECTIONS),
+    )
+
+    assert result is None
+    (producer,) = producers
+    assert producer.config["bootstrap.servers"] == "localhost:29092"
+    ((topic, value),) = producer.produced
+    assert topic == "detections"
+    assert json.loads(value)["detections"] == [
+        {
+            "label": "person",
+            "confidence": 0.9,
+            "box": {"x1": 1, "y1": 2, "x2": 4, "y2": 6},
+        },
+        {
+            "label": "car",
+            "confidence": 0.5,
+            "box": {"x1": 10, "y1": 20, "x2": 40, "y2": 60},
+        },
+    ]
+    flushes_before_eos = producer.flush_count
+    sink.g2g_eos()
+    assert producer.flush_count == flushes_before_eos + 1
 
 
 def test_two_elements_on_their_own_threads_keep_their_own_sinks():

@@ -16,6 +16,8 @@
 # Free Software Foundation, Inc., 51 Franklin Street, Fifth Floor,
 # Boston, MA 02110-1301, USA.
 
+from contextlib import contextmanager
+
 import gi
 
 gi.require_version("Gst", "1.0")
@@ -41,6 +43,22 @@ from backend.gst.cuda_memory import (  # noqa: E402
 # mapping the whole buffer merges the appended metadata into the frame
 def map_video_memory(buffer, flags):
     return buffer.map_range(VIDEO_MEMORY, MAPPED_MEMORY_COUNT, flags)
+
+
+@contextmanager
+def mapped_frame(buffer, flags, width, height, bytes_per_pixel):
+    import numpy as np
+
+    success, map_info = map_video_memory(buffer, flags)
+    if not success:
+        yield None
+        return
+    try:
+        count = width * height * bytes_per_pixel
+        frame = np.frombuffer(map_info.data, dtype=np.uint8, count=count)
+        yield frame.reshape(height, width, bytes_per_pixel)
+    finally:
+        buffer.unmap(map_info)
 
 
 class GstFrameIO(FrameIO):

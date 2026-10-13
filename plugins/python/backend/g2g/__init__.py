@@ -25,6 +25,7 @@ from backend.g2g.transform import BaseTransform  # noqa: F401
 from backend.g2g.video_transform import VideoTransform  # noqa: F401
 from backend.g2g.in_place_video_transform import InPlaceVideoTransform  # noqa: F401
 from backend.g2g.in_place_audio_transform import InPlaceAudioTransform  # noqa: F401
+from backend.g2g.sink import BaseSink  # noqa: F401
 from backend.g2g.aggregator import BaseAggregator  # noqa: F401
 from backend.g2g.errors import post_error, post_model_load_error  # noqa: F401
 
@@ -34,6 +35,7 @@ __all__ = [
     "VideoTransform",
     "InPlaceVideoTransform",
     "InPlaceAudioTransform",
+    "BaseSink",
     "analytics",
     "frameio",
     "FlowReturn",

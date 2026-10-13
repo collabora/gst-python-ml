@@ -26,7 +26,7 @@ from gi.repository import Gst, GstBase, GstVideo  # noqa: E402
 
 from backend.gst.cuda_memory import is_cuda_buffer  # noqa: E402
 from backend.gst.errors import post_error  # noqa: E402
-from backend.gst.frameio import map_video_memory  # noqa: E402
+from backend.gst.frameio import mapped_frame  # noqa: E402
 from backend.gst.video_transform import CUDA_MEMORY_FEATURE, pad_templates  # noqa: E402
 from log.logger_factory import LoggerFactory  # noqa: E402
 
@@ -86,24 +86,17 @@ class InPlaceVideoTransform(GstBase.BaseTransform):
         return True
 
     def do_transform_ip(self, buf):
-        import numpy as np
-
         if not self.READS_PIXELS:
             return self._run(None, buf)
         if self.DRAWS_ON_DEVICE_FRAMES and is_cuda_buffer(buf):
             return self._run_on_device_frame(buf)
-        ok, mapinfo = map_video_memory(buf, Gst.MapFlags.WRITE)
-        if not ok:
-            self.logger.error("failed to map buffer for writing")
-            return Gst.FlowReturn.ERROR
-        try:
-            count = self.width * self.height * self._bytes_per_pixel
-            frame = np.frombuffer(mapinfo.data, dtype=np.uint8, count=count)
-            return self._run(
-                frame.reshape(self.height, self.width, self._bytes_per_pixel), buf
-            )
-        finally:
-            buf.unmap(mapinfo)
+        with mapped_frame(
+            buf, Gst.MapFlags.WRITE, self.width, self.height, self._bytes_per_pixel
+        ) as frame:
+            if frame is None:
+                self.logger.error("failed to map buffer for writing")
+                return Gst.FlowReturn.ERROR
+            return self._run(frame, buf)
 
     def _run_on_device_frame(self, buf):
         import backend

@@ -16,29 +16,16 @@
 # Free Software Foundation, Inc., 51 Franklin Street, Fifth Floor,
 # Boston, MA 02110-1301, USA.
 
-from log.global_logger import GlobalLogger
+import json
+import os
+
 import backend
+from backend import BaseSink, GObject, analytics
 
-CAN_REGISTER_ELEMENT = True
-try:
-    import json
-    import os
-
-    import gi
-
-    gi.require_version("Gst", "1.0")
-    from gi.repository import Gst  # noqa: E402
-
-    from log.logger_factory import LoggerFactory  # noqa: E402
-    from backend import analytics, GObject  # noqa: E402
-except ImportError as e:
-    CAN_REGISTER_ELEMENT = False
-    GlobalLogger().warning(
-        f"The 'pyml_kafkasink' element will not be available. Error {e}"
-    )
+NANOSECONDS_PER_SECOND = 1_000_000_000
 
 
-class KafkaSink(Gst.Element):
+class KafkaSink(BaseSink):
     GST_PLUGIN_NAME = "pyml_kafkasink"
 
     __gstmetadata__ = (
@@ -47,6 +34,9 @@ class KafkaSink(Gst.Element):
         "Extracts metadata and sends it to a Kafka server",
         "Aaron Boxer <aaron.boxer@collabora.com>",
     )
+
+    READS_PIXELS = False
+
     broker = GObject.Property(
         type=str, default=None, nick="Kafka Broker", blurb="Address of the Kafka broker"
     )
@@ -114,18 +104,6 @@ class KafkaSink(Gst.Element):
 
     def __init__(self):
         super().__init__()
-        self.logger = LoggerFactory.get(LoggerFactory.LOGGER_TYPE_GST)
-
-        self.sinkpad = Gst.Pad.new_from_template(
-            Gst.PadTemplate.new(
-                "sink",
-                Gst.PadDirection.SINK,
-                Gst.PadPresence.ALWAYS,
-                Gst.Caps.new_any(),
-            )
-        )
-        self.sinkpad.set_chain_function_full(self.chain)
-        self.add_pad(self.sinkpad)
         self.producer = None
 
     def do_set_property(self, prop: GObject.GParamSpec, value):
@@ -224,15 +202,16 @@ class KafkaSink(Gst.Element):
                 f"Schema file {file_path} does not exist or is not a file."
             )
 
-    def chain(self, pad, parent, buffer):
+    def render(self, frame, fmt, buffer):
         metadata = self.extract_metadata(buffer)
-        if metadata:
-            formatted_metadata = self.format_metadata(metadata, buffer.pts)
-            if formatted_metadata:
-                self.send_to_kafka(formatted_metadata)
-        else:
+        if not metadata:
             self.logger.warning("No metadata extracted from buffer to send to Kafka.")
-        return Gst.FlowReturn.OK
+            return
+        # g2g hands a hosted element no presentation time
+        pts = buffer.pts if backend.BACKEND == "gst" else None
+        formatted_metadata = self.format_metadata(metadata, pts)
+        if formatted_metadata:
+            self.send_to_kafka(formatted_metadata)
 
     def extract_metadata(self, buffer):
         """Extract object detection metadata from GstBuffer using GstAnalyticsRelationMeta."""
@@ -280,7 +259,9 @@ class KafkaSink(Gst.Element):
         """Convert nanosecond timestamp to ISO 8601 format."""
         import datetime
 
-        timestamp_s = timestamp_ns / Gst.SECOND
+        if timestamp_ns is None:
+            return None
+        timestamp_s = timestamp_ns / NANOSECONDS_PER_SECOND
         dt = datetime.datetime.utcfromtimestamp(timestamp_s)
         return dt.isoformat() + "Z"
 
@@ -309,16 +290,12 @@ class KafkaSink(Gst.Element):
         else:
             self.logger.info(f"Message delivered to {msg.topic()} [{msg.partition()}]")
 
-    def do_finalize(self):
+    def stop(self):
         if self.producer:
             self.producer.flush()
 
 
-if CAN_REGISTER_ELEMENT and backend.BACKEND == "gst":
+if backend.BACKEND == "gst":
     __gstelementfactory__ = backend.register_gst_element(
         KafkaSink.GST_PLUGIN_NAME, KafkaSink
-    )
-elif not CAN_REGISTER_ELEMENT:
-    GlobalLogger().warning(
-        "The 'pyml_kafkasink' element will not be registered because required modules are missing."
     )
