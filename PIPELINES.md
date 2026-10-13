@@ -1008,7 +1008,7 @@ python pyml-launch.py filesrc location=data/soccer_single_camera.mp4 ! decodebin
 ### Kafka Sink
 
 `pyml_kafkasink` needs a broker. Create a docker network and add `--network kafka-network`
-to the `docker run` line above so a containerised pipeline reaches it:
+to the `docker run` line in [INSTALL.md](INSTALL.md#run-docker-container) so a containerised pipeline reaches it:
 
 ```
 docker network create kafka-network
