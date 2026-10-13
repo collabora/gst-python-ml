@@ -365,6 +365,22 @@ def test_yolo_on_a_builtin_engine_matches_yolo_on_pytorch(builtin_engine, portra
 
 
 @pytest.mark.parametrize("builtin_engine", EXPORTED_MODEL_ENGINES)
+def test_an_exported_yolo_result_holds_no_view_of_the_frame(
+    builtin_engine, portrait_rgb
+):
+    require_engine(builtin_engine)
+    xfail_refused("yolo", builtin_engine)
+    pytest.importorskip("ultralytics")
+    import numpy as np
+    from yolo import YOLOTransform
+
+    element = loaded_element(YOLOTransform, YOLO_MODEL, builtin_engine)
+    result = element.do_forward(portrait_rgb)
+
+    assert not np.shares_memory(result.orig_img, portrait_rgb)
+
+
+@pytest.mark.parametrize("builtin_engine", EXPORTED_MODEL_ENGINES)
 def test_yolo_segmentation_on_a_builtin_engine_matches_yolo_segmentation_on_pytorch(
     builtin_engine, portrait_rgb
 ):

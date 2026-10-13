@@ -357,7 +357,8 @@ class ExportedYolo:
         from ultralytics.data.augment import LetterBox
 
         model_input = LetterBox(EXPORTED_INPUT_SHAPE, auto=False)(image=frame)
-        return self.task_result(frame, self.engine.do_forward(model_input))
+        # the results outlive the buffer the frame views
+        return self.task_result(frame.copy(), self.engine.do_forward(model_input))
 
     def _detections(self, predictions, rotated=False):
         import numpy as np
