@@ -29,7 +29,8 @@ Under `g2g` it runs `g2g-launch-py`, rewriting the three things g2g spells
 differently: a `pyml_*` element becomes `pyelement` plus the module and class to
 host, an element g2g implements itself becomes that one, and a raw-video caps
 filter with no format gains `format=RGBA`. An element it cannot map is an error,
-not a silent pass-through.
+not a silent pass-through. It launches with `--threads`, one OS thread per
+element as in GStreamer, so a CPU-bound element does not hold up the others.
 
 Under `gst`, detections, classifications and tracking ids travel in the
 GstAnalytics relation meta when the Python bindings have GstAnalytics

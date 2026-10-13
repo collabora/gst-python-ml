@@ -601,7 +601,7 @@ def g2g_command(pipeline):
             "PYO3_PYTHON=$(which python) cargo build --release -p g2g-python "
             "--features ml --bin g2g-launch-py"
         )
-    return [binary, *pipeline], launch_environment()
+    return [binary, "--threads", *pipeline], launch_environment()
 
 
 def main(argv=None):

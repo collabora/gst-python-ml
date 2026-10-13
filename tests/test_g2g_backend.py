@@ -579,6 +579,8 @@ def test_a_packed_frame_is_reduced_to_rgb_in_channel_order():
     pixel = np.array([[[10, 20, 30, 40]]], dtype=np.uint8)
 
     assert as_rgb(pixel, "RGBA").tolist() == [[[10, 20, 30]]]
+    assert np.shares_memory(as_rgb(pixel, "RGBA"), pixel), "a leading RGB is a view"
+    assert np.shares_memory(as_rgb(pixel, "ARGB"), pixel)
     assert as_rgb(pixel, "BGRA").tolist() == [[[30, 20, 10]]]
     assert as_rgb(pixel, "ARGB").tolist() == [[[20, 30, 40]]]
     assert as_rgb(pixel, "ABGR").tolist() == [[[40, 30, 20]]]

@@ -56,6 +56,9 @@ def as_rgb(frames, fmt):
     already_rgb = channels == 3 and rgb == (0, 1, 2)
     if rgb is None or already_rgb:
         return frames
+    first, second, third = rgb
+    if (second, third) == (first + 1, first + 2):
+        return frames[..., first : first + 3]
     return frames[..., list(rgb)]
 
 
