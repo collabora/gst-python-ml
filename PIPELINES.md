@@ -184,16 +184,20 @@ python pyml-launch.py filesrc location=data/people.mp4 ! decodebin ! videoconver
 
 ##### fasterrcnn/kafka
 
+`pyml_kafkasink` sends one JSON message per frame with `source_id`, `timestamp`
+(the UTC time it was sent) and `detections`, each with `label`, `score` and
+`box`. `data/pyml_object_detector.json` is the JSON Schema for that message.
+
 From the host:
 
 ```
-python pyml-launch.py  filesrc location=data/people.mp4 ! decodebin ! videoconvert ! videoscale ! video/x-raw,width=640,height=480 ! pyml_objectdetector model-name=fasterrcnn_resnet50_fpn device=cuda batch-size=4 ! pyml_kafkasink schema-file=data/pyml_object_detector.json broker=localhost:29092 topic=test-kafkasink-topic
+python pyml-launch.py  filesrc location=data/people.mp4 ! decodebin ! videoconvert ! videoscale ! video/x-raw,width=640,height=480 ! pyml_objectdetector model-name=fasterrcnn_resnet50_fpn device=cuda batch-size=4 ! pyml_kafkasink broker=localhost:29092 topic=test-kafkasink-topic
 ```
 
 From a container:
 
 ```
-python pyml-launch.py  filesrc location=data/people.mp4 ! decodebin ! videoconvert ! videoscale ! video/x-raw,width=640,height=480 ! pyml_objectdetector model-name=fasterrcnn_resnet50_fpn device=cuda batch-size=4 ! pyml_kafkasink schema-file=data/pyml_object_detector.json broker=kafka:9092 topic=test-kafkasink-topic
+python pyml-launch.py  filesrc location=data/people.mp4 ! decodebin ! videoconvert ! videoscale ! video/x-raw,width=640,height=480 ! pyml_objectdetector model-name=fasterrcnn_resnet50_fpn device=cuda batch-size=4 ! pyml_kafkasink broker=kafka:9092 topic=test-kafkasink-topic
 ```
 
 

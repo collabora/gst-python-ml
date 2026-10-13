@@ -910,6 +910,7 @@ def test_tracker_on_a_cuda_frame_tracks_and_leaves_the_frame_alone():
 
 
 SAMPLE_METADATA = PLUGIN_DIR.parent.parent / "data" / "sample_metadata.json"
+KAFKA_MESSAGE_SCHEMA = PLUGIN_DIR.parent.parent / "data" / "pyml_object_detector.json"
 SAMPLE_METADATA_WIDTH, SAMPLE_METADATA_HEIGHT = 1280, 720
 COUNTING_LINE_REGION = (slice(358, 363), slice(1000, 1280))
 COUNTER_TEXT_REGION = (slice(30, 55), slice(0, 300))
@@ -1018,15 +1019,23 @@ def test_kafkasink_sends_the_upstream_detections_and_flushes_at_eos(monkeypatch)
     assert json.loads(value)["detections"] == [
         {
             "label": "person",
-            "confidence": 0.9,
+            "score": 0.9,
             "box": {"x1": 1, "y1": 2, "x2": 4, "y2": 6},
         },
         {
             "label": "car",
-            "confidence": 0.5,
+            "score": 0.5,
             "box": {"x1": 10, "y1": 20, "x2": 40, "y2": 60},
         },
     ]
+    message = json.loads(value)
+    schema = json.loads(KAFKA_MESSAGE_SCHEMA.read_text())
+    detection_schema = schema["properties"]["detections"]["items"]
+    assert set(schema["required"]) <= message.keys()
+    assert isinstance(message["timestamp"], str)
+    assert all(
+        set(detection_schema["required"]) <= d.keys() for d in message["detections"]
+    )
     flushes_before_eos = producer.flush_count
     sink.g2g_eos()
     assert producer.flush_count == flushes_before_eos + 1

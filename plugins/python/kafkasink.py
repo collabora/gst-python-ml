@@ -21,8 +21,6 @@ import json
 import backend
 from backend import BaseSink, GObject, analytics
 
-NANOSECONDS_PER_SECOND = 1_000_000_000
-
 
 class KafkaSink(BaseSink):
     GST_PLUGIN_NAME = "pyml_kafkasink"
@@ -42,13 +40,6 @@ class KafkaSink(BaseSink):
 
     topic = GObject.Property(
         type=str, default=None, nick="Topic", blurb="Kafka topic to send messages to"
-    )
-
-    schema_file = GObject.Property(
-        type=str,
-        default=None,
-        nick="Schema File",
-        blurb="Unused, kept so existing pipelines still parse",
     )
 
     source_id = GObject.Property(
@@ -134,9 +125,7 @@ class KafkaSink(BaseSink):
         if not metadata:
             self.logger.warning("No metadata extracted from buffer to send to Kafka.")
             return
-        # g2g hands a hosted element no presentation time
-        pts = buffer.pts if backend.BACKEND == "gst" else None
-        formatted_metadata = self.format_metadata(metadata, pts)
+        formatted_metadata = self.format_metadata(metadata)
         if formatted_metadata:
             self.send_to_kafka(formatted_metadata)
 
@@ -155,7 +144,7 @@ class KafkaSink(BaseSink):
                 metadata.append(
                     {
                         "label": obj["label"],
-                        "confidence": obj["score"],
+                        "score": obj["score"],
                         "box": {"x1": x, "y1": y, "x2": x + w, "y2": y + h},
                     }
                 )
@@ -170,26 +159,16 @@ class KafkaSink(BaseSink):
 
         return metadata
 
-    def format_metadata(self, metadata, timestamp):
-        timestamp_iso = self.convert_timestamp_to_iso(timestamp)
-
-        formatted_metadata = {
-            "source_id": self.source_id,
-            "timestamp": timestamp_iso,
-            "detections": metadata,
-        }
-
-        return formatted_metadata
-
-    def convert_timestamp_to_iso(self, timestamp_ns):
-        """Convert nanosecond timestamp to ISO 8601 format."""
+    # data/pyml_object_detector.json describes this message
+    def format_metadata(self, metadata):
         import datetime
 
-        if timestamp_ns is None:
-            return None
-        timestamp_s = timestamp_ns / NANOSECONDS_PER_SECOND
-        dt = datetime.datetime.utcfromtimestamp(timestamp_s)
-        return dt.isoformat() + "Z"
+        sent = datetime.datetime.now(datetime.timezone.utc)
+        return {
+            "source_id": self.source_id,
+            "timestamp": sent.isoformat().replace("+00:00", "Z"),
+            "detections": metadata,
+        }
 
     def send_to_kafka(self, metadata):
         if self.producer is None:

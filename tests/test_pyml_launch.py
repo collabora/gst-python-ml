@@ -269,12 +269,11 @@ def test_a_hosted_element_named_like_a_sink_keeps_its_own_properties(shells):
 
 
 def test_a_hosted_sink_becomes_pysink_keeping_its_properties(shells):
-    pipeline = "pyml_kafkasink schema-file=x broker=localhost:29092 topic=t".split()
+    pipeline = "pyml_kafkasink broker=localhost:29092 topic=t".split()
     assert pyml_launch.rewrite_for_g2g(pipeline, shells) == [
         "pysink",
         "module=kafkasink",
         "class=KafkaSink",
-        "schema-file=x",
         "broker=localhost:29092",
         "topic=t",
     ]
