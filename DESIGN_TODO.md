@@ -21,14 +21,12 @@ tracked in that repo's `design/TODO.md`, not here.
     then `NATIVE_EQUIVALENTS` entries for both.
   - The elements in the next bullet.
 
-- **Seven elements have no per-frame seam, so they cannot run on g2g at all.**
-  `overlay_counter`, `kafkasink`, `streammux`, `streamdemux`, `coalescehistory`
-  and `llm_remote` subclass a GStreamer base directly. `stablediffusion` is
-  hosted but fills in neither `process_frames` nor `process_payload`, so it fails
-  with `PyTransform produces no output for text/x-raw`. Reparenting a family onto
-  one of those two seams in `backend/core.py` is what makes its pipelines
-  runnable. `overlay_counter` inherits `overlay`, which the launcher rewrites to
-  g2g's native `analyticsoverlay`, so the plain overlay line works regardless.
+- **Five elements have no per-frame seam, so they cannot run on g2g at all.**
+  `kafkasink`, `streammux`, `streamdemux` and `coalescehistory` subclass a
+  GStreamer base directly. `stablediffusion` is hosted but fills in neither
+  `process_frames` nor `process_payload`, so it fails with `PyTransform produces
+  no output for text/x-raw`. Reparenting a family onto one of those two seams in
+  `backend/core.py` is what makes its pipelines runnable.
 
 - **`g2g-mcp` takes a g2g-spelled pipeline only**, so a gst-spelled one has to
   go through the launcher's rewrite before it can be started there.
