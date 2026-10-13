@@ -191,6 +191,8 @@ python pyml-launch.py filesrc location=data/people.mp4 ! decodebin ! videoconver
 
 [PIPELINES.md](PIPELINES.md) describes every pipeline, one or two per element, how to
 run them under glass2glass, and how to run the MCP server.
+[FREE_THREADING.md](FREE_THREADING.md) runs the yolo detector and tracker on
+glass2glass under free-threaded Python 3.14t with the GIL off.
 
 ## Blog post
 
