@@ -113,7 +113,7 @@ installed before.
 The core install covers PyTorch, torchvision, transformers and OpenCV, which is
 what most elements need. Each extra adds the packages for a group of elements:
 
-- `yolo`: `pyml_yolo`, `pyml_yolo_pose`, and the `bytetrack` and `botsort` types of `pyml_tracker`
+- `yolo`: `pyml_yolo`, `pyml_yolo_pose`, `demo_soccer`, and the `bytetrack` and `botsort` types of `pyml_tracker`
 - `llm`: `pyml_llm`, `pyml_llmstreamfilter`, `pyml_caption_qwen`, `pyml_caption_phi`
 - `awq`: AWQ quantized models, through gptqmodel, which builds its CUDA kernels with nvcc on the first model load
 - `audio`: `pyml_whisperspeechtts`, `pyml_whisperlive`, `pyml_demucs`, `pyml_sepformer`
