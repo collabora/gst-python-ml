@@ -222,6 +222,15 @@ def track_device_frame(model, frame, **options):
     )
 
 
+def stream_tracker():
+    from ultralytics.trackers.bot_sort import BOTSORT
+    from ultralytics.utils import YAML, IterableSimpleNamespace
+    from ultralytics.utils.checks import check_yaml
+
+    configuration = YAML.load(check_yaml(TRACKER_CONFIGURATION))
+    return BOTSORT(args=IterableSimpleNamespace(**configuration))
+
+
 # runs the model and its nms on the gpu without the ultralytics predictor
 class DirectDetector:
     def __init__(self, weights, device, imgsz, pads_to_stride):
@@ -453,6 +462,7 @@ class YoloEngine(PyTorchEngine):
         self.tensorrt = False
         self.direct_detector = None
         self.direct_detector_frame_size = None
+        self.stream_trackers = {}
 
     def do_load_model(self, model_name, **kwargs):
         try:
@@ -550,7 +560,21 @@ class YoloEngine(PyTorchEngine):
         iou = getattr(self, "iou", 0.5)
         agnostic = getattr(self, "agnostic_nms", True)
         imgsz = getattr(self, "imgsz", 640)
-        if self.track:
+        if self.track and is_batch:
+            results = [
+                self._track_stream(stream_index, result)
+                for stream_index, result in enumerate(
+                    model(
+                        img_list,
+                        imgsz=imgsz,
+                        conf=conf,
+                        iou=iou,
+                        agnostic_nms=agnostic,
+                        verbose=True,
+                    )
+                )
+            ]
+        elif self.track:
             # Ensure tracker persists across batches
             results = model.track(
                 source=img_list,
@@ -581,3 +605,22 @@ class YoloEngine(PyTorchEngine):
             f"Preprocessing: {(end_pre - start_pre)*1000:.2f} ms, Inference: {(end_inf - end_pre)*1000:.2f} ms for {batch_size} frames"
         )
         return results[0] if not is_batch else results
+
+    # ultralytics tracks every image of a list with one tracker
+    def _track_stream(self, stream_index, result):
+        import torch
+
+        if stream_index not in self.stream_trackers:
+            self.stream_trackers[stream_index] = stream_tracker()
+        tracker = self.stream_trackers[stream_index]
+        tracks = tracker.update(result.boxes.cpu().numpy(), result.orig_img)
+        if len(tracks) == 0:
+            unconfirmed = any(
+                not track.is_activated for track in tracker.tracked_stracks
+            )
+            return result[:0] if unconfirmed else result
+        tracked = result[tracks[:, -1].astype(int)]
+        tracked.update(
+            boxes=torch.as_tensor(tracks[:, :-1], device=result.boxes.data.device)
+        )
+        return tracked
