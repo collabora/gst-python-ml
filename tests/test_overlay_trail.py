@@ -30,10 +30,11 @@ pytestmark = pytest.mark.skipif(
 WIDTH, HEIGHT = 64, 32
 BYTES_PER_PIXEL = 4
 TRAIL_POINTS = ((8, 16), (56, 16))
+BOX = (8, 8, 16, 16)
 PIPELINE_TIMEOUT = 10 * Gst.SECOND
 
 
-def overlaid_frame(labelled_points):
+def overlaid_frames(labelled_boxes_per_frame):
     pipeline = Gst.parse_launch(
         f"appsrc name=source format=time "
         f"caps=video/x-raw,format=RGBA,width={WIDTH},height={HEIGHT},framerate=30/1 "
@@ -43,28 +44,44 @@ def overlaid_frame(labelled_points):
     sink = pipeline.get_by_name("sink")
     pipeline.set_state(Gst.State.PLAYING)
 
-    buffer = Gst.Buffer.new_wrapped(bytes(WIDTH * HEIGHT * 4))
-    GstVideo.buffer_add_video_meta(
-        buffer, GstVideo.VideoFrameFlags.NONE, GstVideo.VideoFormat.RGBA, WIDTH, HEIGHT
-    )
-    meta = analytics.add_relation_meta(buffer)
-    for label, (x, y) in labelled_points:
-        analytics.add_object(meta, label, x, y, 0, 0, 1.0)
-    source.emit("push-buffer", buffer)
+    for labelled_boxes in labelled_boxes_per_frame:
+        buffer = Gst.Buffer.new_wrapped(bytes(WIDTH * HEIGHT * 4))
+        GstVideo.buffer_add_video_meta(
+            buffer,
+            GstVideo.VideoFrameFlags.NONE,
+            GstVideo.VideoFormat.RGBA,
+            WIDTH,
+            HEIGHT,
+        )
+        meta = analytics.add_relation_meta(buffer)
+        for label, (x, y, w, h) in labelled_boxes:
+            analytics.add_object(meta, label, x, y, w, h, 1.0)
+        source.emit("push-buffer", buffer)
     source.emit("end-of-stream")
 
-    sample = sink.emit("try-pull-sample", PIPELINE_TIMEOUT)
+    frames = []
+    for _ in labelled_boxes_per_frame:
+        sample = sink.emit("try-pull-sample", PIPELINE_TIMEOUT)
+        assert sample is not None, "overlay produced no frame"
+        frame = np.frombuffer(
+            sample.get_buffer().extract_dup(0, WIDTH * HEIGHT * BYTES_PER_PIXEL),
+            dtype=np.uint8,
+        )
+        frames.append(frame.reshape(HEIGHT, WIDTH, BYTES_PER_PIXEL))
     pipeline.set_state(Gst.State.NULL)
-    assert sample is not None, "overlay produced no frame"
-    output = sample.get_buffer()
-    frame = np.frombuffer(
-        output.extract_dup(0, WIDTH * HEIGHT * BYTES_PER_PIXEL), dtype=np.uint8
-    )
-    return frame.reshape(HEIGHT, WIDTH, BYTES_PER_PIXEL)
+    return frames
 
 
 def test_trail_points_are_joined_into_a_line():
-    frame = overlaid_frame([("stream_0_ball_trail", point) for point in TRAIL_POINTS])
+    (frame,) = overlaid_frames(
+        [[("stream_0_ball_trail", (x, y, 0, 0)) for x, y in TRAIL_POINTS]]
+    )
     midpoint_x = (TRAIL_POINTS[0][0] + TRAIL_POINTS[1][0]) // 2
     red, green, blue, _alpha = frame[TRAIL_POINTS[0][1], midpoint_x]
     assert red > 200 and green > 200 and blue < 50
+
+
+def test_a_frame_without_detections_gets_no_boxes():
+    with_box, without_box = overlaid_frames([[("person", BOX)], []])
+    assert with_box.any()
+    assert not without_box.any()

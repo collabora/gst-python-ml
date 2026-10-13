@@ -277,9 +277,8 @@ class Overlay(GstBase.BaseTransform):
             analytics_utils = AnalyticsUtils()
             extracted = analytics_utils.extract_analytics_metadata(buf)
             self.logger.debug(f"Extracted buffer metadata: {extracted}")
-            if extracted:
-                self.extracted_metadata = extracted
-            else:
+            self.extracted_metadata = extracted
+            if not extracted:
                 self.logger.warning(
                     "No metadata extracted from buffer, checking file fallback"
                 )
