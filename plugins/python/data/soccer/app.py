@@ -500,7 +500,7 @@ class ByteTrackWrapper:
         args = get_cfg(yaml_path)
         args.frame_rate = int(frame_rate)
         _normalize_tracker_args(args, kind="byte")
-        self.tracker = BYTETracker(args, frame_rate=int(frame_rate))
+        self.tracker = BYTETracker(args)
 
     def update(self, boxes: Boxes, frame):
         return self.tracker.update(boxes, frame)
@@ -520,7 +520,7 @@ class BoTSORTWrapper:
         args.frame_rate = int(frame_rate)
         args.with_reid = bool(enable_reid)
         _normalize_tracker_args(args, kind="botsort")
-        self.tracker = BOTSORT(args, frame_rate=int(frame_rate))
+        self.tracker = BOTSORT(args)
         self._install_safe_encoder()
 
     def _install_safe_encoder(self):
