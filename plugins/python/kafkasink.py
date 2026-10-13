@@ -20,6 +20,7 @@ import json
 
 import backend
 from backend import BaseSink, GObject, analytics
+from utils.analytics_utils import AnalyticsUtils
 
 
 class KafkaSink(BaseSink):
@@ -44,7 +45,7 @@ class KafkaSink(BaseSink):
 
     source_id = GObject.Property(
         type=str,
-        default=None,
+        default="",
         nick="Source ID",
         blurb="Identifier for the metadata source",
     )
@@ -95,6 +96,7 @@ class KafkaSink(BaseSink):
     def __init__(self):
         super().__init__()
         self.producer = None
+        self.label_parser = AnalyticsUtils()
 
     def initialize_producer(self):
         if self.broker and self.topic:
@@ -141,13 +143,15 @@ class KafkaSink(BaseSink):
         try:
             for obj in analytics.read_objects(meta):
                 x, y, w, h = obj["x"], obj["y"], obj["w"], obj["h"]
-                metadata.append(
-                    {
-                        "label": obj["label"],
-                        "score": obj["score"],
-                        "box": {"x1": x, "y1": y, "x2": x + w, "y2": y + h},
-                    }
-                )
+                track_id, label = self.label_parser.extract_id_from_label(obj["label"])
+                detection = {
+                    "label": label,
+                    "score": obj["score"],
+                    "box": {"x1": x, "y1": y, "x2": x + w, "y2": y + h},
+                }
+                if track_id is not None:
+                    detection["track_id"] = track_id
+                metadata.append(detection)
 
         except Exception as e:
             self.logger.error(f"Error while extracting metadata: {e}")

@@ -3,6 +3,10 @@
     "title": "ObjectDetectionMetadata",
     "type": "object",
     "properties": {
+      "source_id": {
+        "type": "string",
+        "description": "The source-id property of the sink, empty when unset"
+      },
       "detections": {
         "type": "array",
         "description": "List of detected objects with bounding box coordinates, labels, and scores",
@@ -23,6 +27,10 @@
             "label": {
               "type": "string",
               "description": "The label of the detected object"
+            },
+            "track_id": {
+              "type": "integer",
+              "description": "The tracker's id for the object, present when a tracker ran upstream"
             },
             "score": {
               "type": "number",

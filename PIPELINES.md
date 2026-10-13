@@ -185,8 +185,8 @@ python pyml-launch.py filesrc location=data/people.mp4 ! decodebin ! videoconver
 ##### fasterrcnn/kafka
 
 `pyml_kafkasink` sends one JSON message per frame with `source_id`, `timestamp`
-(the UTC time it was sent) and `detections`, each with `label`, `score` and
-`box`. `data/pyml_object_detector.json` is the JSON Schema for that message.
+(the UTC time it was sent) and `detections`, each with `label`, `score`,
+`box`, and `track_id` when a tracker ran upstream. `data/pyml_object_detector.json` is the JSON Schema for that message.
 
 From the host:
 
