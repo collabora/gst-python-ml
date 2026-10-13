@@ -69,6 +69,19 @@ def test_hosted_element_becomes_pyelement_keeping_its_properties(shells):
     ]
 
 
+def test_overlay_counter_is_hosted_keeping_its_properties(shells):
+    assert pyml_launch.rewrite_segment(
+        "pyml_overlay_counter meta-path=data/sample_metadata.json tracking=true",
+        shells,
+    ) == [
+        "pyelement",
+        "module=overlay_counter",
+        "class=OverlayCounter",
+        "meta-path=data/sample_metadata.json",
+        "tracking=true",
+    ]
+
+
 def test_overlay_becomes_the_native_element(shells):
     assert pyml_launch.rewrite_segment("pyml_overlay", shells) == ["analyticsoverlay"]
 
@@ -303,6 +316,7 @@ def test_the_elements_that_accept_device_frames_are_found(shells):
         "pyml_superres",
         "pyml_tracker",
         "pyml_football_overlay",
+        "pyml_overlay_counter",
     }
 
 

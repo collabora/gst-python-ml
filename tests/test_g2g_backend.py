@@ -143,6 +143,7 @@ HOSTED_ELEMENT_MODULES = [
     "face",
     "tracker",
     "football_overlay",
+    "overlay_counter",
     "clap",
     "vad",
 ]
@@ -905,6 +906,55 @@ def test_tracker_on_a_cuda_frame_tracks_and_leaves_the_frame_alone():
     label = sinks[1].staged_class_names[sinks[1].staged_objects[0][0]]
     assert label.startswith("player_id_")
     assert sinks[1].staged_objects[0][1:5] == (10.0, 10.0, 8.0, 16.0)
+
+
+SAMPLE_METADATA = PLUGIN_DIR.parent.parent / "data" / "sample_metadata.json"
+SAMPLE_METADATA_WIDTH, SAMPLE_METADATA_HEIGHT = 1280, 720
+COUNTING_LINE_REGION = (slice(358, 363), slice(1000, 1280))
+COUNTER_TEXT_REGION = (slice(30, 55), slice(0, 300))
+EMPTY_CORNER_REGION = (slice(650, 720), slice(1000, 1280))
+
+
+def overlay_counter_for_the_sample_metadata():
+    pytest.importorskip("cairo")
+    from overlay_counter import OverlayCounter
+
+    counter = OverlayCounter()
+    counter.meta_path = str(SAMPLE_METADATA)
+    return counter
+
+
+def test_overlay_counter_draws_the_counting_line_and_the_counts():
+    counter = overlay_counter_for_the_sample_metadata()
+    width, height = SAMPLE_METADATA_WIDTH, SAMPLE_METADATA_HEIGHT
+    frame = bytearray(width * height * 4)
+    counter.g2g_process(frame, width, height, "RGBA", StubMetaSink())
+
+    pixels = np.frombuffer(frame, dtype=np.uint8).reshape(height, width, 4)
+    assert pixels[COUNTING_LINE_REGION].any(), "the line across half the height"
+    assert pixels[COUNTER_TEXT_REGION].any(), "the counter text"
+    assert not pixels[EMPTY_CORNER_REGION].any(), "nothing drawn in the empty corner"
+
+
+def test_overlay_counter_draws_on_a_cuda_frame():
+    torch = pytest.importorskip("torch")
+    if not torch.cuda.is_available():
+        pytest.skip("needs a CUDA device")
+    from backend.g2g.cuda_frames import nv12_to_rgb
+
+    counter = overlay_counter_for_the_sample_metadata()
+    width, height = SAMPLE_METADATA_WIDTH, SAMPLE_METADATA_HEIGHT
+    luma, chroma = black_cuda_planes(height, width)
+    drawn_luma, drawn_chroma = counter.g2g_process_cuda(
+        luma, chroma, width, height, BT601_LIMITED_RANGE, StubMetaSink()
+    )
+
+    before = nv12_to_rgb(luma, chroma, BT601_LIMITED_RANGE).cpu().numpy()
+    after = nv12_to_rgb(drawn_luma, drawn_chroma, BT601_LIMITED_RANGE).cpu().numpy()
+    changed = np.any(before != after, axis=-1)
+    assert changed[COUNTING_LINE_REGION].any(), "the line across half the height"
+    assert changed[COUNTER_TEXT_REGION].any(), "the counter text"
+    assert not changed[EMPTY_CORNER_REGION].any(), "nothing drawn in the empty corner"
 
 
 def test_a_frame_read_from_cuda_memory_refuses_a_write():

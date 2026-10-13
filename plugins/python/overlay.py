@@ -19,27 +19,21 @@
 from log.global_logger import GlobalLogger
 import backend
 
-from utils.analytics_utils import AnalyticsUtils, TRAIL_LABEL_SUFFIX
+from utils.analytics_utils import AnalyticsUtils
 
 CAN_REGISTER_ELEMENT = True
 try:
     from overlay_helper.overlay_utils import (
+        draw_frame_objects,
         load_metadata,
     )
     from overlay_helper.overlay_utils_interface import (
-        Color,
+        DEFAULT_RENDERER,
+        GRAPHICS_TYPE_BY_RENDERER,
         TrackingDisplay,
         GraphicsType,
         OverlayGraphicsFactory,
     )
-
-    TRAIL_COLOR = Color(1.0, 1.0, 0.0, 1.0)
-    TRAIL_LINE_WIDTH = 3
-    DEFAULT_RENDERER = "cairo"
-    GRAPHICS_TYPE_BY_RENDERER = {
-        "cairo": GraphicsType.CAIRO,
-        "skia": GraphicsType.SKIA,
-    }
     import gi
 
     gi.require_version("Gst", "1.0")
@@ -478,27 +472,10 @@ class Overlay(GstBase.BaseTransform):
             backend.frameio.release_frames(buf)
 
     def do_post_process(self, frame_metadata):
-        trails = {}
-        boxes = []
-        for entry in frame_metadata:
-            label = entry.get("label", "")
-            if label.endswith(TRAIL_LABEL_SUFFIX):
-                trails.setdefault(label, []).append(entry["box"])
-            else:
-                boxes.append(entry)
-        for points in trails.values():
-            self.draw_trail(points)
-        self.overlay_graphics.draw_metadata(
-            boxes, self.tracking_display if self.tracking else None
-        )
-        if self.tracking:
-            self.tracking_display.fade_history()
-
-    def draw_trail(self, points):
-        self.overlay_graphics.draw_polyline(
-            [{"x": point["x1"], "y": point["y1"]} for point in points],
-            TRAIL_COLOR,
-            TRAIL_LINE_WIDTH,
+        draw_frame_objects(
+            self.overlay_graphics,
+            frame_metadata,
+            self.tracking_display if self.tracking else None,
         )
 
 

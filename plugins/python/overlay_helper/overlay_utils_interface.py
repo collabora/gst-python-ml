@@ -185,6 +185,13 @@ class GraphicsType(Enum):
     TORCH = "torch"
 
 
+DEFAULT_RENDERER = "cairo"
+GRAPHICS_TYPE_BY_RENDERER = {
+    "cairo": GraphicsType.CAIRO,
+    "skia": GraphicsType.SKIA,
+}
+
+
 class OverlayGraphicsFactory:
     @staticmethod
     def create(graphics_type, width, height, **kwargs):

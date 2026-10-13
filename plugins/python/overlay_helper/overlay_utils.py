@@ -19,6 +19,12 @@
 import os
 import json
 
+from utils.analytics_utils import TRAIL_LABEL_SUFFIX
+from .overlay_utils_interface import Color
+
+TRAIL_COLOR = Color(1.0, 1.0, 0.0, 1.0)
+TRAIL_LINE_WIDTH = 3
+
 
 def load_metadata(meta_path, logger):
     """Load JSON metadata from a file and return a dictionary indexed by frame index.
@@ -54,3 +60,23 @@ def load_metadata(meta_path, logger):
     except Exception as e:
         logger.error(f"Unexpected error while loading metadata: {e}")
         return {}
+
+
+def draw_frame_objects(overlay_graphics, frame_metadata, tracking_display):
+    trails = {}
+    boxes = []
+    for entry in frame_metadata:
+        label = entry.get("label", "")
+        if label.endswith(TRAIL_LABEL_SUFFIX):
+            trails.setdefault(label, []).append(entry["box"])
+        else:
+            boxes.append(entry)
+    for points in trails.values():
+        overlay_graphics.draw_polyline(
+            [{"x": point["x1"], "y": point["y1"]} for point in points],
+            TRAIL_COLOR,
+            TRAIL_LINE_WIDTH,
+        )
+    overlay_graphics.draw_metadata(boxes, tracking_display)
+    if tracking_display is not None:
+        tracking_display.fade_history()
