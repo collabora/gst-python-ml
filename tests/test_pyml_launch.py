@@ -233,6 +233,17 @@ def test_a_sink_asked_to_wait_on_the_clock_is_refused(shells):
         pyml_launch.rewrite_segment("autovideosink sync=true", shells)
 
 
+def test_pipewiresrc_drops_the_timestamping_g2g_always_does(shells):
+    assert pyml_launch.rewrite_segment("pipewiresrc do-timestamp=true", shells) == [
+        "pipewiresrc"
+    ]
+
+
+def test_pipewiresrc_asked_not_to_timestamp_is_refused(shells):
+    with pytest.raises(SystemExit, match="capture time"):
+        pyml_launch.rewrite_segment("pipewiresrc do-timestamp=false", shells)
+
+
 def test_a_hosted_element_named_like_a_sink_keeps_its_own_properties(shells):
     # `sync` on a g2g sink names a clock wait that does not exist there, but on
     # `pyml_kafkasink` it is the Kafka producer's own knob.

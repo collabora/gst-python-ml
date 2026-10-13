@@ -109,15 +109,31 @@ NATIVE_PROPERTIES = {
 #: What separates two elements, on both spellings.
 SEPARATOR = "!"
 
+
+class DefaultedProperty(NamedTuple):
+    g2g_value: bool
+    instead: str
+
+
 #: `(element name suffix, property)` a g2g pipeline does not spell, mapped to
-#: what to do when the behaviour it switches off is actually wanted.
+#: the value g2g always behaves as and what to do when the other one is wanted.
 DEFAULTED_PROPERTIES = {
-    ("sink", "sync"): "a g2g sink does not wait on the clock, put a `clocksync` "
-    "element ahead of it instead",
-    ("sink", "async"): "a g2g sink does not wait on the clock, put a `clocksync` "
-    "element ahead of it instead",
-    ("textoverlay", "wait-text"): "g2g's textoverlay never holds video back for "
-    "the text pad",
+    ("sink", "sync"): DefaultedProperty(
+        False,
+        "a g2g sink does not wait on the clock, put a `clocksync` element ahead "
+        "of it instead",
+    ),
+    ("sink", "async"): DefaultedProperty(
+        False,
+        "a g2g sink does not wait on the clock, put a `clocksync` element ahead "
+        "of it instead",
+    ),
+    ("textoverlay", "wait-text"): DefaultedProperty(
+        False, "g2g's textoverlay never holds video back for the text pad"
+    ),
+    ("pipewiresrc", "do-timestamp"): DefaultedProperty(
+        True, "g2g's pipewiresrc always stamps a buffer with its capture time"
+    ),
 }
 
 FALSE_VALUES = ("false", "0", "no", "off")
@@ -519,28 +535,25 @@ def renamed_properties(head, properties):
 
 
 def drop_defaulted_properties(head, properties):
-    """The properties minus the ones naming behaviour g2g already has.
-
-    Each of these switches off something g2g never does, so turning it off is a
-    no-op there. Asking for it back is refused rather than dropped quietly,
-    because that needs a pipeline change this cannot make on its own.
-    """
     kept = []
     for property in properties:
         key, _, value = property.partition("=")
-        instead = next(
+        defaulted = next(
             (
-                instead
-                for (suffix, name), instead in DEFAULTED_PROPERTIES.items()
+                defaulted
+                for (suffix, name), defaulted in DEFAULTED_PROPERTIES.items()
                 if name == key and head.endswith(suffix)
             ),
             None,
         )
-        if instead is None:
+        if defaulted is None:
             kept.append(property)
-        elif value.lower() not in FALSE_VALUES:
+            continue
+        # Asking for the other value needs a pipeline change this cannot make.
+        if (value.lower() not in FALSE_VALUES) != defaulted.g2g_value:
             raise SystemExit(
-                f"pyml-launch: {head} {property} has no equivalent on g2g; {instead}"
+                f"pyml-launch: {head} {property} has no equivalent on g2g; "
+                f"{defaulted.instead}"
             )
     return kept
 
