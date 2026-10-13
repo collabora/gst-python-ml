@@ -1465,6 +1465,10 @@ claude mcp add gst-python-ml -- \
                 <p>Set <code>device=cuda</code> or <code>device=cuda:0</code> on any element. Automatic GPU memory management and model caching.</p>
             </div>
             <div class="feat-card">
+                <h3>Python Without the GIL</h3>
+                <p>On the g2g backend, each Python element runs on its own OS thread. On free-threaded CPython 3.14t with the GIL off, those threads run Python at the same time. Experimental, tested with YOLO and <code>pyml_tracker</code> on CUDA. Setup in <a href="https://github.com/collabora/gst-python-ml/blob/master/FREE_THREADING.md">FREE_THREADING.md</a>.</p>
+            </div>
+            <div class="feat-card">
                 <h3>&#128300; ONNX Post-Processing</h3>
                 <p>Automatic YOLO anchor-free NMS decoding with <code>post-process=anchor_free</code>. No manual post-processing code required.</p>
             </div>
