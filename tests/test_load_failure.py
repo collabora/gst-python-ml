@@ -174,8 +174,6 @@ def test_an_engine_name_set_after_the_device_replaces_the_engine():
     element = EngineNamedOnThePipeline()
     element.set_property("engine-name", FAILING_ENGINE)
     element.set_property("device", "cpu")
-    assert type(element.engine) is FailingEngine
-
     element.set_property("engine-name", WORKING_ENGINE)
     element.set_property("model-name", LOADABLE_MODEL_NAME)
     element.do_load_model()
@@ -190,9 +188,8 @@ def test_a_layout_set_before_the_device_reaches_the_engine():
     element.set_property("engine-name", WORKING_ENGINE)
     element.set_property("input-format", "nchw")
     element.set_property("post-process", "anchor_free")
-    assert element.engine is None
-
     element.set_property("device", "cpu")
+    element.initialize_engine()
 
     assert element.engine.input_format == "nchw"
     assert element.engine.post_process == "anchor_free"

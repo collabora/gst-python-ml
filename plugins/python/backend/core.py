@@ -100,9 +100,6 @@ def ml_property_namespace(gobject):
     @device.setter
     def device(self, value):
         self.mgr.set_device(value)
-        # TODO: why is this needed, for example for yolo?
-        if self.mgr.engine_name:
-            self.initialize_engine()
 
     @gobject.Property(type=str)
     def model_name(self):
@@ -122,7 +119,6 @@ def ml_property_namespace(gobject):
         # a task element runs pytorch through its own engine
         if value == EngineFactory.PYTORCH_ENGINE and self.task_engine_name:
             value = self.task_engine_name
-        # device= already built an engine under the old name
         if value != self.mgr.engine_name:
             self.mgr.engine = None
         self.mgr.engine_name = value
