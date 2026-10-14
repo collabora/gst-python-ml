@@ -1,3 +1,4 @@
+import os
 import sys
 from pathlib import Path
 
@@ -14,6 +15,12 @@ def launch():
 
 
 def mcp():
+    # pyml_mcp imports gi at module scope
+    if os.environ.get("PYML_BACKEND", "gst").lower() == "g2g":
+        import pyml_mcp_g2g
+
+        sys.exit(pyml_mcp_g2g.main())
+
     import pyml_mcp
 
     pyml_mcp.main()

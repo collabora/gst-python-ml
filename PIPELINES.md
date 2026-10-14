@@ -1405,7 +1405,15 @@ uv sync --extra mcp
 claude mcp add gst-python-ml -- /path/to/gst-python-ml/.venv/bin/pyml-mcp
 ```
 
-For the g2g backend use glass2glass's own `g2g-mcp`, which drives its pipelines
-natively. It has `latest_metadata`, `wait_for_records`, `load_metadata`,
-`snapshot_frame`, `clip_at`, `set_property` and `get_property` under these names,
-and prompts of its own. `describe_frame` and `search_video` stay here.
+With `PYML_BACKEND=g2g`, `pyml-mcp` serves glass2glass's own MCP server from
+`g2g-launch-py --mcp`, on `PATH` or at `G2G_LAUNCH`. It takes pipelines in
+the `gst-launch` spelling this file uses and rewrites them as `pyml-launch` does.
+An element passed to `insert_transform` is rewritten on its own, so name its
+`format=` or `cuda-frames=true` yourself. The tools and prompts are g2g's. It has
+`latest_metadata`, `wait_for_records`, `load_metadata`, `snapshot_frame`,
+`clip_at`, `set_property` and `get_property` under these names, but no
+`describe_frame`, `search_video` or prompts from this file.
+
+```
+claude mcp add gst-python-ml-g2g -e PYML_BACKEND=g2g -- /path/to/gst-python-ml/.venv/bin/pyml-mcp
+```

@@ -695,7 +695,7 @@ def g2g_binary():
     return shutil.which(G2G_LAUNCH_NAME)
 
 
-def g2g_command(pipeline):
+def required_g2g_binary():
     binary = g2g_binary()
     if not binary:
         raise SystemExit(
@@ -704,7 +704,11 @@ def g2g_command(pipeline):
             "PYO3_PYTHON=$(which python) cargo build --release -p g2g-python "
             "--features ml --bin g2g-launch-py"
         )
-    return [binary, "--threads", *pipeline], launch_environment()
+    return binary
+
+
+def g2g_command(pipeline):
+    return [required_g2g_binary(), "--threads", *pipeline], launch_environment()
 
 
 def main(argv=None):
