@@ -5,14 +5,6 @@ tracked in that repo's `design/TODO.md`, not here.
 
 ## g2g backend coverage
 
-- **24 PIPELINES.md pipelines pass on gst and fail under `PYML_BACKEND=g2g`.**
-  Measured with `tests/test_pipelines.py` on 2026-10-13: gst 74 passed, g2g 51,
-  26 skipped on both. A pass on gst and a fail on g2g is a gap, a fail on both is
-  the environment. The suite holds the GPU for about 20 minutes per backend, so
-  run one backend at a time with the machine otherwise idle: a model still
-  resident from the previous run fails the next one at preroll. `G2G_CAPS_TRACE=1`
-  prints the caps solve, `RUST_LOG` does nothing.
-
 - **`g2g-mcp` takes a g2g-spelled pipeline only**, so a gst-spelled one has to
   go through the launcher's rewrite before it can be started there.
 
