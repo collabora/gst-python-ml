@@ -1,0 +1,80 @@
+diff --git a/gi/pygobject-object.c b/gi/pygobject-object.c
+index 35479bd..b73f5ee 100644
+--- a/gi/pygobject-object.c
++++ b/gi/pygobject-object.c
+@@ -51,6 +51,7 @@ GQuark pygobject_custom_key;
+ GQuark pygobject_class_key;
+ GQuark pygobject_class_init_key;
+ GQuark pygobject_wrapper_key;
++static GRecMutex pygobject_wrapper_lock;
+ GQuark pygobject_instance_init_ref_count;
+ GQuark pygobject_instance_data_key;
+ 
+@@ -301,6 +302,8 @@ pygobject_register_wrapper (PyObject *self)
+ 
+     if (have_error) PyErr_Fetch (&error_type, &error_value, &error_traceback);
+ 
++    g_rec_mutex_lock (&pygobject_wrapper_lock);
++
+     gself = (PyGObject *)self;
+ 
+     g_assert (gself->obj->ref_count >= 1);
+@@ -324,6 +327,8 @@ pygobject_register_wrapper (PyObject *self)
+     /* save wrapper pointer so we can access it later */
+     g_object_set_qdata_full (gself->obj, pygobject_wrapper_key, gself, NULL);
+ 
++    g_rec_mutex_unlock (&pygobject_wrapper_lock);
++
+     if (have_error) PyErr_Restore (error_type, error_value, error_traceback);
+ }
+ 
+@@ -597,6 +602,8 @@ pygobject_new_full (GObject *obj, gboolean steal, gpointer g_class)
+         Py_RETURN_NONE;
+     }
+ 
++    g_rec_mutex_lock (&pygobject_wrapper_lock);
++
+     /* If the GObject already has a PyObject wrapper stashed in its qdata, re-use it.
+      */
+     self = (PyGObject *)g_object_get_qdata (obj, pygobject_wrapper_key);
+@@ -627,7 +634,10 @@ pygobject_new_full (GObject *obj, gboolean steal, gpointer g_class)
+            pygobject_new_with_interfaces(). fixes bug #141042 */
+         if (tp->tp_flags & Py_TPFLAGS_HEAPTYPE) Py_INCREF (tp);
+         self = PyObject_GC_New (PyGObject, tp);
+-        if (self == NULL) return NULL;
++        if (self == NULL) {
++            g_rec_mutex_unlock (&pygobject_wrapper_lock);
++            return NULL;
++        }
+ 
+         self->inst_dict = NULL;
+         self->weakreflist = NULL;
+@@ -642,6 +652,8 @@ pygobject_new_full (GObject *obj, gboolean steal, gpointer g_class)
+         PyObject_GC_Track ((PyObject *)self);
+     }
+ 
++    g_rec_mutex_unlock (&pygobject_wrapper_lock);
++
+     return (PyObject *)self;
+ }
+ 
+@@ -813,6 +825,7 @@ static int
+ pygobject_clear (PyGObject *self)
+ {
+     if (self->obj) {
++        g_rec_mutex_lock (&pygobject_wrapper_lock);
+         PyGObjectData *inst_data = pygobject_get_inst_data (self);
+ 
+         /* The __class__ of the object may have changed. If so, update it. */
+@@ -822,7 +835,10 @@ pygobject_clear (PyGObject *self)
+             Py_INCREF ((PyObject *)inst_data->type);
+         }
+ 
+-        g_object_set_qdata_full (self->obj, pygobject_wrapper_key, NULL, NULL);
++        if (g_object_get_qdata (self->obj, pygobject_wrapper_key) == self)
++            g_object_set_qdata_full (self->obj, pygobject_wrapper_key, NULL,
++                                     NULL);
++        g_rec_mutex_unlock (&pygobject_wrapper_lock);
+         Py_BEGIN_ALLOW_THREADS;
+         g_clear_pointer (&self->obj, g_object_unref);
+         Py_END_ALLOW_THREADS;

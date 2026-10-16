@@ -1,0 +1,60 @@
+diff --git a/gi/overrides/gstmodule.c b/gi/overrides/gstmodule.c
+index 926f13a..d4b7c34 100644
+--- a/gi/overrides/gstmodule.c
++++ b/gi/overrides/gstmodule.c
+@@ -34,6 +34,13 @@
+ 
+ #include <locale.h>
+ 
++#ifdef Py_GIL_DISABLED
++#define PYGLIB_MODULE_DECLARE_GIL(module) \
++    PyUnstable_Module_SetGIL(module, Py_MOD_GIL_NOT_USED)
++#else
++#define PYGLIB_MODULE_DECLARE_GIL(module)
++#endif
++
+ #define URI_HANDLER_PROTOCOLS_QUARK g_quark_from_static_string("__gst__uri_handler_protocols")
+ #define URI_HANDLER_URITYPE_QUARK g_quark_from_static_string("__gst__uri_handler_uritype")
+ 
+@@ -53,7 +60,10 @@ PyMODINIT_FUNC PyInit_##symbol(void);                   \
+ PyMODINIT_FUNC PyInit_##symbol(void)                    \
+ {                                                       \
+     PyObject *module;                                   \
+-    module = PyModule_Create(&_##symbol##module);
++    module = PyModule_Create(&_##symbol##module);        \
++    if (module == NULL)                                 \
++        return NULL;                                    \
++    PYGLIB_MODULE_DECLARE_GIL(module);
+ #define PYGLIB_MODULE_END return module; }
+ 
+ GST_DEBUG_CATEGORY_STATIC (python_debug);
+diff --git a/gi/overrides/gstanalyticsmodule.c b/gi/overrides/gstanalyticsmodule.c
+index 18a16cc..4c345fa 100644
+--- a/gi/overrides/gstanalyticsmodule.c
++++ b/gi/overrides/gstanalyticsmodule.c
+@@ -30,6 +30,13 @@
+ 
+ #include <locale.h>
+ 
++#ifdef Py_GIL_DISABLED
++#define PYGLIB_MODULE_DECLARE_GIL(module) \
++    PyUnstable_Module_SetGIL(module, Py_MOD_GIL_NOT_USED)
++#else
++#define PYGLIB_MODULE_DECLARE_GIL(module)
++#endif
++
+ #define PYGLIB_MODULE_START(symbol, modname)	        \
+     static struct PyModuleDef _##symbol##module = {     \
+     PyModuleDef_HEAD_INIT,                              \
+@@ -46,7 +53,10 @@
+ PyMODINIT_FUNC PyInit_##symbol(void)                    \
+ {                                                       \
+     PyObject *module;                                   \
+-    module = PyModule_Create(&_##symbol##module);
++    module = PyModule_Create(&_##symbol##module);        \
++    if (module == NULL)                                 \
++        return NULL;                                    \
++    PYGLIB_MODULE_DECLARE_GIL(module);
+ #define PYGLIB_MODULE_END return module; }
+ 
+ typedef struct

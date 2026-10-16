@@ -81,6 +81,42 @@ The first 15 s of `data/soccer_tracking.mp4` (752 frames) into fakesink, glass2g
 
 Free threading doesn't speed this pipeline up. yolo spends about 22 ms per frame in Python and sets the frame rate, and the GIL is not what holds it back. Before d949f2d5 each hosted element built and tore down a Python thread state every frame, which cost 5 ms a frame on 3.14t.
 
+## PyGObject investigation
+
+Tested on Fedora 43 with CPython 3.14.2t, GStreamer 1.26.11 and PyGObject 3.58.1. PyPI distributes PyGObject as source only, so a `cp314t` build succeeds. The released `_gi` module does not declare free-threading support. CPython therefore enables the GIL when `_gi` is imported. `PYTHON_GIL=0` overrides this protection and exposes data races.
+
+A 12-thread reproducer calling `GLib.filename_from_uri()` 200,000 times per thread failed within seconds with `malloc(): unaligned tcache chunk detected`. Two unlocked PyGObject caches independently caused corruption:
+
+- `free_arg_state[10]` in `gi/pygi-invoke.c` reuses native argument blocks.
+- `free_list[10]` and `numfree[10]` in `gi/pygi-resulttuple.c` reuse `ResultTuple` objects.
+
+Disabling only one cache still crashed. Disabling both caches completed five runs and 12 million calls. This matches the changes in the upstream [free-threading draft](https://gitlab.gnome.org/GNOME/pygobject/-/merge_requests/565), which tracks the remaining work in [issue 646](https://gitlab.gnome.org/GNOME/pygobject/-/work_items/646).
+
+A `cp314t` wheel built from the upstream draft kept the GIL disabled without `PYTHON_GIL=0`. It completed the 12 million call test and 400,000 callbacks from eight simultaneous GStreamer pipelines when the gst-python overrides were absent.
+
+The draft still races when it creates Python wrappers for GObjects. `pygobject_new_full()` reads the wrapper from GObject qdata, creates one when absent, then stores it. Concurrent first access can create two wrappers for one GObject. A 32-thread test calling `get_static_pad("src")` returned two wrappers in 5 of 10 runs. `pygobject_clear()` can then remove the qdata entry for the other wrapper.
+
+An experimental recursive lock around wrapper lookup, registration and removal returned one wrapper in 20 of 20 runs. The lock also removed the allocator corruption seen when the gst-python overrides were enabled. Five runs of eight simultaneous pipelines completed two million callbacks with the GIL disabled. The lock is deliberately broad and still needs upstream review for callback and destruction behavior.
+
+gst-python also needs free-threading work. `_gi_gst` and `_gi_gst_analytics` use single-phase module initialization without calling `PyUnstable_Module_SetGIL()`. A matching 1.26.11 build with that declaration imported with the GIL disabled. With the PyGObject wrapper lock, its overrides passed the concurrent pipeline test.
+
+The installed `libgstpython.so` links `libpython3.14.so.1.0`. A gst host using 3.14t needs this plugin rebuilt against `libpython3.14t.so.1.0`. Loading the regular plugin into the 3.14t process fails during Python thread-state attachment. A rebuilt 1.26.11 plugin loaded under `gst-inspect-1.0` and registered all 48 project elements with the GIL disabled.
+
+The experimental changes and reproducers are preserved here:
+
+- [`pygobject-wrapper-lock.patch`](patches/free-threading/pygobject-wrapper-lock.patch), applied after PyGObject draft commit `5584ef47f975c276fcaf9827ee032214aecb60ba`.
+- [`gst-python-module-gil.patch`](patches/free-threading/gst-python-module-gil.patch), applied to gst-python 1.26.11.
+- [`pygobject_glib_stress.py`](patches/free-threading/pygobject_glib_stress.py), [`pygobject_wrapper_stress.py`](patches/free-threading/pygobject_wrapper_stress.py) and [`pygobject_gstreamer_stress.py`](patches/free-threading/pygobject_gstreamer_stress.py).
+
+The remote forks are [boxerab/pygobject](https://github.com/boxerab/pygobject) and [boxerab/gstreamer](https://github.com/boxerab/gstreamer). Patch branches have not been pushed.
+
+The remaining work is:
+
+1. Replace or validate the broad PyGObject wrapper lock and audit the remaining wrapper reads.
+2. Add the wrapper identity test and both cache stress tests to PyGObject.
+3. Audit the gst-python override modules beyond their module declarations.
+4. Run the gst host and project pipelines repeatedly with allocator diagnostics.
+
 ## Not working yet
 
 - `track=true` on the yolo element: the ultralytics trackers import `lap`, which turns the GIL back on. Use pyml_tracker.
