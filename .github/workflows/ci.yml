@@ -338,12 +338,10 @@ jobs:
       - name: ONNX pipeline smoke test (macOS)
         if: runner.os == 'macOS'
         run: |
-          # brew's libgstpython.dylib embeds brew's Python (not actions/setup-python).
-          # Install ML packages into brew's Python so libgstpython can find them.
-          BREW_PREFIX=$(brew --prefix)
-          BREW_PIP="${BREW_PREFIX}/bin/pip3"
-          BREW_PYTHON="${BREW_PREFIX}/bin/python3"
-          ${BREW_PIP} install --break-system-packages ultralytics onnxruntime onnx numpy opencv-python-headless
+          # libgstpython embeds the python@ formula gstreamer depends on, not brew's python3
+          GST_PYTHON_FORMULA=$(brew deps --direct gstreamer | grep '^python@')
+          BREW_PYTHON="$(brew --prefix "${GST_PYTHON_FORMULA}")/bin/python3"
+          ${BREW_PYTHON} -m pip install --break-system-packages ultralytics onnxruntime onnx numpy opencv-python-headless
           export GST_PLUGIN_PATH=${{ github.workspace }}/plugins
           export PYTHONPATH=${{ github.workspace }}/plugins/python
           # Export YOLO model to ONNX
