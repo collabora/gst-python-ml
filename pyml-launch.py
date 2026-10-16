@@ -2,9 +2,9 @@
 """Run a pipeline on whichever backend `PYML_BACKEND` selects, from the checkout.
 
 See `plugins/python/pyml_launch.py` for what the two backends spell differently.
-Re-runs itself under the repo's venv when started from another interpreter: the
-launcher hands its own site directories to GStreamer and to g2g, neither of
-which has a venv of its own.
+Re-runs itself under the venv `PYML_VENV` names, else the repo's, when started
+from another interpreter: the launcher hands its own interpreter and site
+directories to GStreamer and to g2g, neither of which has a venv of its own.
 """
 
 import os
@@ -13,7 +13,7 @@ import sys
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parent
-VENV = ROOT / ".venv"
+VENV = Path(os.environ.get("PYML_VENV", ROOT / ".venv"))
 VENV_PYTHON = (
     VENV / "Scripts" / "python.exe" if os.name == "nt" else VENV / "bin" / "python"
 )

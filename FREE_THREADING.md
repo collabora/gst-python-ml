@@ -4,7 +4,7 @@
 
 Tested with the yolo detector and pyml_tracker on CUDA, Fedora 43, CPython 3.14.2t. This is experimental. OpenCV has no official free-threaded support, so it is built from source with a patch upstream has not merged.
 
-Run everything from the gst-python-ml checkout, with glass2glass checked out beside it.
+Run everything from the gst-python-ml checkout, with glass2glass checked out beside it. `PYML_VENV` points `pyml-launch.py` at the free-threaded venv: it re-runs itself there and hands that interpreter, its shared library and its site directories to whichever host it launches.
 
 ## Venv
 
@@ -53,19 +53,16 @@ pyo3 links the libpython of `PYO3_PYTHON`. The separate target dir keeps the sto
 The weights come from `python demo/football/fetch_models.py pt` in the repo venv.
 
 ```
-FT_LIB=$(dirname $(uv python find 3.14t))/../lib
-PATH=$FT_VENV/bin:$PATH PYTHONPATH=$PWD/plugins/python LD_LIBRARY_PATH=$FT_LIB \
-  PYTHONWARNINGS=error::RuntimeWarning \
-  ../glass2glass/target-ft/release/g2g-launch-py --threads \
+PYML_VENV=$FT_VENV PYML_BACKEND=g2g G2G_LAUNCH=../glass2glass/target-ft/release/g2g-launch-py \
+  PYTHONWARNINGS=error::RuntimeWarning python pyml-launch.py \
   filesrc location=data/soccer_tracking.mp4 ! qtdemux ! ffmpegdec ! videoconvertscale \
   ! video/x-raw,width=1280,height=720,format=RGBA \
-  ! pyelement module=yolo class=YOLOTransform model-name=models/football/football device=cuda:0 imgsz=640 confidence=0.1 \
-  ! pyelement module=tracker class=TrackerTransform tracker-type=bytetrack new-track-confidence=0.25 \
+  ! pyml_yolo model-name=models/football/football device=cuda:0 imgsz=640 confidence=0.1 \
+  ! pyml_tracker tracker-type=bytetrack new-track-confidence=0.25 \
   ! fakesink
 ```
 
-- Call the launcher directly. `pyml-launch.py` re-runs itself under the repo `.venv`.
-- The embedded interpreter takes its prefix from the first `python` on `PATH`. With the repo `.venv` first it dies with `No module named 'encodings'`.
+- The embedded interpreter takes its prefix from the first `python` on `PATH`, which the launcher sets. With the repo `.venv` first it dies with `No module named 'encodings'`.
 - `PYTHONPATH` must not keep the repo venv's site dir. Its numpy fails to load under 3.14t.
 - `PYTHONWARNINGS=error::RuntimeWarning` fails the element at import if any module turns the GIL back on, instead of printing a warning.
 
@@ -97,26 +94,19 @@ git -C $GST_SRC sparse-checkout set subprojects/gst-python
 uvx meson setup $GST_SRC/subprojects/gst-python/build $GST_SRC/subprojects/gst-python \
   --prefix=$FT_VENV -Dpython-exe=$FT_VENV/bin/python -Dplugin=enabled -Dtests=disabled
 uvx meson install -C $GST_SRC/subprojects/gst-python/build
-
-PLUGINS_NO_PYTHON=$HOME/gst-plugins-no-python
-mkdir -p $PLUGINS_NO_PYTHON && ln -s /usr/lib64/gstreamer-1.0/* $PLUGINS_NO_PYTHON/ && rm $PLUGINS_NO_PYTHON/libgstpython.so
 ```
 
-- The system `libgstpython.so` links `libpython3.14.so` and must not load into the 3.14t process. `GST_PLUGIN_SYSTEM_PATH_1_0` points at a plugin directory without it, and `GST_REGISTRY` keeps the system registry out of it.
-- The plugin takes its Python prefix from the first `python` on `PATH`, like the g2g launcher.
-- `pyml-launch.py` re-runs itself under the repo `.venv`, so call `gst-launch-1.0` directly.
+The system `libgstpython.so` links `libpython3.14.so` and must not load into the 3.14t process. When the venv has its own plugin, the launcher puts that first on `GST_PLUGIN_PATH`, points `GST_PLUGIN_SYSTEM_PATH` at a symlink copy of the system plugin directory without the python plugin, kept under the venv, and gives the venv its own `GST_REGISTRY`.
 
 ```
-PATH=$FT_VENV/bin:$PATH LD_LIBRARY_PATH=$FT_LIB \
-  GST_PLUGIN_SYSTEM_PATH_1_0=$PLUGINS_NO_PYTHON GST_PLUGIN_PATH_1_0=$FT_VENV/lib64/gstreamer-1.0:$PWD/plugins \
-  GST_REGISTRY=$FT_VENV/gst-registry.bin PYTHONPATH=$PWD/plugins/python PYTHONWARNINGS=error::RuntimeWarning \
-  gst-launch-1.0 filesrc location=data/soccer_tracking.mp4 ! qtdemux ! h264parse ! avdec_h264 ! videoconvertscale \
+PYML_VENV=$FT_VENV PYTHONWARNINGS=error::RuntimeWarning python pyml-launch.py \
+  filesrc location=data/soccer_tracking.mp4 ! qtdemux ! h264parse ! avdec_h264 ! videoconvertscale \
   ! video/x-raw,width=1280,height=720,format=RGBA ! identity eos-after=752 \
   ! pyml_yolo model-name=models/football/football device=cuda:0 imgsz=640 confidence=0.1 \
   ! pyml_tracker tracker-type=bytetrack new-track-confidence=0.25 ! fakesink
 ```
 
-The same 752 frames into fakesink, pipeline time as `gst-launch-1.0` reports it. The stock row is `python pyml-launch.py` with the same pipeline on the system gst-python and PyGObject 3.56.2.
+The same 752 frames into fakesink, pipeline time as `gst-launch-1.0` reports it. The stock row is the same line without `PYML_VENV`, on the system gst-python and PyGObject 3.56.2.
 
 | host | pipeline time | fps |
 |---|---|---|
@@ -163,7 +153,7 @@ The remaining work is:
 1. Replace or validate the broad PyGObject wrapper lock and audit the remaining wrapper reads.
 2. Add the wrapper identity test and both cache stress tests to PyGObject.
 3. Audit the gst-python override modules beyond their module declarations.
-4. Run `tests/test_pipelines.py` on the free-threaded gst host. `pyml-launch.py` has no way to pick that host.
+4. Run `tests/test_pipelines.py` with `PYML_VENV=$FT_VENV` on both backends.
 5. Upstream the thread state pin, or get CPython to make thread state deletion cheap.
 
 ## Not working yet

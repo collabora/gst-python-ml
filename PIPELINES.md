@@ -22,7 +22,8 @@ The ML elements run under GStreamer or under
 [glass2glass](https://gitlab.collabora.com/glass2glass/glass2glass), selected by
 `PYML_BACKEND`. It defaults to `gst`, which is why the examples leave it off.
 Prefix any of them with `PYML_BACKEND=g2g` to run the same line under
-glass2glass instead.
+glass2glass instead. `PYML_VENV` runs the line from another venv than the
+repo's, such as the free-threaded one in FREE_THREADING.md.
 
 Under `gst` it runs GStreamer with `GST_PLUGIN_PATH` pointing at this checkout.
 Under `g2g` it runs `g2g-launch-py`, rewriting the three things g2g spells

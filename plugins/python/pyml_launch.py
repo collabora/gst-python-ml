@@ -51,6 +51,7 @@ import shutil
 import site
 import subprocess
 import sys
+import sysconfig
 from pathlib import Path
 from typing import NamedTuple
 
@@ -59,6 +60,9 @@ _PLUGINS = Path(__file__).resolve().parent.parent
 CHECKOUT_PLUGINS = _PLUGINS if _PLUGINS.name == "plugins" else None
 
 USAGE = "usage: pyml-launch <element> [key=value ...] ! <element> ! ..."
+
+#: gst-python's plugin, which embeds the libpython it was built against.
+GST_PYTHON_PLUGIN = "libgstpython.so"
 
 #: The g2g launcher, and the checkout it is built in, looked for beside this one.
 G2G_LAUNCH_NAME = "g2g-launch-py"
@@ -659,15 +663,51 @@ def _prepend_path(existing, *entries):
 def launch_environment():
     """The environment both launchers need.
 
-    Neither runs under this interpreter: GStreamer's Python loader embeds the
-    system one and g2g embeds its own, so torch and the rest are only reachable
-    if the venv's site directories are on `PYTHONPATH`.
+    Neither runs under this interpreter: GStreamer's Python loader and g2g each
+    embed a libpython and take its prefix from the first `python` on `PATH`, so
+    this interpreter goes first with its shared library beside it, and torch and
+    the rest are only reachable if the venv's site directories are on
+    `PYTHONPATH`.
     """
     env = os.environ.copy()
+    env["PATH"] = _prepend_path(env.get("PATH"), Path(sys.executable).parent)
+    library_dir = sysconfig.get_config_var("LIBDIR")
+    if library_dir and os.name != "nt":
+        env["LD_LIBRARY_PATH"] = _prepend_path(env.get("LD_LIBRARY_PATH"), library_dir)
     env["PYTHONPATH"] = _prepend_path(
         env.get("PYTHONPATH"), plugin_dir(), *site.getsitepackages()
     )
     return env
+
+
+def venv_gst_python_plugin_dir():
+    """Where a gst-python built into this interpreter's prefix put its plugin,
+    which a venv on a libpython the system plugin was not built against needs."""
+    for plugin in sorted(
+        Path(sys.prefix).glob(f"lib*/gstreamer-1.0/{GST_PYTHON_PLUGIN}")
+    ):
+        return plugin.parent
+    return None
+
+
+def system_plugin_dir():
+    return Path(
+        subprocess.check_output(
+            ["pkg-config", "--variable=pluginsdir", "gstreamer-1.0"], text=True
+        ).strip()
+    )
+
+
+def system_plugins_without_python():
+    """The system plugin directory as symlinks, minus its python plugin, which
+    would load a second libpython into the process."""
+    copy = Path(sys.prefix) / "gst-plugins-without-python"
+    if not copy.is_dir():
+        copy.mkdir()
+        for plugin in system_plugin_dir().iterdir():
+            if plugin.name != GST_PYTHON_PLUGIN:
+                (copy / plugin.name).symlink_to(plugin)
+    return copy
 
 
 def gst_command(argv):
@@ -676,6 +716,13 @@ def gst_command(argv):
         env["GST_PLUGIN_PATH"] = _prepend_path(
             env.get("GST_PLUGIN_PATH"), CHECKOUT_PLUGINS
         )
+    venv_plugin_dir = venv_gst_python_plugin_dir()
+    if venv_plugin_dir:
+        env["GST_PLUGIN_PATH"] = _prepend_path(
+            env.get("GST_PLUGIN_PATH"), venv_plugin_dir
+        )
+        env["GST_PLUGIN_SYSTEM_PATH"] = str(system_plugins_without_python())
+        env["GST_REGISTRY"] = str(Path(sys.prefix) / "gst-registry.bin")
     return ["gst-launch-1.0", *argv], env
 
 

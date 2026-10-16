@@ -6,6 +6,7 @@ silently dropping out of the map.
 """
 
 import json
+import os
 import subprocess
 import sys
 from pathlib import Path
@@ -752,3 +753,45 @@ def test_an_element_read_from_twice_is_not_a_muxer(shells):
     rewritten = pyml_launch.rewrite_for_g2g(pipeline, shells)
     assert "pyelement" in rewritten
     assert "pyaggregator" not in rewritten
+
+
+def test_gst_command_uses_the_gst_python_plugin_built_into_the_venv(
+    tmp_path, monkeypatch
+):
+    prefix = tmp_path / "venv"
+    venv_plugin_dir = prefix / "lib64" / "gstreamer-1.0"
+    venv_plugin_dir.mkdir(parents=True)
+    (venv_plugin_dir / pyml_launch.GST_PYTHON_PLUGIN).touch()
+    system = tmp_path / "system"
+    system.mkdir()
+    (system / pyml_launch.GST_PYTHON_PLUGIN).touch()
+    (system / "libgstcoreelements.so").touch()
+    monkeypatch.setattr(pyml_launch.sys, "prefix", str(prefix))
+    monkeypatch.setattr(pyml_launch, "system_plugin_dir", lambda: system)
+
+    command, env = pyml_launch.gst_command(["fakesrc", "!", "fakesink"])
+
+    assert command == ["gst-launch-1.0", "fakesrc", "!", "fakesink"]
+    assert env["GST_PLUGIN_PATH"].split(os.pathsep)[0] == str(venv_plugin_dir)
+    assert env["GST_REGISTRY"] == str(prefix / "gst-registry.bin")
+    without_python = Path(env["GST_PLUGIN_SYSTEM_PATH"])
+    assert [plugin.name for plugin in without_python.iterdir()] == [
+        "libgstcoreelements.so"
+    ]
+    assert (without_python / "libgstcoreelements.so").resolve() == (
+        system / "libgstcoreelements.so"
+    )
+
+
+def test_gst_command_keeps_the_system_plugin_without_a_venv_build(
+    tmp_path, monkeypatch
+):
+    monkeypatch.setattr(pyml_launch.sys, "prefix", str(tmp_path))
+    monkeypatch.delenv("GST_REGISTRY", raising=False)
+    monkeypatch.delenv("GST_PLUGIN_SYSTEM_PATH", raising=False)
+
+    _, env = pyml_launch.gst_command(["fakesrc"])
+
+    assert "GST_REGISTRY" not in env
+    assert "GST_PLUGIN_SYSTEM_PATH" not in env
+    assert env["PATH"].split(os.pathsep)[0] == str(Path(sys.executable).parent)
