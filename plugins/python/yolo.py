@@ -89,6 +89,14 @@ class YOLOTransform(BaseObjectDetector, YoloTask):
         "(like football_analyzer) so two close players aren't merged",
         flags=GObject.ParamFlags.READWRITE,
     )
+    exclude_classes = GObject.Property(
+        type=str,
+        default="",
+        nick="Excluded Classes",
+        blurb="Comma-separated class names whose boxes are dropped, so a second "
+        "detector can supply that class instead",
+        flags=GObject.ParamFlags.READWRITE,
+    )
     tensorrt = GObject.Property(
         type=bool,
         default=False,

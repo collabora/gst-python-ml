@@ -32,6 +32,8 @@ python demo/football/fetch_models.py "$BACKEND" >&2
 INTERVAL="${INTERVAL:-1}"   # run detection every Nth frame; the ball trail needs every frame
 CONF="${CONF:-0.1}"        # detector confidence threshold (low = more detections)
 IMGSZ="${IMGSZ:-640}"      # network input size; 1280 sees the ball far more often (pt backend only)
+BALL_MODEL="${BALL_MODEL:-}" # ball-only weights run as a second detector after the player one (pt backend only)
+BALL_IMGSZ="${BALL_IMGSZ:-1280}" # network input size of the ball detector
 IOU="${IOU:-0.7}"          # NMS IoU (ultralytics/football_analyzer default)
 NEWTRACK="${NEWTRACK:-0.25}" # min confidence to START a new track (ByteTrack gate; kills ghosts)
 DRAWCONF="${DRAWCONF:-0}"  # min confidence to DRAW a detection (0 = draw all; raise to trim weak boxes)
@@ -106,6 +108,11 @@ if [[ "$BACKEND" == "fp16" ]]; then
 else
   DETECT="$DETECTOR_ELEMENT model-name=models/football/football device=cuda:0 interval=$INTERVAL imgsz=$IMGSZ confidence=$CONF nms-iou=$IOU"
   IN_FMT="RGBA"
+fi
+if [[ -n "$BALL_MODEL" ]]; then
+  [[ "$BACKEND" == "pt" ]] || { echo "BALL_MODEL runs the pt backend only" >&2; exit 1; }
+  BALL_DETECT="${DETECTOR_ELEMENT/name=detector/name=ball-detector} model-name=$BALL_MODEL device=cuda:0 interval=$INTERVAL imgsz=$BALL_IMGSZ confidence=$CONF nms-iou=$IOU"
+  DETECT="$DETECT exclude-classes=ball ! $BALL_DETECT"
 fi
 
 POST_DETECT="$TRACK"

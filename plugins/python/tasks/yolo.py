@@ -142,6 +142,7 @@ class YoloTask(ObjectDetectorTask):
         self.logger.debug(
             f"Stream {stream_idx} - Attaching metadata for {len(boxes)} detections"
         )
+        excluded = set(filter(None, self.exclude_classes.split(",")))
         for i in range(len(boxes)):
             x1, y1, x2, y2 = boxes.xyxy[i]
             score = boxes.conf[i]
@@ -150,6 +151,8 @@ class YoloTask(ObjectDetectorTask):
             # Prefer the model's own class names; fall back to COCO for plain yolo.
             names = getattr(result, "names", None) or COCO_CLASSES
             class_name = names.get(label_num, f"unknown_{label_num}")
+            if class_name in excluded:
+                continue
 
             # Use class name for detection, track_id for tracking
             if self.task_engine.track and hasattr(boxes, "id") and boxes.id is not None:
