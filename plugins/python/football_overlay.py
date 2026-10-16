@@ -763,14 +763,17 @@ class FootballOverlay(InPlaceVideoTransform):
         # Class-agnostic greedy suppression: keep the most confident box, drop
         # any later box that overlaps it past merge_iou OR sits at the same feet.
         # Collapses a player circled twice (e.g. player+goalkeeper on one person,
-        # or two offset boxes) into one. The ball is never merged against players.
+        # or two offset boxes) into one. Only the most confident ball is kept.
         if self.merge_iou <= 0.0 or len(entries) < 2:
             return entries
         ordered = sorted(entries, key=lambda e: e["confidence"], reverse=True)
         kept = []
+        ball_kept = False
         for e in ordered:
             if _is_ball(e["label"]):
-                kept.append(e)
+                if not ball_kept:
+                    kept.append(e)
+                ball_kept = True
                 continue
             if any(
                 not _is_ball(k["label"])

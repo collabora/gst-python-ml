@@ -254,11 +254,11 @@ change is about 4 to 5 seconds: Whisper about 3, Qwen about 1 to 2.
 | `CUDA`     | `false` | `true` decodes, detects, tracks and draws on CUDA memory (`pt` backend only). On `gst` the frame stays on the card up to the sink. On `g2g` it decodes a file with `nvdec`, keeps the frame on the card through the overlay, and shows it with `cudaglsink` or encodes it with `nvenc`. |
 | `INTERVAL` | `1`     | Run detection every Nth frame; the tracker/overlay still update every frame, so it stays smooth at ~N× less inference cost. The main real-time lever. The ball trail needs 1. |
 | `IMGSZ`    | `640`   | Network input size for the `pt` backend. `1280` finds the ball on about half the frames instead of a third, at three times the inference cost. |
-| `BALL_MODEL` | unset | Ball-only weights (without `.pt`) run as a second `pyml_yolo` after the player detector, which then drops its own ball class. `pt` backend only. |
+| `BALL_MODEL` | `models/football/ball11n` | Ball-only weights (without `.pt`) run as a second `pyml_yolo` after the player detector, which then drops its own ball class. Empty runs the player detector alone. `pt` backend only. |
 | `BALL_IMGSZ` | `1280` | Network input size of the ball detector. |
 | `TRAILS`   | `false` | Draw motion trails behind the players. |
 | `BALL_TRAIL` | `false` | Draw a motion trail behind the ball. |
-| `SHOW_BALL` | `false` | Draw the ball marker. |
+| `SHOW_BALL` | `true` | Draw the ball marker. |
 | `KICKS` | `false` | Mark kicks and record a clip of each, see Kicks above. |
 | `KICK_BEFORE` | `3` | Seconds of video in a kick clip before the kick. |
 | `KICK_AFTER` | `1` | Seconds of video in a kick clip after the kick. |

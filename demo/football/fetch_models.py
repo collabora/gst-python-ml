@@ -19,7 +19,7 @@
 #
 # Download the football detector weights from the Hugging Face Hub into
 # models/football/ (gitignored). Usage:
-#   python demo/football/fetch_models.py            # pt + fp16, what run.sh uses
+#   python demo/football/fetch_models.py            # pt + fp16 + ball, what run.sh uses
 #   python demo/football/fetch_models.py int8 onnx  # named variants
 #   python demo/football/fetch_models.py all
 
@@ -38,11 +38,12 @@ VARIANTS = {
     "fp16": "football_fp16.onnx",
     "onnx": "football.onnx",
     "int8": "football_int8.onnx",
+    "ball": "ball11n.pt",
 }
 
 
 def main(argv):
-    wanted = argv[1:] or ["pt", "fp16"]
+    wanted = argv[1:] or ["pt", "fp16", "ball"]
     if wanted == ["all"]:
         wanted = list(VARIANTS)
     for variant in wanted:

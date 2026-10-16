@@ -28,12 +28,18 @@ if [[ "$CUDA" == "true" ]]; then
   [[ "$BACKEND" == "pt" ]] || { echo "CUDA=true runs the pt backend only" >&2; exit 1; }
 fi
 # The weights live on the Hugging Face Hub; this is a no-op once cached.
-python demo/football/fetch_models.py "$BACKEND" >&2
+if [[ "$BACKEND" == "pt" ]]; then
+  BALL_MODEL="${BALL_MODEL-models/football/ball11n}" # ball-only weights run as a second detector after the player one, empty disables
+else
+  BALL_MODEL="${BALL_MODEL:-}"
+fi
+BALL_IMGSZ="${BALL_IMGSZ:-1280}" # network input size of the ball detector
+FETCH="$BACKEND"
+[[ "$BALL_MODEL" == models/football/ball11n ]] && FETCH="$FETCH ball"
+python demo/football/fetch_models.py $FETCH >&2
 INTERVAL="${INTERVAL:-1}"   # run detection every Nth frame; the ball trail needs every frame
 CONF="${CONF:-0.1}"        # detector confidence threshold (low = more detections)
 IMGSZ="${IMGSZ:-640}"      # network input size; 1280 sees the ball far more often (pt backend only)
-BALL_MODEL="${BALL_MODEL:-}" # ball-only weights run as a second detector after the player one (pt backend only)
-BALL_IMGSZ="${BALL_IMGSZ:-1280}" # network input size of the ball detector
 IOU="${IOU:-0.7}"          # NMS IoU (ultralytics/football_analyzer default)
 NEWTRACK="${NEWTRACK:-0.25}" # min confidence to START a new track (ByteTrack gate; kills ghosts)
 DRAWCONF="${DRAWCONF:-0}"  # min confidence to DRAW a detection (0 = draw all; raise to trim weak boxes)
@@ -41,7 +47,7 @@ MERGE="${MERGE:-0.5}"      # collapse overlapping boxes (lower=merge more; 0 dis
 SMOOTH="${SMOOTH:-0.6}"    # temporal EMA on circle positions (0=off, higher=smoother but more lag)
 TRAILS="${TRAILS:-false}"  # draw motion trails behind players
 BALL_TRAIL="${BALL_TRAIL:-false}"
-SHOW_BALL="${SHOW_BALL:-false}" # draw the ball marker
+SHOW_BALL="${SHOW_BALL:-true}" # draw the ball marker
 KICKS="${KICKS:-false}"    # mark each kick and record a clip of it
 KICK_BEFORE="${KICK_BEFORE:-3}" # seconds of video kept before a kick
 KICK_AFTER="${KICK_AFTER:-1}"   # seconds of video kept after a kick
