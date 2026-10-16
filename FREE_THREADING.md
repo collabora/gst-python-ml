@@ -1,6 +1,6 @@
 # Free-threaded Python on g2g
 
-`g2g-launch-py --threads` runs each hosted element on its own OS thread. On free-threaded CPython 3.14t with the GIL off, those threads run Python at the same time. The gst host can't do this: pygobject turns the GIL back on at import and crashes when it is forced off.
+`g2g-launch-py --threads` runs each hosted element on its own OS thread. On free-threaded CPython 3.14t with the GIL off, those threads run Python at the same time. The gst host does the same with the patched PyGObject and gst-python under [gst host](#gst-host). Released PyGObject turns the GIL back on at import and crashes when it is forced off.
 
 Tested with the yolo detector and pyml_tracker on CUDA, Fedora 43, CPython 3.14.2t. This is experimental. OpenCV has no official free-threaded support, so it is built from source with a patch upstream has not merged.
 
@@ -81,6 +81,51 @@ The first 15 s of `data/soccer_tracking.mp4` (752 frames) into fakesink, glass2g
 
 Free threading doesn't speed this pipeline up. yolo spends about 22 ms per frame in Python and sets the frame rate, and the GIL is not what holds it back. Before d949f2d5 each hosted element built and tore down a Python thread state every frame, which cost 5 ms a frame on 3.14t.
 
+## gst host
+
+gst-python's plugin embeds libpython, so the gst host needs a plugin built against `libpython3.14t`, a PyGObject that stays GIL-free, and gst-python override modules that declare themselves GIL-free. Both patched trees are on the `free-threading-python-3.14` branches of [boxerab/pygobject](https://github.com/boxerab/pygobject/tree/free-threading-python-3.14) and [boxerab/gstreamer](https://github.com/boxerab/gstreamer/tree/free-threading-python-3.14). Everything installs into the venv.
+
+```
+PYGOBJECT_SRC=$HOME/pygobject-ft
+git clone -b free-threading-python-3.14 https://github.com/boxerab/pygobject.git $PYGOBJECT_SRC
+uv build --wheel --python $FT_VENV/bin/python --out-dir $PYGOBJECT_SRC/dist $PYGOBJECT_SRC
+uv pip install --python $FT_VENV/bin/python $PYGOBJECT_SRC/dist/pygobject-*.whl
+
+GST_SRC=$HOME/gstreamer-ft
+git clone --filter=blob:none --sparse --depth=1 --branch free-threading-python-3.14 https://github.com/boxerab/gstreamer.git $GST_SRC
+git -C $GST_SRC sparse-checkout set subprojects/gst-python
+uvx meson setup $GST_SRC/subprojects/gst-python/build $GST_SRC/subprojects/gst-python \
+  --prefix=$FT_VENV -Dpython-exe=$FT_VENV/bin/python -Dplugin=enabled -Dtests=disabled
+uvx meson install -C $GST_SRC/subprojects/gst-python/build
+
+PLUGINS_NO_PYTHON=$HOME/gst-plugins-no-python
+mkdir -p $PLUGINS_NO_PYTHON && ln -s /usr/lib64/gstreamer-1.0/* $PLUGINS_NO_PYTHON/ && rm $PLUGINS_NO_PYTHON/libgstpython.so
+```
+
+- The system `libgstpython.so` links `libpython3.14.so` and must not load into the 3.14t process. `GST_PLUGIN_SYSTEM_PATH_1_0` points at a plugin directory without it, and `GST_REGISTRY` keeps the system registry out of it.
+- The plugin takes its Python prefix from the first `python` on `PATH`, like the g2g launcher.
+- `pyml-launch.py` re-runs itself under the repo `.venv`, so call `gst-launch-1.0` directly.
+
+```
+PATH=$FT_VENV/bin:$PATH LD_LIBRARY_PATH=$FT_LIB \
+  GST_PLUGIN_SYSTEM_PATH_1_0=$PLUGINS_NO_PYTHON GST_PLUGIN_PATH_1_0=$FT_VENV/lib64/gstreamer-1.0:$PWD/plugins \
+  GST_REGISTRY=$FT_VENV/gst-registry.bin PYTHONPATH=$PWD/plugins/python PYTHONWARNINGS=error::RuntimeWarning \
+  gst-launch-1.0 filesrc location=data/soccer_tracking.mp4 ! qtdemux ! h264parse ! avdec_h264 ! videoconvertscale \
+  ! video/x-raw,width=1280,height=720,format=RGBA ! identity eos-after=752 \
+  ! pyml_yolo model-name=models/football/football device=cuda:0 imgsz=640 confidence=0.1 \
+  ! pyml_tracker tracker-type=bytetrack new-track-confidence=0.25 ! fakesink
+```
+
+The same 752 frames into fakesink, pipeline time as `gst-launch-1.0` reports it. The stock row is `python pyml-launch.py` with the same pipeline on the system gst-python and PyGObject 3.56.2.
+
+| host | pipeline time | fps |
+|---|---|---|
+| stock 3.14 | 19.6 s | 38.3 |
+| 3.14t, GIL off | 19.1 s | 39.3 |
+| 3.14t, `PYTHON_GIL=1` | 19.3 s | 38.9 |
+
+Same conclusion as g2g: yolo sets the frame rate. Before the thread state pin described below the GIL-off run took 32.9 s.
+
 ## PyGObject investigation
 
 Tested on Fedora 43 with CPython 3.14.2t, GStreamer 1.26.11 and PyGObject 3.58.1. PyPI distributes PyGObject as source only, so a `cp314t` build succeeds. The released `_gi` module does not declare free-threading support. CPython therefore enables the GIL when `_gi` is imported. `PYTHON_GIL=0` overrides this protection and exposes data races.
@@ -100,11 +145,14 @@ An experimental recursive lock around wrapper lookup, registration and removal r
 
 gst-python also needs free-threading work. `_gi_gst` and `_gi_gst_analytics` use single-phase module initialization without calling `PyUnstable_Module_SetGIL()`. A matching 1.26.11 build with that declaration imported with the GIL disabled. With the PyGObject wrapper lock, its overrides passed the concurrent pipeline test.
 
+With those fixes the gst host ran the yolo pipeline at 23 fps against 38 on stock, and a python element that does nothing cost 1.6 ms a buffer against 0.05 ms. PyGObject enters Python from a streaming thread through `PyGILState_Ensure()` and leaves through `PyGILState_Release()`, which creates a thread state and deletes it again on every call. On 3.14t deleting a thread state costs about 1.7 ms against 0.03 ms on stock, and 3.15.0a5t is the same: `perf` puts the time in mimalloc's abandoned segment collection, `mi_heap_collect_ex` calling `_mi_abandoned_collect` and `mi_segment_try_purge`, with one clock read per segment. The pin patch keeps the first thread state a foreign thread creates until the thread exits, where a `GPrivate` destructor releases it. The empty element then costs 0.04 ms a buffer and the yolo pipeline matches stock. The three reproducers and the yolo pipeline passed repeated runs under `GLIBC_TUNABLES=glibc.malloc.check=3` with the pin.
+
 The installed `libgstpython.so` links `libpython3.14.so.1.0`. A gst host using 3.14t needs this plugin rebuilt against `libpython3.14t.so.1.0`. Loading the regular plugin into the 3.14t process fails during Python thread-state attachment. A rebuilt 1.26.11 plugin loaded under `gst-inspect-1.0` and registered all 48 project elements with the GIL disabled.
 
 The experimental changes and reproducers are preserved here:
 
 - [`pygobject-wrapper-lock.patch`](patches/free-threading/pygobject-wrapper-lock.patch), applied after PyGObject draft commit `5584ef47f975c276fcaf9827ee032214aecb60ba`.
+- [`pygobject-thread-state-pin.patch`](patches/free-threading/pygobject-thread-state-pin.patch), applied after the wrapper lock.
 - [`gst-python-module-gil.patch`](patches/free-threading/gst-python-module-gil.patch), applied to gst-python 1.26.11.
 - [`pygobject_glib_stress.py`](patches/free-threading/pygobject_glib_stress.py), [`pygobject_wrapper_stress.py`](patches/free-threading/pygobject_wrapper_stress.py) and [`pygobject_gstreamer_stress.py`](patches/free-threading/pygobject_gstreamer_stress.py).
 
@@ -115,7 +163,8 @@ The remaining work is:
 1. Replace or validate the broad PyGObject wrapper lock and audit the remaining wrapper reads.
 2. Add the wrapper identity test and both cache stress tests to PyGObject.
 3. Audit the gst-python override modules beyond their module declarations.
-4. Run the gst host and project pipelines repeatedly with allocator diagnostics.
+4. Run `tests/test_pipelines.py` on the free-threaded gst host. `pyml-launch.py` has no way to pick that host.
+5. Upstream the thread state pin, or get CPython to make thread state deletion cheap.
 
 ## Not working yet
 

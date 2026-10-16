@@ -1,0 +1,94 @@
+diff --git a/gi/pygi-closure.c b/gi/pygi-closure.c
+index 06632485..28df26bc 100644
+--- a/gi/pygi-closure.c
++++ b/gi/pygi-closure.c
+@@ -498,6 +498,35 @@ _pygi_closure_clear_retvals (PyGIInvokeState *state, PyGICallableCache *cache,
+     }
+ }
+ 
++static void _pygi_thread_state_unpin (gpointer pinned);
++
++/* a thread state PyGILState_Ensure creates dies with the matching release,
++ * and on free-threaded builds deleting one costs milliseconds */
++static GPrivate pinned_thread_state = G_PRIVATE_INIT (_pygi_thread_state_unpin);
++
++static void
++_pygi_thread_state_unpin (gpointer pinned)
++{
++    PyThreadState *tstate;
++
++    if (!Py_IsInitialized () || Py_IsFinalizing ())
++        return;
++    tstate = PyGILState_GetThisThreadState ();
++    if (tstate == NULL)
++        return;
++    PyEval_RestoreThread (tstate);
++    PyGILState_Release (PyGILState_UNLOCKED);
++}
++
++void
++pygi_thread_state_pin (gboolean created)
++{
++    if (!created || g_private_get (&pinned_thread_state))
++        return;
++    PyGILState_Ensure ();
++    g_private_set (&pinned_thread_state, GINT_TO_POINTER (TRUE));
++}
++
+ static void
+ _pygi_invoke_closure_clear_py_data (PyGICClosure *invoke_closure)
+ {
+@@ -513,6 +542,7 @@ static void
+ _pygi_closure_handle (ffi_cif *cif, void *result, void **args, void *data)
+ {
+     PyGILState_STATE py_state;
++    gboolean created_thread_state;
+     PyGICClosure *closure = data;
+     PyObject *retval;
+     gboolean success = TRUE;
+@@ -527,7 +557,9 @@ _pygi_closure_handle (ffi_cif *cif, void *result, void **args, void *data)
+ 
+     /* Lock the GIL as we are coming into this code without the lock and we
+       may be executing python code */
++    created_thread_state = PyGILState_GetThisThreadState () == NULL;
+     py_state = PyGILState_Ensure ();
++    pygi_thread_state_pin (created_thread_state);
+ 
+     if (closure->cache == NULL) goto end;
+ 
+diff --git a/gi/pygi-closure.h b/gi/pygi-closure.h
+index 9d2a8c31..29ac8abd 100644
+--- a/gi/pygi-closure.h
++++ b/gi/pygi-closure.h
+@@ -50,6 +50,7 @@ typedef struct _PyGICClosure {
+ } PyGICClosure;
+ 
+ void _pygi_invoke_closure_free (PyGICClosure *invoke_closure);
++void pygi_thread_state_pin (gboolean created);
+ 
+ PyGICClosure *_pygi_make_native_closure (GICallableInfo *info,
+                                          PyGIClosureCache *cache,
+diff --git a/gi/pygi-type.c b/gi/pygi-type.c
+index 4a248ca0..1d022e06 100644
+--- a/gi/pygi-type.c
++++ b/gi/pygi-type.c
+@@ -17,6 +17,7 @@
+  */
+ 
+ #include "pygi-type.h"
++#include "pygi-closure.h"
+ 
+ #include "pygboxed.h"
+ #include "pygenum.h"
+@@ -822,8 +823,11 @@ pyg_closure_marshal (GClosure *closure, GValue *return_value,
+     PyGClosure *pc = (PyGClosure *)closure;
+     PyObject *params, *ret;
+     guint i;
++    gboolean created_thread_state;
+ 
++    created_thread_state = PyGILState_GetThisThreadState () == NULL;
+     state = PyGILState_Ensure ();
++    pygi_thread_state_pin (created_thread_state);
+ 
+     /* construct Python tuple for the parameter values */
+     params = PyTuple_New (n_param_values);
