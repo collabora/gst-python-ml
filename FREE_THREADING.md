@@ -108,7 +108,7 @@ The experimental changes and reproducers are preserved here:
 - [`gst-python-module-gil.patch`](patches/free-threading/gst-python-module-gil.patch), applied to gst-python 1.26.11.
 - [`pygobject_glib_stress.py`](patches/free-threading/pygobject_glib_stress.py), [`pygobject_wrapper_stress.py`](patches/free-threading/pygobject_wrapper_stress.py) and [`pygobject_gstreamer_stress.py`](patches/free-threading/pygobject_gstreamer_stress.py).
 
-The remote forks are [boxerab/pygobject](https://github.com/boxerab/pygobject) and [boxerab/gstreamer](https://github.com/boxerab/gstreamer). Patch branches have not been pushed.
+The patches are pushed to [boxerab/pygobject](https://github.com/boxerab/pygobject/tree/free-threading-python-3.14) and [boxerab/gstreamer](https://github.com/boxerab/gstreamer/tree/free-threading-python-3.14) on branches named `free-threading-python-3.14`.
 
 The remaining work is:
 
