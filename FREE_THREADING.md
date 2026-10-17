@@ -106,6 +106,7 @@ The experimental changes and reproducers are preserved here:
 
 - [`pygobject-wrapper-lock.patch`](patches/free-threading/pygobject-wrapper-lock.patch), applied after PyGObject draft commit `5584ef47f975c276fcaf9827ee032214aecb60ba`.
 - [`gst-python-module-gil.patch`](patches/free-threading/gst-python-module-gil.patch), applied to gst-python 1.26.11.
+- [`pygobject-thread-state-pin.patch`](patches/free-threading/pygobject-thread-state-pin.patch), keeps the thread state a GStreamer streaming thread creates on its first callback. Without it each `PyGILState_Release` deletes the thread state, which costs 1.7 ms on 3.14t and held the gst host at 23 fps.
 - [`pygobject_glib_stress.py`](patches/free-threading/pygobject_glib_stress.py), [`pygobject_wrapper_stress.py`](patches/free-threading/pygobject_wrapper_stress.py) and [`pygobject_gstreamer_stress.py`](patches/free-threading/pygobject_gstreamer_stress.py).
 
 The PyGObject branch is [boxerab/pygobject free-threading-python-3.14](https://github.com/boxerab/pygobject/tree/free-threading-python-3.14). The gst-python change is rebased on GStreamer main in [boxerab/gstreamer gst-python-free-threading](https://gitlab.freedesktop.org/boxerab/gstreamer/-/tree/gst-python-free-threading) for an upstream merge request.
