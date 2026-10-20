@@ -349,6 +349,25 @@ class TorchFootballDrawing:
             left, top, right + 1, bottom + 1, self.colour(rgba)
         )
 
+    def draw_rectangle(self, top_left, bottom_right, rgba, thickness):
+        self.draw_queued_squares()
+        left, top = top_left
+        right, bottom = bottom_right
+        corners = [
+            {"x": left, "y": top},
+            {"x": right, "y": top},
+            {"x": right, "y": bottom},
+            {"x": left, "y": bottom},
+        ]
+        colour = self.colour(rgba)
+        self.graphics.draw_segments(
+            [
+                (start, end, colour)
+                for start, end in zip(corners, corners[1:] + corners[:1])
+            ],
+            thickness,
+        )
+
     def blit(self, image, left, top):
         import torch
 

@@ -388,6 +388,7 @@ def test_the_elements_that_accept_device_frames_are_found(shells):
         "pyml_superres",
         "pyml_tracker",
         "pyml_football_overlay",
+        "pyml_baseball_overlay",
         "pyml_overlay_counter",
         "pyml_kafkasink",
     }

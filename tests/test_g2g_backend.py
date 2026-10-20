@@ -147,6 +147,7 @@ HOSTED_ELEMENT_MODULES = [
     "face",
     "tracker",
     "football_overlay",
+    "baseball_overlay",
     "overlay_counter",
     "clap",
     "vad",
@@ -560,6 +561,74 @@ def test_football_overlay_draws_the_ball_trail_without_the_player_trails():
     pytest.importorskip("cv2")
     assert ball_path_pixels(ball_trail=True).any(), "the ball trail was drawn"
     assert not ball_path_pixels(ball_trail=False).any(), "no ball trail when off"
+
+
+BATTER_BOX = {"x": 500, "y": 200, "w": 80, "h": 300}
+BAT_BOX = {"x": 540, "y": 150, "w": 30, "h": 120}
+FIELDER_BOX = {"x": 1000, "y": 400, "w": 40, "h": 120}
+BASEBALL_FRAMES = 3
+
+
+def baseball_overlay_pixels(show_equipment):
+    from baseball_overlay import BaseballOverlay, ROLE_RGBA, BATTER_ROLE, PLAYER_ROLE
+
+    overlay = BaseballOverlay()
+    overlay.show_labels = False
+    overlay.show_equipment = show_equipment
+    width, height = 1280, 720
+    upstream = [
+        {"label": "person_id_1", "score": 1.0, **BATTER_BOX},
+        {"label": "person_id_2", "score": 1.0, **FIELDER_BOX},
+        {"label": "baseball bat", "score": 0.9, **BAT_BOX},
+    ]
+    for _ in range(BASEBALL_FRAMES):
+        frame = bytearray(width * height * 4)
+        overlay.g2g_process(
+            frame, width, height, "RGBA", StubMetaSink(upstream_objects=upstream)
+        )
+    pixels = np.frombuffer(frame, dtype=np.uint8).reshape(height, width, 4)
+    return pixels, ROLE_RGBA[BATTER_ROLE][:3], ROLE_RGBA[PLAYER_ROLE][:3]
+
+
+# the ellipse at the feet is this fraction of the box width tall
+ELLIPSE_HEIGHT_RATIO = 0.35
+
+
+def ellipse_colours(pixels, box):
+    bottom = box["y"] + box["h"]
+    centre = box["x"] + box["w"] // 2
+    reach = int(ELLIPSE_HEIGHT_RATIO * box["w"]) + 3
+    region = pixels[bottom - reach : bottom + reach, centre - 10 : centre + 10, :3]
+    return {tuple(colour) for colour in region.reshape(-1, 3) if colour.any()}
+
+
+def test_baseball_overlay_colours_the_person_holding_the_bat_as_the_batter():
+    pytest.importorskip("cv2")
+    pixels, batter_rgb, player_rgb = baseball_overlay_pixels(show_equipment=True)
+    assert batter_rgb in ellipse_colours(pixels, BATTER_BOX)
+    assert player_rgb in ellipse_colours(pixels, FIELDER_BOX)
+    bat_edge = pixels[
+        BAT_BOX["y"] : BAT_BOX["y"] + 1, BAT_BOX["x"] : BAT_BOX["x"] + BAT_BOX["w"]
+    ]
+    assert bat_edge.any(), "the bat outline was drawn"
+
+
+def test_baseball_overlay_drops_a_box_nested_in_a_stronger_one():
+    from baseball_overlay import drop_nested
+
+    whole_bat = {"box": (100, 100, 300, 160), "confidence": 0.8}
+    barrel = {"box": (200, 110, 300, 150), "confidence": 0.5}
+    other_bat = {"box": (600, 100, 800, 160), "confidence": 0.4}
+    assert drop_nested([barrel, whole_bat, other_bat]) == [whole_bat, other_bat]
+
+
+def test_baseball_overlay_leaves_the_bat_unmarked_when_equipment_is_off():
+    pytest.importorskip("cv2")
+    pixels, _, _ = baseball_overlay_pixels(show_equipment=False)
+    bat_top = BAT_BOX["y"] - 2
+    assert not pixels[
+        bat_top : bat_top + 1, BAT_BOX["x"] : BAT_BOX["x"] + BAT_BOX["w"]
+    ].any()
 
 
 def test_aggregator_drives_the_same_hook_a_transform_fills_in():
