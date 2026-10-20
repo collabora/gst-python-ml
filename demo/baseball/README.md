@@ -17,9 +17,9 @@ it stays put once the bat or glove is hidden for a few frames.
 the weights there on first use. `MODEL=yolo11n` and `MODEL=yolo11x` work the
 same way.
 
-The default clip `data/baseball_batter.mp4` is Mixkit's free "Batter hits a
-baseball" (17 s, 1280x720, 30 fps, filmed from behind the batter), downloaded
-on first run from the URL in `run.sh`. It is not in git. The clip is under the
+The default clip `data/baseball_batter.mp4` is Mixkit's free
+["Batter hits a baseball"](https://mixkit.co/free-stock-video/batter-hits-a-baseball-853/)
+(17 s, 1280x720, 30 fps, filmed from behind the batter), under the
 [Mixkit Stock Video Free License](https://mixkit.co/license/#videoFree).
 
 ## Run

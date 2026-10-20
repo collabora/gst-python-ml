@@ -31,8 +31,6 @@ BALL_TRAIL="${BALL_TRAIL:-true}"
 LABELS="${LABELS:-true}"   # write batter / fielder / bat / glove next to each marker
 EQUIPMENT="${EQUIPMENT:-true}" # outline the bat and the glove
 CLIP="data/baseball_batter.mp4"
-# Mixkit's free "Batter hits a baseball" clip, not in git
-CLIP_URL="https://assets.mixkit.co/videos/853/853-720.mp4"
 
 if [[ "$HOST" == "g2g" ]]; then
   DETECTOR_ELEMENT="pyelement module=yolo class=YOLOTransform"
@@ -90,12 +88,6 @@ else
   ENCODE="$Q ! ${DOWNLOAD}videoconvert ! openh264enc bitrate=8000000 ! h264parse ! mp4mux"
 fi
 
-fetch_clip() {
-  [[ "$1" == "$CLIP" && ! -f "$CLIP" ]] || return 0
-  echo "downloading $CLIP_URL -> $CLIP" >&2
-  curl -sSL -o "$CLIP" "$CLIP_URL"
-}
-
 MODE="${1:-file}"
 if [[ "$MODE" == "camera" ]]; then
   [[ "$HOST" == "g2g" && "$CUDA" == "true" ]] && { echo "CUDA=true on g2g decodes a file with nvdec, camera mode runs without it" >&2; exit 1; }
@@ -111,7 +103,6 @@ elif [[ "$MODE" == "display" ]]; then
   IN="${2:-$CLIP}"
   SIZE="${3:-1280x720}"
   W="${SIZE%x*}"; H="${SIZE#*x}"
-  fetch_clip "$IN"
   [[ -f "$IN" ]] || { echo "input not found: $IN" >&2; exit 1; }
   echo "[$HOST] '$IN' @ ${W}x${H} -> live display (real-time)"
   exec $LAUNCH \
@@ -124,7 +115,6 @@ else
   OUT="${2:-demo/baseball/out.mp4}"
   SIZE="${3:-1280x720}"
   W="${SIZE%x*}"; H="${SIZE#*x}"
-  fetch_clip "$IN"
   [[ -f "$IN" ]] || { echo "input not found: $IN" >&2; exit 1; }
   echo "[$HOST] '$IN' @ ${W}x${H} -> '$OUT'"
   $LAUNCH \
