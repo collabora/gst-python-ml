@@ -1,4 +1,4 @@
-# FootballOverlayDrawing
+# SportOverlayDrawing
 # Copyright (C) 2024-2026 Collabora Ltd.
 #
 # This library is free software; you can redistribute it and/or
@@ -65,6 +65,22 @@ def channel_order(video_format):
     return CHANNEL_ORDER.get(video_format, CHANNEL_ORDER["RGBA"])
 
 
+# drawings: (implementation, width, height, format) -> drawing, kept across frames
+def drawing_for(drawings, frame, fmt):
+    import numpy as np
+
+    height, width = frame.shape[:2]
+    if isinstance(frame, np.ndarray):
+        key = (OpenCVSportDrawing, width, height, fmt)
+        if key not in drawings:
+            drawings[key] = OpenCVSportDrawing(fmt)
+        return drawings[key]
+    key = (TorchSportDrawing, width, height, fmt)
+    if key not in drawings:
+        drawings[key] = TorchSportDrawing(width, height, fmt)
+    return drawings[key]
+
+
 def jersey_window(box, frame_width, frame_height):
     x1, y1, x2, y2 = (int(value) for value in box)
     box_height, box_width = y2 - y1, x2 - x1
@@ -97,7 +113,7 @@ def jersey_vote(counts, pixel_count):
     return best
 
 
-class OpenCVFootballDrawing:
+class OpenCVSportDrawing:
     def __init__(self, video_format):
         self.order = channel_order(video_format)
         self.inverse_order = [self.order.index(channel) for channel in range(4)]
@@ -214,7 +230,7 @@ class OpenCVFootballDrawing:
         return jersey_vote(counts, rgb.shape[0] * rgb.shape[1])
 
 
-class TorchFootballDrawing:
+class TorchSportDrawing:
     def __init__(self, width, height, video_format):
         from overlay_helper.overlay_torch import TorchOverlayGraphics
 

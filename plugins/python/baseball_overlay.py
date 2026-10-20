@@ -20,7 +20,7 @@ import re
 
 import backend
 from backend import analytics, GObject, InPlaceVideoTransform
-from football_overlay_drawing import OpenCVFootballDrawing, TorchFootballDrawing
+from sport_overlay_drawing import drawing_for
 
 if backend.BACKEND == "gst":
     from backend.gst import Gst
@@ -186,7 +186,6 @@ class BaseballOverlay(InPlaceVideoTransform):
         self._role_votes = {}
         self._trail = []
         self._trail_frame = None
-        # (implementation, width, height, format) -> drawing
         self._drawings = {}
 
     def _read_metadata(self, buf):
@@ -206,20 +205,6 @@ class BaseballOverlay(InPlaceVideoTransform):
                 }
             )
         return entries
-
-    def _drawing_for(self, frame, fmt):
-        import numpy as np
-
-        height, width = frame.shape[:2]
-        if isinstance(frame, np.ndarray):
-            key = (OpenCVFootballDrawing, width, height, fmt)
-            if key not in self._drawings:
-                self._drawings[key] = OpenCVFootballDrawing(fmt)
-            return self._drawings[key]
-        key = (TorchFootballDrawing, width, height, fmt)
-        if key not in self._drawings:
-            self._drawings[key] = TorchFootballDrawing(width, height, fmt)
-        return self._drawings[key]
 
     def _role(self, person, bats, gloves):
         held_bat = any(
@@ -326,7 +311,7 @@ class BaseballOverlay(InPlaceVideoTransform):
             x1, y1, x2, y2 = ball["box"]
             self._extend_trail((int((x1 + x2) / 2), int((y1 + y2) / 2)))
 
-        drawing = self._drawing_for(frame, fmt)
+        drawing = drawing_for(self._drawings, frame, fmt)
         with drawing.drawing_on(frame):
             for person in people:
                 role = self._role(person, bats, gloves)

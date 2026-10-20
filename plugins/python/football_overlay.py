@@ -22,10 +22,10 @@ import re
 
 import backend
 from backend import analytics, frameio, GObject, InPlaceVideoTransform
-from football_overlay_drawing import (
-    OpenCVFootballDrawing,
-    TorchFootballDrawing,
+from sport_overlay_drawing import (
+    OpenCVSportDrawing,
     channel_order,
+    drawing_for,
 )
 from utils.blob_headers import ALERT_META_HEADER
 from utils.kick_detector import KickDetector
@@ -375,7 +375,6 @@ class FootballOverlay(InPlaceVideoTransform):
         self._headshot_loaded = False
         self._hud_bitmap = None
         self._hud_bitmap_key = None
-        # (implementation, width, height, format) -> drawing
         self._drawings = {}
         # Position-smoothing slots: {"box": np[x1,y1,x2,y2]} kept across frames
         # and matched by proximity, so the drawn ellipse can be low-passed.
@@ -1036,7 +1035,7 @@ class FootballOverlay(InPlaceVideoTransform):
             w + 1 + 2 * _HUD_BORDER_OVERHANG,
             _RGBA_CHANNELS,
         )
-        drawing = OpenCVFootballDrawing(self._format_seen)
+        drawing = OpenCVSportDrawing(self._format_seen)
         # the thick border leaves its corner pixels unpainted
         bitmap = np.empty(bitmap_size, dtype=np.uint8)
         bitmap[:] = drawing.buffer_colour(rgba)
@@ -1057,20 +1056,6 @@ class FootballOverlay(InPlaceVideoTransform):
                 f"Distance: {distance_text} m", (text_x, y + 85), 0.6, _HUD_TEXT_RGBA, 1
             )
         return bitmap
-
-    def _drawing_for(self, frame, fmt):
-        import numpy as np
-
-        height, width = frame.shape[:2]
-        if isinstance(frame, np.ndarray):
-            key = (OpenCVFootballDrawing, width, height, fmt)
-            if key not in self._drawings:
-                self._drawings[key] = OpenCVFootballDrawing(fmt)
-            return self._drawings[key]
-        key = (TorchFootballDrawing, width, height, fmt)
-        if key not in self._drawings:
-            self._drawings[key] = TorchFootballDrawing(width, height, fmt)
-        return self._drawings[key]
 
     def process_in_place(self, frame, fmt, buf):
         import cv2
@@ -1137,7 +1122,7 @@ class FootballOverlay(InPlaceVideoTransform):
         draw_entries = self._smooth_boxes(np, draw_entries)
         if not all_entries:
             return
-        drawing = self._drawing_for(frame, fmt)
+        drawing = drawing_for(self._drawings, frame, fmt)
         with drawing.drawing_on(frame):
             self._draw_frame(cv2, np, drawing, active, track_entries, draw_entries)
 
