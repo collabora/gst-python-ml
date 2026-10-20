@@ -194,6 +194,23 @@ run them under glass2glass, and how to run the MCP server.
 [FREE_THREADING.md](FREE_THREADING.md) runs the yolo detector and tracker on
 glass2glass under free-threaded Python 3.14t with the GIL off.
 
+## Demos
+
+Each demo is a launcher script and a README under `demo/`, with a file,
+display and camera mode and a `HOST=gst` switch to run the same pipeline on
+`gst-launch-1.0`.
+
+- [Football](demo/football/README.md): a detector trained on broadcast
+  football, a tracker, and an overlay with team colours, a focal-player HUD,
+  kick detection and clip recording.
+- [Baseball](demo/baseball/README.md): the stock COCO YOLO weights, a tracker,
+  and an overlay that marks the batter, fielders, bat, glove and ball with a
+  ball trail. No training needed.
+
+```
+demo/baseball/run.sh display
+```
+
 ## Blog post
 
 [![Unleashing gst-python-ml](https://www.collabora.com/assets/images/blog/Collabora-GStPython.jpg)](https://www.collabora.com/news-and-blog/blog/2025/05/12/unleashing-gst-python-ml-analytics-gstreamer-pipelines/)
