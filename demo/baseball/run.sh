@@ -87,7 +87,7 @@ else
   CHAIN="$Q ! $DETECT ! $Q ! $TRACK ! $Q ! $OVERLAY"
   DISPLAY_SINK="$PREROLL ! ${DOWNLOAD}videoconvert ! autovideosink sync=true"
   CAMERA_SINK="$Q ! ${DOWNLOAD}videoconvert ! autovideosink sync=false"
-  ENCODE="$Q ! ${DOWNLOAD}videoconvert ! openh264enc ! h264parse ! mp4mux"
+  ENCODE="$Q ! ${DOWNLOAD}videoconvert ! openh264enc bitrate=8000000 ! h264parse ! mp4mux"
 fi
 
 fetch_clip() {
