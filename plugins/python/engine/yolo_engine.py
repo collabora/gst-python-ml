@@ -530,7 +530,7 @@ class YoloEngine(PyTorchEngine):
                 conf=self.conf,
                 iou=self.iou,
                 agnostic_nms=self.agnostic_nms,
-                verbose=True,
+                verbose=False,
             )
         is_batch = isinstance(frames, np.ndarray) and frames.ndim == 4
         # ultralytics reads a numpy frame as bgr
@@ -570,7 +570,7 @@ class YoloEngine(PyTorchEngine):
                         conf=conf,
                         iou=iou,
                         agnostic_nms=agnostic,
-                        verbose=True,
+                        verbose=False,
                     )
                 )
             ]
@@ -583,7 +583,7 @@ class YoloEngine(PyTorchEngine):
                 conf=conf,
                 iou=iou,
                 agnostic_nms=agnostic,
-                verbose=True,
+                verbose=False,
                 tracker=TRACKER_CONFIGURATION,
             )
         else:
@@ -593,7 +593,7 @@ class YoloEngine(PyTorchEngine):
                 conf=conf,
                 iou=iou,
                 agnostic_nms=agnostic,
-                verbose=True,
+                verbose=False,
             )
         end_inf = time.time()
 
