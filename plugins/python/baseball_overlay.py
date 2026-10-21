@@ -230,6 +230,10 @@ class BaseballOverlay(InPlaceVideoTransform):
         best = max(votes, key=votes.get)
         return best if votes[best] > 0 else PLAYER_ROLE
 
+    def _drop_stale_trail(self):
+        if self._trail and self._frame - self._trail_frame > BALL_TRAIL_MAX_GAP:
+            self._trail = []
+
     def _extend_trail(self, point):
         if self._trail:
             elapsed = self._frame - self._trail_frame
@@ -237,9 +241,7 @@ class BaseballOverlay(InPlaceVideoTransform):
                 (point[0] - self._trail[-1][0]) ** 2
                 + (point[1] - self._trail[-1][1]) ** 2
             ) ** 0.5
-            if elapsed > BALL_TRAIL_MAX_GAP or jump > (
-                BALL_TRAIL_MAX_STEP * self.width * elapsed
-            ):
+            if jump > BALL_TRAIL_MAX_STEP * self.width * elapsed:
                 self._trail = []
         self._trail.append(point)
         del self._trail[: -self.trail_length]
@@ -288,6 +290,7 @@ class BaseballOverlay(InPlaceVideoTransform):
 
     def process_in_place(self, frame, fmt, buf):
         self._frame += 1
+        self._drop_stale_trail()
         entries = [
             entry
             for entry in self._read_metadata(buf)

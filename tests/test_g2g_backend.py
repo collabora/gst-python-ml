@@ -1988,3 +1988,43 @@ def test_gst_in_place_audio_writes_the_samples_and_appends_the_blob_after_them()
         memories.append(bytes(map_info.data))
         buf.peek_memory(index).unmap(map_info)
     assert memories == [bytes(4), b"GST-TEST:muted"]
+
+
+BASEBALL_TRAIL_SIGHTINGS = 4
+
+
+def baseball_trail_row_after(frames_without_ball):
+    from baseball_overlay import BaseballOverlay
+
+    overlay = BaseballOverlay()
+    overlay.show_labels = False
+    overlay.show_equipment = False
+    width, height = 1280, 720
+    batter = {"label": "person_id_1", "score": 1.0, **BATTER_BOX}
+    for step in range(BASEBALL_TRAIL_SIGHTINGS + frames_without_ball):
+        frame = bytearray(width * height * 4)
+        upstream = [batter]
+        if step < BASEBALL_TRAIL_SIGHTINGS:
+            ball = {
+                "label": "sports ball",
+                "score": 0.9,
+                "x": BALL_START_X + step * BALL_STEP_PIXELS,
+                "y": BALL_Y,
+                "w": BALL_SIZE,
+                "h": BALL_SIZE,
+            }
+            upstream.append(ball)
+        overlay.g2g_process(
+            frame, width, height, "RGBA", StubMetaSink(upstream_objects=upstream)
+        )
+    pixels = np.frombuffer(frame, dtype=np.uint8).reshape(height, width, 4)
+    trail_y = BALL_Y + BALL_SIZE // 2
+    return pixels[trail_y - 2 : trail_y + 3, BALL_START_X : BALL_START_X + 40]
+
+
+def test_baseball_overlay_clears_the_trail_once_the_ball_stays_unseen():
+    pytest.importorskip("cv2")
+    from baseball_overlay import BALL_TRAIL_MAX_GAP
+
+    assert baseball_trail_row_after(BALL_TRAIL_MAX_GAP).any(), "trail kept in the gap"
+    assert not baseball_trail_row_after(BALL_TRAIL_MAX_GAP + 1).any()
