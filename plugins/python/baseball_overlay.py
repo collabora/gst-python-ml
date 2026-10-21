@@ -76,6 +76,8 @@ EQUIPMENT_OVERLAP = 0.3
 NESTED_OVERLAP = 0.7
 # a ball this far inside a bat box or the batter's box is the knob or a fist
 BALL_ON_BATTER = 0.5
+# two bat boxes closer than this fraction of their union's diagonal are one bat
+BAT_PART_GAP = 0.25
 
 
 def parse_label(full_label):
@@ -102,6 +104,44 @@ def box_overlap(box, other):
         (other[2] - other[0]) * (other[3] - other[1]),
     )
     return intersection / smaller if smaller > 0 else 0.0
+
+
+def box_union(box, other):
+    return (
+        min(box[0], other[0]),
+        min(box[1], other[1]),
+        max(box[2], other[2]),
+        max(box[3], other[3]),
+    )
+
+
+def same_bat(box, other):
+    gap_x = max(0, max(box[0], other[0]) - min(box[2], other[2]))
+    gap_y = max(0, max(box[1], other[1]) - min(box[3], other[3]))
+    union = box_union(box, other)
+    diagonal = ((union[2] - union[0]) ** 2 + (union[3] - union[1]) ** 2) ** 0.5
+    return (gap_x**2 + gap_y**2) ** 0.5 < BAT_PART_GAP * diagonal
+
+
+def merge_bat_parts(entries):
+    merged = [
+        dict(entry) for entry in sorted(entries, key=lambda entry: -entry["confidence"])
+    ]
+    index = 0
+    while index < len(merged):
+        kept = merged[index]
+        parts = [
+            other
+            for other in merged[index + 1 :]
+            if same_bat(kept["box"], other["box"])
+        ]
+        if not parts:
+            index += 1
+            continue
+        for other in parts:
+            kept["box"] = box_union(kept["box"], other["box"])
+            merged.remove(other)
+    return merged
 
 
 def drop_nested(entries):
@@ -306,7 +346,10 @@ class BaseballOverlay(InPlaceVideoTransform):
         people = drop_nested(
             [entry for entry in (tracked or detected) if entry["label"] == PERSON_LABEL]
         )
-        bats = drop_nested([entry for entry in detected if entry["label"] == BAT_LABEL])
+        # the detector often boxes the handle and the barrel of one bat separately
+        bats = merge_bat_parts(
+            [entry for entry in detected if entry["label"] == BAT_LABEL]
+        )
         gloves = drop_nested(
             [entry for entry in detected if entry["label"] == GLOVE_LABEL]
         )

@@ -2067,3 +2067,20 @@ def test_baseball_overlay_ignores_a_ball_on_the_batter_or_the_bat():
     assert not baseball_ball_ring_drawn(
         BATTER_BOX["x"] + 10, BATTER_BOX["y"] + 200
     ), "ball on the batter"
+
+
+def test_baseball_overlay_merges_the_parts_of_one_bat_into_one_box():
+    from baseball_overlay import merge_bat_parts
+
+    handle = {"box": (549, 252, 785, 394), "confidence": 0.8}
+    barrel = {"box": (705, 90, 1115, 310), "confidence": 0.5}
+    apart_barrel = {"box": (937, 112, 1226, 246), "confidence": 0.6}
+    other_bat = {"box": (100, 600, 300, 660), "confidence": 0.4}
+    assert merge_bat_parts([barrel, handle, other_bat]) == [
+        {"box": (549, 90, 1115, 394), "confidence": 0.8},
+        other_bat,
+    ]
+    assert merge_bat_parts([handle, apart_barrel, other_bat]) == [
+        {"box": (549, 112, 1226, 394), "confidence": 0.8},
+        other_bat,
+    ]
