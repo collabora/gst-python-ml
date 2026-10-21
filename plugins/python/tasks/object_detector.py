@@ -47,7 +47,7 @@ class ObjectDetectorTask:
         if self.task_engine:
             self.task_engine.track = self.track
             result = self.task_engine.do_forward(frames)
-            self.logger.debug(f"Forward result: {result} (type: {type(result)})")
+            self.logger.debug(f"Forward result type: {type(result)}")
             return result
         return None
 

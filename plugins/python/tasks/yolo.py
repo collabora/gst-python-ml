@@ -121,7 +121,7 @@ class YoloTask(ObjectDetectorTask):
 
     def do_decode(self, buf, result, stream_idx=0):
         self.logger.debug(
-            f"Decoding YOLO result for buffer {hex(id(buf))}, stream {stream_idx}: {result}"
+            f"Decoding YOLO result for buffer {hex(id(buf))}, stream {stream_idx}"
         )
         boxes = result.boxes if result.boxes is not None else result.obb
         masks = None
