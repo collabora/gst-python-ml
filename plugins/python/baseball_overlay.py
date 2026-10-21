@@ -74,6 +74,8 @@ BALL_TRAIL_MAX_GAP = 15
 EQUIPMENT_OVERLAP = 0.3
 # a second box on the same object sits mostly inside the first
 NESTED_OVERLAP = 0.7
+# a ball this far inside a bat box or the batter's box is the knob or a fist
+BALL_ON_BATTER = 0.5
 
 
 def parse_label(full_label):
@@ -308,7 +310,18 @@ class BaseballOverlay(InPlaceVideoTransform):
         gloves = drop_nested(
             [entry for entry in detected if entry["label"] == GLOVE_LABEL]
         )
-        balls = [entry for entry in detected if entry["label"] == BALL_LABEL]
+        roles = [(person, self._role(person, bats, gloves)) for person in people]
+        batter_boxes = [
+            person["box"] for person, role in roles if role == BATTER_ROLE
+        ] + [bat["box"] for bat in bats]
+        balls = [
+            entry
+            for entry in detected
+            if entry["label"] == BALL_LABEL
+            and not any(
+                box_overlap(entry["box"], box) >= BALL_ON_BATTER for box in batter_boxes
+            )
+        ]
         ball = max(balls, key=lambda entry: entry["confidence"], default=None)
         if ball is not None:
             x1, y1, x2, y2 = ball["box"]
@@ -316,8 +329,7 @@ class BaseballOverlay(InPlaceVideoTransform):
 
         drawing = drawing_for(self._drawings, frame, fmt)
         with drawing.drawing_on(frame):
-            for person in people:
-                role = self._role(person, bats, gloves)
+            for person, role in roles:
                 rgba = ROLE_RGBA[role]
                 self._draw_ellipse(drawing, person["box"], rgba, person["track_id"])
                 if self.show_labels:

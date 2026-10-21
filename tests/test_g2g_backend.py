@@ -2028,3 +2028,42 @@ def test_baseball_overlay_clears_the_trail_once_the_ball_stays_unseen():
 
     assert baseball_trail_row_after(BALL_TRAIL_MAX_GAP).any(), "trail kept in the gap"
     assert not baseball_trail_row_after(BALL_TRAIL_MAX_GAP + 1).any()
+
+
+def baseball_ball_ring_drawn(ball_x, ball_y):
+    from baseball_overlay import BaseballOverlay
+
+    overlay = BaseballOverlay()
+    overlay.show_labels = False
+    overlay.show_equipment = False
+    overlay.ball_trail = False
+    width, height = 1280, 720
+    upstream = [
+        {"label": "person_id_1", "score": 1.0, **BATTER_BOX},
+        {"label": "baseball bat", "score": 0.9, **BAT_BOX},
+        {
+            "label": "sports ball",
+            "score": 0.9,
+            "x": ball_x,
+            "y": ball_y,
+            "w": 20,
+            "h": 20,
+        },
+    ]
+    frame = bytearray(width * height * 4)
+    overlay.g2g_process(
+        frame, width, height, "RGBA", StubMetaSink(upstream_objects=upstream)
+    )
+    pixels = np.frombuffer(frame, dtype=np.uint8).reshape(height, width, 4)
+    return pixels[ball_y - 5 : ball_y + 25, ball_x - 5 : ball_x + 25].any()
+
+
+def test_baseball_overlay_ignores_a_ball_on_the_batter_or_the_bat():
+    pytest.importorskip("cv2")
+    assert baseball_ball_ring_drawn(900, 100), "a ball in the open is drawn"
+    assert not baseball_ball_ring_drawn(
+        BAT_BOX["x"] + 5, BAT_BOX["y"] + 5
+    ), "ball on the bat"
+    assert not baseball_ball_ring_drawn(
+        BATTER_BOX["x"] + 10, BATTER_BOX["y"] + 200
+    ), "ball on the batter"
