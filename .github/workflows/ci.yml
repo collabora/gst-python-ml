@@ -341,7 +341,8 @@ jobs:
           # libgstpython embeds the python@ formula gstreamer depends on, not brew's python3
           GST_PYTHON_FORMULA=$(brew deps --direct gstreamer | grep '^python@')
           BREW_PYTHON="$(brew --prefix "${GST_PYTHON_FORMULA}")/bin/python${GST_PYTHON_FORMULA#python@}"
-          ${BREW_PYTHON} -m pip install --break-system-packages ultralytics onnxruntime onnx numpy opencv-python-headless
+          # 1.27.0 provides the CPython 3.14 macOS ARM64 wheel.
+          ${BREW_PYTHON} -m pip install --break-system-packages ultralytics onnxruntime==1.27.0 onnx numpy opencv-python-headless
           export GST_PLUGIN_PATH=${{ github.workspace }}/plugins
           export PYTHONPATH=${{ github.workspace }}/plugins/python
           # Export YOLO model to ONNX
