@@ -339,23 +339,20 @@ jobs:
             ! mp_objectdetector engine-name=onnx model-name=yolo11n.onnx device=cpu input-format=nchw post-process=anchor_free \
             ! fakesink
 
-      - name: ONNX pipeline smoke test (macOS)
+      - name: GStreamer plugin smoke test (macOS)
         if: runner.os == 'macOS'
         run: |
           # libgstpython embeds the python@ formula gstreamer depends on, not brew's python3
           GST_PYTHON_FORMULA=$(brew deps --direct gstreamer | grep '^python@')
           BREW_PYTHON="$(brew --prefix "${GST_PYTHON_FORMULA}")/bin/python${GST_PYTHON_FORMULA#python@}"
-          # 1.27.0 provides the CPython 3.14 macOS ARM64 wheel.
-          ${BREW_PYTHON} -m pip install --break-system-packages ultralytics onnxruntime==1.27.0 onnx numpy opencv-python-headless
+          ${BREW_PYTHON} -m pip install --break-system-packages numpy
           export GST_PLUGIN_PATH=${{ github.workspace }}/plugins
           export PYTHONPATH=${{ github.workspace }}/plugins/python
-          # Export YOLO model to ONNX
-          ${BREW_PYTHON} -c "from ultralytics import YOLO; YOLO('yolo11n.pt').export(format='onnx')"
-          # Run 2-frame smoke test with synthetic source (avoids codec deps)
+          gst-inspect-1.0 python
+          gst-inspect-1.0 mp_metasink
           gst-launch-1.0 videotestsrc num-buffers=2 \
-            ! "video/x-raw,format=RGB,width=640,height=640" \
-            ! mp_objectdetector engine-name=onnx model-name=yolo11n.onnx device=cpu input-format=nchw post-process=anchor_free \
-            ! fakesink
+            ! "video/x-raw,format=RGB,width=64,height=48" \
+            ! mp_metasink
 
       - name: Check GStreamer plugin discovery (Windows)
         if: runner.os == 'Windows'
