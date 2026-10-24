@@ -1,5 +1,5 @@
 # drpai_runtime.py  —  off-board stand-in for the native pybind `drpai_runtime`.
-# Copyright (C) 2024-2026 Collabora Ltd. — LGPL (see COPYING).
+# Copyright (C) 2024-2026 Collabora Ltd. — MPL-2.0 (see COPYING).
 #
 # Same interface as the C++ binding (Runtime.load / set_input / run /
 # num_output / get_output), with two backends auto-selected by what's in the

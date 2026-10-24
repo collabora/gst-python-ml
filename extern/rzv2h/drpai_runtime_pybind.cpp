@@ -1,5 +1,5 @@
 // drpai_runtime_pybind.cpp
-// Copyright (C) 2024-2026 Collabora Ltd. — LGPL (see COPYING).
+// Copyright (C) 2024-2026 Collabora Ltd. — MPL-2.0 (see COPYING).
 //
 // pybind11 binding around the Renesas DRP-AI TVM runtime
 // (MeraDrpRuntimeWrapper, powered by EdgeCortix MERA(TM)) for RZ/V2H.

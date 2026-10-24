@@ -112,4 +112,6 @@ python mp-launch.py filesrc location=data/people.mp4 num-buffers=5 \
 
 ## License
 
-This project is licensed under LGPL-2.0-or-later. By contributing, you agree that your contributions will be licensed under the same terms.
+This project is licensed under MPL-2.0. By contributing, you agree that your contributions will be licensed under the same terms.
+
+The patches under `patches/` and `extern/migraphx/` change other projects and carry those projects' licenses.

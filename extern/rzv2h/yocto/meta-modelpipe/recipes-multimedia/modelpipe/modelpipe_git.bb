@@ -1,6 +1,6 @@
 SUMMARY = "ModelPipe elements (mp_*) + DRP-AI engine for RZ/V2H"
 DESCRIPTION = "Installs the pure-Python GStreamer elements and sets GST_PLUGIN_PATH/PYTHONPATH."
-LICENSE = "LGPL-2.1-or-later"
+LICENSE = "MPL-2.0"
 LIC_FILES_CHKSUM = "file://COPYING;md5=<FILL_IN>"
 
 # Point this at your ModelPipe source. Examples:
