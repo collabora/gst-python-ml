@@ -26,7 +26,7 @@ from embeddingsink import decode_embedding  # noqa: E402
 
 pytestmark = pytest.mark.skipif(
     Gst.ElementFactory.find("mp_embeddingsink") is None,
-    reason="the python plugin loader did not register the pyml elements",
+    reason="the python plugin loader did not register the modelpipe elements",
 )
 
 EMBEDDING_HEADER = b"GST-EMBEDDING:"
@@ -164,15 +164,15 @@ class StubTextEngine:
 
 
 def test_search_video_answers_from_the_index(tmp_path, monkeypatch):
-    pyml_mcp = pytest.importorskip("pyml_mcp")
+    mp_mcp = pytest.importorskip("mp_mcp")
     index = EmbeddingIndex.open(tmp_path / "index.sqlite")
     for position in range(DIMENSION):
         index.add(SOURCE_ID, position, one_hot(position), MODEL_NAME)
     index.close()
 
     engine = StubTextEngine(one_hot(2))
-    monkeypatch.setattr(pyml_mcp, "text_embedding_engine", lambda name: engine)
-    results = pyml_mcp.search_video("a ball", str(tmp_path / "index.sqlite"), 1)
+    monkeypatch.setattr(mp_mcp, "text_embedding_engine", lambda name: engine)
+    results = mp_mcp.search_video("a ball", str(tmp_path / "index.sqlite"), 1)
 
     assert engine.queries == ["a ball"]
     assert results == [
@@ -181,8 +181,8 @@ def test_search_video_answers_from_the_index(tmp_path, monkeypatch):
 
 
 def test_search_video_rejects_a_missing_index(tmp_path):
-    pyml_mcp = pytest.importorskip("pyml_mcp")
+    mp_mcp = pytest.importorskip("mp_mcp")
     from mcp.server.mcpserver.exceptions import ToolError
 
     with pytest.raises(ToolError, match="no embedding index"):
-        pyml_mcp.search_video("a ball", str(tmp_path / "absent.sqlite"), 1)
+        mp_mcp.search_video("a ball", str(tmp_path / "absent.sqlite"), 1)

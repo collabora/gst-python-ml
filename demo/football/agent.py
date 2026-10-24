@@ -16,7 +16,7 @@ from mcp.client.stdio import stdio_client
 
 REPO = Path(__file__).resolve().parents[2]
 RUN_SCRIPT = REPO / "demo/football/run.sh"
-MP_MCP = REPO / ".venv/bin/pyml-mcp"
+MP_MCP = REPO / ".venv/bin/mp-mcp"
 LOG_DIR = Path(tempfile.gettempdir())
 
 LLAMA_RUNTIME = Path.home() / ".local/share/liquid/runtime"
@@ -122,8 +122,8 @@ def start_llama_server():
     )
 
 
-def pyml_mcp_transport():
-    log = open(LOG_DIR / "football-agent-pyml-mcp.log", "w")
+def mp_mcp_transport():
+    log = open(LOG_DIR / "football-agent-mp-mcp.log", "w")
     parameters = StdioServerParameters(
         command=str(MP_MCP), env=dict(os.environ), cwd=str(REPO)
     )
@@ -170,7 +170,7 @@ MIC_ICON_OVERLAY = (
 def demo_pipeline():
     pipeline = subprocess.run(
         [str(RUN_SCRIPT), "print", DEMO_VIDEO],
-        # pyml-mcp hosts gstreamer pipelines
+        # mp-mcp hosts gstreamer pipelines
         env={**os.environ, "HOST": "gst"},
         check=True,
         capture_output=True,
@@ -515,7 +515,7 @@ async def main():
     kill_old_llama_servers()
     llama = start_llama_server()
     try:
-        async with Client(pyml_mcp_transport()) as mcp, httpx.AsyncClient() as http:
+        async with Client(mp_mcp_transport()) as mcp, httpx.AsyncClient() as http:
             if "--voice" in sys.argv:
                 await voice(http, mcp)
             else:

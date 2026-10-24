@@ -14,20 +14,20 @@ import pytest
 
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent / "plugins" / "python"))
 
-import pyml_launch  # noqa: E402
+import mp_launch  # noqa: E402
 
 
 @pytest.fixture(scope="module")
 def shells():
-    return pyml_launch.element_shells()
+    return mp_launch.element_shells()
 
 
 def test_element_shells_finds_the_hosted_elements(shells):
-    assert shells["mp_yolo"] == pyml_launch.ElementShell(
+    assert shells["mp_yolo"] == mp_launch.ElementShell(
         "yolo", "YOLOTransform", reads_device_frames=True
     )
     assert shells["mp_objectdetector"].module == "objectdetector"
-    assert shells["mp_overlay"] == pyml_launch.ElementShell("overlay", "Overlay")
+    assert shells["mp_overlay"] == mp_launch.ElementShell("overlay", "Overlay")
 
 
 def test_an_element_several_chains_feed_becomes_the_batching_host(shells):
@@ -36,7 +36,7 @@ def test_an_element_several_chains_feed_becomes_the_batching_host(shells):
         "videotestsrc ! detector. videotestsrc ! detector. "
         "detector. ! fakesink"
     ).split()
-    rewritten = pyml_launch.rewrite_for_g2g(pipeline, shells)
+    rewritten = mp_launch.rewrite_for_g2g(pipeline, shells)
     assert "pyaggregator" in rewritten
     assert "pyelement" not in rewritten
 
@@ -45,20 +45,20 @@ def test_a_single_input_element_stays_on_the_one_in_host(shells):
     # Whisper derives from GstBase.Aggregator but takes one chain, which g2g
     # hosts as a transform.
     assert (
-        pyml_launch.rewrite_segment("mp_whispertranscribe language=ko", shells)[0]
+        mp_launch.rewrite_segment("mp_whispertranscribe language=ko", shells)[0]
         == "pyelement"
     )
 
 
 def test_element_shells_resolves_a_name_given_as_a_class_constant(shells):
     # kafkasink registers under `KafkaSink.GST_PLUGIN_NAME`, not a literal.
-    assert shells["mp_kafkasink"] == pyml_launch.ElementShell(
+    assert shells["mp_kafkasink"] == mp_launch.ElementShell(
         "kafkasink", "KafkaSink", reads_device_frames=True, is_sink=True
     )
 
 
 def test_hosted_element_becomes_pyelement_keeping_its_properties(shells):
-    assert pyml_launch.rewrite_segment(
+    assert mp_launch.rewrite_segment(
         "mp_yolo model-name=yolo11m device=cuda:0", shells
     ) == [
         "pyelement",
@@ -70,7 +70,7 @@ def test_hosted_element_becomes_pyelement_keeping_its_properties(shells):
 
 
 def test_overlay_counter_is_hosted_keeping_its_properties(shells):
-    assert pyml_launch.rewrite_segment(
+    assert mp_launch.rewrite_segment(
         "mp_overlay_counter meta-path=data/sample_metadata.json tracking=true",
         shells,
     ) == [
@@ -83,31 +83,32 @@ def test_overlay_counter_is_hosted_keeping_its_properties(shells):
 
 
 def test_overlay_becomes_the_native_element(shells):
-    assert pyml_launch.rewrite_segment("mp_overlay", shells) == ["analyticsoverlay"]
+    assert mp_launch.rewrite_segment("mp_overlay", shells) == ["analyticsoverlay"]
 
 
 def test_overlay_properties_carry_over_under_the_native_name(shells):
-    assert pyml_launch.rewrite_segment("mp_overlay tracking=True", shells) == [
+    assert mp_launch.rewrite_segment("mp_overlay tracking=True", shells) == [
         "analyticsoverlay",
         "show-track=True",
     ]
 
 
 def test_metasink_becomes_the_native_element(shells):
-    assert pyml_launch.rewrite_segment("mp_metasink location=people.jsonl", shells) == [
+    assert mp_launch.rewrite_segment("mp_metasink location=people.jsonl", shells) == [
         "metasink",
         "location=people.jsonl",
     ]
 
 
 def test_metareplay_becomes_the_native_element(shells):
-    assert pyml_launch.rewrite_segment(
-        "mp_metareplay location=people.jsonl", shells
-    ) == ["metareplay", "location=people.jsonl"]
+    assert mp_launch.rewrite_segment("mp_metareplay location=people.jsonl", shells) == [
+        "metareplay",
+        "location=people.jsonl",
+    ]
 
 
 def test_alert_becomes_the_native_element(shells):
-    assert pyml_launch.rewrite_segment(
+    assert mp_launch.rewrite_segment(
         ["mp_alert", "cooldown=5", "draw-alert=false", "webhook-url=http://host/a"],
         shells,
     ) == [
@@ -121,11 +122,11 @@ def test_alert_becomes_the_native_element(shells):
 def test_an_alert_property_with_no_g2g_counterpart_is_refused(shells):
     # g2g runs no MQTT, so the broker cannot be carried over or dropped.
     with pytest.raises(SystemExit, match="mqtt-broker"):
-        pyml_launch.rewrite_segment("mp_alert mqtt-broker=host", shells)
+        mp_launch.rewrite_segment("mp_alert mqtt-broker=host", shells)
 
 
 def test_alertrecorder_becomes_the_native_element(shells):
-    assert pyml_launch.rewrite_segment(
+    assert mp_launch.rewrite_segment(
         [
             "mp_alertrecorder",
             "location=alert-%s.avi",
@@ -144,14 +145,14 @@ def test_alertrecorder_becomes_the_native_element(shells):
 
 
 def test_digest_becomes_the_native_element(shells):
-    assert pyml_launch.rewrite_segment("mp_digest window-seconds=5", shells) == [
+    assert mp_launch.rewrite_segment("mp_digest window-seconds=5", shells) == [
         "textdigest",
         "window-seconds=5",
     ]
 
 
 def test_embeddingsink_becomes_the_native_element(shells):
-    assert pyml_launch.rewrite_segment(
+    assert mp_launch.rewrite_segment(
         "mp_embeddingsink location=index.db source-id=camera model-name=clip", shells
     ) == [
         "embeddingsink",
@@ -163,37 +164,37 @@ def test_embeddingsink_becomes_the_native_element(shells):
 
 def test_an_overlay_property_with_no_counterpart_is_refused(shells):
     with pytest.raises(SystemExit, match="meta-path"):
-        pyml_launch.rewrite_segment(
+        mp_launch.rewrite_segment(
             "mp_overlay meta-path=data/sample_metadata.json", shells
         )
 
 
 def test_unknown_mp_element_is_refused(shells):
     with pytest.raises(SystemExit, match="mp_nonesuch"):
-        pyml_launch.rewrite_segment("mp_nonesuch", shells)
+        mp_launch.rewrite_segment("mp_nonesuch", shells)
 
 
 def test_shared_elements_pass_through_untouched(shells):
     for segment in ("filesrc location=data/people.mp4", "decodebin", "videoscale"):
-        assert pyml_launch.rewrite_segment(segment, shells) == segment.split()
+        assert mp_launch.rewrite_segment(segment, shells) == segment.split()
 
 
 def test_raw_video_caps_gain_a_format_only_when_they_lack_one(shells):
-    assert pyml_launch.rewrite_segment("video/x-raw,width=640,height=480", shells) == [
+    assert mp_launch.rewrite_segment("video/x-raw,width=640,height=480", shells) == [
         "video/x-raw,width=640,height=480,format=RGBA"
     ]
     pinned = "video/x-raw,format=NV12,width=640,height=480"
-    assert pyml_launch.rewrite_segment(pinned, shells) == [pinned]
+    assert mp_launch.rewrite_segment(pinned, shells) == [pinned]
 
 
 def test_caps_written_with_spaces_become_one_token(shells):
-    assert pyml_launch.rewrite_segment(
+    assert mp_launch.rewrite_segment(
         ["video/x-raw,", "width=320,", "height=240"], shells
     ) == ["video/x-raw,width=320,height=240,format=RGBA"]
 
 
 def test_a_property_value_with_spaces_keeps_them(shells):
-    assert pyml_launch.rewrite_segment(
+    assert mp_launch.rewrite_segment(
         ["mp_clip", "labels=person, bicycle, car", "top-k=3"], shells
     ) == [
         "pyelement",
@@ -205,7 +206,7 @@ def test_a_property_value_with_spaces_keeps_them(shells):
 
 
 def test_spaces_round_a_property_equals_sign_are_closed_up(shells):
-    rewritten = pyml_launch.rewrite_for_g2g(
+    rewritten = mp_launch.rewrite_for_g2g(
         ["mp_whispertranscribe", "initial_prompt", "=", "Air Traffic Control"],
         shells,
     )
@@ -214,7 +215,7 @@ def test_spaces_round_a_property_equals_sign_are_closed_up(shells):
 
 def test_a_property_name_is_written_with_dashes(shells):
     assert (
-        pyml_launch.rewrite_segment(
+        mp_launch.rewrite_segment(
             ["mp_whispertranscribe", "initial_prompt=Air_Traffic"], shells
         )[-1]
         == "initial-prompt=Air_Traffic"
@@ -222,46 +223,42 @@ def test_a_property_name_is_written_with_dashes(shells):
 
 
 def test_a_value_after_a_spaced_equals_sign_is_not_read_as_a_reference(shells):
-    assert pyml_launch.rewrite_for_g2g(
+    assert mp_launch.rewrite_for_g2g(
         ["mp_yolo", "model-name", "=", "yolo11m.pt", "!", "fakesink"], shells
     )[-3:] == ["model-name=yolo11m.pt", "!", "fakesink"]
 
 
 def test_a_property_value_keeps_the_quotes_inside_it(shells):
     assert (
-        pyml_launch.rewrite_segment(["mp_alert", 'rules={"class":"person"}'], shells)[
-            -1
-        ]
+        mp_launch.rewrite_segment(["mp_alert", 'rules={"class":"person"}'], shells)[-1]
         == r"rules={\"class\":\"person\"}"
     )
 
 
 def test_a_sink_drops_the_clock_properties_g2g_has_no_counterpart_for(shells):
-    assert pyml_launch.rewrite_segment("fakesink async=0 sync=0", shells) == [
-        "fakesink"
-    ]
+    assert mp_launch.rewrite_segment("fakesink async=0 sync=0", shells) == ["fakesink"]
 
 
 def test_a_sink_asked_to_wait_on_the_clock_is_refused(shells):
     with pytest.raises(SystemExit, match="clocksync"):
-        pyml_launch.rewrite_segment("autovideosink sync=true", shells)
+        mp_launch.rewrite_segment("autovideosink sync=true", shells)
 
 
 def test_pipewiresrc_drops_the_timestamping_g2g_always_does(shells):
-    assert pyml_launch.rewrite_segment("pipewiresrc do-timestamp=true", shells) == [
+    assert mp_launch.rewrite_segment("pipewiresrc do-timestamp=true", shells) == [
         "pipewiresrc"
     ]
 
 
 def test_pipewiresrc_asked_not_to_timestamp_is_refused(shells):
     with pytest.raises(SystemExit, match="capture time"):
-        pyml_launch.rewrite_segment("pipewiresrc do-timestamp=false", shells)
+        mp_launch.rewrite_segment("pipewiresrc do-timestamp=false", shells)
 
 
 def test_a_hosted_element_named_like_a_sink_keeps_its_own_properties(shells):
     # `sync` on a g2g sink names a clock wait that does not exist there, but on
     # `mp_kafkasink` it is the Kafka producer's own knob.
-    assert pyml_launch.rewrite_segment("mp_kafkasink sync=true", shells) == [
+    assert mp_launch.rewrite_segment("mp_kafkasink sync=true", shells) == [
         "pysink",
         "module=kafkasink",
         "class=KafkaSink",
@@ -271,7 +268,7 @@ def test_a_hosted_element_named_like_a_sink_keeps_its_own_properties(shells):
 
 def test_a_hosted_sink_becomes_pysink_keeping_its_properties(shells):
     pipeline = "mp_kafkasink broker=localhost:29092 topic=t".split()
-    assert pyml_launch.rewrite_for_g2g(pipeline, shells) == [
+    assert mp_launch.rewrite_for_g2g(pipeline, shells) == [
         "pysink",
         "module=kafkasink",
         "class=KafkaSink",
@@ -283,7 +280,7 @@ def test_a_hosted_sink_becomes_pysink_keeping_its_properties(shells):
 def test_a_hosted_sink_after_one_on_cuda_frames_states_nv12_in_its_caps(shells):
     # pysink has no `format` property, it takes the format in its input caps.
     pipeline = "nvdec ! mp_yolo device=cuda ! mp_kafkasink topic=t".split()
-    assert pyml_launch.rewrite_for_g2g(pipeline, shells)[-6:] == [
+    assert mp_launch.rewrite_for_g2g(pipeline, shells)[-6:] == [
         "pysink",
         "module=kafkasink",
         "class=KafkaSink",
@@ -294,7 +291,7 @@ def test_a_hosted_sink_after_one_on_cuda_frames_states_nv12_in_its_caps(shells):
 
 
 def test_textoverlay_drops_the_wait_it_never_does(shells):
-    assert pyml_launch.rewrite_segment(
+    assert mp_launch.rewrite_segment(
         "textoverlay name=overlay wait-text=false", shells
     ) == ["textoverlay", "name=overlay"]
 
@@ -307,7 +304,7 @@ def test_whole_documented_pipeline_rewrites(shells):
         "! mp_overlay ! videoconvert ! autovideosink"
     )
     assert (
-        pyml_launch.rewrite_for_g2g(pipeline.split(), shells)
+        mp_launch.rewrite_for_g2g(pipeline.split(), shells)
         == (
             "filesrc location=data/soccer_tracking.mp4 ! decodebin ! videoconvert "
             "! videoscale ! video/x-raw,width=640,height=480,format=RGBA "
@@ -332,7 +329,7 @@ def test_the_two_stream_detector_rewrites_onto_the_native_mux_and_demux(shells):
         f"demux. ! {branch.format('mp_overlay')} sync=false"
     )
     assert (
-        pyml_launch.rewrite_for_g2g(pipeline.split(), shells)
+        mp_launch.rewrite_for_g2g(pipeline.split(), shells)
         == (
             f"{source} ! streammux name=mux {source} ! mux. "
             "mux. ! pyelement module=yolo class=YOLOTransform format=RGB "
@@ -355,7 +352,7 @@ def test_the_mux_and_demux_keep_the_pad_names_they_are_linked_by(shells):
     )
     pinned = "videotestsrc ! video/x-raw,width=320,height=240,format=RGBA ! queue"
     assert (
-        pyml_launch.rewrite_for_g2g(pipeline.split(), shells)
+        mp_launch.rewrite_for_g2g(pipeline.split(), shells)
         == (
             f"{pinned} ! streammux name=mux "
             f"{pinned} ! mux.sink_1 {pinned} ! mux.sink_2 "
@@ -371,7 +368,7 @@ def test_hosted_element_takes_the_format_the_caps_ahead_of_it_pin(shells):
         "videoconvert ! video/x-raw,format=RGB,width=640,height=640 "
         "! mp_inference engine-name=onnx"
     ).split()
-    assert pyml_launch.rewrite_for_g2g(pipeline, shells)[-4:] == [
+    assert mp_launch.rewrite_for_g2g(pipeline, shells)[-4:] == [
         "module=inference",
         "class=GenericInferenceTransform",
         "format=RGB",
@@ -402,7 +399,7 @@ def test_an_element_reading_device_frames_takes_them_straight_from_nvdec(shells)
         "! videoconvert ! mp_tracker ! mp_overlay ! fakesink"
     )
     assert (
-        pyml_launch.rewrite_for_g2g(pipeline.split(), shells)
+        mp_launch.rewrite_for_g2g(pipeline.split(), shells)
         == (
             "filesrc location=data/people.mp4 ! qtdemux ! h264parse ! nvdec "
             "! pyelement module=yolo class=YOLOTransform cuda-frames=true "
@@ -420,7 +417,7 @@ def test_gst_cuda_converters_after_nvdec_are_dropped(shells):
         *"! mp_classifier device=cuda".split(),
     ]
     assert (
-        pyml_launch.rewrite_for_g2g(pipeline, shells)
+        mp_launch.rewrite_for_g2g(pipeline, shells)
         == (
             "qtdemux ! h264parse ! nvh264dec ! pyelement module=classifier "
             "class=Classifier cuda-frames=true format=NV12 device=cuda"
@@ -431,7 +428,7 @@ def test_gst_cuda_converters_after_nvdec_are_dropped(shells):
 def test_an_element_after_one_on_cuda_frames_takes_them_too(shells):
     pipeline = "nvdec ! mp_yolo device=cuda ! mp_tracker ! fakesink".split()
     assert (
-        pyml_launch.rewrite_for_g2g(pipeline, shells)
+        mp_launch.rewrite_for_g2g(pipeline, shells)
         == (
             "nvdec ! pyelement module=yolo class=YOLOTransform cuda-frames=true "
             "format=NV12 device=cuda ! pyelement module=tracker "
@@ -442,17 +439,17 @@ def test_an_element_after_one_on_cuda_frames_takes_them_too(shells):
 
 def test_a_converter_after_nvdec_keeps_the_element_on_system_memory(shells):
     pipeline = "nvdec ! videoconvert ! mp_yolo device=cuda".split()
-    assert "cuda-frames=true" not in pyml_launch.rewrite_for_g2g(pipeline, shells)
+    assert "cuda-frames=true" not in mp_launch.rewrite_for_g2g(pipeline, shells)
 
 
 def test_an_element_reading_host_frames_takes_no_cuda_frames_after_nvdec(shells):
     pipeline = "nvdec ! mp_inference engine-name=onnx".split()
-    assert "cuda-frames=true" not in pyml_launch.rewrite_for_g2g(pipeline, shells)
+    assert "cuda-frames=true" not in mp_launch.rewrite_for_g2g(pipeline, shells)
 
 
 def test_the_batching_host_takes_the_caps_of_an_audio_in_text_out_element(shells):
-    assert pyml_launch.rewrite_segment(
-        "mp_whispertranscribe", shells, host=pyml_launch.PY_AGGREGATOR
+    assert mp_launch.rewrite_segment(
+        "mp_whispertranscribe", shells, host=mp_launch.PY_AGGREGATOR
     ) == [
         "pyaggregator",
         "module=whispertranscribe",
@@ -463,8 +460,8 @@ def test_the_batching_host_takes_the_caps_of_an_audio_in_text_out_element(shells
 
 
 def test_the_batching_host_takes_the_caps_of_a_text_in_audio_out_element(shells):
-    assert pyml_launch.rewrite_segment(
-        "mp_whisperspeechtts", shells, host=pyml_launch.PY_AGGREGATOR
+    assert mp_launch.rewrite_segment(
+        "mp_whisperspeechtts", shells, host=mp_launch.PY_AGGREGATOR
     ) == [
         "pyaggregator",
         "module=whisperspeechtts",
@@ -480,7 +477,7 @@ def test_the_one_in_host_takes_the_caps_of_an_audio_in_text_out_element(shells):
         "! mp_whispertranscribe language=ko ! fakesink"
     ).split()
     assert (
-        pyml_launch.rewrite_for_g2g(pipeline, shells)
+        mp_launch.rewrite_for_g2g(pipeline, shells)
         == (
             "filesrc location=data/audio_sample.wav ! decodebin ! audioconvert "
             "! pyelement module=whispertranscribe class=WhisperTranscribe "
@@ -496,7 +493,7 @@ def test_the_one_in_host_takes_the_caps_of_a_text_in_audio_out_element(shells):
         "filesrc location=data/lines.txt ! mp_whisperspeechtts ! fakesink".split()
     )
     assert (
-        pyml_launch.rewrite_for_g2g(pipeline, shells)
+        mp_launch.rewrite_for_g2g(pipeline, shells)
         == (
             "filesrc location=data/lines.txt "
             "! pyelement module=whisperspeechtts class=WhisperSpeechTTS "
@@ -508,7 +505,7 @@ def test_the_one_in_host_takes_the_caps_of_a_text_in_audio_out_element(shells):
 
 
 def test_the_one_in_host_takes_the_text_caps_a_remote_llm_inherits(shells):
-    assert pyml_launch.rewrite_segment(
+    assert mp_launch.rewrite_segment(
         "mp_llm_remote url=http://localhost:11434/api/generate model-name=llama3",
         shells,
     ) == [
@@ -523,7 +520,7 @@ def test_the_one_in_host_takes_the_text_caps_a_remote_llm_inherits(shells):
 
 
 def test_the_one_in_host_takes_the_text_caps_of_coalescehistory(shells):
-    assert pyml_launch.rewrite_segment("coalescehistory history-length=10", shells) == [
+    assert mp_launch.rewrite_segment("coalescehistory history-length=10", shells) == [
         "pyelement",
         "module=coalescehistory",
         "class=CoalesceHistory",
@@ -534,7 +531,7 @@ def test_the_one_in_host_takes_the_text_caps_of_coalescehistory(shells):
 
 
 def test_the_one_in_host_takes_the_caps_of_a_text_in_video_out_element(shells):
-    assert pyml_launch.rewrite_segment("mp_stablediffusion device=cuda", shells) == [
+    assert mp_launch.rewrite_segment("mp_stablediffusion device=cuda", shells) == [
         "pyelement",
         "module=stablediffusion",
         "class=StableDiffusion",
@@ -588,7 +585,7 @@ def test_an_element_declaring_no_caps_gets_no_caps_properties(shells):
         "videotestsrc ! detector. videotestsrc ! detector. "
         "detector. ! fakesink"
     ).split()
-    rewritten = pyml_launch.rewrite_for_g2g(pipeline, shells)
+    rewritten = mp_launch.rewrite_for_g2g(pipeline, shells)
     assert "pyaggregator" in rewritten
     assert not [token for token in rewritten if token.startswith(("input-", "output-"))]
 
@@ -600,7 +597,7 @@ def test_the_caps_survive_the_rewrite_of_a_whole_pipeline(shells):
         "audiotestsrc ! stt. audiotestsrc ! stt. stt. ! fakesink"
     ).split()
     assert (
-        pyml_launch.rewrite_for_g2g(pipeline, shells)
+        mp_launch.rewrite_for_g2g(pipeline, shells)
         == (
             "filesrc location=data/audio_sample.wav ! decodebin ! audioconvert "
             "! pyaggregator module=whispertranscribe class=WhisperTranscribe "
@@ -617,7 +614,7 @@ def g2g_pipeline(*segments):
     Skips where there is no build to check against, so the drift check runs for
     whoever has both repos and never blocks whoever has one.
     """
-    binary = pyml_launch.g2g_binary()
+    binary = mp_launch.g2g_binary()
     if not binary:
         pytest.skip("needs a g2g-launch-py build to check the names against")
     return subprocess.run(
@@ -635,7 +632,7 @@ G2G_VIDEO_SOURCE = (
     "!",
     "videoconvert",
     "!",
-    f"video/x-raw,format={pyml_launch.G2G_RAW_VIDEO_FORMAT}",
+    f"video/x-raw,format={mp_launch.G2G_RAW_VIDEO_FORMAT}",
     "!",
 )
 
@@ -727,14 +724,14 @@ def test_the_native_element_and_the_names_it_renames_to_still_exist(shells, tmp_
     (tmp_path / "records.jsonl").write_text(json.dumps(METADATA_RECORD) + "\n")
     (tmp_path / "cues.srt").write_text(SUBTITLE_CUE)
 
-    for element, native in pyml_launch.NATIVE_EQUIVALENTS.items():
+    for element, native in mp_launch.NATIVE_EQUIVALENTS.items():
         properties, source, tail = NATIVE_PROBES[element]
         assert {property.partition("=")[0] for property in properties} - {
-            pyml_launch.NAME_PROPERTY
+            mp_launch.NAME_PROPERTY
         } == set(
-            pyml_launch.NATIVE_PROPERTIES.get(element, {})
+            mp_launch.NATIVE_PROPERTIES.get(element, {})
         ), f"{element} carries a property no sample value here covers"
-        rewritten = pyml_launch.rewrite_segment(
+        rewritten = mp_launch.rewrite_segment(
             [element, *filled(properties, tmp_path)], shells
         )
         assert rewritten[0] == native
@@ -751,6 +748,6 @@ def test_an_element_read_from_twice_is_not_a_muxer(shells):
         "videotestsrc ! mp_caption_qwen name=cap "
         "cap.src ! fakesink cap.text_src ! fakesink"
     ).split()
-    rewritten = pyml_launch.rewrite_for_g2g(pipeline, shells)
+    rewritten = mp_launch.rewrite_for_g2g(pipeline, shells)
     assert "pyelement" in rewritten
     assert "pyaggregator" not in rewritten

@@ -13,15 +13,15 @@ pytest.importorskip("mcp")
 gi = pytest.importorskip("gi")
 PillowImage = pytest.importorskip("PIL.Image")
 
-import pyml_mcp  # noqa: E402
+import mp_mcp  # noqa: E402
 from mcp.server.mcpserver.exceptions import ToolError  # noqa: E402
 
 gi.require_version("GstPbutils", "1.0")
 from gi.repository import Gst, GstPbutils  # noqa: E402
 
 pytestmark = pytest.mark.skipif(
-    not any(element["name"] == "mp_metasink" for element in pyml_mcp.list_elements()),
-    reason="the python plugin loader did not register the pyml elements",
+    not any(element["name"] == "mp_metasink" for element in mp_mcp.list_elements()),
+    reason="the python plugin loader did not register the modelpipe elements",
 )
 
 RECORD_WAIT_SECONDS = 10
@@ -82,37 +82,37 @@ def video_file(tmp_path):
 def test_text_flows_from_the_sink_to_latest_metadata(tmp_path):
     text = tmp_path / "hello.txt"
     text.write_text("hello")
-    pyml_mcp.start_pipeline(
+    mp_mcp.start_pipeline(
         f"filesrc location={text} ! text/x-raw,format=utf8 ! mp_metasink"
     )
-    waited = pyml_mcp.wait_for_records(1, timeout=RECORD_WAIT_SECONDS)
+    waited = mp_mcp.wait_for_records(1, timeout=RECORD_WAIT_SECONDS)
     assert [record["text"] for record in waited["records"]] == ["hello"]
     assert "state" in waited["status"]
-    assert [record["text"] for record in pyml_mcp.latest_metadata()] == ["hello"]
-    assert pyml_mcp.stop_pipeline() == {"state": "none"}
+    assert [record["text"] for record in mp_mcp.latest_metadata()] == ["hello"]
+    assert mp_mcp.stop_pipeline() == {"state": "none"}
 
 
 def test_element_messages_from_any_element_reach_latest_bus_messages():
-    pyml_mcp.start_pipeline("audiotestsrc num-buffers=20 ! level name=meter ! fakesink")
-    pyml_mcp.wait_for_records(1, timeout=RECORD_WAIT_SECONDS)
+    mp_mcp.start_pipeline("audiotestsrc num-buffers=20 ! level name=meter ! fakesink")
+    mp_mcp.wait_for_records(1, timeout=RECORD_WAIT_SECONDS)
     readings = [
         message
-        for message in pyml_mcp.latest_bus_messages(RECENT_MESSAGES_READ)
+        for message in mp_mcp.latest_bus_messages(RECENT_MESSAGES_READ)
         if message["source"] == "meter"
     ]
     assert readings
     assert all(reading["text"].startswith("level, ") for reading in readings)
     assert "rms=" in readings[0]["text"]
-    pyml_mcp.stop_pipeline()
+    mp_mcp.stop_pipeline()
 
 
 def test_an_error_keeps_the_reason_gstreamer_gave(tmp_path):
     with pytest.raises(ToolError, match="No such file"):
-        pyml_mcp.start_pipeline(f"filesrc location={tmp_path / 'missing'} ! fakesink")
+        mp_mcp.start_pipeline(f"filesrc location={tmp_path / 'missing'} ! fakesink")
 
 
 def test_a_sink_dropping_late_frames_reports_qos():
-    pyml_mcp.start_pipeline(
+    mp_mcp.start_pipeline(
         "videotestsrc ! video/x-raw,framerate=30/1 "
         f"! identity sleep-time={SLOW_ELEMENT_MICROSECONDS} "
         "! fakesink name=screen sync=true qos=true max-lateness=1"
@@ -120,53 +120,53 @@ def test_a_sink_dropping_late_frames_reports_qos():
     time.sleep(FLOW_SETTLE_SECONDS)
     reports = [
         message
-        for message in pyml_mcp.latest_bus_messages(RECENT_MESSAGES_READ)
+        for message in mp_mcp.latest_bus_messages(RECENT_MESSAGES_READ)
         if message["type"] == "qos"
     ]
-    pyml_mcp.stop_pipeline()
+    mp_mcp.stop_pipeline()
     assert reports
     assert reports[0]["source"] == "screen"
     assert "dropped" in reports[0]["text"]
 
 
 def test_buffer_flow_shows_where_the_data_stops():
-    pyml_mcp.start_pipeline(
+    mp_mcp.start_pipeline(
         "videotestsrc name=source ! video/x-raw,framerate=30/1 "
         "! valve name=gate drop=false ! fakesink sync=true"
     )
     time.sleep(FLOW_SETTLE_SECONDS)
-    pyml_mcp.set_property("gate", "drop", "true")
+    mp_mcp.set_property("gate", "drop", "true")
     time.sleep(FLOW_SETTLE_SECONDS)
-    flows = {flow["pad"]: flow for flow in pyml_mcp.buffer_flow()}
-    pyml_mcp.stop_pipeline()
+    flows = {flow["pad"]: flow for flow in mp_mcp.buffer_flow()}
+    mp_mcp.stop_pipeline()
     assert flows["gate.src"]["buffers"] > 0
     assert flows["gate.src"]["seconds_since_last"] >= FLOW_SETTLE_SECONDS / 2
     assert flows["source.src"]["seconds_since_last"] < FLOW_SETTLE_SECONDS / 2
 
 
 def test_buffer_flow_measures_how_long_each_element_holds_a_buffer():
-    pyml_mcp.start_pipeline(
+    mp_mcp.start_pipeline(
         "videotestsrc name=source ! video/x-raw,framerate=30/1 ! identity name=fast "
         f"! identity name=slow sleep-time={SLOW_ELEMENT_MICROSECONDS} ! fakesink"
     )
     time.sleep(FLOW_SETTLE_SECONDS)
-    flows = {flow["pad"]: flow for flow in pyml_mcp.buffer_flow()}
-    pyml_mcp.stop_pipeline()
+    flows = {flow["pad"]: flow for flow in mp_mcp.buffer_flow()}
+    mp_mcp.stop_pipeline()
     assert flows["slow.src"]["latency_ms"] >= SLOW_ELEMENT_MICROSECONDS / 1000
     assert flows["fast.src"]["latency_ms"] < flows["slow.src"]["latency_ms"]
     assert "latency_ms" not in flows["source.src"]
 
 
 def test_element_latencies_ranks_elements_slowest_first_without_queues():
-    pyml_mcp.start_pipeline(
+    mp_mcp.start_pipeline(
         "videotestsrc name=source ! video/x-raw,framerate=30/1 ! identity name=fast "
         f"! queue ! identity name=slow sleep-time={SLOW_ELEMENT_MICROSECONDS} "
         "! fakesink"
     )
     time.sleep(FLOW_SETTLE_SECONDS)
-    flows = pyml_mcp.buffer_flow()
-    latencies = pyml_mcp.element_latencies()
-    pyml_mcp.stop_pipeline()
+    flows = mp_mcp.buffer_flow()
+    latencies = mp_mcp.element_latencies()
+    mp_mcp.stop_pipeline()
     assert any(
         flow["pad"].startswith("queue") and "latency_ms" in flow for flow in flows
     )
@@ -178,87 +178,85 @@ def test_element_latencies_ranks_elements_slowest_first_without_queues():
 
 
 def test_buffer_flow_counts_a_pad_decodebin_adds(video_file):
-    pyml_mcp.start_pipeline(
+    mp_mcp.start_pipeline(
         f"filesrc location={video_file} ! decodebin name=decoder ! fakesink"
     )
-    pyml_mcp.wait_for_records(1, timeout=RECORD_WAIT_SECONDS)
-    flows = pyml_mcp.buffer_flow()
-    pyml_mcp.stop_pipeline()
+    mp_mcp.wait_for_records(1, timeout=RECORD_WAIT_SECONDS)
+    flows = mp_mcp.buffer_flow()
+    mp_mcp.stop_pipeline()
     decoded = [flow for flow in flows if flow["pad"].startswith("decoder.")]
     assert decoded
     assert decoded[0]["buffers"] == CLIP_SOURCE_FRAMES
 
 
 def test_snapshot_frame_returns_a_jpeg_of_the_newest_frame():
-    pyml_mcp.start_pipeline(VIDEO_PIPELINE)
-    pyml_mcp.wait_for_records(1, timeout=FRAME_WAIT_SECONDS)
-    for snapshot in (pyml_mcp.snapshot_frame(), pyml_mcp.snapshot_frame("sink")):
+    mp_mcp.start_pipeline(VIDEO_PIPELINE)
+    mp_mcp.wait_for_records(1, timeout=FRAME_WAIT_SECONDS)
+    for snapshot in (mp_mcp.snapshot_frame(), mp_mcp.snapshot_frame("sink")):
         assert snapshot.data.startswith(JPEG_MAGIC)
         assert snapshot.to_image_content().mime_type == "image/jpeg"
-    pyml_mcp.stop_pipeline()
+    mp_mcp.stop_pipeline()
 
 
 def test_snapshot_frame_refuses_a_sink_that_carries_no_video(tmp_path):
     text = tmp_path / "hello.txt"
     text.write_text("hello")
-    pyml_mcp.start_pipeline(
+    mp_mcp.start_pipeline(
         f"filesrc location={text} ! text/x-raw,format=utf8 ! mp_metasink"
     )
-    pyml_mcp.wait_for_records(1, timeout=RECORD_WAIT_SECONDS)
+    mp_mcp.wait_for_records(1, timeout=RECORD_WAIT_SECONDS)
     with pytest.raises(ToolError):
-        pyml_mcp.snapshot_frame()
-    pyml_mcp.stop_pipeline()
+        mp_mcp.snapshot_frame()
+    mp_mcp.stop_pipeline()
 
 
 def test_snapshot_frame_names_the_element_it_cannot_find():
-    pyml_mcp.start_pipeline(VIDEO_PIPELINE)
+    mp_mcp.start_pipeline(VIDEO_PIPELINE)
     with pytest.raises(ToolError, match="no element named"):
-        pyml_mcp.snapshot_frame("nosuch")
-    pyml_mcp.stop_pipeline()
+        mp_mcp.snapshot_frame("nosuch")
+    mp_mcp.stop_pipeline()
 
 
 def test_wait_for_records_gives_up_on_a_key_no_record_carries():
-    pyml_mcp.start_pipeline(VIDEO_PIPELINE)
+    mp_mcp.start_pipeline(VIDEO_PIPELINE)
     started = time.monotonic()
-    waited = pyml_mcp.wait_for_records(1, key="alert", timeout=MISSING_KEY_WAIT_SECONDS)
+    waited = mp_mcp.wait_for_records(1, key="alert", timeout=MISSING_KEY_WAIT_SECONDS)
     assert waited["records"] == []
     assert time.monotonic() - started < MISSING_KEY_DEADLINE_SECONDS
-    pyml_mcp.stop_pipeline()
+    mp_mcp.stop_pipeline()
 
 
 def test_a_property_can_change_while_the_pipeline_runs():
-    pyml_mcp.start_pipeline(
+    mp_mcp.start_pipeline(
         "videotestsrc name=source pattern=snow ! videobalance name=balance "
         "! mp_metasink name=sink"
     )
-    assert pyml_mcp.get_property("source", "pattern") == "snow"
-    assert pyml_mcp.set_property("source", "pattern", "ball") == {"pattern": "ball"}
-    assert pyml_mcp.set_property("balance", "contrast", "0.99") == {"contrast": "0.99"}
-    assert pyml_mcp.set_property("sink", "location", "a b") == {"location": "a b"}
+    assert mp_mcp.get_property("source", "pattern") == "snow"
+    assert mp_mcp.set_property("source", "pattern", "ball") == {"pattern": "ball"}
+    assert mp_mcp.set_property("balance", "contrast", "0.99") == {"contrast": "0.99"}
+    assert mp_mcp.set_property("sink", "location", "a b") == {"location": "a b"}
     with pytest.raises(ToolError, match="no property"):
-        pyml_mcp.set_property("source", "no-such-property", "1")
-    pyml_mcp.stop_pipeline()
+        mp_mcp.set_property("source", "no-such-property", "1")
+    mp_mcp.stop_pipeline()
 
 
 def test_a_sink_without_a_location_is_kept_off_stdout():
-    pyml_mcp.start_pipeline("videotestsrc ! mp_metasink name=sink")
-    assert pyml_mcp.get_property("sink", "location") == os.devnull
-    pyml_mcp.stop_pipeline()
+    mp_mcp.start_pipeline("videotestsrc ! mp_metasink name=sink")
+    assert mp_mcp.get_property("sink", "location") == os.devnull
+    mp_mcp.stop_pipeline()
 
 
 def test_a_bad_description_is_reported_and_leaves_nothing_running():
     with pytest.raises(ToolError, match="nosuchelement"):
-        pyml_mcp.start_pipeline("nosuchelement ! fakesink")
-    assert pyml_mcp.pipeline_status() == {"state": "none"}
+        mp_mcp.start_pipeline("nosuchelement ! fakesink")
+    assert mp_mcp.pipeline_status() == {"state": "none"}
 
 
 def test_a_looping_pipeline_seeks_instead_of_ending():
-    pyml_mcp.start_pipeline(
-        "videotestsrc num-buffers=5 ! fakesink sync=true", loop=True
-    )
+    mp_mcp.start_pipeline("videotestsrc num-buffers=5 ! fakesink sync=true", loop=True)
     time.sleep(1)
-    status = pyml_mcp.pipeline_status()
-    pyml_mcp.stop_pipeline()
+    status = mp_mcp.pipeline_status()
+    mp_mcp.stop_pipeline()
     assert status["errors"] == []
     assert status["ended"] is False
     assert status["state"] == "playing"
@@ -266,15 +264,15 @@ def test_a_looping_pipeline_seeks_instead_of_ending():
 
 def test_describe_frame_captions_the_newest_frame(monkeypatch):
     engine = StubVlmEngine()
-    monkeypatch.setattr(pyml_mcp, "vlm_engine", lambda model_name: engine)
-    pyml_mcp.start_pipeline(VIDEO_PIPELINE)
-    pyml_mcp.wait_for_records(1, timeout=FRAME_WAIT_SECONDS)
-    assert pyml_mcp.describe_frame("what is this", max_tokens=8) == "a test pattern"
+    monkeypatch.setattr(mp_mcp, "vlm_engine", lambda model_name: engine)
+    mp_mcp.start_pipeline(VIDEO_PIPELINE)
+    mp_mcp.wait_for_records(1, timeout=FRAME_WAIT_SECONDS)
+    assert mp_mcp.describe_frame("what is this", max_tokens=8) == "a test pattern"
     image, prompt, _system_prompt, max_tokens, temperature = engine.calls[0]
     assert (prompt, max_tokens, temperature) == ("what is this", 8, 0.0)
     assert image.size == (64, 48)
     assert image.mode == "RGB"
-    jpeg = PillowImage.open(io.BytesIO(pyml_mcp.snapshot_frame().data))
+    jpeg = PillowImage.open(io.BytesIO(mp_mcp.snapshot_frame().data))
     difference = [
         abs(raw - encoded)
         for raw, encoded in zip(
@@ -282,41 +280,41 @@ def test_describe_frame_captions_the_newest_frame(monkeypatch):
         )
     ]
     assert max(difference) <= JPEG_CHANNEL_TOLERANCE
-    pyml_mcp.stop_pipeline()
+    mp_mcp.stop_pipeline()
 
 
 def test_describe_frame_drops_the_padding_at_the_end_of_a_row(monkeypatch):
     engine = StubVlmEngine()
-    monkeypatch.setattr(pyml_mcp, "vlm_engine", lambda model_name: engine)
-    pyml_mcp.start_pipeline(PADDED_VIDEO_PIPELINE)
-    pyml_mcp.wait_for_records(1, timeout=FRAME_WAIT_SECONDS)
-    pyml_mcp.describe_frame()
+    monkeypatch.setattr(mp_mcp, "vlm_engine", lambda model_name: engine)
+    mp_mcp.start_pipeline(PADDED_VIDEO_PIPELINE)
+    mp_mcp.wait_for_records(1, timeout=FRAME_WAIT_SECONDS)
+    mp_mcp.describe_frame()
     image = engine.calls[0][0]
     assert image.size == (66, 48)
     assert image.getpixel(YELLOW_BAR_PIXEL) == YELLOW
-    pyml_mcp.stop_pipeline()
+    mp_mcp.stop_pipeline()
 
 
 def test_describe_frame_refuses_a_sink_that_carries_no_video(tmp_path):
     text = tmp_path / "hello.txt"
     text.write_text("hello")
-    pyml_mcp.start_pipeline(
+    mp_mcp.start_pipeline(
         f"filesrc location={text} ! text/x-raw,format=utf8 ! mp_metasink"
     )
-    pyml_mcp.wait_for_records(1, timeout=RECORD_WAIT_SECONDS)
+    mp_mcp.wait_for_records(1, timeout=RECORD_WAIT_SECONDS)
     with pytest.raises(ToolError, match="is not carrying video"):
-        pyml_mcp.describe_frame()
-    pyml_mcp.stop_pipeline()
+        mp_mcp.describe_frame()
+    mp_mcp.stop_pipeline()
 
 
 def test_describe_frame_needs_a_running_pipeline():
-    pyml_mcp.stop_pipeline()
+    mp_mcp.stop_pipeline()
     with pytest.raises(ToolError, match="no pipeline is running"):
-        pyml_mcp.describe_frame()
+        mp_mcp.describe_frame()
 
 
 def test_clip_at_cuts_the_seconds_around_a_pts(video_file):
-    clip = pyml_mcp.clip_at(str(video_file), 3.0, CLIP_SECONDS)
+    clip = mp_mcp.clip_at(str(video_file), 3.0, CLIP_SECONDS)
     assert (clip["start"], clip["end"]) == (2.0, 4.0)
     assert Path(clip["path"]).stat().st_size > 0
     assert LEAST_CLIP_FRAMES <= clip["frames"] <= MOST_CLIP_FRAMES
@@ -329,36 +327,36 @@ def test_clip_at_cuts_the_seconds_around_a_pts(video_file):
 
 def test_clip_at_names_the_video_it_cannot_find(tmp_path):
     with pytest.raises(ToolError, match="no video"):
-        pyml_mcp.clip_at(str(tmp_path / "missing.webm"), 1.0)
+        mp_mcp.clip_at(str(tmp_path / "missing.webm"), 1.0)
 
 
 def test_load_metadata_stands_in_for_a_finished_run(tmp_path):
     recorded = tmp_path / "records.jsonl"
     recorded.write_text('{"pts": 0.0, "text": "one"}\n\n{"pts": 0.1, "text": "two"}\n')
-    assert pyml_mcp.load_metadata(str(recorded)) == {"records": 2}
-    assert [record["text"] for record in pyml_mcp.latest_metadata()] == ["one", "two"]
-    assert pyml_mcp.pipeline_status() == {"state": "none"}
+    assert mp_mcp.load_metadata(str(recorded)) == {"records": 2}
+    assert [record["text"] for record in mp_mcp.latest_metadata()] == ["one", "two"]
+    assert mp_mcp.pipeline_status() == {"state": "none"}
     started = time.monotonic()
-    waited = pyml_mcp.wait_for_records(1, timeout=LOADED_WAIT_SECONDS)
+    waited = mp_mcp.wait_for_records(1, timeout=LOADED_WAIT_SECONDS)
     assert [record["text"] for record in waited["records"]] == ["one", "two"]
     assert time.monotonic() - started < LOADED_DEADLINE_SECONDS
 
 
 def test_load_metadata_names_the_file_it_cannot_find(tmp_path):
     with pytest.raises(ToolError, match="no metadata file"):
-        pyml_mcp.load_metadata(str(tmp_path / "missing.jsonl"))
+        mp_mcp.load_metadata(str(tmp_path / "missing.jsonl"))
 
 
 def test_every_pipelines_section_is_offered_as_a_prompt():
-    names = [prompt.name for prompt in asyncio.run(pyml_mcp.server.list_prompts())]
+    names = [prompt.name for prompt in asyncio.run(mp_mcp.server.list_prompts())]
     assert "object_detection" in names
     assert "metadata_sink" in names
-    result = asyncio.run(pyml_mcp.server.get_prompt("metadata_sink", None))
+    result = asyncio.run(mp_mcp.server.get_prompt("metadata_sink", None))
     assert "mp_metasink" in result.messages[0].content.text
 
 
 def test_inspect_lists_the_sink_location():
-    described = pyml_mcp.inspect("mp_metasink")
+    described = mp_mcp.inspect("mp_metasink")
     defaults = {spec["name"]: spec["default"] for spec in described["properties"]}
     assert defaults["location"] == ""
     assert defaults["last-sample"] == ""

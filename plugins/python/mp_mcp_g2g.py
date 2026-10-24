@@ -1,4 +1,4 @@
-# pyml-mcp on g2g
+# mp-mcp on g2g
 # Copyright (C) 2024-2026 Collabora Ltd.
 #
 # This Source Code Form is subject to the terms of the Mozilla Public
@@ -11,7 +11,7 @@ import subprocess
 import sys
 import threading
 
-import pyml_launch
+import mp_launch
 
 LAUNCH_LINE_ARGUMENTS = {
     "validate": "pipeline",
@@ -46,7 +46,7 @@ def g2g_spelled(request, shells):
     if argument not in arguments:
         return request
     tokens = shlex.split(arguments[argument])
-    rewritten = " ".join(pyml_launch.rewrite_for_g2g(tokens, shells))
+    rewritten = " ".join(mp_launch.rewrite_for_g2g(tokens, shells))
     arguments = {**arguments, argument: rewritten}
     return {**request, "params": {**params, "arguments": arguments}}
 
@@ -77,13 +77,13 @@ def relay_replies(server_output, replies):
 
 
 def main():
-    shells = pyml_launch.element_shells()
+    shells = mp_launch.element_shells()
     server = subprocess.Popen(
-        [pyml_launch.required_g2g_binary(), "--mcp"],
+        [mp_launch.required_g2g_binary(), "--mcp"],
         stdin=subprocess.PIPE,
         stdout=subprocess.PIPE,
         text=True,
-        env=pyml_launch.launch_environment(),
+        env=mp_launch.launch_environment(),
     )
     replies = LineWriter(sys.stdout)
     reply_thread = threading.Thread(

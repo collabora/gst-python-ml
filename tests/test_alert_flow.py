@@ -24,7 +24,7 @@ from metasink import buffer_record  # noqa: E402
 
 pytestmark = pytest.mark.skipif(
     Gst.ElementFactory.find("mp_alert") is None,
-    reason="the python plugin loader did not register the pyml elements",
+    reason="the python plugin loader did not register the modelpipe elements",
 )
 
 FRAMERATE = 30

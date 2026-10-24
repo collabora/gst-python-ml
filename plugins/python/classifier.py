@@ -42,7 +42,7 @@ class Classifier(BaseClassifier):
     def export_model(self, model_name):
         engine = self.mgr.engine_name
         if engine not in TASK_ENGINES["classifier"]:
-            raise ValueError(f"{engine} does not run the classifier, see pyml-engines")
+            raise ValueError(f"{engine} does not run the classifier, see mp-engines")
         return ExportedClassifier(model_name, engine)
 
 

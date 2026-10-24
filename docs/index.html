@@ -475,6 +475,7 @@
             font-family: 'JetBrains Mono', monospace;
             color: var(--green);
         }
+        .feat-card a { color: var(--green); }
 
         /* ── CAPABILITIES / BENTO ── */
         #capabilities { border-bottom: 1px solid var(--border); }
@@ -585,7 +586,7 @@
         #deploy { border-bottom: 1px solid var(--border); }
         .deploy-grid {
             display: grid;
-            grid-template-columns: repeat(3, 1fr);
+            grid-template-columns: repeat(4, 1fr);
             gap: 16px;
         }
         .deploy-card {
@@ -1376,7 +1377,7 @@
     <div class="section-inner">
         <span class="section-label">Agents</span>
         <h2 class="section-title">Give an LLM Agent Eyes and Ears</h2>
-        <p class="section-desc"><code>pyml-mcp</code> is a Model Context Protocol server over stdio. It runs a GStreamer pipeline in-process, so an agent in Claude Code, Claude Desktop or any MCP client can start a pipeline, read what it sees, and tune it while it runs.</p>
+        <p class="section-desc"><code>mp-mcp</code> is a Model Context Protocol server over stdio. It runs a GStreamer pipeline in-process, so an agent in Claude Code, Claude Desktop or any MCP client can start a pipeline, read what it sees, and tune it while it runs.</p>
         <div class="features-grid fade-in">
             <div class="feat-card">
                 <h3>Tools</h3>
@@ -1390,7 +1391,7 @@
                 <h3>Setup</h3>
 <pre>uv sync --extra mcp
 claude mcp add modelpipe -- \
-  /path/to/modelpipe/.venv/bin/pyml-mcp</pre>
+  /path/to/modelpipe/.venv/bin/mp-mcp</pre>
             </div>
         </div>
     </div>
@@ -1434,7 +1435,7 @@ claude mcp add modelpipe -- \
             </div>
             <div class="feat-card">
                 <h3>&#129302; Agent Access over MCP</h3>
-                <p><code>pyml-mcp</code> is an MCP server that runs a pipeline in-process. An LLM agent starts it, reads detections and transcripts from <code>mp_metasink</code>, and changes element properties while it runs.</p>
+                <p><code>mp-mcp</code> is an MCP server that runs a pipeline in-process. An LLM agent starts it, reads detections and transcripts from <code>mp_metasink</code>, and changes element properties while it runs.</p>
             </div>
             <div class="feat-card">
                 <h3>&#9878; Cascade Gating</h3>
@@ -1682,6 +1683,7 @@ claude mcp add modelpipe -- \
                 <button class="tab-btn" data-tab="fedora">Fedora</button>
                 <button class="tab-btn" data-tab="docker">Docker</button>
                 <button class="tab-btn" data-tab="windows">Windows</button>
+                <button class="tab-btn" data-tab="g2g">Glass2Glass</button>
             </div>
             <div class="tab-body">
                 <div class="tab-panel active" id="tab-ubuntu">
@@ -1777,21 +1779,48 @@ pip install torch torchvision torchaudio --index-url https://download.pytorch.or
 pip install -e .</pre>
                 </div>
                 <div class="tab-panel" id="tab-windows">
-<pre><span class="cmt"># 1. Install GStreamer MSVC x86_64 (runtime + development)</span>
-<span class="cmt">#    https://gstreamer.freedesktop.org/download/#windows</span>
+<pre><span class="cmt"># PowerShell, with Python 3.10 or later installed</span>
+<span class="cmt"># Clone and set up</span>
+git clone https://github.com/collabora/modelpipe.git
+cd modelpipe
+python -m venv .venv
+.venv\Scripts\Activate.ps1
 
-<span class="cmt"># 2. Set environment variables</span>
-[Environment]::SetEnvironmentVariable(<span class="str">"PATH"</span>,
-  <span class="str">"C:\gstreamer\1.0\msvc_x86_64\bin;"</span> + $env:PATH, <span class="str">"User"</span>)
-[Environment]::SetEnvironmentVariable(<span class="str">"GST_PLUGIN_PATH"</span>,
-  <span class="str">"D:\modelpipe\plugins"</span>, <span class="str">"User"</span>)
+<span class="cmt"># Install GStreamer and its Python bindings from the GStreamer wheels</span>
+pip install <span class="str">"gstreamer-meta[cli]"</span>
 
-<span class="cmt"># 3. Install Python 3.12+ and PyGObject</span>
-pip install gstreamer-python
+<span class="cmt"># Install modelpipe</span>
+pip install -e .
 
-<span class="cmt"># 4. Install CUDA PyTorch (optional)</span>
+<span class="cmt"># The wheels set GST_PLUGIN_PATH_1_0, which hides GST_PLUGIN_PATH</span>
+<span class="cmt"># The plugin loader embeds the base interpreter, so it needs PYTHONPATH too</span>
+$venv = <span class="str">"$PWD\.venv"</span>
+$env:GST_PLUGIN_PATH_1_0 = <span class="str">"$PWD\plugins"</span>
+$env:PYTHONPATH = <span class="str">"$venv\Lib\site-packages;$venv\Lib\site-packages\gstreamer_python\Lib\site-packages;$PWD\plugins\python"</span>
+
+<span class="cmt"># Check the elements load</span>
+gst-inspect-1.0 mp_objectdetector
+
+<span class="cmt"># Optional: CUDA PyTorch, after the CUDA Toolkit matching your driver</span>
 pip install torch torchvision torchaudio \
   --index-url https://download.pytorch.org/whl/cu128</pre>
+                </div>
+                <div class="tab-panel" id="tab-g2g">
+<pre><span class="cmt"># Set up modelpipe as in the Ubuntu or Fedora tab and keep its venv active</span>
+<span class="cmt"># Build g2g-launch-py from a glass2glass checkout next to modelpipe (needs Rust)</span>
+cd ..
+git clone https://github.com/Glass2GlassHQ/glass2glass.git
+cd glass2glass
+PYO3_PYTHON=$(which python) cargo build --release -p g2g-python \
+  --features ml --bin g2g-launch-py
+cd ../modelpipe
+
+<span class="cmt"># Run any pipeline under glass2glass</span>
+<span class="kw">export</span> MP_BACKEND=<span class="str">g2g</span>
+python mp-launch.py filesrc location=data/people.mp4 ! decodebin \
+  ! videoconvert ! videoscale ! video/x-raw,width=<span class="num">640</span>,height=<span class="num">480</span> \
+  ! mp_yolo model-name=yolo11m device=cuda ! videoconvert ! mp_overlay \
+  ! videoconvert ! autovideosink</pre>
                 </div>
             </div>
         </div>
@@ -1870,27 +1899,25 @@ gst-inspect-1.0 my_detector</pre>
             <div class="deploy-card">
                 <div class="d-icon">&#128187;</div>
                 <h3>Windows</h3>
-                <p>GStreamer MSVC runtime with Python 3.12+. CUDA GPU support via PyTorch. PowerShell setup scripts included.</p>
+                <p>GStreamer and its Python bindings from the gstreamer-meta wheels, with Python 3.10 or later. CUDA GPU support via PyTorch.</p>
+            </div>
+            <div class="deploy-card">
+                <div class="d-icon">&#127822;</div>
+                <h3>macOS</h3>
+                <p>GStreamer and PyGObject from Homebrew. On Apple Silicon, the MLX engine and the ONNX Runtime CoreML provider with device=coreml.</p>
             </div>
         </div>
     </div>
 </section>
 
-<!-- ═══ BLOG ═══ -->
-<section id="blog" style="border-bottom: 1px solid var(--border);">
+<!-- ═══ DEMO ═══ -->
+<section id="demo" style="border-bottom: 1px solid var(--border);">
     <div class="section-inner">
         <span class="section-label">Resources</span>
-        <h2 class="section-title">From the Blog</h2>
-        <p class="section-desc">Read about the technology behind ModelPipe.</p>
+        <h2 class="section-title">See It Run</h2>
 
         <div class="pipeline-grid fade-in">
-            <a href="https://www.collabora.com/news-and-blog/blog/2025/05/12/unleashing-gst-python-ml-analytics-gstreamer-pipelines/" class="pipeline-card" style="text-decoration: none; cursor: pointer;">
-                <span class="pipe-tag">Blog Post</span>
-                <h3>Original project announcement</h3>
-                <p style="color: var(--text-secondary);">A detailed look at ModelPipe analytics in GStreamer pipelines, from object detection to video captioning.</p>
-                <span style="display: inline-flex; align-items: center; gap: 4px; margin-top: 16px; font-size: 0.82rem; font-weight: 600; color: var(--green);">Read more &rarr;</span>
-            </a>
-            <div class="pipeline-card" style="grid-column: span 2;">
+            <div class="pipeline-card" style="grid-column: 1 / -1;">
                 <span class="pipe-tag">Demo Video</span>
                 <h3>YOLO Tracking on Soccer Match</h3>
                 <p style="margin-bottom: 16px;">See ModelPipe run real-time YOLO object tracking on a live soccer match.</p>
@@ -1940,7 +1967,7 @@ gst-inspect-1.0 my_detector</pre>
         <div class="footer-col">
             <h4>Resources</h4>
             <a href="https://github.com/collabora/modelpipe">GitHub</a>
-            <a href="https://github.com/collabora/modelpipe/blob/main/README.md">Documentation</a>
+            <a href="https://github.com/collabora/modelpipe/blob/master/README.md">Documentation</a>
             <a href="https://pypi.org/project/modelpipe/">PyPI Package</a>
             <a href="#install">Installation Guide</a>
         </div>

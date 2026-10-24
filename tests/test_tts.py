@@ -23,7 +23,7 @@ from base_tts import BYTES_PER_SAMPLE  # noqa: E402
 
 pytestmark = pytest.mark.skipif(
     Gst.ElementFactory.find("mp_whisperspeechtts") is None,
-    reason="the python plugin loader did not register the pyml elements",
+    reason="the python plugin loader did not register the modelpipe elements",
 )
 
 TRANSCRIPT = "the quick brown fox"

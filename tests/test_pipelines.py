@@ -74,7 +74,7 @@ HEADLESS_REWRITES = (
 # an eos this many buffers before the first ml element proves frames went through it
 HEADLESS_FRAME_CAP = 20
 FRAME_CAP_ELEMENT = f"identity eos-after={HEADLESS_FRAME_CAP}"
-FIRST_ML_ELEMENT = re.compile(r"\b(?:pyml_\w+|demo_\w+)\b")
+FIRST_ML_ELEMENT = re.compile(r"\b(?:mp_\w+|demo_\w+)\b")
 LOG_TAIL_LINES = 40
 
 

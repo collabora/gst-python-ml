@@ -9,24 +9,24 @@ if INSTALLED_ELEMENT_MODULES.is_dir():
 
 
 def launch():
-    import pyml_launch
+    import mp_launch
 
-    pyml_launch.main()
+    mp_launch.main()
 
 
 def mcp():
-    # pyml_mcp imports gi at module scope
+    # mp_mcp imports gi at module scope
     if os.environ.get("MP_BACKEND", "gst").lower() == "g2g":
-        import pyml_mcp_g2g
+        import mp_mcp_g2g
 
-        sys.exit(pyml_mcp_g2g.main())
+        sys.exit(mp_mcp_g2g.main())
 
-    import pyml_mcp
+    import mp_mcp
 
-    pyml_mcp.main()
+    mp_mcp.main()
 
 
 def engines():
-    import pyml_engines
+    import mp_engines
 
-    pyml_engines.main()
+    mp_engines.main()

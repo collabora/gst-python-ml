@@ -20,7 +20,7 @@ Gst.init(None)
 
 pytestmark = pytest.mark.skipif(
     Gst.ElementFactory.find("mp_digest") is None,
-    reason="the python plugin loader did not register the pyml elements",
+    reason="the python plugin loader did not register the modelpipe elements",
 )
 
 WINDOW_SECONDS = 1.0

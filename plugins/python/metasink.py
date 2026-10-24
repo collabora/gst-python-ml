@@ -28,7 +28,7 @@ except ImportError as e:
         f"The 'mp_metasink' element will not be available. Error: {e}"
     )
 
-BUS_MESSAGE_NAME = "pyml-metadata"
+BUS_MESSAGE_NAME = "mp-metadata"
 BUS_MESSAGE_FIELD = "json"
 
 TEXT_MEDIA_PREFIX = "text/"

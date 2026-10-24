@@ -19,7 +19,7 @@ instead, from the `skia` extra.
 ### Choosing the backend
 
 The ML elements run under GStreamer or under
-[glass2glass](https://gitlab.collabora.com/glass2glass/glass2glass), selected by
+[glass2glass](https://github.com/Glass2GlassHQ/glass2glass), selected by
 `MP_BACKEND`. It defaults to `gst`, which is why the examples leave it off.
 Prefix any of them with `MP_BACKEND=g2g` to run the same line under
 glass2glass instead.
@@ -1380,7 +1380,7 @@ python mp-launch.py filesrc location=data/people.mp4 ! decodebin ! videoconvert 
 
 ## MCP Server
 
-`pyml-mcp` is an MCP server over stdio that runs the gst backend in-process, so an
+`mp-mcp` is an MCP server over stdio that runs the gst backend in-process, so an
 agent can start a pipeline, read its results and change a property while it runs.
 End every pipeline with a `mp_metasink`, that is where records come from.
 
@@ -1390,7 +1390,7 @@ End every pipeline with a `mp_metasink`, that is where records come from.
 - When the pipeline has an element named `record`, such as `filesink name=record`, `stop_pipeline` sends end of stream first so the mp4 it writes is playable.
 - `latest_metadata` returns the newest records, at most the last 1000. `wait_for_records` blocks until the sink posts new ones, optionally only those carrying a key such as `detections`.
 - `load_metadata` reads a JSON lines file a `mp_metasink` wrote, so a finished run needs no pipeline.
-- `engine_options` lists the engines and devices that run a model name or file, as `pyml-engines --json` prints them.
+- `engine_options` lists the engines and devices that run a model name or file, as `mp-engines --json` prints them.
 - `latest_bus_messages` returns the newest element messages, warnings and QoS reports any element posted, such as `level` loudness or a sink dropping late frames, at most the last 1000. Debug logs never reach the bus. Errors in `pipeline_status` and warnings carry GStreamer's debug detail, such as `not-negotiated`.
 - `buffer_flow` counts the buffers each source pad pushed, with the rate while they flowed and the seconds since the last one. Data stops at the first pad whose count stopped growing. `latency_ms` is the element's recent average time from a buffer entering to it leaving, matched by timestamp, so an element that changes timestamps, such as an encoder, has none, and a `queue` shows how long buffers wait in it. It covers the pipeline's own elements, not the ones inside a bin such as `autovideosink`.
 - `snapshot_frame` returns the newest rendered frame as a JPEG. `describe_frame` captions it with the model `MP_MCP_VLM_MODEL` names, `HuggingFaceTB/SmolVLM-500M-Instruct` by default.
@@ -1402,10 +1402,10 @@ caption takes tens of seconds.
 
 ```
 uv sync --extra mcp
-claude mcp add modelpipe -- /path/to/modelpipe/.venv/bin/pyml-mcp
+claude mcp add modelpipe -- /path/to/modelpipe/.venv/bin/mp-mcp
 ```
 
-With `MP_BACKEND=g2g`, `pyml-mcp` serves glass2glass's own MCP server from
+With `MP_BACKEND=g2g`, `mp-mcp` serves glass2glass's own MCP server from
 `g2g-launch-py --mcp`, on `PATH` or at `G2G_LAUNCH`. It takes pipelines in
 the `gst-launch` spelling this file uses and rewrites them as `mp-launch` does.
 An element passed to `insert_transform` is rewritten on its own, so name its
@@ -1415,5 +1415,5 @@ An element passed to `insert_transform` is rewritten on its own, so name its
 `describe_frame`, `search_video` or prompts from this file.
 
 ```
-claude mcp add modelpipe-g2g -e MP_BACKEND=g2g -- /path/to/modelpipe/.venv/bin/pyml-mcp
+claude mcp add modelpipe-g2g -e MP_BACKEND=g2g -- /path/to/modelpipe/.venv/bin/mp-mcp
 ```

@@ -1,4 +1,4 @@
-# pyml-engines
+# mp-engines
 # Copyright (C) 2024-2026 Collabora Ltd.
 #
 # This Source Code Form is subject to the terms of the Mozilla Public
@@ -113,7 +113,7 @@ def print_benchmark(options, frames, as_json):
 
 def main(argv=None):
     parser = argparse.ArgumentParser(
-        prog="pyml-engines",
+        prog="mp-engines",
         description="List the engines and devices that run a model name or file.",
     )
     parser.add_argument("model", help="a Hugging Face id, a model name or a file")
@@ -136,9 +136,9 @@ def main(argv=None):
         options = engine_options(arguments.model)
     except OSError as error:
         first_line = str(error).splitlines()[0]
-        sys.exit(f"pyml-engines: cannot read {arguments.model}: {first_line}")
+        sys.exit(f"mp-engines: cannot read {arguments.model}: {first_line}")
     if not options["tasks"]:
-        sys.exit(f"pyml-engines: no task or engine matches {arguments.model}")
+        sys.exit(f"mp-engines: no task or engine matches {arguments.model}")
     if arguments.benchmark:
         print_benchmark(options, arguments.frames, arguments.json)
         return

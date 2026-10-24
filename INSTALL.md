@@ -362,7 +362,7 @@ Then set up the venv in the container shell as above.
 
 ## Post Install
 
-Run `gst-inspect-1.0 python` to list pyml elements.
+Run `gst-inspect-1.0 python` to list the modelpipe elements.
 
 ## Custom Plugins
 

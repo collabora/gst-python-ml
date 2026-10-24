@@ -82,11 +82,11 @@ report what it found, and `agent.py` answers "how many kicks so far" from
 them. Each kick also carries a `GST-ALERT:` blob shaped like `mp_alert`'s,
 `[{"event": "kick", "player": ..., "frame": ..., "speed": ...}]`.
 
-## Typed commands through pyml-mcp
+## Typed commands through mp-mcp
 
-`agent.py` runs the display pipeline inside `pyml-mcp` and lets you change it
+`agent.py` runs the display pipeline inside `mp-mcp` and lets you change it
 by typing. It starts the local model described below, spawns
-`.venv/bin/pyml-mcp`, and shows each tool call as it happens. The model sees
+`.venv/bin/mp-mcp`, and shows each tool call as it happens. The model sees
 five tools: `start_football_demo`, `set_property`, `get_property`,
 `pipeline_status`, `stop_pipeline`. It knows `overlay show-ball`,
 `overlay ball-trail`, `overlay trails`, `overlay show-hud` and `detector confidence`.
@@ -101,7 +101,7 @@ five tools: `start_football_demo`, `set_property`, `get_property`,
 ```
 
 `run.sh print` echoes the display pipeline the agent starts. Server logs go to
-`football-agent-llama.log` and `football-agent-pyml-mcp.log` in the temp dir.
+`football-agent-llama.log` and `football-agent-mp-mcp.log` in the temp dir.
 The voice log, when you use `--voice`, is `football-voice.log` in that same dir.
 
 ## Voice demo
@@ -118,7 +118,7 @@ One process starts three pieces, all local, no network:
 
 1. Whisper, a GStreamer pipeline in the agent.
 2. Qwen, `llama-server` on `127.0.0.1:8089`.
-3. The football pipeline, inside `pyml-mcp`, which the model drives with tools.
+3. The football pipeline, inside `mp-mcp`, which the model drives with tools.
 
 The clip is `data/iStock-1446288409.mp4` (31 s, 1920×1080, no audio track),
 shown at 1280×720. `start_football_demo` is rewritten to
@@ -197,7 +197,7 @@ a call to a hidden tool is refused. A misheard "go back" had stopped the
 picture, and silence had restarted it. The typed REPL still has both tools.
 Ctrl-C runs `stop_pipeline`, so the recording is finalized.
 
-Ask "which element has the most latency?" and the model calls `pyml-mcp`'s
+Ask "which element has the most latency?" and the model calls `mp-mcp`'s
 `element_latencies`: each element's average time per frame, slowest first,
 queues left out. The answer replaces the transcript on the picture. A phrase
 that only changes properties gets no answer, as before.
@@ -209,9 +209,9 @@ Property rules in the system prompt:
 - "show player tracks": `trails=true`, ball properties unchanged.
 - "hide player tracks": `trails=false`, ball properties unchanged.
 
-### pyml-mcp
+### mp-mcp
 
-`.venv/bin/pyml-mcp` serves `plugins/python/pyml_mcp` over stdio. The agent
+`.venv/bin/mp-mcp` serves `plugins/python/mp_mcp` over stdio. The agent
 is the client. Tools the model can call are listed above. `start_pipeline`
 takes a gst-launch string and `loop`. The voice demo passes `loop=False`.
 
@@ -219,7 +219,7 @@ takes a gst-launch string and `loop`. The voice demo passes `loop=False`.
 `SEGMENT_DONE` or EOS seeks again without flush. A flush seek at the end of
 the clip stalls the picture. The seek runs on a side thread, not in the bus
 sync handler, because that handler is on the streaming thread. The bus sync
-handler drops every message. `tests/test_pyml_mcp.py` covers the loop with a
+handler drops every message. `tests/test_mp_mcp.py` covers the loop with a
 short `videotestsrc`.
 
 `stop_pipeline` sends EOS and waits up to 8 seconds when the pipeline has an

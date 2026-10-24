@@ -9,8 +9,8 @@ import pytest
 
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent / "plugins" / "python"))
 
-import pyml_launch  # noqa: E402
-import pyml_mcp_g2g  # noqa: E402
+import mp_launch  # noqa: E402
+import mp_mcp_g2g  # noqa: E402
 
 GST_SPELLED_PIPELINE = (
     "videotestsrc num-buffers=2 ! videoconvert ! mp_tracker name=tracker ! fakesink"
@@ -21,7 +21,7 @@ SERVER_TIMEOUT_SECONDS = 120
 
 @pytest.fixture(scope="module")
 def shells():
-    return pyml_launch.element_shells()
+    return mp_launch.element_shells()
 
 
 def tool_call(request_id, name, arguments):
@@ -38,8 +38,8 @@ def relayed(requests, shells):
     server_input = io.StringIO()
     replies = io.StringIO()
     lines = [json.dumps(request) + "\n" for request in requests]
-    pyml_mcp_g2g.relay_requests(
-        lines, server_input, pyml_mcp_g2g.LineWriter(replies), shells
+    mp_mcp_g2g.relay_requests(
+        lines, server_input, mp_mcp_g2g.LineWriter(replies), shells
     )
     forwarded = [json.loads(line) for line in server_input.getvalue().splitlines()]
     answered = [json.loads(line) for line in replies.getvalue().splitlines()]
@@ -81,12 +81,12 @@ def test_a_line_the_rewrite_refuses_is_answered_without_reaching_g2g(shells):
     )
     assert forwarded == []
     assert answered[0]["id"] == 7
-    assert answered[0]["error"]["code"] == pyml_mcp_g2g.INVALID_PARAMS
+    assert answered[0]["error"]["code"] == mp_mcp_g2g.INVALID_PARAMS
     assert "broker" in answered[0]["error"]["message"]
 
 
-def test_pyml_mcp_on_g2g_runs_a_gst_spelled_pipeline():
-    if not pyml_launch.g2g_binary():
+def test_mp_mcp_on_g2g_runs_a_gst_spelled_pipeline():
+    if not mp_launch.g2g_binary():
         pytest.skip("needs a g2g-launch-py build")
     requests = [
         {"jsonrpc": "2.0", "id": 1, "method": "initialize", "params": {}},

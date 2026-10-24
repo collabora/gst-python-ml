@@ -8,7 +8,7 @@
 #   demo/football/run.sh [INPUT.mp4] [OUTPUT.mp4] [WxH]      # file -> annotated mp4
 #   demo/football/run.sh display [INPUT.mp4] [WxH]           # file -> live on-screen
 #   demo/football/run.sh camera [/dev/videoN] [WxH]          # live camera -> on-screen
-#   demo/football/run.sh print [INPUT.mp4] [WxH]             # echo the display pipeline for pyml-mcp
+#   demo/football/run.sh print [INPUT.mp4] [WxH]             # echo the display pipeline for mp-mcp
 #   HOST=gst demo/football/run.sh ...                         # same, on gst-launch-1.0
 #   CUDA=true demo/football/run.sh ...                        # decode, detect, track, draw and sink on cuda memory
 set -euo pipefail

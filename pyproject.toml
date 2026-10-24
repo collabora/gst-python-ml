@@ -204,8 +204,8 @@ markers = [
 
 [project.scripts]
 mp-launch = "modelpipe:launch"
-pyml-mcp = "modelpipe:mcp"
-pyml-engines = "modelpipe:engines"
+mp-mcp = "modelpipe:mcp"
+mp-engines = "modelpipe:engines"
 
 [tool.hatch.build.targets.wheel]
 only-include = ["plugins"]

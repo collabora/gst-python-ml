@@ -26,7 +26,7 @@ from utils.blobs import read_blobs  # noqa: E402
 
 pytestmark = pytest.mark.skipif(
     Gst.ElementFactory.find("mp_football_overlay") is None,
-    reason="the python plugin loader did not register the pyml elements",
+    reason="the python plugin loader did not register the modelpipe elements",
 )
 
 WIDTH, HEIGHT = 320, 240

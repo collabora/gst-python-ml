@@ -1,4 +1,4 @@
-# pyml-mcp
+# mp-mcp
 # Copyright (C) 2024-2026 Collabora Ltd.
 #
 # This Source Code Form is subject to the terms of the Mozilla Public
@@ -20,16 +20,16 @@ from mcp.server import MCPServer
 from mcp.server.mcpserver.exceptions import ToolError
 from mcp.server.mcpserver.utilities.types import Image
 
-import pyml_launch
+import mp_launch
 
 # the plugin loader reads GST_PLUGIN_PATH at Gst.init
-if pyml_launch.CHECKOUT_PLUGINS:
+if mp_launch.CHECKOUT_PLUGINS:
     os.environ["GST_PLUGIN_PATH"] = os.pathsep.join(
         filter(
-            None, [str(pyml_launch.CHECKOUT_PLUGINS), os.environ.get("GST_PLUGIN_PATH")]
+            None, [str(mp_launch.CHECKOUT_PLUGINS), os.environ.get("GST_PLUGIN_PATH")]
         )
     )
-sys.path.insert(0, str(pyml_launch.plugin_dir()))
+sys.path.insert(0, str(mp_launch.plugin_dir()))
 
 import gi  # noqa: E402
 
@@ -68,8 +68,8 @@ CLIP_DECODE_PIPELINE = (
 PREROLL_SECONDS = 10
 CLIP_FINISH_SECONDS = 20
 PIPELINES_PATH = (
-    pyml_launch.CHECKOUT_PLUGINS.parent / "PIPELINES.md"
-    if pyml_launch.CHECKOUT_PLUGINS
+    mp_launch.CHECKOUT_PLUGINS.parent / "PIPELINES.md"
+    if mp_launch.CHECKOUT_PLUGINS
     else None
 )
 

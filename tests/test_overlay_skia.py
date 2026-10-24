@@ -25,7 +25,7 @@ from backend import analytics  # noqa: E402
 
 pytestmark = pytest.mark.skipif(
     Gst.ElementFactory.find("mp_overlay") is None,
-    reason="the python plugin loader did not register the pyml elements",
+    reason="the python plugin loader did not register the modelpipe elements",
 )
 
 WIDTH, HEIGHT = 64, 32

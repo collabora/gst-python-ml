@@ -3,7 +3,7 @@
 [![CI](https://github.com/collabora/modelpipe/actions/workflows/ci.yml/badge.svg)](https://github.com/collabora/modelpipe/actions/workflows/ci.yml)
 
 ModelPipe runs a wide variety of ML models in GStreamer and
-[Glass2Glass](https://gitlab.collabora.com/glass2glass/glass2glass) multimedia
+[Glass2Glass](https://github.com/Glass2GlassHQ/glass2glass) multimedia
 pipelines.
 
 ModelPipe provides one Python element per task, plus base classes and inference
@@ -105,14 +105,14 @@ generated from `plugins/python/engine/support_matrix.py`, regenerate it with
 23. tinygrad's Gather rejects 2-d constant indices
 <!-- support matrix end -->
 
-`pyml-engines` reads the same tables for one model. It takes a Hugging Face id, a
+`mp-engines` reads the same tables for one model. It takes a Hugging Face id, a
 model name such as `yolo11n-pose` or `resnet18`, or a model file, and prints each
 engine's status, its devices, and the extra to install when the engine is missing.
 `*` marks a device this machine reaches, `?` one it does not probe. `--json` prints
 the same as JSON.
 
 ```
-$ pyml-engines depth-anything/Depth-Anything-V2-Small-hf
+$ mp-engines depth-anything/Depth-Anything-V2-Small-hf
 depth
   pytorch     runs                                                       cpu* cuda*
   onnx        runs                                                       cpu* cuda* tensorrt* rocm migraphx npu? coreml
@@ -212,12 +212,3 @@ display and camera mode and a `HOST=gst` switch to run the same pipeline on
 ```
 demo/baseball/run.sh display
 ```
-
-## Blog post
-
-[![ModelPipe project announcement](https://www.collabora.com/assets/images/blog/Collabora-GStPython.jpg)](https://www.collabora.com/news-and-blog/blog/2025/05/12/unleashing-gst-python-ml-analytics-gstreamer-pipelines/)
-
-**[Original project announcement: Python-powered ML analytics for GStreamer pipelines](https://www.collabora.com/news-and-blog/blog/2025/05/12/unleashing-gst-python-ml-analytics-gstreamer-pipelines/)**
-
-Combining GStreamer with machine learning frameworks into video analytics
-pipelines, from object detection to video captioning.

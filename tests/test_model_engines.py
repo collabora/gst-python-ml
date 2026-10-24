@@ -238,7 +238,7 @@ def test_a_crashed_child_becomes_an_error_note():
 
 
 def test_a_frame_count_under_one_is_rejected():
-    import pyml_engines
+    import mp_engines
 
     with pytest.raises(SystemExit):
-        pyml_engines.main(["yolo11n", "--benchmark", "--frames", "0"])
+        mp_engines.main(["yolo11n", "--benchmark", "--frames", "0"])
