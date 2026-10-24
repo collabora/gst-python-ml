@@ -19,7 +19,7 @@ from gi.repository import Gst  # noqa: E402
 Gst.init(None)
 
 pytestmark = pytest.mark.skipif(
-    Gst.ElementFactory.find("pyml_digest") is None,
+    Gst.ElementFactory.find("mp_digest") is None,
     reason="the python plugin loader did not register the pyml elements",
 )
 
@@ -50,8 +50,8 @@ def test_a_digest_holds_one_record_per_window(tmp_path):
     records = tmp_path / "records.jsonl"
     pipeline = Gst.parse_launch(
         "appsrc name=source format=time caps=text/x-raw,format=utf8 "
-        f"! pyml_digest window-seconds={WINDOW_SECONDS} "
-        f"! pyml_metasink location={records}"
+        f"! mp_digest window-seconds={WINDOW_SECONDS} "
+        f"! mp_metasink location={records}"
     )
     source = pipeline.get_by_name("source")
     pipeline.set_state(Gst.State.PLAYING)

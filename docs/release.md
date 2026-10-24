@@ -5,7 +5,7 @@
 Put a PyPI API token in `~/.pypirc`. A section with a name other than `pypi` needs the `repository` line, or twine fails with `KeyError: 'repository'`.
 
 ```
-[pypi-gst-python-ml]
+[pypi-modelpipe]
   repository = https://upload.pypi.org/legacy/
   username = __token__
   password = <token>
@@ -23,11 +23,11 @@ git push origin master vX.Y.Z
 rm -rf dist
 uv build
 uvx twine check dist/*
-uvx twine upload -r pypi-gst-python-ml dist/*
+uvx twine upload -r pypi-modelpipe dist/*
 ```
 
 `uv lock` records the new version in `uv.lock`.
 
 Use `uvx twine`. Hatchling writes metadata version 2.5, and twine 6.2 rejects it.
 
-The wheel should have one top-level directory, `gst_python_ml/`, with the elements under `gst_python_ml/plugins/python`.
+The wheel should have one top-level directory, `modelpipe/`, with the elements under `modelpipe/plugins/python`.

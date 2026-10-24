@@ -305,7 +305,7 @@ class FootballOverlay(InPlaceVideoTransform):
         default=False,
         nick="Detect Kicks",
         blurb="Mark each kick on the picture and attach a GST-ALERT blob to its "
-        "frame, so a pyml_alertrecorder downstream records it",
+        "frame, so a mp_alertrecorder downstream records it",
         flags=GObject.ParamFlags.READWRITE,
     )
 
@@ -1233,5 +1233,5 @@ class FootballOverlay(InPlaceVideoTransform):
 
 if backend.BACKEND == "gst":
     __gstelementfactory__ = backend.register_gst_element(
-        "pyml_football_overlay", FootballOverlay
+        "mp_football_overlay", FootballOverlay
     )

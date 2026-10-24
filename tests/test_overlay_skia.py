@@ -24,7 +24,7 @@ pytest.importorskip("skia")
 from backend import analytics  # noqa: E402
 
 pytestmark = pytest.mark.skipif(
-    Gst.ElementFactory.find("pyml_overlay") is None,
+    Gst.ElementFactory.find("mp_overlay") is None,
     reason="the python plugin loader did not register the pyml elements",
 )
 
@@ -39,7 +39,7 @@ def overlaid_frame(labelled_boxes):
     pipeline = Gst.parse_launch(
         f"appsrc name=source format=time "
         f"caps=video/x-raw,format=RGBA,width={WIDTH},height={HEIGHT},framerate=30/1 "
-        f"! pyml_overlay renderer=skia ! appsink name=sink sync=false"
+        f"! mp_overlay renderer=skia ! appsink name=sink sync=false"
     )
     source = pipeline.get_by_name("source")
     sink = pipeline.get_by_name("sink")

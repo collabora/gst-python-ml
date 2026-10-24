@@ -1,15 +1,15 @@
 # Object detection on Renesas RZ/V2H (DRP-AI NPU)
 
-This runs `pyml_objectdetector` on the **RZ/V2H** DRP-AI NPU, using a YOLO11
+This runs `mp_objectdetector` on the **RZ/V2H** DRP-AI NPU, using a YOLO11
 model compiled with the **DRP-AI TVM** compiler (powered by EdgeCortix MERA).
 
 It is the decomposed, metadata-passing pipeline used elsewhere in this repo —
 detector -> (tracker) -> overlay, but the detector's inference runs on the NPU:
 
 ```
-... ! pyml_objectdetector engine-name=drpai model-name=<deploy_dir> device=drpai
+... ! mp_objectdetector engine-name=drpai model-name=<deploy_dir> device=drpai
       input-format=nchw post-process=anchor_free
-    ! pyml_tracker ! pyml_overlay ! ...
+    ! mp_tracker ! mp_overlay ! ...
 ```
 ## Prerequisites
 
@@ -51,15 +51,15 @@ resolve in the container.
 
 Copy onto the RZ/V2H (e.g. under `/home/weston`):
 
-- this repo's `plugins/` (the gst-python-ml elements),
+- this repo's `plugins/` (the ModelPipe elements),
 - `build/drpai_runtime.so`,
 - the compiled `yolo11m_drpai_v2h/` deploy dir,
 - a COCO label file if you overlay class names.
 
 ```bash
-export GST_PLUGIN_PATH=/home/weston/gst-python-ml/plugins:$GST_PLUGIN_PATH
+export GST_PLUGIN_PATH=/home/weston/modelpipe/plugins:$GST_PLUGIN_PATH
 export PYTHONPATH=/home/weston/rzv2h/build:$PYTHONPATH
-gst-inspect-1.0 pyml_objectdetector
+gst-inspect-1.0 mp_objectdetector
 ```
 
 ## 4 — Run on the board
@@ -69,10 +69,10 @@ File -> annotated file (run as a user that can open `/dev/drpai0`, often root):
 ```bash
 gst-launch-1.0 filesrc location=clip.mp4 ! decodebin ! videoconvert ! videoscale \
   ! "video/x-raw,format=RGB,width=640,height=640" \
-  ! pyml_objectdetector engine-name=drpai model-name=yolo11m_drpai_v2h device=drpai \
+  ! mp_objectdetector engine-name=drpai model-name=yolo11m_drpai_v2h device=drpai \
         input-format=nchw post-process=anchor_free \
-  ! pyml_tracker tracker-type=bytetrack \
-  ! videoconvert ! "video/x-raw,format=RGBA" ! pyml_overlay \
+  ! mp_tracker tracker-type=bytetrack \
+  ! videoconvert ! "video/x-raw,format=RGBA" ! mp_overlay \
   ! videoconvert ! autovideosink
 ```
 

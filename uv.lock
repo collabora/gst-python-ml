@@ -2262,7 +2262,7 @@ wheels = [
 ]
 
 [[package]]
-name = "gst-python-ml"
+name = "modelpipe"
 version = "1.3.0"
 source = { editable = "." }
 dependencies = [
@@ -2510,8 +2510,8 @@ requires-dist = [
     { name = "grain", marker = "extra == 'jax-cpu'" },
     { name = "grain", marker = "extra == 'jax-gpu'" },
     { name = "grain", marker = "extra == 'jax-tpu'" },
-    { name = "gst-python-ml", extras = ["onnx", "tinygrad", "llamacpp", "openvino", "tensorflow", "litert", "vad"], marker = "extra == 'all'" },
-    { name = "gst-python-ml", extras = ["yolo", "llm", "audio", "diffusion", "face", "superres", "skia", "kafka", "mqtt"], marker = "extra == 'all'" },
+    { name = "modelpipe", extras = ["onnx", "tinygrad", "llamacpp", "openvino", "tensorflow", "litert", "vad"], marker = "extra == 'all'" },
+    { name = "modelpipe", extras = ["yolo", "llm", "audio", "diffusion", "face", "superres", "skia", "kafka", "mqtt"], marker = "extra == 'all'" },
     { name = "huggingface-hub" },
     { name = "insightface", marker = "extra == 'face'" },
     { name = "ipython", marker = "extra == 'audio'" },

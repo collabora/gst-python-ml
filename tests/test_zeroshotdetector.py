@@ -24,7 +24,7 @@ from engine.zero_shot_detector_engine import ZeroShotDetectorEngine  # noqa: E40
 from zeroshotdetector import DEFAULT_MODEL_NAME  # noqa: E402
 
 pytestmark = pytest.mark.skipif(
-    Gst.ElementFactory.find("pyml_zeroshotdetector") is None,
+    Gst.ElementFactory.find("mp_zeroshotdetector") is None,
     reason="the python plugin loader did not register the pyml elements",
 )
 
@@ -80,8 +80,8 @@ def test_the_element_names_detections_after_the_label_text(tmp_path):
         f"videotestsrc num-buffers={FRAMES} pattern=ball "
         f"! video/x-raw,width={FRAME_SIZE},height={FRAME_SIZE},"
         f"framerate={FRAMERATE}/1,format=RGBA "
-        f"! pyml_zeroshotdetector device=cpu labels=ball confidence={CONFIDENCE} "
-        f"! pyml_metasink location={records}"
+        f"! mp_zeroshotdetector device=cpu labels=ball confidence={CONFIDENCE} "
+        f"! mp_metasink location={records}"
     )
     pipeline.set_state(Gst.State.PLAYING)
     message = pipeline.get_bus().timed_pop_filtered(

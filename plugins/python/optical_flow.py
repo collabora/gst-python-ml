@@ -79,7 +79,7 @@ class OpticalFlowTransform(VideoTransform, OpticalFlowTask):
 
     def __init__(self):
         super().__init__()
-        self.task_engine_name = self.mgr.engine_name = "pyml_optical_flow_engine"
+        self.task_engine_name = self.mgr.engine_name = "mp_optical_flow_engine"
         EngineFactory.register(self.mgr.engine_name, OpticalFlowEngine)
         self.format_converter = FormatConverter()
         self._prev_frame = None
@@ -110,9 +110,9 @@ class OpticalFlowTransform(VideoTransform, OpticalFlowTask):
 
 if CAN_REGISTER_ELEMENT and backend.BACKEND == "gst":
     __gstelementfactory__ = backend.register_gst_element(
-        "pyml_optical_flow", OpticalFlowTransform
+        "mp_optical_flow", OpticalFlowTransform
     )
 elif not CAN_REGISTER_ELEMENT:
     GlobalLogger().warning(
-        "The 'pyml_optical_flow' element will not be registered because required modules are missing."
+        "The 'mp_optical_flow' element will not be registered because required modules are missing."
     )

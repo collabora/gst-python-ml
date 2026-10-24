@@ -73,5 +73,5 @@ class ObjectDetector(BaseObjectDetector):
 # GStreamer factory registration runs only under the gst backend.
 if backend.BACKEND == "gst":
     __gstelementfactory__ = backend.register_gst_element(
-        "pyml_objectdetector", ObjectDetector
+        "mp_objectdetector", ObjectDetector
     )

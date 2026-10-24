@@ -19,10 +19,10 @@
 import re
 from pathlib import Path
 
-LAUNCHER_PREFIX = "python pyml-launch.py"
+LAUNCHER_PREFIX = "python mp-launch.py"
 
 PIPELINE_PATTERN = re.compile(
-    r"(?:`)?\s*(python pyml-launch\.py\s+.*?)(?:`)?(?=\n\n|\n\s*\n|$)", re.DOTALL
+    r"(?:`)?\s*(python mp-launch\.py\s+.*?)(?:`)?(?=\n\n|\n\s*\n|$)", re.DOTALL
 )
 HEADING_PATTERN = re.compile(r"^#{2,3} (.+)$", re.MULTILINE)
 

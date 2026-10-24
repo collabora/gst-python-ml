@@ -36,7 +36,7 @@ try:
 except ImportError as e:
     CAN_REGISTER_ELEMENT = False
     GlobalLogger().warning(
-        f"The 'pyml_metasink' element will not be available. Error: {e}"
+        f"The 'mp_metasink' element will not be available. Error: {e}"
     )
 
 BUS_MESSAGE_NAME = "pyml-metadata"
@@ -71,7 +71,7 @@ def buffer_record(buffer, media_type):
 
 
 class MetaSink(GstBase.BaseSink):
-    GST_PLUGIN_NAME = "pyml_metasink"
+    GST_PLUGIN_NAME = "mp_metasink"
 
     __gstmetadata__ = (
         "Metadata Sink",
@@ -135,5 +135,5 @@ if CAN_REGISTER_ELEMENT and backend.BACKEND == "gst":
     )
 elif not CAN_REGISTER_ELEMENT:
     GlobalLogger().warning(
-        "The 'pyml_metasink' element will not be registered because required modules are missing."
+        "The 'mp_metasink' element will not be registered because required modules are missing."
     )

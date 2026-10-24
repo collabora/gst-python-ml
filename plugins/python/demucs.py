@@ -30,7 +30,7 @@ try:
 except ImportError as e:
     CAN_REGISTER_ELEMENT = False
     GlobalLogger().warning(
-        f"The 'pyml_demucs' element will not be available. Error: {e}"
+        f"The 'mp_demucs' element will not be available. Error: {e}"
     )
 
 
@@ -44,8 +44,8 @@ class Demucs(BaseSeparate):
 
     def __init__(self):
         super().__init__()
-        self.model_name = "pyml_demucs_model"  # Placeholder, since we use bundle
-        self.mgr.engine_name = "pyml_demucs_engine"
+        self.model_name = "mp_demucs_model"  # Placeholder, since we use bundle
+        self.mgr.engine_name = "mp_demucs_engine"
         EngineFactory.register(self.mgr.engine_name, DemucsEngine)
 
     # make engine_name read only
@@ -114,8 +114,8 @@ class Demucs(BaseSeparate):
 
 
 if CAN_REGISTER_ELEMENT and backend.BACKEND == "gst":
-    __gstelementfactory__ = backend.register_gst_element("pyml_demucs", Demucs)
+    __gstelementfactory__ = backend.register_gst_element("mp_demucs", Demucs)
 elif not CAN_REGISTER_ELEMENT:
     GlobalLogger().warning(
-        "The 'pyml_demucs' element will not be registered because base_separate module is missing."
+        "The 'mp_demucs' element will not be registered because base_separate module is missing."
     )

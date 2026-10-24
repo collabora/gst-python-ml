@@ -22,7 +22,7 @@ Gst.init(None)
 
 from alert import AlertTransform  # noqa: E402
 
-TOKEN_VARIABLE = "PYML_TEST_WEBHOOK_TOKEN"
+TOKEN_VARIABLE = "MP_TEST_WEBHOOK_TOKEN"
 TOKEN = "s3cret-value"
 ALERT_PAYLOAD = {"timestamp": 0, "rule": {"class": "person"}, "detection": {}}
 POST_TIMEOUT = 5

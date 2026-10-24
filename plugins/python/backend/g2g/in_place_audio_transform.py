@@ -23,7 +23,7 @@ from log.logger_factory import LoggerFactory
 
 
 class InPlaceAudioTransform:
-    # the element's one caps description, which pyml-launch hands the host
+    # the element's one caps description, which mp-launch hands the host
     INPUT_CAPS = "audio/x-raw"
 
     def __init__(self):

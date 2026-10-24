@@ -25,7 +25,7 @@ try:
 except ImportError as e:
     CAN_REGISTER_ELEMENT = False
     GlobalLogger().warning(
-        f"The 'pyml_stablediffusion' element will not be available. Error: {e}"
+        f"The 'mp_stablediffusion' element will not be available. Error: {e}"
     )
 
 if backend.BACKEND == "gst":
@@ -93,9 +93,9 @@ class StableDiffusion(BaseAggregator):
 
 if CAN_REGISTER_ELEMENT and backend.BACKEND == "gst":
     __gstelementfactory__ = backend.register_gst_element(
-        "pyml_stablediffusion", StableDiffusion
+        "mp_stablediffusion", StableDiffusion
     )
 elif not CAN_REGISTER_ELEMENT:
     GlobalLogger().warning(
-        "The 'pyml_stablediffusion' element will not be registered because required modules are missing."
+        "The 'mp_stablediffusion' element will not be registered because required modules are missing."
     )

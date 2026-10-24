@@ -121,7 +121,7 @@ jobs:
 
       - name: Run the engine tests
         env:
-          PYML_REQUIRE_ENGINE: ${{ matrix.engine }}
+          MP_REQUIRE_ENGINE: ${{ matrix.engine }}
           YOLO_AUTOINSTALL: "false"
           # tensorflow's onednn kernels segfault the depth model on the runner
           TF_ENABLE_ONEDNN_OPTS: "0"
@@ -135,7 +135,7 @@ jobs:
       - name: Run the exported model tests
         if: matrix.exported-models
         env:
-          PYML_REQUIRE_ENGINE: ${{ matrix.engine }}
+          MP_REQUIRE_ENGINE: ${{ matrix.engine }}
           YOLO_AUTOINSTALL: "false"
           # tensorflow's onednn kernels segfault the depth model on the runner
           TF_ENABLE_ONEDNN_OPTS: "0"
@@ -265,7 +265,7 @@ jobs:
           unset LD_LIBRARY_PATH
           rm -rf ~/.cache/gstreamer-1.0
           gst-inspect-1.0 python
-          gst-inspect-1.0 pyml_objectdetector
+          gst-inspect-1.0 mp_objectdetector
 
       - name: Run gst backend tests (Linux)
         if: runner.os == 'Linux'
@@ -332,7 +332,7 @@ jobs:
           # Run 2-frame smoke test with synthetic source (avoids codec deps)
           gst-launch-1.0 videotestsrc num-buffers=2 \
             ! "video/x-raw,format=RGB,width=640,height=640" \
-            ! pyml_objectdetector engine-name=onnx model-name=yolo11n.onnx device=cpu input-format=nchw post-process=anchor_free \
+            ! mp_objectdetector engine-name=onnx model-name=yolo11n.onnx device=cpu input-format=nchw post-process=anchor_free \
             ! fakesink
 
       - name: ONNX pipeline smoke test (macOS)
@@ -349,7 +349,7 @@ jobs:
           # Run 2-frame smoke test with synthetic source (avoids codec deps)
           gst-launch-1.0 videotestsrc num-buffers=2 \
             ! "video/x-raw,format=RGB,width=640,height=640" \
-            ! pyml_objectdetector engine-name=onnx model-name=yolo11n.onnx device=cpu input-format=nchw post-process=anchor_free \
+            ! mp_objectdetector engine-name=onnx model-name=yolo11n.onnx device=cpu input-format=nchw post-process=anchor_free \
             ! fakesink
 
       - name: Check GStreamer plugin discovery (Windows)
@@ -369,7 +369,7 @@ jobs:
           # the import check above cached a registry without the plugins dir
           rm -rf .venv/Temp/gstreamer-1.0
           gst-inspect-1.0 python
-          gst-inspect-1.0 pyml_objectdetector
+          gst-inspect-1.0 mp_objectdetector
 
       - name: ONNX pipeline smoke test (Windows)
         if: runner.os == 'Windows'
@@ -380,5 +380,5 @@ jobs:
           python -c "from ultralytics import YOLO; YOLO('yolo11n.pt').export(format='onnx')"
           gst-launch-1.0 videotestsrc num-buffers=2 \
             ! "video/x-raw,format=RGB,width=640,height=640" \
-            ! pyml_objectdetector engine-name=onnx model-name=yolo11n.onnx device=cpu input-format=nchw post-process=anchor_free \
+            ! mp_objectdetector engine-name=onnx model-name=yolo11n.onnx device=cpu input-format=nchw post-process=anchor_free \
             ! fakesink

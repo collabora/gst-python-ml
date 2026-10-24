@@ -1,7 +1,7 @@
 # Football demo
 
 Real-time football broadcast overlay: **detection → tracking → overlay**
-(`pyml_yolo`/`pyml_objectdetector` -> `pyml_tracker` -> `pyml_football_overlay`).
+(`mp_yolo`/`mp_objectdetector` -> `mp_tracker` -> `mp_football_overlay`).
 
 The overlay draws a foot ellipse per player coloured by team (red/blue, voted
 from jersey hue), a gold ellipse for referees, motion trails (off by default),
@@ -33,7 +33,7 @@ It puts `plugins/` on `GST_PLUGIN_PATH` and the venv's site-packages on
 `decodebin` picks `nvh264dec` and the detector runs on `cuda:0`.
 
 ```bash
-cd gst-python-ml
+cd modelpipe
 uv sync
 demo/football/run.sh display          # data/soccer_tracking.mp4, on screen
 ```
@@ -61,7 +61,7 @@ KICKS=true KICK_BEFORE=5 KICK_AFTER=2 HOST=gst demo/football/run.sh display
 ```
 
 `KICKS=true` turns on `detect-kicks` on the overlay and puts
-`pyml_alertrecorder` right after it. Each kick writes a clip of
+`mp_alertrecorder` right after it. Each kick writes a clip of
 `KICK_BEFORE` seconds before it and `KICK_AFTER` seconds after it to
 `demo/football/kicks/kick-<time>.webm`. A kick inside a clip that is still
 recording extends that clip. The picture shows `KICK #<track id>` above the
@@ -79,7 +79,7 @@ were tuned on the 50 fps `data/soccer_tracking.mp4`.
 The overlay's read-only `kick-count` and `last-kick` (JSON with `frame`,
 `player`, `speed`, `direction` in degrees anticlockwise from screen right)
 report what it found, and `agent.py` answers "how many kicks so far" from
-them. Each kick also carries a `GST-ALERT:` blob shaped like `pyml_alert`'s,
+them. Each kick also carries a `GST-ALERT:` blob shaped like `mp_alert`'s,
 `[{"event": "kick", "player": ..., "frame": ..., "speed": ...}]`.
 
 ## Typed commands through pyml-mcp
@@ -126,7 +126,7 @@ shown at 1280×720. `start_football_demo` is rewritten to
 
 ### Whisper
 
-`pulsesrc` captures the headset, then `pyml_whispertranscribe`:
+`pulsesrc` captures the headset, then `mp_whispertranscribe`:
 
 - Model `base`, device `cpu`, `beam-size=1`, language `en`.
 - Audio is S16LE, 16 kHz, mono.
@@ -249,12 +249,12 @@ change is about 4 to 5 seconds: Whisper about 3, Qwen about 1 to 2.
 
 | Var        | Default | Meaning |
 |------------|---------|---------|
-| `BACKEND`  | `pt`    | `pt` = PyTorch `pyml_yolo`; `fp16` = ONNX FP16 via `pyml_objectdetector` (CUDA). |
+| `BACKEND`  | `pt`    | `pt` = PyTorch `mp_yolo`; `fp16` = ONNX FP16 via `mp_objectdetector` (CUDA). |
 | `HOST`     | `g2g`   | `g2g` runs the three Python elements hosted by `g2g-launch-py` (needs it on `PATH`, `pt` backend only). `gst` runs the same pipeline on `gst-launch-1.0`, which `fp16` and `KICKS` need. |
 | `CUDA`     | `false` | `true` decodes, detects, tracks and draws on CUDA memory (`pt` backend only). On `gst` the frame stays on the card up to the sink. On `g2g` it decodes a file with `nvdec`, keeps the frame on the card through the overlay, and shows it with `cudaglsink` or encodes it with `nvenc`. |
 | `INTERVAL` | `1`     | Run detection every Nth frame; the tracker/overlay still update every frame, so it stays smooth at ~N× less inference cost. The main real-time lever. The ball trail needs 1. |
 | `IMGSZ`    | `640`   | Network input size for the `pt` backend. `1280` finds the ball on about half the frames instead of a third, at three times the inference cost. |
-| `BALL_MODEL` | `models/football/ball11n` | Ball-only weights (without `.pt`) run as a second `pyml_yolo` after the player detector, which then drops its own ball class. Empty runs the player detector alone. `pt` backend only. |
+| `BALL_MODEL` | `models/football/ball11n` | Ball-only weights (without `.pt`) run as a second `mp_yolo` after the player detector, which then drops its own ball class. Empty runs the player detector alone. `pt` backend only. |
 | `BALL_IMGSZ` | `1280` | Network input size of the ball detector. |
 | `TRAILS`   | `false` | Draw motion trails behind the players. |
 | `BALL_TRAIL` | `false` | Draw a motion trail behind the ball. |

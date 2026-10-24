@@ -2,9 +2,9 @@
 
 `g2g-launch-py --threads` runs each hosted element on its own OS thread. On free-threaded CPython 3.14t with the GIL off, those threads run Python at the same time. The gst host can't do this: pygobject turns the GIL back on at import and crashes when it is forced off.
 
-Tested with the yolo detector and pyml_tracker on CUDA, Fedora 43, CPython 3.14.2t. This is experimental. OpenCV has no official free-threaded support, so it is built from source with a patch upstream has not merged.
+Tested with the yolo detector and mp_tracker on CUDA, Fedora 43, CPython 3.14.2t. This is experimental. OpenCV has no official free-threaded support, so it is built from source with a patch upstream has not merged.
 
-Run everything from the gst-python-ml checkout, with glass2glass checked out beside it.
+Run everything from the ModelPipe checkout, with glass2glass checked out beside it.
 
 ## Venv
 
@@ -64,7 +64,7 @@ PATH=$FT_VENV/bin:$PATH PYTHONPATH=$PWD/plugins/python LD_LIBRARY_PATH=$FT_LIB \
   ! fakesink
 ```
 
-- Call the launcher directly. `pyml-launch.py` re-runs itself under the repo `.venv`.
+- Call the launcher directly. `mp-launch.py` re-runs itself under the repo `.venv`.
 - The embedded interpreter takes its prefix from the first `python` on `PATH`. With the repo `.venv` first it dies with `No module named 'encodings'`.
 - `PYTHONPATH` must not keep the repo venv's site dir. Its numpy fails to load under 3.14t.
 - `PYTHONWARNINGS=error::RuntimeWarning` fails the element at import if any module turns the GIL back on, instead of printing a warning.
@@ -120,6 +120,6 @@ The remaining work is:
 
 ## Not working yet
 
-- `track=true` on the yolo element: the ultralytics trackers import `lap`, which turns the GIL back on. Use pyml_tracker.
-- gst-only elements, the ones that subclass `GstBase` or `Gst.Element` such as pyml_vad and pyml_clap, don't run on g2g.
-- Two elements can call cv2 at the same moment. The author of opencv#30134 stress-tested 8 threads on `resize`, `cvtColor`, `warpPerspective` and drawing calls. pyml_tracker's `estimateAffinePartial2D` was not in that set.
+- `track=true` on the yolo element: the ultralytics trackers import `lap`, which turns the GIL back on. Use mp_tracker.
+- gst-only elements, the ones that subclass `GstBase` or `Gst.Element` such as mp_vad and mp_clap, don't run on g2g.
+- Two elements can call cv2 at the same moment. The author of opencv#30134 stress-tested 8 threads on `resize`, `cvtColor`, `warpPerspective` and drawing calls. mp_tracker's `estimateAffinePartial2D` was not in that set.

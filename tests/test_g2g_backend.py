@@ -1,4 +1,4 @@
-"""Unit tests for the g2g element backend (`PYML_BACKEND=g2g`).
+"""Unit tests for the g2g element backend (`MP_BACKEND=g2g`).
 
 These exercise the backend with no GStreamer present: the backend selection, the
 `GObject` / `FlowReturn` shims, the `G2gFrameIO` buffer round-trip, the
@@ -27,7 +27,7 @@ PLUGIN_DIR = Path(__file__).resolve().parent.parent / "plugins" / "python"
 
 # Select the g2g backend before importing `backend`, and make the plugin package
 # importable.
-os.environ["PYML_BACKEND"] = "g2g"
+os.environ["MP_BACKEND"] = "g2g"
 sys.path.insert(0, str(PLUGIN_DIR))
 
 import backend  # noqa: E402
@@ -172,7 +172,7 @@ def test_hosted_elements_import_under_g2g_with_no_pygobject(tmp_path):
         [sys.executable, "-c", "import " + ", ".join(HOSTED_ELEMENT_MODULES)],
         env={
             **os.environ,
-            "PYML_BACKEND": "g2g",
+            "MP_BACKEND": "g2g",
             "PYTHONPATH": os.pathsep.join([str(tmp_path), str(PLUGIN_DIR)]),
         },
         capture_output=True,
@@ -201,7 +201,7 @@ def test_every_element_module_imports_under_g2g_without_gst_init():
 
     result = subprocess.run(
         [sys.executable, "-c", "import " + ", ".join(modules)],
-        env={**os.environ, "PYML_BACKEND": "g2g", "PYTHONPATH": str(PLUGIN_DIR)},
+        env={**os.environ, "MP_BACKEND": "g2g", "PYTHONPATH": str(PLUGIN_DIR)},
         capture_output=True,
         text=True,
     )
@@ -1062,7 +1062,7 @@ def test_tracker_on_a_cuda_frame_tracks_and_leaves_the_frame_alone():
 
 
 SAMPLE_METADATA = PLUGIN_DIR.parent.parent / "data" / "sample_metadata.json"
-KAFKA_MESSAGE_SCHEMA = PLUGIN_DIR.parent.parent / "data" / "pyml_object_detector.json"
+KAFKA_MESSAGE_SCHEMA = PLUGIN_DIR.parent.parent / "data" / "mp_object_detector.json"
 SAMPLE_METADATA_WIDTH, SAMPLE_METADATA_HEIGHT = 1280, 720
 COUNTING_LINE_REGION = (slice(358, 363), slice(1000, 1280))
 COUNTER_TEXT_REGION = (slice(30, 55), slice(0, 300))

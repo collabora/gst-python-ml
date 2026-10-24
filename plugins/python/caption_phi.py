@@ -29,7 +29,7 @@ try:
 except ImportError as e:
     CAN_REGISTER_ELEMENT = False
     GlobalLogger().warning(
-        f"The 'pyml_caption_phi' element will not be available. Error {e}"
+        f"The 'mp_caption_phi' element will not be available. Error {e}"
     )
 
 
@@ -48,15 +48,15 @@ class CaptionPhi(BaseCaption):
     def __init__(self):
         super().__init__()
         # set engine_name directly on mgr, as engine_name property is read only
-        self.mgr.engine_name = "pyml_caption_phi_engine"
+        self.mgr.engine_name = "mp_caption_phi_engine"
         EngineFactory.register(self.engine_name, CaptionPhiEngine)
 
 
 if CAN_REGISTER_ELEMENT and backend.BACKEND == "gst":
     __gstelementfactory__ = backend.register_gst_element(
-        "pyml_caption_phi", CaptionPhi, "pyml_caption_phi"
+        "mp_caption_phi", CaptionPhi, "mp_caption_phi"
     )
 elif not CAN_REGISTER_ELEMENT:
     GlobalLogger().warning(
-        "The 'pyml_caption_phi' element will not be registered because required modules are missing."
+        "The 'mp_caption_phi' element will not be registered because required modules are missing."
     )

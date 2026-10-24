@@ -58,15 +58,15 @@ pip install "gstreamer-meta[cli]"
    plugins:
 
 ```powershell
-$venv = "D:\Workspace\gst-python-ml\.venv"
-$env:GST_PLUGIN_PATH_1_0 = "D:\Workspace\gst-python-ml\plugins"
-$env:PYTHONPATH = "$venv\Lib\site-packages;$venv\Lib\site-packages\gstreamer_python\Lib\site-packages;D:\Workspace\gst-python-ml\plugins\python"
+$venv = "D:\Workspace\modelpipe\.venv"
+$env:GST_PLUGIN_PATH_1_0 = "D:\Workspace\modelpipe\plugins"
+$env:PYTHONPATH = "$venv\Lib\site-packages;$venv\Lib\site-packages\gstreamer_python\Lib\site-packages;D:\Workspace\modelpipe\plugins\python"
 ```
 
 4. Check the elements load:
 
 ```powershell
-gst-inspect-1.0 pyml_objectdetector
+gst-inspect-1.0 mp_objectdetector
 ```
 
 5. For CUDA, install the [CUDA Toolkit](https://developer.nvidia.com/cuda-downloads) matching your driver, then the CUDA PyTorch:
@@ -113,18 +113,18 @@ installed before.
 The core install covers PyTorch, torchvision, transformers and OpenCV, which is
 what most elements need. Each extra adds the packages for a group of elements:
 
-- `yolo`: `pyml_yolo`, `pyml_yolo_pose`, `demo_soccer`, and the `bytetrack` and `botsort` types of `pyml_tracker`
-- `llm`: `pyml_llm`, `pyml_llmstreamfilter`, `pyml_caption_qwen`, `pyml_caption_phi`
+- `yolo`: `mp_yolo`, `mp_yolo_pose`, `demo_soccer`, and the `bytetrack` and `botsort` types of `mp_tracker`
+- `llm`: `mp_llm`, `mp_llmstreamfilter`, `mp_caption_qwen`, `mp_caption_phi`
 - `awq`: AWQ quantized models, through gptqmodel, which builds its CUDA kernels with nvcc on the first model load
-- `audio`: `pyml_whisperspeechtts`, `pyml_whisperlive`, `pyml_demucs`, `pyml_sepformer`
-- `diffusion`: `pyml_stablediffusion`
-- `face`: `pyml_face`
-- `superres`: `pyml_superres`
-- `skia`: the `renderer=skia` option of `pyml_overlay`
-- `kafka`: `pyml_kafkasink`
-- `mqtt`: `pyml_alert` with `mqtt-broker=` set
+- `audio`: `mp_whisperspeechtts`, `mp_whisperlive`, `mp_demucs`, `mp_sepformer`
+- `diffusion`: `mp_stablediffusion`
+- `face`: `mp_face`
+- `superres`: `mp_superres`
+- `skia`: the `renderer=skia` option of `mp_overlay`
+- `kafka`: `mp_kafkasink`
+- `mqtt`: `mp_alert` with `mqtt-broker=` set
 - `mcp`: the MCP server
-- `vad`: `pyml_vad`
+- `vad`: `mp_vad`
 
 ```
 uv sync --extra yolo --extra audio
@@ -148,15 +148,15 @@ uv sync --extra onnx
 - ExecuTorch has no Python 3.14 wheel.
 - TensorRT is `device=tensorrt` on the ONNX engine. It needs the `onnx-gpu` extra and the TensorRT 10 libraries:
   `uv pip install tensorrt-cu13-libs==10.16.1.11`, a 4 GB install. Tested with onnxruntime-gpu 1.30.
-- `tensorrt=true` on `pyml_yolo` and `pyml_yolo_pose` needs the `tensorrt` extra, which installs TensorRT 11.
+- `tensorrt=true` on `mp_yolo` and `mp_yolo_pose` needs the `tensorrt` extra, which installs TensorRT 11.
   onnxruntime-gpu 1.30 loads `libnvinfer.so.10`, so the extra and `device=tensorrt` on the ONNX engine cannot share a venv today.
   The fp16 conversion runs the model in onnxruntime, so add the `onnx` or `onnx-gpu` extra too.
 - LiteRT runs a `.tflite` file with the `litert` extra alone. Exporting one, or loading a Keras model by name, needs `tensorflow` too.
 - llama.cpp builds a CPU wheel. For CUDA: `CMAKE_ARGS="-DGGML_CUDA=on" pip install llama-cpp-python`.
-  The extra also installs pywhispercpp, which runs `pyml_whispertranscribe` on the CPU. For CUDA:
+  The extra also installs pywhispercpp, which runs `mp_whispertranscribe` on the CPU. For CUDA:
   `GGML_CUDA=1 pip install git+https://github.com/absadiki/pywhispercpp`.
 - MLX runs on Apple Silicon. On Linux use the `mlx-cpu` extra.
-- The JAX extras bring in `keras-hub`, which runs `pyml_depth` and `pyml_clip` on `engine-name=jax`.
+- The JAX extras bring in `keras-hub`, which runs `mp_depth` and `mp_clip` on `engine-name=jax`.
   uv leaves out its `tensorflow-text` dependency. pip installs it, and with it TensorFlow, which has no 3.14 wheel,
   so on 3.14 install the JAX extras with uv.
 - NCNN takes `.param` and `.bin` files. Convert an ONNX model with
@@ -219,7 +219,7 @@ to MiGraphX's search list and fixes the build with rocMLIR disabled (Fedora does
 cd $HOME/src
 git clone --branch rocm-6.4.4 --depth 1 https://github.com/ROCm/AMDMIGraphX.git
 cd AMDMIGraphX
-git apply $HOME/src/gst-python-ml/extern/migraphx/rocm-6.4.4-fedora.patch
+git apply $HOME/src/modelpipe/extern/migraphx/rocm-6.4.4-fedora.patch
 CXX=/usr/lib64/rocm/llvm/bin/clang++ cmake -S . -B build -G Ninja \
     -DCMAKE_BUILD_TYPE=Release -DGPU_TARGETS=gfx1035 \
     -DMIGRAPHX_ENABLE_MLIR=OFF -DMIGRAPHX_USE_COMPOSABLEKERNEL=OFF -DMIGRAPHX_USE_HIPBLASLT=OFF \
@@ -250,19 +250,19 @@ runs but is very slow on detection models.
 
 ```
 cd $HOME/src
-git clone https://github.com/collabora/gst-python-ml.git
+git clone https://github.com/collabora/modelpipe.git
 ```
 
 ### Plugin path
 
 ```
-echo 'export GST_PLUGIN_PATH=$HOME/src/gst-python-ml/plugins:$GST_PLUGIN_PATH' >> ~/.bashrc
+echo 'export GST_PLUGIN_PATH=$HOME/src/modelpipe/plugins:$GST_PLUGIN_PATH' >> ~/.bashrc
 source ~/.bashrc
 ```
 
 ## Docker Install
 
-The Dockerfiles mount the checkout from `$HOME/src/gst-python-ml`.
+The Dockerfiles mount the checkout from `$HOME/src/modelpipe`.
 
 ### Enable Docker GPU Support on Host
 
@@ -347,15 +347,15 @@ docker run --rm --gpus all nvidia/cuda:12.0.0-base-ubuntu22.04 nvidia-smi
 
 Drop `--gpus all` on CPU.
 
-`docker run -v ~/src/gst-python-ml/:/root/gst-python-ml -it --rm --gpus all --name ubuntu24 ubuntu24:latest /bin/bash`
+`docker run -v ~/src/modelpipe/:/root/modelpipe -it --rm --gpus all --name ubuntu24 ubuntu24:latest /bin/bash`
 
 or
 
-`docker run -v ~/src/gst-python-ml/:/root/gst-python-ml -it --rm --gpus all --name ubuntu26 ubuntu26:latest /bin/bash`
+`docker run -v ~/src/modelpipe/:/root/modelpipe -it --rm --gpus all --name ubuntu26 ubuntu26:latest /bin/bash`
 
 or
 
-`docker run -v ~/src/gst-python-ml/:/root/gst-python-ml -it --rm --gpus all --name fedora42 fedora42:latest /bin/bash`
+`docker run -v ~/src/modelpipe/:/root/modelpipe -it --rm --gpus all --name fedora42 fedora42:latest /bin/bash`
 
 Then set up the venv in the container shell as above.
 
@@ -415,7 +415,7 @@ Set both `GST_PLUGIN_PATH` (so GStreamer discovers your `.py` files) and `PYTHON
 (so Python can import your modules):
 
 ```bash
-export GST_PLUGIN_PATH=$HOME/src/gst-python-ml/plugins:$HOME/my_plugins:$GST_PLUGIN_PATH
+export GST_PLUGIN_PATH=$HOME/src/modelpipe/plugins:$HOME/my_plugins:$GST_PLUGIN_PATH
 export PYTHONPATH=$HOME/my_plugins/python:$PYTHONPATH
 ```
 

@@ -90,9 +90,9 @@ ZERO_SHOT_BOX_TOLERANCE_PIXELS = 1
 # the task engine first
 ENGINE_NAMES = ("pytorch", "onnx")
 # a ci matrix leg fails on a missing engine instead of skipping
-REQUIRED_ENGINE = os.environ.get("PYML_REQUIRE_ENGINE")
+REQUIRED_ENGINE = os.environ.get("MP_REQUIRE_ENGINE")
 # the pytorch reference stays on the cpu
-BUILTIN_ENGINE_DEVICE = os.environ.get("PYML_TEST_DEVICE", "cpu")
+BUILTIN_ENGINE_DEVICE = os.environ.get("MP_TEST_DEVICE", "cpu")
 
 pytest.importorskip("onnxruntime")
 pytest.importorskip("transformers")

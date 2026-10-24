@@ -25,7 +25,7 @@ try:
 except ImportError as e:
     CAN_REGISTER_ELEMENT = False
     GlobalLogger().warning(
-        f"The 'pyml_whisperspeechtts' element will not be available. Error: {e}"
+        f"The 'mp_whisperspeechtts' element will not be available. Error: {e}"
     )
 
 if backend.BACKEND == "gst":
@@ -86,9 +86,9 @@ class WhisperSpeechTTS(BaseTts):
 
 if CAN_REGISTER_ELEMENT and backend.BACKEND == "gst":
     __gstelementfactory__ = backend.register_gst_element(
-        "pyml_whisperspeechtts", WhisperSpeechTTS
+        "mp_whisperspeechtts", WhisperSpeechTTS
     )
 elif not CAN_REGISTER_ELEMENT:
     GlobalLogger().warning(
-        "The 'pyml_whisperspeechtts' element will not be registered because required modules were missing."
+        "The 'mp_whisperspeechtts' element will not be registered because required modules were missing."
     )

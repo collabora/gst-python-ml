@@ -39,7 +39,7 @@ try:
 except ImportError as e:
     CAN_REGISTER_ELEMENT = False
     GlobalLogger().warning(
-        f"The 'pyml_digest' element will not be available. Error: {e}"
+        f"The 'mp_digest' element will not be available. Error: {e}"
     )
 
 DEFAULT_WINDOW_SECONDS = 60.0
@@ -48,7 +48,7 @@ DIGEST_SEPARATOR = "\n"
 
 
 class Digest(GstBase.BaseTransform):
-    GST_PLUGIN_NAME = "pyml_digest"
+    GST_PLUGIN_NAME = "mp_digest"
 
     __gstmetadata__ = (
         "Incident Digest",
@@ -127,5 +127,5 @@ if CAN_REGISTER_ELEMENT and backend.BACKEND == "gst":
     __gstelementfactory__ = backend.register_gst_element(Digest.GST_PLUGIN_NAME, Digest)
 elif not CAN_REGISTER_ELEMENT:
     GlobalLogger().warning(
-        "The 'pyml_digest' element will not be registered because required modules are missing."
+        "The 'mp_digest' element will not be registered because required modules are missing."
     )

@@ -26,9 +26,9 @@ def test_a_heading_claims_the_pipelines_below_it(tmp_path):
     doc = tmp_path / "PIPELINES.md"
     doc.write_text(
         "## First\n\n"
-        "```\npython pyml-launch.py videotestsrc ! fakesink\n```\n\n"
+        "```\npython mp-launch.py videotestsrc ! fakesink\n```\n\n"
         "### Second\n\n"
-        "`python pyml-launch.py audiotestsrc ! fakesink`\n\n"
+        "`python mp-launch.py audiotestsrc ! fakesink`\n\n"
     )
     assert pipelines_by_section(doc) == {
         "First": ["videotestsrc ! fakesink"],

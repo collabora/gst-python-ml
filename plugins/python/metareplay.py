@@ -38,7 +38,7 @@ try:
 except ImportError as e:
     CAN_REGISTER_ELEMENT = False
     GlobalLogger().warning(
-        f"The 'pyml_metareplay' element will not be available. Error: {e}"
+        f"The 'mp_metareplay' element will not be available. Error: {e}"
     )
 
 MILLISECONDS_PER_SECOND = 1000
@@ -62,12 +62,12 @@ def read_records(path):
 
 
 class MetaReplay(GstBase.BaseTransform):
-    GST_PLUGIN_NAME = "pyml_metareplay"
+    GST_PLUGIN_NAME = "mp_metareplay"
 
     __gstmetadata__ = (
         "Metadata Replay",
         "Transform",
-        "Reattaches the detections and blobs a pyml_metasink wrote to the frames at the same timestamps",
+        "Reattaches the detections and blobs a mp_metasink wrote to the frames at the same timestamps",
         "Aaron Boxer <aaron.boxer@collabora.com>",
     )
 
@@ -85,7 +85,7 @@ class MetaReplay(GstBase.BaseTransform):
         type=str,
         default="",
         nick="Location",
-        blurb="JSON lines file a pyml_metasink wrote",
+        blurb="JSON lines file a mp_metasink wrote",
     )
 
     def __init__(self):
@@ -159,5 +159,5 @@ if CAN_REGISTER_ELEMENT and backend.BACKEND == "gst":
     )
 elif not CAN_REGISTER_ELEMENT:
     GlobalLogger().warning(
-        "The 'pyml_metareplay' element will not be registered because required modules are missing."
+        "The 'mp_metareplay' element will not be registered because required modules are missing."
     )

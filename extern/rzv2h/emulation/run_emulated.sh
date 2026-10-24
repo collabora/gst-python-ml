@@ -28,10 +28,10 @@ echo "EMULATED DRP-AI run: '$IN' -> '$OUT' (CPU/ONNX, not the NPU)"
 gst-launch-1.0 -e \
   filesrc location="$IN" ! decodebin ! videoconvert ! videoscale \
   ! "video/x-raw,format=RGB,width=640,height=640" \
-  ! pyml_objectdetector engine-name=drpai model-name="$DEPLOY" device=drpai \
+  ! mp_objectdetector engine-name=drpai model-name="$DEPLOY" device=drpai \
         input-format=nchw post-process=anchor_free \
-  ! pyml_tracker tracker-type=bytetrack \
+  ! mp_tracker tracker-type=bytetrack \
   ! videoconvert ! "video/x-raw,format=RGBA" \
-  ! pyml_football_overlay show-ids=false show-labels=false \
+  ! mp_football_overlay show-ids=false show-labels=false \
   ! videoconvert ! openh264enc ! h264parse ! mp4mux ! filesink location="$OUT"
 echo "Done: $OUT"

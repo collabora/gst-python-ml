@@ -23,7 +23,7 @@ from backend import analytics  # noqa: E402
 from metasink import buffer_record  # noqa: E402
 
 pytestmark = pytest.mark.skipif(
-    Gst.ElementFactory.find("pyml_alert") is None,
+    Gst.ElementFactory.find("mp_alert") is None,
     reason="the python plugin loader did not register the pyml elements",
 )
 
@@ -80,10 +80,10 @@ def test_alert_records_a_clip_and_the_sink_reports_it(tmp_path):
         f"videotestsrc num-buffers={FRAMES} "
         f"! video/x-raw,width=64,height=48,framerate={FRAMERATE}/1,format=RGBA "
         "! tagoneframe "
-        '! pyml_alert rules={"class":"thing"} draw-alert=false '
-        f"! pyml_alertrecorder location={clip_pattern} "
+        '! mp_alert rules={"class":"thing"} draw-alert=false '
+        f"! mp_alertrecorder location={clip_pattern} "
         f"seconds-before={CLIP_SECONDS} seconds-after={CLIP_SECONDS} "
-        f"! pyml_metasink location={records}"
+        f"! mp_metasink location={records}"
     )
     run_to_eos(pipeline)
 

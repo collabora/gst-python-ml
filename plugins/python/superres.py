@@ -57,7 +57,7 @@ class SuperResTransform(VideoTransform, SuperResTask):
 
     def __init__(self):
         super().__init__()
-        self.task_engine_name = self.mgr.engine_name = "pyml_superres_engine"
+        self.task_engine_name = self.mgr.engine_name = "mp_superres_engine"
         EngineFactory.register(self.mgr.engine_name, SuperResEngine)
         self.format_converter = FormatConverter()
         self.model_name = DEFAULT_MODEL_NAME
@@ -78,9 +78,9 @@ class SuperResTransform(VideoTransform, SuperResTask):
 
 if CAN_REGISTER_ELEMENT and backend.BACKEND == "gst":
     __gstelementfactory__ = backend.register_gst_element(
-        "pyml_superres", SuperResTransform
+        "mp_superres", SuperResTransform
     )
 elif not CAN_REGISTER_ELEMENT:
     GlobalLogger().warning(
-        "The 'pyml_superres' element will not be registered because required modules are missing."
+        "The 'mp_superres' element will not be registered because required modules are missing."
     )

@@ -52,7 +52,7 @@ class ClapTransform(InPlaceAudioTransform):
     Example pipeline:
       filesrc location=audio.wav ! decodebin ! audioconvert ! audioresample \\
         ! audio/x-raw,format=F32LE,rate=48000,channels=1 \\
-        ! pyml_clap labels="gunshot,siren,baby crying,music,speech" \\
+        ! mp_clap labels="gunshot,siren,baby crying,music,speech" \\
         ! fakesink
     """
 
@@ -104,7 +104,7 @@ class ClapTransform(InPlaceAudioTransform):
         self._engine = None
         self._labels_str = "gunshot,siren,baby crying,music,speech"
         self._labels = [label.strip() for label in self._labels_str.split(",")]
-        EngineFactory.register("pyml_clap_engine", ClapEngine)
+        EngineFactory.register("mp_clap_engine", ClapEngine)
 
     @GObject.Property(type=str)
     def labels(self):
@@ -119,7 +119,7 @@ class ClapTransform(InPlaceAudioTransform):
             self._engine._precompute_text_embeddings(self._labels)
 
     def on_start(self):
-        self._engine = EngineFactory.create("pyml_clap_engine")
+        self._engine = EngineFactory.create("mp_clap_engine")
         self._engine.do_set_device(self.device)
         self._engine.do_load_model(self.model_name, labels=self._labels)
         self.logger.info(f"CLAP element started with {len(self._labels)} labels")
@@ -156,8 +156,8 @@ class ClapTransform(InPlaceAudioTransform):
 
 
 if CAN_REGISTER_ELEMENT and backend.BACKEND == "gst":
-    __gstelementfactory__ = backend.register_gst_element("pyml_clap", ClapTransform)
+    __gstelementfactory__ = backend.register_gst_element("mp_clap", ClapTransform)
 elif not CAN_REGISTER_ELEMENT:
     GlobalLogger().warning(
-        "The 'pyml_clap' element will not be registered because required modules are missing."
+        "The 'mp_clap' element will not be registered because required modules are missing."
     )

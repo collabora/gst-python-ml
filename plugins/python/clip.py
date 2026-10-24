@@ -49,9 +49,9 @@ class CLIPTransform(VideoTransform, ClipTask):
       google/siglip-large-patch16-384    (SigLIP large)
 
     Example pipeline:
-      python pyml-launch.py filesrc location=data/people.mp4 ! decodebin \\
+      python mp-launch.py filesrc location=data/people.mp4 ! decodebin \\
         ! videoconvert ! videoscale ! video/x-raw,width=640,height=480 \\
-        ! pyml_clip model-name=openai/clip-vit-base-patch32 device=cuda \\
+        ! mp_clip model-name=openai/clip-vit-base-patch32 device=cuda \\
                     labels="person, bicycle, car, dog, cat" top-k=3 \\
         ! fakesink
     """
@@ -85,7 +85,7 @@ class CLIPTransform(VideoTransform, ClipTask):
 
     def __init__(self):
         super().__init__()
-        self.task_engine_name = self.mgr.engine_name = "pyml_clip_engine"
+        self.task_engine_name = self.mgr.engine_name = "mp_clip_engine"
         EngineFactory.register(self.mgr.engine_name, ClipEngine)
         self._labels_str = ""
         self._labels_list = []
@@ -183,8 +183,8 @@ class CLIPTransform(VideoTransform, ClipTask):
 
 
 if CAN_REGISTER_ELEMENT and backend.BACKEND == "gst":
-    __gstelementfactory__ = backend.register_gst_element("pyml_clip", CLIPTransform)
+    __gstelementfactory__ = backend.register_gst_element("mp_clip", CLIPTransform)
 elif not CAN_REGISTER_ELEMENT:
     GlobalLogger().warning(
-        "The 'pyml_clip' element will not be registered because required modules are missing."
+        "The 'mp_clip' element will not be registered because required modules are missing."
     )

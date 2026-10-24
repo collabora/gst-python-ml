@@ -53,7 +53,7 @@ try:
 except ImportError as e:
     CAN_REGISTER_ELEMENT = False
     GlobalLogger().warning(
-        f"The 'pyml_overlay' element will not be available. Error: {e}"
+        f"The 'mp_overlay' element will not be available. Error: {e}"
     )
 
 
@@ -479,8 +479,8 @@ class Overlay(GstBase.BaseTransform):
 
 
 if CAN_REGISTER_ELEMENT and backend.BACKEND == "gst":
-    __gstelementfactory__ = backend.register_gst_element("pyml_overlay", Overlay)
+    __gstelementfactory__ = backend.register_gst_element("mp_overlay", Overlay)
 elif not CAN_REGISTER_ELEMENT:
     GlobalLogger().warning(
-        "The 'pyml_overlay' element will not be registered because a module is missing."
+        "The 'mp_overlay' element will not be registered because a module is missing."
     )

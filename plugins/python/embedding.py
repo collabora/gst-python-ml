@@ -58,7 +58,7 @@ class EmbeddingTransform(VideoTransform, EmbeddingTask):
     the text and image embeddings is also included in the JSON header.
 
     Use frame-stride to control processing frequency:
-      pyml_embedding model-name=openai/clip-vit-large-patch14 frame-stride=5
+      mp_embedding model-name=openai/clip-vit-large-patch14 frame-stride=5
     """
 
     __gstmetadata__ = (
@@ -86,7 +86,7 @@ class EmbeddingTransform(VideoTransform, EmbeddingTask):
 
     def __init__(self):
         super().__init__()
-        self.task_engine_name = self.mgr.engine_name = "pyml_embedding_engine"
+        self.task_engine_name = self.mgr.engine_name = "mp_embedding_engine"
         EngineFactory.register(self.mgr.engine_name, EmbeddingEngine)
         self._frame_count = 0
         self._text_embedding = None
@@ -149,9 +149,9 @@ class EmbeddingTransform(VideoTransform, EmbeddingTask):
 
 if CAN_REGISTER_ELEMENT and backend.BACKEND == "gst":
     __gstelementfactory__ = backend.register_gst_element(
-        "pyml_embedding", EmbeddingTransform
+        "mp_embedding", EmbeddingTransform
     )
 elif not CAN_REGISTER_ELEMENT:
     GlobalLogger().warning(
-        "The 'pyml_embedding' element will not be registered because required modules are missing."
+        "The 'mp_embedding' element will not be registered because required modules are missing."
     )

@@ -31,7 +31,7 @@ from engine.model_engines import (
 REACHABLE_MARK = "*"
 UNPROBED_MARK = "?"
 LEGEND = f"{REACHABLE_MARK} reachable on this machine, {UNPROBED_MARK} not probed"
-PACKAGE_NAME = "gst-python-ml"
+PACKAGE_NAME = "modelpipe"
 NO_PIP_EXTRA = "not on PyPI"
 DEFAULT_BENCHMARK_FRAMES = 20
 BENCHMARK_HEADER = ("task", "engine", "device", "load s", "ms/frame", "fps", "note")

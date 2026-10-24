@@ -167,5 +167,5 @@ class OverlayCounter(InPlaceVideoTransform):
 
 if backend.BACKEND == "gst":
     __gstelementfactory__ = backend.register_gst_element(
-        "pyml_overlay_counter", OverlayCounter
+        "mp_overlay_counter", OverlayCounter
     )

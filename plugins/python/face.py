@@ -79,7 +79,7 @@ class FaceTransform(BaseObjectDetector):
 
     def __init__(self):
         super().__init__()
-        self.mgr.engine_name = "pyml_face_engine"
+        self.mgr.engine_name = "mp_face_engine"
         EngineFactory.register(self.mgr.engine_name, FaceEngine)
         self._gallery_loaded = False
         self.model_name = DEFAULT_MODEL_NAME
@@ -91,7 +91,7 @@ class FaceTransform(BaseObjectDetector):
 
     @engine_name.setter
     def engine_name(self, value):
-        raise ValueError("'engine_name' is read-only for pyml_face")
+        raise ValueError("'engine_name' is read-only for mp_face")
 
     def do_decode(self, buf, result, stream_idx=0):
         # Load gallery on first decode if gallery-path is set
@@ -150,8 +150,8 @@ class FaceTransform(BaseObjectDetector):
 
 
 if CAN_REGISTER_ELEMENT and backend.BACKEND == "gst":
-    __gstelementfactory__ = backend.register_gst_element("pyml_face", FaceTransform)
+    __gstelementfactory__ = backend.register_gst_element("mp_face", FaceTransform)
 elif not CAN_REGISTER_ELEMENT:
     GlobalLogger().warning(
-        "The 'pyml_face' element will not be registered because required modules are missing."
+        "The 'mp_face' element will not be registered because required modules are missing."
     )

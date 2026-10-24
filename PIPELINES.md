@@ -2,31 +2,31 @@
 
 ## Running a pipeline
 
-`pyml-launch` runs every pipeline in this file. Run it from the checkout with
+`mp-launch` runs every pipeline in this file. Run it from the checkout with
 any Python: it re-runs itself under `.venv` if it finds one, so the elements see
-torch and the rest. Installing the package also puts a `pyml-launch` on `PATH`.
+torch and the rest. Installing the package also puts a `mp-launch` on `PATH`.
 
 ```bash
-python pyml-launch.py filesrc location=data/people.mp4 ! decodebin ! videoconvert ! videoscale \
+python mp-launch.py filesrc location=data/people.mp4 ! decodebin ! videoconvert ! videoscale \
   ! video/x-raw,width=640,height=480 \
-  ! pyml_yolo model-name=yolo11m device=cuda:0 track=True \
-  ! pyml_overlay ! videoconvert ! autovideosink
+  ! mp_yolo model-name=yolo11m device=cuda:0 track=True \
+  ! mp_overlay ! videoconvert ! autovideosink
 ```
 
-`pyml_overlay` draws with Cairo. `pyml_overlay renderer=skia` draws with Skia
+`mp_overlay` draws with Cairo. `mp_overlay renderer=skia` draws with Skia
 instead, from the `skia` extra.
 
 ### Choosing the backend
 
 The ML elements run under GStreamer or under
 [glass2glass](https://gitlab.collabora.com/glass2glass/glass2glass), selected by
-`PYML_BACKEND`. It defaults to `gst`, which is why the examples leave it off.
-Prefix any of them with `PYML_BACKEND=g2g` to run the same line under
+`MP_BACKEND`. It defaults to `gst`, which is why the examples leave it off.
+Prefix any of them with `MP_BACKEND=g2g` to run the same line under
 glass2glass instead.
 
 Under `gst` it runs GStreamer with `GST_PLUGIN_PATH` pointing at this checkout.
 Under `g2g` it runs `g2g-launch-py`, rewriting the three things g2g spells
-differently: a `pyml_*` element becomes `pyelement` plus the module and class to
+differently: an `mp_*` element becomes `pyelement` plus the module and class to
 host, an element g2g implements itself becomes that one, and a raw-video caps
 filter with no format gains `format=RGBA`. An element it cannot map is an error,
 not a silent pass-through. It launches with `--threads`, one OS thread per
@@ -35,40 +35,40 @@ element as in GStreamer, so a CPU-bound element does not hold up the others.
 Under `gst`, detections, classifications and tracking ids travel in the
 GstAnalytics relation meta when the Python bindings have GstAnalytics
 (GStreamer 1.24 or newer), and otherwise in a JSON chunk appended to the buffer
-as an extra memory. `PYML_ANALYTICS=meta` or `PYML_ANALYTICS=chunk` forces one.
+as an extra memory. `MP_ANALYTICS=meta` or `MP_ANALYTICS=chunk` forces one.
 An element that writes a new buffer between the detector and the element
 reading it, such as a converting `videoconvert` or an encoder, drops the chunk,
 while the relation meta survives it.
 
-Seven elements are native on g2g rather than hosted: `pyml_overlay` becomes
-`analyticsoverlay`, `pyml_alert` becomes `analyticsalert`, `pyml_digest` becomes
-`textdigest`, and `pyml_metasink`, `pyml_metareplay`, `pyml_alertrecorder` and
-`pyml_embeddingsink` drop the prefix. Their `location`, `rules`, `cooldown`,
+Seven elements are native on g2g rather than hosted: `mp_overlay` becomes
+`analyticsoverlay`, `mp_alert` becomes `analyticsalert`, `mp_digest` becomes
+`textdigest`, and `mp_metasink`, `mp_metareplay`, `mp_alertrecorder` and
+`mp_embeddingsink` drop the prefix. Their `location`, `rules`, `cooldown`,
 `draw-alert`, `webhook-url`, `encoder`, `seconds-before`, `seconds-after`,
 `window-seconds`, `source-id` and `model-name` carry over under the same names,
 and the file formats match, so `search_video` reads an index either backend
-wrote. g2g runs no MQTT, so `pyml_alert`'s `mqtt-broker` and `mqtt-topic` are
+wrote. g2g runs no MQTT, so `mp_alert`'s `mqtt-broker` and `mqtt-topic` are
 refused rather than dropped.
 
 On g2g, `nvdec` decodes H.264, H.265 and AV1 into CUDA memory. Put it directly
-before `pyml_classifier`, `pyml_yolo`, `pyml_yolo_pose` or `pyml_depth` and
-pyml-launch hosts that element with `cuda-frames=true format=NV12`: the element
+before `mp_classifier`, `mp_yolo`, `mp_yolo_pose` or `mp_depth` and
+mp-launch hosts that element with `cuda-frames=true format=NV12`: the element
 converts the NV12 frame to RGB on the GPU and runs the same device-frame path as
-on gst. The frame leaves it still CUDA NV12, so a `pyml_tracker` straight after
-it takes `cuda-frames=true` too. pyml-launch does this only from `nvdec` on, so
+on gst. The frame leaves it still CUDA NV12, so a `mp_tracker` straight after
+it takes `cuda-frames=true` too. mp-launch does this only from `nvdec` on, so
 a line with `decodebin` keeps the element on system memory, spell `qtdemux !
-h264parse ! nvdec`. g2g has no GPU scaler or RGBA conversion, so pyml-launch
+h264parse ! nvdec`. g2g has no GPU scaler or RGBA conversion, so mp-launch
 drops gst's `cudaconvert`, `cudascale` and `video/x-raw(memory:CUDAMemory)` caps
 filter after `nvdec`, and the element sees the decoded size. Put `videoconvert`
-ahead of `pyml_overlay`. An element that writes the frame, such as `pyml_depth`
-with `visualize=true` or `pyml_superres`, needs `videoconvert` between `nvdec`
+ahead of `mp_overlay`. An element that writes the frame, such as `mp_depth`
+with `visualize=true` or `mp_superres`, needs `videoconvert` between `nvdec`
 and it.
 Build `g2g-launch-py` with `--features ml,g2g-plugins/nvdec,g2g-plugins/cuda`
 for `nvdec`.
 
 `analyticsoverlay` has its own properties (`show-label`, `show-track`,
 `show-score`, `show-trail`, `trail-length`, `thickness`, `mask-alpha`), so only
-`pyml_overlay`'s `tracking` carries over, as `show-track`.
+`mp_overlay`'s `tracking` carries over, as `show-track`.
 
 Build `g2g-launch-py` from a glass2glass checkout and put it on `PATH`, or point
 `G2G_LAUNCH` at it:
@@ -85,10 +85,10 @@ One or two lines per element. Paths are relative to the checkout.
 ### Classification
 
 ```
-python pyml-launch.py  filesrc location=data/people.mp4 ! decodebin ! videoconvert ! videoscale ! video/x-raw,width=640,height=480 ! pyml_classifier model-name=resnet18 device=cuda !  videoconvert !  autovideosink
+python mp-launch.py  filesrc location=data/people.mp4 ! decodebin ! videoconvert ! videoscale ! video/x-raw,width=640,height=480 ! mp_classifier model-name=resnet18 device=cuda !  videoconvert !  autovideosink
 ```
 
-`pyml_classifier` also takes frames in CUDA memory. On the pytorch engine with
+`mp_classifier` also takes frames in CUDA memory. On the pytorch engine with
 `device=cuda`, a frame decoded by `nvh264dec` and converted by `cudaconvert`
 reaches the model as a tensor on the GPU, with no copy to the host. The element
 offers CUDA memory only when its engine reads tensors, which is the pytorch
@@ -96,7 +96,7 @@ engine. With an exported-model engine such as onnx it drops those caps, so a
 pipeline feeding it CUDA memory fails to link when it is built rather than at
 the first frame. Put `cudadownload` before the element for those engines.
 
-`pyml_yolo` and `pyml_yolo_pose` take CUDA memory on the pytorch engine too. The
+`mp_yolo` and `mp_yolo_pose` take CUDA memory on the pytorch engine too. The
 frame is scaled and padded to the model's input size on the GPU, and with
 `track=false` the model and its non-maximum suppression run there without the
 ultralytics predictor, copying only the kept boxes back, which cuts the yolo
@@ -105,29 +105,29 @@ Laptop. `track=true` still goes through ultralytics' tracker. Set
 `tensorrt=true` to run the same path on a half precision TensorRT engine built
 from the weights with the `tensorrt` extra, which cuts yolo11n to about 4.5 ms
 a frame on the same GPU. The first frame builds the engine, which takes about
-two minutes, and later starts load it from `~/.cache/gst-python-ml/tensorrt`.
+two minutes, and later starts load it from `~/.cache/modelpipe/tensorrt`.
 The engine is built for the letterboxed shape of the frame, 480x640 for a
 640x480 frame, so its boxes stay within a pixel or two of the pytorch weights,
 and a new frame size builds another engine. The boxes and keypoints are
 mapped back to the frame, so the analytics metadata matches the system-memory
 path. Segmentation
-and oriented-box models refuse these frames. On a CUDA frame `pyml_yolo_pose`
+and oriented-box models refuse these frames. On a CUDA frame `mp_yolo_pose`
 with `visualize=true` draws the keypoints and skeleton in place with torch, in
-ultralytics' colours but without the boxes and labels, so put `pyml_overlay`
-after it for those. `pyml_tracker`
-reads only the metadata, so it passes CUDA memory through, and `pyml_overlay`
+ultralytics' colours but without the boxes and labels, so put `mp_overlay`
+after it for those. `mp_tracker`
+reads only the metadata, so it passes CUDA memory through, and `mp_overlay`
 draws on CUDA frames in place with torch, so `nvh264dec ! cudaconvert !
-cudascale ! pyml_yolo engine-name=pytorch device=cuda ! pyml_tracker !
-pyml_overlay` never copies a frame to the host. On CUDA frames the overlay
+cudascale ! mp_yolo engine-name=pytorch device=cuda ! mp_tracker !
+mp_overlay` never copies a frame to the host. On CUDA frames the overlay
 ignores the `renderer` property and draws boxes, labels, tracking squares and
 trails without antialiasing, with Pillow's default font. `cudadownload` drops
 the analytics metadata, so it goes after the last element that reads it.
 
-`pyml_depth` takes CUDA memory with `engine-name=pytorch device=cuda` too: the
+`mp_depth` takes CUDA memory with `engine-name=pytorch device=cuda` too: the
 image processor resizes and normalises the frame on the GPU and the colormap
 frame is written back into the CUDA buffer, with only the uint8 depth blob
 going to the host, about 5 ms a frame less than through system memory. Add
-`cudadownload` after it to save or show the colormap. `pyml_superres` takes
+`cudadownload` after it to save or show the colormap. `mp_superres` takes
 CUDA memory on the same engine: the frame reaches Real-ESRGAN as a tensor and
 comes back to the frame size with an antialiased bicubic resize on the GPU
 instead of Lanczos, then is written into the CUDA buffer. Every other element
@@ -139,11 +139,11 @@ own, so two elements on the branches of a `tee` overlap on the GPU. Set
 more urgent as in CUDA and the value is clamped to the range the device allows.
 
 ```
-python pyml-launch.py filesrc location=data/people.mp4 ! qtdemux ! h264parse ! nvh264dec ! cudaconvert ! cudascale ! capsfilter caps="video/x-raw(memory:CUDAMemory),format=RGBA,width=640,height=480" ! pyml_yolo model-name=yolo11n engine-name=pytorch device=cuda ! pyml_tracker ! fakesink
+python mp-launch.py filesrc location=data/people.mp4 ! qtdemux ! h264parse ! nvh264dec ! cudaconvert ! cudascale ! capsfilter caps="video/x-raw(memory:CUDAMemory),format=RGBA,width=640,height=480" ! mp_yolo model-name=yolo11n engine-name=pytorch device=cuda ! mp_tracker ! fakesink
 ```
 
 ```
-python pyml-launch.py filesrc location=data/people.mp4 ! qtdemux ! h264parse ! nvh264dec ! cudaconvert ! capsfilter caps="video/x-raw(memory:CUDAMemory),format=RGBA" ! pyml_classifier model-name=resnet50 engine-name=pytorch device=cuda ! fakesink
+python mp-launch.py filesrc location=data/people.mp4 ! qtdemux ! h264parse ! nvh264dec ! cudaconvert ! capsfilter caps="video/x-raw(memory:CUDAMemory),format=RGBA" ! mp_classifier model-name=resnet50 engine-name=pytorch device=cuda ! fakesink
 ```
 
 
@@ -155,19 +155,19 @@ which trades a slow first frame for higher steady throughput.
 #### Classification with torch.compile
 
 ```
-python pyml-launch.py filesrc location=data/people.mp4 ! decodebin ! videoconvert ! videoscale \
+python mp-launch.py filesrc location=data/people.mp4 ! decodebin ! videoconvert ! videoscale \
   ! video/x-raw,width=640,height=480 \
-  ! pyml_classifier model-name=resnet18 device=cuda compile=True \
+  ! mp_classifier model-name=resnet18 device=cuda compile=True \
   ! videoconvert ! autovideosink
 ```
 
 #### Object detection with torch.compile
 
 ```
-python pyml-launch.py filesrc location=data/people.mp4 ! decodebin ! videoconvert ! videoscale \
+python mp-launch.py filesrc location=data/people.mp4 ! decodebin ! videoconvert ! videoscale \
   ! video/x-raw,width=640,height=480 \
-  ! pyml_objectdetector model-name=fasterrcnn_resnet50_fpn device=cuda compile=True \
-  ! videoconvert ! pyml_overlay ! videoconvert ! autovideosink
+  ! mp_objectdetector model-name=fasterrcnn_resnet50_fpn device=cuda compile=True \
+  ! videoconvert ! mp_overlay ! videoconvert ! autovideosink
 ```
 
 
@@ -175,57 +175,57 @@ python pyml-launch.py filesrc location=data/people.mp4 ! decodebin ! videoconver
 
 #### TorchVision
 
-`pyml_objectdetector` takes any torchvision detection model name, such as
+`mp_objectdetector` takes any torchvision detection model name, such as
 `fasterrcnn_resnet50_fpn` or `ssdlite320_mobilenet_v3_large`.
 
 ##### fasterrcnn
 
-`python pyml-launch.py  filesrc location=data/people.mp4 ! decodebin ! videoconvert ! videoscale ! video/x-raw,width=640,height=480 ! pyml_objectdetector model-name=fasterrcnn_resnet50_fpn device=cuda batch-size=4 ! videoconvert ! pyml_overlay ! videoconvert ! autovideosink`
+`python mp-launch.py  filesrc location=data/people.mp4 ! decodebin ! videoconvert ! videoscale ! video/x-raw,width=640,height=480 ! mp_objectdetector model-name=fasterrcnn_resnet50_fpn device=cuda batch-size=4 ! videoconvert ! mp_overlay ! videoconvert ! autovideosink`
 
 ##### fasterrcnn/kafka
 
-`pyml_kafkasink` sends one JSON message per frame with `source_id`, `timestamp`
+`mp_kafkasink` sends one JSON message per frame with `source_id`, `timestamp`
 (the UTC time it was sent) and `detections`, each with `label`, `score` and
-`box`. `data/pyml_object_detector.json` is the JSON Schema for that message.
+`box`. `data/mp_object_detector.json` is the JSON Schema for that message.
 
 From the host:
 
 ```
-python pyml-launch.py  filesrc location=data/people.mp4 ! decodebin ! videoconvert ! videoscale ! video/x-raw,width=640,height=480 ! pyml_objectdetector model-name=fasterrcnn_resnet50_fpn device=cuda batch-size=4 ! pyml_kafkasink broker=localhost:29092 topic=test-kafkasink-topic
+python mp-launch.py  filesrc location=data/people.mp4 ! decodebin ! videoconvert ! videoscale ! video/x-raw,width=640,height=480 ! mp_objectdetector model-name=fasterrcnn_resnet50_fpn device=cuda batch-size=4 ! mp_kafkasink broker=localhost:29092 topic=test-kafkasink-topic
 ```
 
 From a container:
 
 ```
-python pyml-launch.py  filesrc location=data/people.mp4 ! decodebin ! videoconvert ! videoscale ! video/x-raw,width=640,height=480 ! pyml_objectdetector model-name=fasterrcnn_resnet50_fpn device=cuda batch-size=4 ! pyml_kafkasink broker=kafka:9092 topic=test-kafkasink-topic
+python mp-launch.py  filesrc location=data/people.mp4 ! decodebin ! videoconvert ! videoscale ! video/x-raw,width=640,height=480 ! mp_objectdetector model-name=fasterrcnn_resnet50_fpn device=cuda batch-size=4 ! mp_kafkasink broker=kafka:9092 topic=test-kafkasink-topic
 ```
 
 
 #### maskrcnn
 
 ```
-python pyml-launch.py   filesrc location=data/people.mp4 ! decodebin ! videoconvert ! videoscale ! pyml_maskrcnn device=cuda batch-size=4 model-name=maskrcnn_resnet50_fpn ! videoconvert ! pyml_overlay ! videoconvert ! autovideosink
+python mp-launch.py   filesrc location=data/people.mp4 ! decodebin ! videoconvert ! videoscale ! mp_maskrcnn device=cuda batch-size=4 model-name=maskrcnn_resnet50_fpn ! videoconvert ! mp_overlay ! videoconvert ! autovideosink
 ```
 
 #### yolo with tracking
 
 ```
-python pyml-launch.py   filesrc location=data/soccer_tracking.mp4 ! decodebin !  videoconvertscale ! video/x-raw,width=640,height=480 ! pyml_yolo model-name=yolo11m device=cuda:0 track=True ! pyml_overlay  ! videoconvert ! autovideosink
+python mp-launch.py   filesrc location=data/soccer_tracking.mp4 ! decodebin !  videoconvertscale ! video/x-raw,width=640,height=480 ! mp_yolo model-name=yolo11m device=cuda:0 track=True ! mp_overlay  ! videoconvert ! autovideosink
 ```
 
-A batch from `pyml_streammux` is the source frames in order, then a
-`GST-PYTHON-ML` memory with each frame's source index. A detector between the
-mux and `pyml_streamdemux` appends its analytics chunk or a blob after that
+A batch from `mp_streammux` is the source frames in order, then a
+`MODELPIPE` memory with each frame's source index. A detector between the
+mux and `mp_streamdemux` appends its analytics chunk or a blob after that
 memory, and the demux finds the source indices by their header, so batching
-works under both `PYML_ANALYTICS` stores.
+works under both `MP_ANALYTICS` stores.
 
 ```
-python pyml-launch.py   filesrc location=data/soccer_tracking.mp4 ! decodebin ! videoconvertscale ! video/x-raw,width=640,height=480,format=RGB ! pyml_streammux name=mux   filesrc location=data/soccer_tracking.mp4 ! decodebin ! videoconvertscale ! video/x-raw,width=640,height=480,format=RGB ! mux.   mux. ! pyml_yolo model-name=yolo11m device=cuda:0 track=True ! pyml_streamdemux name=demux   demux. ! queue ! videoconvert ! pyml_overlay ! videoconvert ! autovideosink sync=false   demux. ! queue ! videoconvert ! pyml_overlay ! videoconvert !  autovideosink sync=false
+python mp-launch.py   filesrc location=data/soccer_tracking.mp4 ! decodebin ! videoconvertscale ! video/x-raw,width=640,height=480,format=RGB ! mp_streammux name=mux   filesrc location=data/soccer_tracking.mp4 ! decodebin ! videoconvertscale ! video/x-raw,width=640,height=480,format=RGB ! mux.   mux. ! mp_yolo model-name=yolo11m device=cuda:0 track=True ! mp_streamdemux name=demux   demux. ! queue ! videoconvert ! mp_overlay ! videoconvert ! autovideosink sync=false   demux. ! queue ! videoconvert ! mp_overlay ! videoconvert !  autovideosink sync=false
 
 ```
 
 ```
-python pyml-launch.py filesrc location=data/soccer_tracking.mp4 ! decodebin ! videoconvertscale ! video/x-raw,width=640,height=480 ! demo_soccer model-name=yolo11m device=cuda:0 imgsz=640 hires-fallback=false ! pyml_overlay ! videoconvert ! autovideosink
+python mp-launch.py filesrc location=data/soccer_tracking.mp4 ! decodebin ! videoconvertscale ! video/x-raw,width=640,height=480 ! demo_soccer model-name=yolo11m device=cuda:0 imgsz=640 hires-fallback=false ! mp_overlay ! videoconvert ! autovideosink
 ```
 
 `imgsz` defaults to 1280 and `hires-fallback` runs a second 1536 pixel pass for the
@@ -247,24 +247,24 @@ YOLO takes channels first, hence `input-format=nchw`. `post-process=anchor_free`
 decodes the raw `[B, 4+nc, anchors]` output into boxes with NMS.
 
 ```
-python pyml-launch.py filesrc location=data/people.mp4 ! decodebin name=d \
+python mp-launch.py filesrc location=data/people.mp4 ! decodebin name=d \
   d. ! queue ! videoconvert ! videoscale \
   ! "video/x-raw,format=RGB,width=640,height=640" \
-  ! pyml_objectdetector engine-name=onnx model-name=yolo11m.onnx device=cpu \
+  ! mp_objectdetector engine-name=onnx model-name=yolo11m.onnx device=cpu \
               input-format=nchw post-process=anchor_free \
   ! videoconvert ! "video/x-raw,format=RGBA" \
-  ! pyml_overlay ! videoconvert ! autovideosink
+  ! mp_overlay ! videoconvert ! autovideosink
 ```
 
 ##### Generic ONNX passthrough (logs raw inference output)
 
-`pyml_inference` runs any model and logs the raw output:
+`mp_inference` runs any model and logs the raw output:
 
 ```
-python pyml-launch.py filesrc location=data/people.mp4 ! decodebin name=d \
+python mp-launch.py filesrc location=data/people.mp4 ! decodebin name=d \
   d. ! queue ! videoconvert ! videoscale \
   ! "video/x-raw,format=RGB,width=640,height=640" \
-  ! pyml_inference engine-name=onnx model-name=yolo11m.onnx device=cpu \
+  ! mp_inference engine-name=onnx model-name=yolo11m.onnx device=cpu \
   ! fakesink
 ```
 
@@ -272,18 +272,18 @@ It takes every `engine-name` below.
 
 ##### Task elements on a builtin engine
 
-`pyml_depth`, `pyml_clip`, `pyml_anomaly`, `pyml_embedding`, `pyml_action`,
-`pyml_superres`, `pyml_optical_flow`, `pyml_sam`, `pyml_yolo`, `pyml_yolo_pose`
-and `pyml_zeroshotdetector` take the Hugging Face or ultralytics model name
+`mp_depth`, `mp_clip`, `mp_anomaly`, `mp_embedding`, `mp_action`,
+`mp_superres`, `mp_optical_flow`, `mp_sam`, `mp_yolo`, `mp_yolo_pose`
+and `mp_zeroshotdetector` take the Hugging Face or ultralytics model name
 with any of `engine-name=onnx`, `openvino`, `tvm`, `tensorflow`, `tflite`,
-`ncnn`, `executorch`, `iree`, `tinygrad` or `migraphx`, and `pyml_depth` and
-`pyml_clip` also `jax`. The first run exports the model to
-`~/.cache/gst-python-ml/onnx/` under a name that carries the torch, torchvision
+`ncnn`, `executorch`, `iree`, `tinygrad` or `migraphx`, and `mp_depth` and
+`mp_clip` also `jax`. The first run exports the model to
+`~/.cache/modelpipe/onnx/` under a name that carries the torch, torchvision
 and transformers versions (ultralytics for YOLO), so a library upgrade exports
 again, and an engine that does not read ONNX converts
-it once more into `~/.cache/gst-python-ml/<engine>/`. ExecuTorch exports a
+it once more into `~/.cache/modelpipe/<engine>/`. ExecuTorch exports a
 `.pte` from the torch graph instead, and jax loads a keras-hub preset.
-`track=True` needs the PyTorch engine. `pyml_whispertranscribe` runs on onnx and
+`track=True` needs the PyTorch engine. `mp_whispertranscribe` runs on onnx and
 openvino through their genai runtimes, on llamacpp through whisper.cpp and on mlx
 through mlx-whisper, see [Transcription](#transcription).
 
@@ -299,27 +299,27 @@ tflite: onnx2tf cannot convert the super resolution export (its height and
 width are dynamic) or the SAM encoder, and it converts optical flow wrong.
 
 ```
-python pyml-launch.py filesrc location=data/people.mp4 ! decodebin name=d \
+python mp-launch.py filesrc location=data/people.mp4 ! decodebin name=d \
   d. ! queue \
     ! videoconvert ! videoscale ! "video/x-raw,width=640,height=480" \
-    ! pyml_depth engine-name=onnx model-name=depth-anything/Depth-Anything-V2-Small-hf device=cuda \
+    ! mp_depth engine-name=onnx model-name=depth-anything/Depth-Anything-V2-Small-hf device=cuda \
     ! videoconvert ! autovideosink sync=false
 ```
 
 ```
-python pyml-launch.py filesrc location=data/people.mp4 ! decodebin ! videoconvert ! videoscale \
+python mp-launch.py filesrc location=data/people.mp4 ! decodebin ! videoconvert ! videoscale \
   ! video/x-raw,width=640,height=480 \
-  ! pyml_yolo engine-name=onnx model-name=yolo11m device=cuda \
-  ! pyml_overlay ! videoconvert ! autovideosink
+  ! mp_yolo engine-name=onnx model-name=yolo11m device=cuda \
+  ! mp_overlay ! videoconvert ! autovideosink
 ```
 
 ```
-python pyml-launch.py filesrc location=data/people.mp4 ! decodebin name=d \
+python mp-launch.py filesrc location=data/people.mp4 ! decodebin name=d \
   d. ! queue \
     ! videoconvert ! videoscale ! "video/x-raw,width=640,height=480" \
-    ! pyml_clip engine-name=onnx model-name=openai/clip-vit-base-patch32 device=cuda \
+    ! mp_clip engine-name=onnx model-name=openai/clip-vit-base-patch32 device=cuda \
               labels="person, bicycle, car, dog, cat" top-k=3 \
-    ! videoconvert ! pyml_overlay ! videoconvert ! autovideosink sync=false
+    ! videoconvert ! mp_overlay ! videoconvert ! autovideosink sync=false
 ```
 
 #### OpenVINO Engine
@@ -333,14 +333,14 @@ yolo export model=yolo11m.pt format=openvino
 ##### YOLO11m OpenVINO object detection with overlay
 
 ```
-python pyml-launch.py filesrc location=data/people.mp4 ! decodebin name=d \
+python mp-launch.py filesrc location=data/people.mp4 ! decodebin name=d \
   d. ! queue ! videoconvert ! videoscale \
   ! "video/x-raw,format=RGB,width=640,height=640" \
-  ! pyml_objectdetector engine-name=openvino \
+  ! mp_objectdetector engine-name=openvino \
               model-name=yolo11m_openvino_model/yolo11m.xml device=cpu \
               input-format=nchw post-process=anchor_free \
   ! videoconvert ! "video/x-raw,format=RGBA" \
-  ! pyml_overlay ! videoconvert ! autovideosink
+  ! mp_overlay ! videoconvert ! autovideosink
 ```
 
 `device=GPU` targets an Intel GPU. OpenVINO device names are uppercase.
@@ -359,14 +359,14 @@ The engine reads the input layout from the model and scales the normalized boxes
 ultralytics export returns back to pixels.
 
 ```
-python pyml-launch.py filesrc location=data/people.mp4 ! decodebin name=d \
+python mp-launch.py filesrc location=data/people.mp4 ! decodebin name=d \
   d. ! queue ! videoconvert ! videoscale \
   ! "video/x-raw,format=RGB,width=640,height=640" \
-  ! pyml_objectdetector engine-name=tflite \
+  ! mp_objectdetector engine-name=tflite \
               model-name=yolo11m_saved_model/yolo11m_float32.tflite device=cpu \
               post-process=anchor_free \
   ! videoconvert ! "video/x-raw,format=RGBA" \
-  ! pyml_overlay ! videoconvert ! autovideosink
+  ! mp_overlay ! videoconvert ! autovideosink
 ```
 
 #### TensorFlow Engine
@@ -379,14 +379,14 @@ yolo export model=yolo11m.pt format=saved_model
 ##### YOLO11m TensorFlow object detection with overlay
 
 ```
-python pyml-launch.py filesrc location=data/people.mp4 ! decodebin name=d \
+python mp-launch.py filesrc location=data/people.mp4 ! decodebin name=d \
   d. ! queue ! videoconvert ! videoscale \
   ! "video/x-raw,format=RGB,width=640,height=640" \
-  ! pyml_objectdetector engine-name=tensorflow \
+  ! mp_objectdetector engine-name=tensorflow \
               model-name=yolo11m_saved_model device=cuda \
               post-process=anchor_free \
   ! videoconvert ! "video/x-raw,format=RGBA" \
-  ! pyml_overlay ! videoconvert ! autovideosink
+  ! mp_overlay ! videoconvert ! autovideosink
 ```
 
 #### tinygrad Engine
@@ -396,32 +396,32 @@ tinygrad runs `.onnx` files.
 ##### YOLO11m ONNX object detection with tinygrad
 
 ```
-python pyml-launch.py filesrc location=data/people.mp4 ! decodebin name=d \
+python mp-launch.py filesrc location=data/people.mp4 ! decodebin name=d \
   d. ! queue ! videoconvert ! videoscale \
   ! "video/x-raw,format=RGB,width=640,height=640" \
-  ! pyml_objectdetector engine-name=tinygrad model-name=yolo11m.onnx device=cuda \
+  ! mp_objectdetector engine-name=tinygrad model-name=yolo11m.onnx device=cuda \
               post-process=anchor_free \
   ! videoconvert ! "video/x-raw,format=RGBA" \
-  ! pyml_overlay ! videoconvert ! autovideosink
+  ! mp_overlay ! videoconvert ! autovideosink
 ```
 
 ##### ResNet18 classification with tinygrad on GPU
 
 ```
-python pyml-launch.py filesrc location=data/people.mp4 ! decodebin name=d \
+python mp-launch.py filesrc location=data/people.mp4 ! decodebin name=d \
   d. ! queue ! videoconvert ! videoscale \
   ! "video/x-raw,format=RGB,width=224,height=224" \
-  ! pyml_classifier model-name=resnet18 device=cuda engine-name=tinygrad \
+  ! mp_classifier model-name=resnet18 device=cuda engine-name=tinygrad \
   ! fakesink
 ```
 
 ##### tinygrad on CPU
 
 ```
-python pyml-launch.py filesrc location=data/people.mp4 ! decodebin name=d \
+python mp-launch.py filesrc location=data/people.mp4 ! decodebin name=d \
   d. ! queue ! videoconvert ! videoscale \
   ! "video/x-raw,format=RGB,width=224,height=224" \
-  ! pyml_classifier model-name=resnet18 device=cpu engine-name=tinygrad \
+  ! mp_classifier model-name=resnet18 device=cpu engine-name=tinygrad \
   ! fakesink
 ```
 
@@ -432,20 +432,20 @@ TVM takes a compiled `.so` or `.tar`, or an `.onnx` file.
 ##### TorchVision model compiled with TVM
 
 ```
-python pyml-launch.py filesrc location=data/people.mp4 ! decodebin name=d \
+python mp-launch.py filesrc location=data/people.mp4 ! decodebin name=d \
   d. ! queue ! videoconvert ! videoscale \
   ! "video/x-raw,format=RGB,width=224,height=224" \
-  ! pyml_classifier model-name=resnet18 device=cuda engine-name=tvm \
+  ! mp_classifier model-name=resnet18 device=cuda engine-name=tvm \
   ! fakesink
 ```
 
 ##### Pre-compiled TVM model (.so)
 
 ```
-python pyml-launch.py filesrc location=data/people.mp4 ! decodebin name=d \
+python mp-launch.py filesrc location=data/people.mp4 ! decodebin name=d \
   d. ! queue ! videoconvert ! videoscale \
   ! "video/x-raw,format=RGB,width=640,height=640" \
-  ! pyml_inference engine-name=tvm model-name=compiled_model.so device=cuda \
+  ! mp_inference engine-name=tvm model-name=compiled_model.so device=cuda \
   ! fakesink
 ```
 
@@ -454,10 +454,10 @@ python pyml-launch.py filesrc location=data/people.mp4 ! decodebin name=d \
 ExecuTorch runs `.pte` files, for example `yolo export model=yolo11n.pt format=executorch`.
 
 ```
-python pyml-launch.py filesrc location=data/people.mp4 ! decodebin name=d \
+python mp-launch.py filesrc location=data/people.mp4 ! decodebin name=d \
   d. ! queue ! videoconvert ! videoscale \
   ! "video/x-raw,format=RGB,width=224,height=224" \
-  ! pyml_inference engine-name=executorch model-name=model.pte device=cpu \
+  ! mp_inference engine-name=executorch model-name=model.pte device=cpu \
   ! fakesink
 ```
 
@@ -467,21 +467,21 @@ llama.cpp runs `.gguf` files, a local path or a Hub repo with the quant that
 ends the file name.
 
 ```
-python pyml-launch.py filesrc location=data/prompt_for_llm.txt \
-  ! pyml_llm engine-name=llamacpp model-name=Qwen/Qwen3-0.6B-GGUF:Q8_0 device=cpu \
+python mp-launch.py filesrc location=data/prompt_for_llm.txt \
+  ! mp_llm engine-name=llamacpp model-name=Qwen/Qwen3-0.6B-GGUF:Q8_0 device=cpu \
   ! fakesink
 ```
 
 #### JAX/Flax Engine
 
-`pyml_depth` and `pyml_clip` run the keras-hub port of their Hugging Face model
+`mp_depth` and `mp_clip` run the keras-hub port of their Hugging Face model
 on JAX. CLIP keeps its text tower on PyTorch.
 
 ```
-python pyml-launch.py filesrc location=data/people.mp4 ! decodebin name=d \
+python mp-launch.py filesrc location=data/people.mp4 ! decodebin name=d \
   d. ! queue \
     ! videoconvert ! videoscale ! "video/x-raw,width=640,height=480" \
-    ! pyml_depth engine-name=jax model-name=depth-anything/Depth-Anything-V2-Small-hf device=cpu \
+    ! mp_depth engine-name=jax model-name=depth-anything/Depth-Anything-V2-Small-hf device=cpu \
     ! videoconvert ! autovideosink sync=false
 ```
 
@@ -492,22 +492,22 @@ MiGraphX takes ONNX files and needs the ROCm install above.
 ##### YOLO11m MiGraphX object detection with overlay
 
 ```
-python pyml-launch.py filesrc location=data/people.mp4 ! decodebin name=d \
+python mp-launch.py filesrc location=data/people.mp4 ! decodebin name=d \
   d. ! queue ! videoconvert ! videoscale \
   ! "video/x-raw,format=RGB,width=640,height=640" \
-  ! pyml_objectdetector engine-name=migraphx model-name=yolo11m.onnx device=gpu \
+  ! mp_objectdetector engine-name=migraphx model-name=yolo11m.onnx device=gpu \
               input-format=nchw post-process=anchor_free \
   ! videoconvert ! "video/x-raw,format=RGBA" \
-  ! pyml_overlay ! videoconvert ! autovideosink
+  ! mp_overlay ! videoconvert ! autovideosink
 ```
 
 ##### MiGraphX on CPU (reference target)
 
 ```
-python pyml-launch.py filesrc location=data/people.mp4 ! decodebin name=d \
+python mp-launch.py filesrc location=data/people.mp4 ! decodebin name=d \
   d. ! queue ! videoconvert ! videoscale \
   ! "video/x-raw,format=RGB,width=640,height=640" \
-  ! pyml_inference engine-name=migraphx model-name=yolo11m.onnx device=cpu \
+  ! mp_inference engine-name=migraphx model-name=yolo11m.onnx device=cpu \
   ! fakesink
 ```
 
@@ -519,20 +519,20 @@ IREE takes a compiled `.vmfb`, or an `.onnx` it compiles at load time, for `hip`
 ##### IREE on AMD GPU (ROCm/HIP)
 
 ```
-python pyml-launch.py filesrc location=data/people.mp4 ! decodebin name=d \
+python mp-launch.py filesrc location=data/people.mp4 ! decodebin name=d \
   d. ! queue ! videoconvert ! videoscale \
   ! "video/x-raw,format=RGB,width=640,height=640" \
-  ! pyml_inference engine-name=iree model-name=yolo11m.onnx device=hip \
+  ! mp_inference engine-name=iree model-name=yolo11m.onnx device=hip \
   ! fakesink
 ```
 
 ##### IREE on Vulkan (any GPU vendor)
 
 ```
-python pyml-launch.py filesrc location=data/people.mp4 ! decodebin name=d \
+python mp-launch.py filesrc location=data/people.mp4 ! decodebin name=d \
   d. ! queue ! videoconvert ! videoscale \
   ! "video/x-raw,format=RGB,width=640,height=640" \
-  ! pyml_inference engine-name=iree model-name=yolo11m.onnx device=vulkan \
+  ! mp_inference engine-name=iree model-name=yolo11m.onnx device=vulkan \
   ! fakesink
 ```
 
@@ -540,10 +540,10 @@ python pyml-launch.py filesrc location=data/people.mp4 ! decodebin name=d \
 
 ```
 # Pre-compile: iree-compile model.mlir --iree-hal-target-device=hip -o model.vmfb
-python pyml-launch.py filesrc location=data/people.mp4 ! decodebin name=d \
+python mp-launch.py filesrc location=data/people.mp4 ! decodebin name=d \
   d. ! queue ! videoconvert ! videoscale \
   ! "video/x-raw,format=RGB,width=640,height=640" \
-  ! pyml_inference engine-name=iree model-name=model.vmfb device=hip \
+  ! mp_inference engine-name=iree model-name=model.vmfb device=hip \
   ! fakesink
 ```
 
@@ -554,20 +554,20 @@ NCNN takes a `.param` with its `.bin` alongside and runs on any Vulkan GPU or th
 ##### NCNN on Vulkan GPU
 
 ```
-python pyml-launch.py filesrc location=data/people.mp4 ! decodebin name=d \
+python mp-launch.py filesrc location=data/people.mp4 ! decodebin name=d \
   d. ! queue ! videoconvert ! videoscale \
   ! "video/x-raw,format=RGB,width=640,height=640" \
-  ! pyml_inference engine-name=ncnn model-name=yolo11m.param device=vulkan \
+  ! mp_inference engine-name=ncnn model-name=yolo11m.param device=vulkan \
   ! fakesink
 ```
 
 ##### NCNN on CPU
 
 ```
-python pyml-launch.py filesrc location=data/people.mp4 ! decodebin name=d \
+python mp-launch.py filesrc location=data/people.mp4 ! decodebin name=d \
   d. ! queue ! videoconvert ! videoscale \
   ! "video/x-raw,format=RGB,width=640,height=640" \
-  ! pyml_inference engine-name=ncnn model-name=yolo11m.param device=cpu \
+  ! mp_inference engine-name=ncnn model-name=yolo11m.param device=cpu \
   ! fakesink
 ```
 
@@ -578,10 +578,10 @@ through RKNN Toolkit Lite2 and the board's `librknnrt`. Use `npu:0`, `npu:1`,
 `npu:2`, or `npu:all` to select NPU cores on supported chips.
 
 ```
-python pyml-launch.py filesrc location=data/people.mp4 ! decodebin name=d \
+python mp-launch.py filesrc location=data/people.mp4 ! decodebin name=d \
   d. ! queue ! videoconvert ! videoscale \
   ! "video/x-raw,format=RGB,width=640,height=640" \
-  ! pyml_inference engine-name=rknn model-name=yolo11m.rknn device=npu \
+  ! mp_inference engine-name=rknn model-name=yolo11m.rknn device=npu \
               input-format=nhwc post-process=none \
   ! fakesink
 ```
@@ -594,10 +594,10 @@ NPU IP and target image must come from the same reference flow.
 
 ```
 source /etc/vai.sh
-python pyml-launch.py filesrc location=data/people.mp4 ! decodebin name=d \
+python mp-launch.py filesrc location=data/people.mp4 ! decodebin name=d \
   d. ! queue ! videoconvert ! videoscale \
   ! "video/x-raw,format=RGB,width=224,height=224" \
-  ! pyml_inference engine-name=vart model-name=snapshot.NPU.resnet50.TF::resnet50 device=npu \
+  ! mp_inference engine-name=vart model-name=snapshot.NPU.resnet50.TF::resnet50 device=npu \
               input-format=nhwc post-process=none \
   ! fakesink
 ```
@@ -607,16 +607,16 @@ python pyml-launch.py filesrc location=data/people.mp4 ! decodebin name=d \
 `device=tensorrt` runs the model through TensorRT, and `device=tensorrt-fp16`
 in half precision. The first start builds the TensorRT engine, which takes about
 ten minutes for YOLO11m on a laptop GPU. It is cached under
-`~/.cache/gst-python-ml/tensorrt`, so later starts take a second.
+`~/.cache/modelpipe/tensorrt`, so later starts take a second.
 
 ```
-python pyml-launch.py filesrc location=data/people.mp4 ! decodebin name=d \
+python mp-launch.py filesrc location=data/people.mp4 ! decodebin name=d \
   d. ! queue ! videoconvert ! videoscale \
   ! "video/x-raw,format=RGB,width=640,height=640" \
-  ! pyml_objectdetector engine-name=onnx model-name=yolo11m.onnx device=tensorrt-fp16 \
+  ! mp_objectdetector engine-name=onnx model-name=yolo11m.onnx device=tensorrt-fp16 \
               input-format=nchw post-process=anchor_free \
   ! videoconvert ! "video/x-raw,format=RGBA" \
-  ! pyml_overlay ! videoconvert ! autovideosink
+  ! mp_overlay ! videoconvert ! autovideosink
 ```
 
 #### ONNX Runtime on AMD GPUs (ROCm)
@@ -628,13 +628,13 @@ On an APU ROCm does not list, such as the Rembrandt gfx1035, the ROCm provider
 runs with `HSA_OVERRIDE_GFX_VERSION=10.3.0`.
 
 ```
-python pyml-launch.py filesrc location=data/people.mp4 ! decodebin name=d \
+python mp-launch.py filesrc location=data/people.mp4 ! decodebin name=d \
   d. ! queue ! videoconvert ! videoscale \
   ! "video/x-raw,format=RGB,width=640,height=640" \
-  ! pyml_objectdetector engine-name=onnx model-name=yolo11m.onnx device=rocm \
+  ! mp_objectdetector engine-name=onnx model-name=yolo11m.onnx device=rocm \
               input-format=nchw post-process=anchor_free \
   ! videoconvert ! "video/x-raw,format=RGBA" \
-  ! pyml_overlay ! videoconvert ! autovideosink
+  ! mp_overlay ! videoconvert ! autovideosink
 ```
 
 #### ONNX Runtime on AMD Ryzen AI NPU
@@ -642,13 +642,13 @@ python pyml-launch.py filesrc location=data/people.mp4 ! decodebin name=d \
 `device=npu` needs the Ryzen AI SDK.
 
 ```
-python pyml-launch.py filesrc location=data/people.mp4 ! decodebin name=d \
+python mp-launch.py filesrc location=data/people.mp4 ! decodebin name=d \
   d. ! queue ! videoconvert ! videoscale \
   ! "video/x-raw,format=RGB,width=640,height=640" \
-  ! pyml_objectdetector engine-name=onnx model-name=yolo11m.onnx device=npu \
+  ! mp_objectdetector engine-name=onnx model-name=yolo11m.onnx device=npu \
               input-format=nchw post-process=anchor_free \
   ! videoconvert ! "video/x-raw,format=RGBA" \
-  ! pyml_overlay ! videoconvert ! autovideosink
+  ! mp_overlay ! videoconvert ! autovideosink
 ```
 
 #### PyTorch on AMD GPUs (ROCm)
@@ -660,27 +660,27 @@ pip install torch torchvision torchaudio --index-url https://download.pytorch.or
 ```
 
 ```
-python pyml-launch.py filesrc location=data/people.mp4 ! decodebin name=d \
+python mp-launch.py filesrc location=data/people.mp4 ! decodebin name=d \
   d. ! queue ! videoconvert ! videoscale \
   ! "video/x-raw,format=RGB,width=640,height=640" \
-  ! pyml_objectdetector model-name=fasterrcnn_resnet50_fpn device=cuda \
-  ! videoconvert ! pyml_overlay ! videoconvert ! autovideosink
+  ! mp_objectdetector model-name=fasterrcnn_resnet50_fpn device=cuda \
+  ! videoconvert ! mp_overlay ! videoconvert ! autovideosink
 ```
 
 With `torch.compile`, which uses Triton on AMD:
 
 ```
-python pyml-launch.py filesrc location=data/people.mp4 ! decodebin name=d \
+python mp-launch.py filesrc location=data/people.mp4 ! decodebin name=d \
   d. ! queue ! videoconvert ! videoscale \
   ! "video/x-raw,format=RGB,width=640,height=640" \
-  ! pyml_objectdetector model-name=fasterrcnn_resnet50_fpn device=cuda compile=True \
-  ! videoconvert ! pyml_overlay ! videoconvert ! autovideosink
+  ! mp_objectdetector model-name=fasterrcnn_resnet50_fpn device=cuda compile=True \
+  ! videoconvert ! mp_overlay ! videoconvert ! autovideosink
 ```
 
 ### Zero-Shot Object Detection
 
-`pyml_zeroshotdetector` detects the classes named in its `labels` property, so
-`pyml_alert`, `pyml_tracker`, `pyml_overlay` and `pyml_metasink` work on a class
+`mp_zeroshotdetector` detects the classes named in its `labels` property, so
+`mp_alert`, `mp_tracker`, `mp_overlay` and `mp_metasink` work on a class
 no detector was trained for. Detections carry the label text, as
 `stream_0_handbag`.
 
@@ -693,16 +693,16 @@ IDEA-Research/grounding-dino-tiny   (faster, smaller)
 #### Alert on a class no detector was trained for
 
 ```
-python pyml-launch.py filesrc location=data/people.mp4 ! decodebin name=d \
+python mp-launch.py filesrc location=data/people.mp4 ! decodebin name=d \
   d. ! queue ! videoconvert ! videoscale ! "video/x-raw,width=640,height=480" \
-  ! pyml_zeroshotdetector device=cuda labels="person, handbag" confidence=0.2 \
-  ! pyml_alert rules='{"class":"handbag"}' \
-  ! pyml_overlay ! videoconvert ! autovideosink sync=false
+  ! mp_zeroshotdetector device=cuda labels="person, handbag" confidence=0.2 \
+  ! mp_alert rules='{"class":"handbag"}' \
+  ! mp_overlay ! videoconvert ! autovideosink sync=false
 ```
 
 ### Pose Estimation
 
-`pyml_yolo_pose` takes any YOLO pose model:
+`mp_yolo_pose` takes any YOLO pose model:
 ```
 yolo11n-pose  (fastest)
 yolo11s-pose
@@ -712,26 +712,26 @@ yolo11m-pose  (best accuracy)
 #### YOLO pose with skeleton visualization (rendered on frame)
 
 ```
-python pyml-launch.py filesrc location=data/people.mp4 ! decodebin name=d \
+python mp-launch.py filesrc location=data/people.mp4 ! decodebin name=d \
   d. ! queue \
     ! videoconvert ! videoscale ! "video/x-raw,width=640,height=480" \
-    ! pyml_yolo_pose model-name=yolo11n-pose device=cuda \
+    ! mp_yolo_pose model-name=yolo11n-pose device=cuda \
     ! videoconvert ! autovideosink sync=false
 ```
 
 #### YOLO pose with bounding box overlay (metadata only, no in-element rendering)
 
 ```
-python pyml-launch.py filesrc location=data/people.mp4 ! decodebin name=d \
+python mp-launch.py filesrc location=data/people.mp4 ! decodebin name=d \
   d. ! queue \
     ! videoconvert ! videoscale ! "video/x-raw,width=640,height=480" \
-    ! pyml_yolo_pose model-name=yolo11n-pose device=cuda visualize=false \
-    ! videoconvert ! pyml_overlay ! videoconvert ! autovideosink sync=false
+    ! mp_yolo_pose model-name=yolo11n-pose device=cuda visualize=false \
+    ! videoconvert ! mp_overlay ! videoconvert ! autovideosink sync=false
 ```
 
 ### Depth Estimation
 
-`pyml_depth` takes the Depth Anything V2 models:
+`mp_depth` takes the Depth Anything V2 models:
 ```
 depth-anything/Depth-Anything-V2-Small-hf  (fastest, ~100 MB)
 depth-anything/Depth-Anything-V2-Base-hf
@@ -743,47 +743,47 @@ Colormaps: `inferno` (default), `jet`, `viridis`, `plasma`, `magma`.
 #### DepthAnything V2 with inferno colormap
 
 ```
-python pyml-launch.py filesrc location=data/people.mp4 ! decodebin name=d \
+python mp-launch.py filesrc location=data/people.mp4 ! decodebin name=d \
   d. ! queue \
     ! videoconvert ! videoscale ! "video/x-raw,width=640,height=480" \
-    ! pyml_depth model-name=depth-anything/Depth-Anything-V2-Small-hf device=cuda \
+    ! mp_depth model-name=depth-anything/Depth-Anything-V2-Small-hf device=cuda \
     ! videoconvert ! autovideosink sync=false
 ```
 
 #### DepthAnything V2 with jet colormap
 
 ```
-python pyml-launch.py filesrc location=data/people.mp4 ! decodebin name=d \
+python mp-launch.py filesrc location=data/people.mp4 ! decodebin name=d \
   d. ! queue \
     ! videoconvert ! videoscale ! "video/x-raw,width=640,height=480" \
-    ! pyml_depth model-name=depth-anything/Depth-Anything-V2-Small-hf device=cuda colormap=jet \
+    ! mp_depth model-name=depth-anything/Depth-Anything-V2-Small-hf device=cuda colormap=jet \
     ! videoconvert ! autovideosink sync=false
 ```
 
 #### Depth with reduced compute via frame-stride
 
 ```
-python pyml-launch.py filesrc location=data/people.mp4 ! decodebin name=d \
+python mp-launch.py filesrc location=data/people.mp4 ! decodebin name=d \
   d. ! queue \
     ! videoconvert ! videoscale ! "video/x-raw,width=640,height=480" \
-    ! pyml_depth model-name=depth-anything/Depth-Anything-V2-Small-hf device=cuda frame-stride=2 \
+    ! mp_depth model-name=depth-anything/Depth-Anything-V2-Small-hf device=cuda frame-stride=2 \
     ! videoconvert ! autovideosink sync=false
 ```
 
 #### Depth with original video side-by-side (tee)
 
 ```
-python pyml-launch.py filesrc location=data/people.mp4 ! decodebin name=d \
+python mp-launch.py filesrc location=data/people.mp4 ! decodebin name=d \
   d. ! queue \
     ! videoconvert ! videoscale ! "video/x-raw,width=640,height=480" \
     ! tee name=t \
-    t. ! queue ! pyml_depth model-name=depth-anything/Depth-Anything-V2-Small-hf device=cuda ! videoconvert ! autovideosink sync=false \
+    t. ! queue ! mp_depth model-name=depth-anything/Depth-Anything-V2-Small-hf device=cuda ! videoconvert ! autovideosink sync=false \
     t. ! queue ! videoconvert ! autovideosink sync=false
 ```
 
 ### Zero-Shot Classification (CLIP / SigLIP)
 
-`pyml_clip` classifies each frame against the text labels you pass.
+`mp_clip` classifies each frame against the text labels you pass.
 
 Supported models:
 ```
@@ -796,34 +796,34 @@ google/siglip-large-patch16-384    (SigLIP large)
 #### CLIP with custom labels
 
 ```
-python pyml-launch.py filesrc location=data/people.mp4 ! decodebin name=d \
+python mp-launch.py filesrc location=data/people.mp4 ! decodebin name=d \
   d. ! queue \
     ! videoconvert ! videoscale ! "video/x-raw,width=640,height=480" \
-    ! pyml_clip model-name=openai/clip-vit-base-patch32 device=cuda \
+    ! mp_clip model-name=openai/clip-vit-base-patch32 device=cuda \
               labels="person, bicycle, car, dog, cat" top-k=3 \
-    ! videoconvert ! pyml_overlay ! videoconvert ! autovideosink sync=false
+    ! videoconvert ! mp_overlay ! videoconvert ! autovideosink sync=false
 ```
 
 #### SigLIP (better zero-shot accuracy than CLIP)
 
 ```
-python pyml-launch.py filesrc location=data/people.mp4 ! decodebin name=d \
+python mp-launch.py filesrc location=data/people.mp4 ! decodebin name=d \
   d. ! queue \
     ! videoconvert ! videoscale ! "video/x-raw,width=640,height=480" \
-    ! pyml_clip model-name=google/siglip-base-patch16-224 device=cuda \
+    ! mp_clip model-name=google/siglip-base-patch16-224 device=cuda \
               labels="people walking, empty street, crowd, indoor scene" top-k=1 \
-    ! videoconvert ! pyml_overlay ! videoconvert ! autovideosink sync=false
+    ! videoconvert ! mp_overlay ! videoconvert ! autovideosink sync=false
 ```
 
 #### CLIP with threshold (only report labels above 20% confidence)
 
 ```
-python pyml-launch.py filesrc location=data/people.mp4 ! decodebin name=d \
+python mp-launch.py filesrc location=data/people.mp4 ! decodebin name=d \
   d. ! queue \
     ! videoconvert ! videoscale ! "video/x-raw,width=640,height=480" \
-    ! pyml_clip model-name=openai/clip-vit-base-patch32 device=cuda \
+    ! mp_clip model-name=openai/clip-vit-base-patch32 device=cuda \
               labels="person, bicycle, car, dog, cat" threshold=0.2 \
-    ! videoconvert ! pyml_overlay ! videoconvert ! autovideosink sync=false
+    ! videoconvert ! mp_overlay ! videoconvert ! autovideosink sync=false
 ```
 
 ### Voice Activity Detection
@@ -831,28 +831,28 @@ python pyml-launch.py filesrc location=data/people.mp4 ! decodebin name=d \
 #### Standalone VAD with metadata (pass-through, speech probability attached to buffers)
 
 ```
-python pyml-launch.py pulsesrc ! audio/x-raw,format=S16LE,rate=16000,channels=1 ! pyml_vad threshold=0.7 ! fakesink
+python mp-launch.py pulsesrc ! audio/x-raw,format=S16LE,rate=16000,channels=1 ! mp_vad threshold=0.7 ! fakesink
 ```
 
-`pyml_whispertranscribe` has its own VAD to split speech into clips, so `pyml_vad` is not needed in front of it.
+`mp_whispertranscribe` has its own VAD to split speech into clips, so `mp_vad` is not needed in front of it.
 
 ### Transcription
 
 Transcripts are logged at GStreamer info level. Run with `GST_DEBUG=python:4` to see them.
 
-`pyml_whispertranscribe` runs faster-whisper on the PyTorch engine. With
+`mp_whispertranscribe` runs faster-whisper on the PyTorch engine. With
 `engine-name=onnx` it builds the Hugging Face checkpoint for onnxruntime-genai,
 and with `engine-name=openvino` it exports it for openvino-genai, each once into
-`~/.cache/gst-python-ml/`. `engine-name=llamacpp` downloads the whisper.cpp ggml
+`~/.cache/modelpipe/`. `engine-name=llamacpp` downloads the whisper.cpp ggml
 file of the same size, and `engine-name=mlx` the mlx-community conversion. A size
 name such as `medium` means `openai/whisper-medium` on those engines.
 
 ```
-python pyml-launch.py filesrc location=data/air_traffic_korean_with_english.wav ! decodebin ! audioconvert ! pyml_whispertranscribe engine-name=onnx device=cpu language=ko ! fakesink
+python mp-launch.py filesrc location=data/air_traffic_korean_with_english.wav ! decodebin ! audioconvert ! mp_whispertranscribe engine-name=onnx device=cpu language=ko ! fakesink
 ```
 
 ```
-python pyml-launch.py filesrc location=data/air_traffic_korean_with_english.wav ! decodebin ! audioconvert ! pyml_whispertranscribe engine-name=openvino device=cpu language=ko ! fakesink
+python mp-launch.py filesrc location=data/air_traffic_korean_with_english.wav ! decodebin ! audioconvert ! mp_whispertranscribe engine-name=openvino device=cpu language=ko ! fakesink
 ```
 
 faster-whisper's CTranslate2 wheel loads CUDA 12 cuBLAS. With a CUDA 13 torch install, add it to the venv and the loader path. On Linux:
@@ -869,11 +869,11 @@ On Windows add the same package's `bin` directory to `PATH` instead.
 `pulsesrc` works on PulseAudio (Ubuntu) and on PipeWire's Pulse server (Fedora). `pipewiresrc` does not work with GStreamer 1.26 (PipeWire 1.4): it stalls after a few buffers even into `fakesink`, because its buffer timestamps and the clock it provides disagree and GstBaseSrc's clock wait hangs. `do-timestamp=true` helps but is not consistent.
 
 ```
-python pyml-launch.py pulsesrc ! audioconvert ! audioresample ! audio/x-raw,format=S16LE,rate=16000,channels=1 ! pyml_whispertranscribe device=cuda language=en ! fakesink
+python mp-launch.py pulsesrc ! audioconvert ! audioresample ! audio/x-raw,format=S16LE,rate=16000,channels=1 ! mp_whispertranscribe device=cuda language=en ! fakesink
 ```
 
 ```
-python pyml-launch.py pipewiresrc do-timestamp=true ! audioconvert ! audioresample ! audio/x-raw,format=S16LE,rate=16000,channels=1 ! pyml_whispertranscribe device=cuda language=en ! fakesink
+python mp-launch.py pipewiresrc do-timestamp=true ! audioconvert ! audioresample ! audio/x-raw,format=S16LE,rate=16000,channels=1 ! mp_whispertranscribe device=cuda language=en ! fakesink
 ```
 
 If nothing is transcribed, check which port the source captures from with `pactl list sources | grep "Active Port"`. Laptop combo jacks often report a plugged-in headset mic as not available and keep the internal mic. Force it with `pactl set-source-port <source> analog-input-mic`. On PipeWire, WirePlumber then drops that source as the default, so name it: `pulsesrc device=<source>` or `pipewiresrc target-object=<source>`. On Windows and macOS use `autoaudiosrc` and pick the input device in the OS sound settings.
@@ -881,19 +881,19 @@ If nothing is transcribed, check which port the source captures from with `pactl
 #### transcription with initial prompt set
 
 ```
-python pyml-launch.py filesrc location=data/air_traffic_korean_with_english.wav ! decodebin ! audioconvert ! pyml_whispertranscribe device=cuda language=ko initial_prompt = "Air Traffic Control은, radar systems를,  weather conditions에, flight paths를, communication은, unexpected weather conditions가, continuous training을, dedication과, professionalism" ! fakesink
+python mp-launch.py filesrc location=data/air_traffic_korean_with_english.wav ! decodebin ! audioconvert ! mp_whispertranscribe device=cuda language=ko initial_prompt = "Air Traffic Control은, radar systems를,  weather conditions에, flight paths를, communication은, unexpected weather conditions가, continuous training을, dedication과, professionalism" ! fakesink
 ```
 
 #### translation to English
 
 ```
-python pyml-launch.py filesrc location=data/air_traffic_korean_with_english.wav ! decodebin ! audioconvert ! pyml_whispertranscribe device=cuda language=ko translate=yes ! fakesink
+python mp-launch.py filesrc location=data/air_traffic_korean_with_english.wav ! decodebin ! audioconvert ! mp_whispertranscribe device=cuda language=ko translate=yes ! fakesink
 ```
 
 #### demucs audio separation
 
 ```
-python pyml-launch.py filesrc location=data/air_traffic_korean_with_english.wav ! decodebin ! audioconvert ! audioresample ! pyml_demucs device=cuda ! wavenc ! filesink location=separated_vocals.wav
+python mp-launch.py filesrc location=data/air_traffic_korean_with_english.wav ! decodebin ! audioconvert ! audioresample ! mp_demucs device=cuda ! wavenc ! filesink location=separated_vocals.wav
 ```
 
 #### sepformer audio separation
@@ -901,20 +901,20 @@ python pyml-launch.py filesrc location=data/air_traffic_korean_with_english.wav 
 `stem` picks the output, `vocals` by default.
 
 ```
-python pyml-launch.py filesrc location=data/air_traffic_korean_with_english.wav ! decodebin ! audioconvert ! audioresample ! pyml_sepformer device=cuda ! wavenc ! filesink location=separated_vocals.wav
+python mp-launch.py filesrc location=data/air_traffic_korean_with_english.wav ! decodebin ! audioconvert ! audioresample ! mp_sepformer device=cuda ! wavenc ! filesink location=separated_vocals.wav
 ```
 
 
 #### whisperspeechtts
 
 ```
-python pyml-launch.py filesrc location=data/air_traffic_korean_with_english.wav ! decodebin ! audioconvert ! pyml_whispertranscribe device=cuda language=ko translate=yes ! pyml_whisperspeechtts device=cuda ! audioconvert ! wavenc ! filesink location=output_audio.wav
+python mp-launch.py filesrc location=data/air_traffic_korean_with_english.wav ! decodebin ! audioconvert ! mp_whispertranscribe device=cuda language=ko translate=yes ! mp_whisperspeechtts device=cuda ! audioconvert ! wavenc ! filesink location=output_audio.wav
 ```
 
 #### mariantranslate
 
 ```
-python pyml-launch.py filesrc location=data/air_traffic_korean_with_english.wav ! decodebin ! audioconvert ! pyml_whispertranscribe device=cuda language=ko translate=yes ! pyml_mariantranslate device=cuda model-name=Helsinki-NLP/opus-mt-en-fr ! fakesink
+python mp-launch.py filesrc location=data/air_traffic_korean_with_english.wav ! decodebin ! audioconvert ! mp_whispertranscribe device=cuda language=ko translate=yes ! mp_mariantranslate device=cuda model-name=Helsinki-NLP/opus-mt-en-fr ! fakesink
 ```
 
 `model-name` is the Hugging Face model id. `Helsinki-NLP/opus-mt-en-fr` is English to French. There is no `Helsinki-NLP/opus-mt-en-ko`. English to Korean is `Helsinki-NLP/opus-mt-tc-big-en-ko`.
@@ -922,13 +922,13 @@ python pyml-launch.py filesrc location=data/air_traffic_korean_with_english.wav 
 `opus-mt-en-fr` lists its English pieces in `vocab.json` and the element uses those ids. `opus-mt-tc-big-en-ko` lists Korean pieces there, so the element encodes the English with the source SentencePiece ids. On CUDA, "Air Traffic Control is the key element of modern aviation industry." is "Le contrôle du trafic aérien est l'élément clé de l'industrie aéronautique moderne." in French and "항공 교통 통제는 현대 항공 산업의 핵심 요소입니다." in Korean.
 
 ```
-python pyml-launch.py filesrc location=data/air_traffic_korean_with_english.wav ! decodebin ! audioconvert ! pyml_whispertranscribe device=cuda language=ko translate=yes ! pyml_mariantranslate device=cuda model-name=Helsinki-NLP/opus-mt-tc-big-en-ko ! fakesink
+python mp-launch.py filesrc location=data/air_traffic_korean_with_english.wav ! decodebin ! audioconvert ! mp_whispertranscribe device=cuda language=ko translate=yes ! mp_mariantranslate device=cuda model-name=Helsinki-NLP/opus-mt-tc-big-en-ko ! fakesink
 ```
 
 
 #### whisperlive
 
-`python pyml-launch.py filesrc location=data/air_traffic_korean_with_english.wav ! decodebin ! audioconvert ! pyml_whisperlive device=cuda language=ko translate=yes llm-model-name="Qwen/Qwen2.5-0.5B-Instruct" ! audioconvert ! wavenc ! filesink location=output_audio.wav`
+`python mp-launch.py filesrc location=data/air_traffic_korean_with_english.wav ! decodebin ! audioconvert ! mp_whisperlive device=cuda language=ko translate=yes llm-model-name="Qwen/Qwen2.5-0.5B-Instruct" ! audioconvert ! wavenc ! filesink location=output_audio.wav`
 
 With more than 6 GB of GPU memory, `llm-model-name="microsoft/phi-2"` also works well. On a 6 GB card it runs out of memory next to whisper and WhisperSpeech.
 
@@ -936,24 +936,24 @@ With more than 6 GB of GPU memory, `llm-model-name="microsoft/phi-2"` also works
 
 Gated models need `hf auth login` first.
 
-`python pyml-launch.py filesrc location=data/prompt_for_llm.txt !  pyml_llm device=cuda model-name="microsoft/phi-2" ! fakesink`
+`python mp-launch.py filesrc location=data/prompt_for_llm.txt !  mp_llm device=cuda model-name="microsoft/phi-2" ! fakesink`
 
-`pyml_llm` takes the Hugging Face name on `engine-name=pytorch`, `onnx` and
+`mp_llm` takes the Hugging Face name on `engine-name=pytorch`, `onnx` and
 `openvino`. On `onnx` the first run builds the model once with
-onnxruntime-genai into `~/.cache/gst-python-ml/onnx-genai/`, int4 weights for
+onnxruntime-genai into `~/.cache/modelpipe/onnx-genai/`, int4 weights for
 `device=cpu` and fp16 for `device=cuda`. On `openvino` the first run exports it
-once with optimum-intel into `~/.cache/gst-python-ml/openvino-genai/` with int4
+once with optimum-intel into `~/.cache/modelpipe/openvino-genai/` with int4
 weights, and openvino-genai runs it. `engine-name=mlx` takes an mlx-lm model
 and `engine-name=llamacpp` a `.gguf`, as a file or as a Hub repo with its
 quant, `Qwen/Qwen3-0.6B-GGUF:Q8_0`.
 
-`python pyml-launch.py filesrc location=data/prompt_for_llm.txt ! pyml_llm engine-name=onnx device=cpu model-name="Qwen/Qwen3-0.6B" ! fakesink`
+`python mp-launch.py filesrc location=data/prompt_for_llm.txt ! mp_llm engine-name=onnx device=cpu model-name="Qwen/Qwen3-0.6B" ! fakesink`
 
-`python pyml-launch.py filesrc location=data/prompt_for_llm.txt ! pyml_llm engine-name=openvino device=cpu model-name="Qwen/Qwen3-0.6B" ! fakesink`
+`python mp-launch.py filesrc location=data/prompt_for_llm.txt ! mp_llm engine-name=openvino device=cpu model-name="Qwen/Qwen3-0.6B" ! fakesink`
 
 #### Remote LLM
 
-`pyml_llm_remote` posts text to an LLM server. The OpenAI-compatible
+`mp_llm_remote` posts text to an LLM server. The OpenAI-compatible
 `/v1/chat/completions` path works against Ollama, llama.cpp and vLLM. Without
 `url=` it uses Ollama's native `/api/generate`, and it picks the request format
 from the path.
@@ -961,9 +961,9 @@ from the path.
 ##### Basic call
 
 ```
-python pyml-launch.py filesrc location=data/prompt_for_llm.txt \
+python mp-launch.py filesrc location=data/prompt_for_llm.txt \
   ! "text/x-raw,format=utf8" \
-  ! pyml_llm_remote url=http://localhost:11434/v1/chat/completions \
+  ! mp_llm_remote url=http://localhost:11434/v1/chat/completions \
     model-name=llama3 \
   ! fakesink
 ```
@@ -971,9 +971,9 @@ python pyml-launch.py filesrc location=data/prompt_for_llm.txt \
 ##### With a system prompt and a custom model
 
 ```
-python pyml-launch.py filesrc location=data/prompt_for_llm.txt \
+python mp-launch.py filesrc location=data/prompt_for_llm.txt \
   ! "text/x-raw,format=utf8" \
-  ! pyml_llm_remote url=http://localhost:11434/v1/chat/completions \
+  ! mp_llm_remote url=http://localhost:11434/v1/chat/completions \
     model-name=qwen3:8b \
     system-prompt="You are a helpful assistant. Answer concisely." \
     temperature=0.5 \
@@ -982,32 +982,32 @@ python pyml-launch.py filesrc location=data/prompt_for_llm.txt \
 
 ### Incident Digest
 
-`pyml_digest` collects the text buffers of a time window into one text buffer,
-so `pyml_llm` summarises half a minute of captions rather than a single line.
+`mp_digest` collects the text buffers of a time window into one text buffer,
+so `mp_llm` summarises half a minute of captions rather than a single line.
 The window closes when a buffer's timestamp passes it, and the open window is
 flushed at end of stream.
 
 ```
-python pyml-launch.py filesrc location=data/soccer_single_camera.mp4 ! decodebin ! videoconvertscale ! video/x-raw,width=640,height=480 ! tee name=t t. ! queue ! textoverlay name=overlay wait-text=false ! videoconvert ! autovideosink t. ! queue leaky=2 max-size-buffers=1 ! videoconvertscale ! video/x-raw,width=240,height=180 ! pyml_caption_qwen device=cuda:0 prompt="In one sentence, describe what you see?" model-name="Qwen/Qwen2.5-VL-3B-Instruct-AWQ" name=cap cap.src ! fakesink async=0 sync=0 cap.text_src ! queue ! pyml_digest window-seconds=30 ! pyml_llm model-name="Qwen/Qwen3-0.6B" device=cuda system-prompt="You receive every caption of the last thirty seconds. Write one paragraph describing what happened, and NEVER mention the specific times." ! queue ! overlay.text_sink
+python mp-launch.py filesrc location=data/soccer_single_camera.mp4 ! decodebin ! videoconvertscale ! video/x-raw,width=640,height=480 ! tee name=t t. ! queue ! textoverlay name=overlay wait-text=false ! videoconvert ! autovideosink t. ! queue leaky=2 max-size-buffers=1 ! videoconvertscale ! video/x-raw,width=240,height=180 ! mp_caption_qwen device=cuda:0 prompt="In one sentence, describe what you see?" model-name="Qwen/Qwen2.5-VL-3B-Instruct-AWQ" name=cap cap.src ! fakesink async=0 sync=0 cap.text_src ! queue ! mp_digest window-seconds=30 ! mp_llm model-name="Qwen/Qwen3-0.6B" device=cuda system-prompt="You receive every caption of the last thirty seconds. Write one paragraph describing what happened, and NEVER mention the specific times." ! queue ! overlay.text_sink
 ```
 
 ### Stable Diffusion
 
-`python pyml-launch.py filesrc location=data/prompt_for_stable_diffusion.txt ! pyml_stablediffusion device=cuda ! pngenc ! filesink location=output_image.png`
+`python mp-launch.py filesrc location=data/prompt_for_stable_diffusion.txt ! mp_stablediffusion device=cuda ! pngenc ! filesink location=output_image.png`
 
 ### Caption
 
-`pyml_caption_qwen` captions frames with Qwen2.5-VL, `pyml_caption_phi` with
+`mp_caption_qwen` captions frames with Qwen2.5-VL, `mp_caption_phi` with
 Phi-3.5-vision. Here `coalescehistory` hands the last ten captions to an LLM for a
 running summary:
 
 ```
-python pyml-launch.py filesrc location=data/soccer_single_camera.mp4 ! decodebin ! videoconvertscale ! video/x-raw,width=640,height=480 ! tee name=t t. ! queue ! textoverlay name=overlay wait-text=false ! videoconvert ! autovideosink t. ! queue leaky=2 max-size-buffers=1 ! videoconvertscale ! video/x-raw,width=240,height=180 ! pyml_caption_qwen device=cuda:0 prompt="In one sentence, describe what you see?" model-name="Qwen/Qwen2.5-VL-3B-Instruct-AWQ" name=cap cap.src ! fakesink async=0 sync=0 cap.text_src ! queue ! coalescehistory history-length=10 ! pyml_llm model-name="Qwen/Qwen3-0.6B" device=cuda system-prompt="You receive the history of what happened in recent times, summarize it nicely with excitement but NEVER mention the specific times. Focus on the most recent events." ! queue ! overlay.text_sink
+python mp-launch.py filesrc location=data/soccer_single_camera.mp4 ! decodebin ! videoconvertscale ! video/x-raw,width=640,height=480 ! tee name=t t. ! queue ! textoverlay name=overlay wait-text=false ! videoconvert ! autovideosink t. ! queue leaky=2 max-size-buffers=1 ! videoconvertscale ! video/x-raw,width=240,height=180 ! mp_caption_qwen device=cuda:0 prompt="In one sentence, describe what you see?" model-name="Qwen/Qwen2.5-VL-3B-Instruct-AWQ" name=cap cap.src ! fakesink async=0 sync=0 cap.text_src ! queue ! coalescehistory history-length=10 ! mp_llm model-name="Qwen/Qwen3-0.6B" device=cuda system-prompt="You receive the history of what happened in recent times, summarize it nicely with excitement but NEVER mention the specific times. Focus on the most recent events." ! queue ! overlay.text_sink
 ```
 
 ### Kafka Sink
 
-`pyml_kafkasink` needs a broker. Create a docker network and add `--network kafka-network`
+`mp_kafkasink` needs a broker. Create a docker network and add `--network kafka-network`
 to the `docker run` line in [INSTALL.md](INSTALL.md#run-docker-container) so a containerised pipeline reaches it:
 
 ```
@@ -1049,66 +1049,66 @@ docker exec -it kafka kafka-console-consumer --bootstrap-server kafka:9092 --top
 
 ### Overlay from a metadata file
 
-`pyml_metareplay` attaches the detections a `pyml_metasink` recorded, so `pyml_overlay` and `pyml_overlay_counter` draw them with no model in the pipeline.
+`mp_metareplay` attaches the detections a `mp_metasink` recorded, so `mp_overlay` and `mp_overlay_counter` draw them with no model in the pipeline.
 
-`python pyml-launch.py filesrc location=data/people.mp4 ! decodebin ! videoconvert ! videoscale ! video/x-raw,width=640,height=480 ! pyml_metareplay location=data/people.jsonl ! pyml_tracker tracker-type=sort ! pyml_overlay tracking=true ! videoconvert ! autovideosink`
+`python mp-launch.py filesrc location=data/people.mp4 ! decodebin ! videoconvert ! videoscale ! video/x-raw,width=640,height=480 ! mp_metareplay location=data/people.jsonl ! mp_tracker tracker-type=sort ! mp_overlay tracking=true ! videoconvert ! autovideosink`
 
-`python pyml-launch.py filesrc location=data/people.mp4 ! decodebin ! videoconvert ! videoscale ! video/x-raw,width=640,height=480 ! pyml_metareplay location=data/people.jsonl ! pyml_tracker tracker-type=sort ! pyml_overlay_counter tracking=true ! videoconvert ! autovideosink`
+`python mp-launch.py filesrc location=data/people.mp4 ! decodebin ! videoconvert ! videoscale ! video/x-raw,width=640,height=480 ! mp_metareplay location=data/people.jsonl ! mp_tracker tracker-type=sort ! mp_overlay_counter tracking=true ! videoconvert ! autovideosink`
 
 
 ### Stream Mux and Demux
 
 ```
- python pyml-launch.py   videotestsrc pattern=ball ! video/x-raw, width=320, height=240 ! queue ! pyml_streammux name=mux   videotestsrc pattern=smpte ! video/x-raw, width=320, height=240 ! queue ! mux.sink_1   videotestsrc pattern=smpte ! video/x-raw, width=320, height=240 ! queue ! mux.sink_2   mux.src ! queue ! pyml_streamdemux name=demux   demux.src_0 ! queue ! glimagesink  demux.src_1 ! queue ! glimagesink   demux.src_2 ! queue  ! glimagesink
+ python mp-launch.py   videotestsrc pattern=ball ! video/x-raw, width=320, height=240 ! queue ! mp_streammux name=mux   videotestsrc pattern=smpte ! video/x-raw, width=320, height=240 ! queue ! mux.sink_1   videotestsrc pattern=smpte ! video/x-raw, width=320, height=240 ! queue ! mux.sink_2   mux.src ! queue ! mp_streamdemux name=demux   demux.src_0 ! queue ! glimagesink  demux.src_1 ! queue ! glimagesink   demux.src_2 ! queue  ! glimagesink
 ```
 
 ### Segment Anything (SAM)
 
-`pyml_sam` runs SAM2 with point, box or automatic prompts.
+`mp_sam` runs SAM2 with point, box or automatic prompts.
 
 #### Auto-mask segmentation (segment everything)
 
 ```
-python pyml-launch.py filesrc location=data/people.mp4 ! decodebin name=d \
+python mp-launch.py filesrc location=data/people.mp4 ! decodebin name=d \
   d. ! queue ! videoconvert ! videoscale ! "video/x-raw,width=640,height=480" \
-  ! pyml_sam model-name=facebook/sam2-hiera-small device=cuda mode=auto \
+  ! mp_sam model-name=facebook/sam2-hiera-small device=cuda mode=auto \
   ! videoconvert ! autovideosink sync=false
 ```
 
 #### Point-prompt segmentation (segment object at center)
 
 ```
-python pyml-launch.py filesrc location=data/people.mp4 ! decodebin name=d \
+python mp-launch.py filesrc location=data/people.mp4 ! decodebin name=d \
   d. ! queue ! videoconvert ! videoscale ! "video/x-raw,width=640,height=480" \
-  ! pyml_sam model-name=facebook/sam2-hiera-small device=cuda \
+  ! mp_sam model-name=facebook/sam2-hiera-small device=cuda \
             mode=points max-masks=10 \
   ! videoconvert ! autovideosink sync=false
 ```
 
 ### OCR
 
-`pyml_ocr` recognizes text with TrOCR and appends it as a `GST-OCR:` chunk.
+`mp_ocr` recognizes text with TrOCR and appends it as a `GST-OCR:` chunk.
 
 #### TrOCR recognition
 
 ```
-python pyml-launch.py filesrc location=data/document.mp4 ! decodebin name=d \
+python mp-launch.py filesrc location=data/document.mp4 ! decodebin name=d \
   d. ! queue ! videoconvert ! videoscale ! "video/x-raw,width=640,height=480" \
-  ! pyml_ocr model-name=microsoft/trocr-base-printed device=cuda \
-  ! videoconvert ! pyml_overlay ! videoconvert ! autovideosink sync=false
+  ! mp_ocr model-name=microsoft/trocr-base-printed device=cuda \
+  ! videoconvert ! mp_overlay ! videoconvert ! autovideosink sync=false
 ```
 
 ### Face Detection & Recognition
 
-`pyml_face` detects faces with RetinaFace and names them from ArcFace embeddings of a gallery.
+`mp_face` detects faces with RetinaFace and names them from ArcFace embeddings of a gallery.
 
 #### Face detection only
 
 ```
-python pyml-launch.py filesrc location=data/people.mp4 ! decodebin name=d \
+python mp-launch.py filesrc location=data/people.mp4 ! decodebin name=d \
   d. ! queue ! videoconvert ! videoscale ! "video/x-raw,width=640,height=480" \
-  ! pyml_face model-name=buffalo_l device=cuda \
-  ! videoconvert ! pyml_overlay ! videoconvert ! autovideosink sync=false
+  ! mp_face model-name=buffalo_l device=cuda \
+  ! videoconvert ! mp_overlay ! videoconvert ! autovideosink sync=false
 ```
 
 #### Face detection + recognition with gallery
@@ -1116,96 +1116,96 @@ python pyml-launch.py filesrc location=data/people.mp4 ! decodebin name=d \
 `gallery-path` holds one image per person, named after them. Without it faces are detected but not named.
 
 ```
-python pyml-launch.py filesrc location=data/people.mp4 ! decodebin name=d \
+python mp-launch.py filesrc location=data/people.mp4 ! decodebin name=d \
   d. ! queue ! videoconvert ! videoscale ! "video/x-raw,width=640,height=480" \
-  ! pyml_face model-name=buffalo_l device=cuda gallery-path=data/face_gallery/ threshold=0.6 \
-  ! videoconvert ! pyml_overlay ! videoconvert ! autovideosink sync=false
+  ! mp_face model-name=buffalo_l device=cuda gallery-path=data/face_gallery/ threshold=0.6 \
+  ! videoconvert ! mp_overlay ! videoconvert ! autovideosink sync=false
 ```
 
 ### Optical Flow
 
-`pyml_optical_flow` runs RAFT between consecutive frames.
+`mp_optical_flow` runs RAFT between consecutive frames.
 
 #### RAFT optical flow with color visualization
 
 ```
-python pyml-launch.py filesrc location=data/people.mp4 ! decodebin name=d \
+python mp-launch.py filesrc location=data/people.mp4 ! decodebin name=d \
   d. ! queue ! videoconvert ! videoscale ! "video/x-raw,width=640,height=480" \
-  ! pyml_optical_flow model-name=raft_small device=cuda visualize=true \
+  ! mp_optical_flow model-name=raft_small device=cuda visualize=true \
   ! videoconvert ! autovideosink sync=false
 ```
 
 ### Super-Resolution
 
-`pyml_superres` upscales with Real-ESRGAN.
+`mp_superres` upscales with Real-ESRGAN.
 
 #### 2x upscale
 
 ```
-python pyml-launch.py filesrc location=data/people.mp4 ! decodebin name=d \
+python mp-launch.py filesrc location=data/people.mp4 ! decodebin name=d \
   d. ! queue ! videoconvert ! videoscale ! "video/x-raw,width=320,height=240" \
-  ! pyml_superres model-name=real-esrgan-x2 device=cuda \
+  ! mp_superres model-name=real-esrgan-x2 device=cuda \
   ! videoconvert ! autovideosink sync=false
 ```
 
 #### 4x upscale
 
 ```
-python pyml-launch.py filesrc location=data/people.mp4 ! decodebin name=d \
+python mp-launch.py filesrc location=data/people.mp4 ! decodebin name=d \
   d. ! queue ! videoconvert ! videoscale ! "video/x-raw,width=320,height=240" \
-  ! pyml_superres model-name=real-esrgan-x4 device=cuda \
+  ! mp_superres model-name=real-esrgan-x4 device=cuda \
   ! videoconvert ! autovideosink sync=false
 ```
 
 ### Action Recognition
 
-`pyml_action` classifies the action in a sliding window of frames.
+`mp_action` classifies the action in a sliding window of frames.
 
 #### VideoMAE action recognition
 
 ```
-python pyml-launch.py filesrc location=data/people.mp4 ! decodebin name=d \
+python mp-launch.py filesrc location=data/people.mp4 ! decodebin name=d \
   d. ! queue ! videoconvert ! videoscale ! "video/x-raw,width=640,height=480" \
-  ! pyml_action model-name=MCG-NJU/videomae-base-finetuned-kinetics device=cuda num-frames=16 \
-  ! videoconvert ! pyml_overlay ! videoconvert ! autovideosink sync=false
+  ! mp_action model-name=MCG-NJU/videomae-base-finetuned-kinetics device=cuda num-frames=16 \
+  ! videoconvert ! mp_overlay ! videoconvert ! autovideosink sync=false
 ```
 
 ### Anomaly Detection
 
-`pyml_anomaly` scores frames against PatchCore features of normal ones in `reference-path`.
+`mp_anomaly` scores frames against PatchCore features of normal ones in `reference-path`.
 
 #### PatchCore anomaly detection
 
 ```
-python pyml-launch.py filesrc location=data/factory.mp4 ! decodebin name=d \
+python mp-launch.py filesrc location=data/factory.mp4 ! decodebin name=d \
   d. ! queue ! videoconvert ! videoscale ! "video/x-raw,width=640,height=480" \
-  ! pyml_anomaly device=cuda reference-path=data/factory_reference.npy threshold=0.5 \
+  ! mp_anomaly device=cuda reference-path=data/factory_reference.npy threshold=0.5 \
   ! videoconvert ! autovideosink sync=false
 ```
 
 ### Audio Classification (CLAP)
 
-`pyml_clap` classifies audio against the labels you pass with LAION CLAP.
+`mp_clap` classifies audio against the labels you pass with LAION CLAP.
 
 #### CLAP audio event detection
 
 ```
-python pyml-launch.py filesrc location=data/audio_sample.wav ! decodebin \
+python mp-launch.py filesrc location=data/audio_sample.wav ! decodebin \
   ! audioconvert ! audioresample ! audio/x-raw,format=F32LE,rate=48000,channels=1 \
-  ! pyml_clap device=cuda labels="gunshot,siren,baby crying,music,speech" threshold=0.3 \
+  ! mp_clap device=cuda labels="gunshot,siren,baby crying,music,speech" threshold=0.3 \
   ! fakesink
 ```
 
 ### Vision-Language Model (VLM)
 
-`pyml_vlm` answers `prompt` about each frame with a vision-language model such as LLaVA or SmolVLM.
+`mp_vlm` answers `prompt` about each frame with a vision-language model such as LLaVA or SmolVLM.
 
 #### SmolVLM visual question answering
 
 ```
-python pyml-launch.py filesrc location=data/people.mp4 ! decodebin name=d \
+python mp-launch.py filesrc location=data/people.mp4 ! decodebin name=d \
   d. ! queue ! videoconvert ! videoscale ! "video/x-raw,width=640,height=480" \
-  ! pyml_vlm model-name=HuggingFaceTB/SmolVLM-500M-Instruct device=cuda \
+  ! mp_vlm model-name=HuggingFaceTB/SmolVLM-500M-Instruct device=cuda \
             prompt="What is happening in this scene?" \
   ! fakesink
 ```
@@ -1215,7 +1215,7 @@ python pyml-launch.py filesrc location=data/people.mp4 ! decodebin name=d \
 ### Cascade Gating
 
 Every video element takes `only-on`, the name of a blob a frame has to carry
-before the element runs on it. `only-on=alert` runs on the frames `pyml_alert`
+before the element runs on it. `only-on=alert` runs on the frames `mp_alert`
 flagged, `only-on=detections` on the frames that carry at least one analytics
 object, and any other value names the blob an element attached under its own
 name (`depth`, `vlm`, ...). Frames without it pass through untouched, so a cheap
@@ -1224,10 +1224,10 @@ detector decides which frames an expensive model sees.
 #### VLM only on alerted frames
 
 The alert decides which frames the vision-language model sees. The same property
-works on `pyml_caption_qwen`, `pyml_depth` or any other video element.
+works on `mp_caption_qwen`, `mp_depth` or any other video element.
 
 ```
-python pyml-launch.py filesrc location=data/people.mp4 ! decodebin ! videoconvert ! videoscale ! video/x-raw,width=640,height=480 ! pyml_yolo model-name=yolo11m device=cuda ! pyml_alert rules='{"class":"person","min_score":0.8}' cooldown=5 draw-alert=false ! pyml_vlm model-name=HuggingFaceTB/SmolVLM-500M-Instruct device=cuda only-on=alert max-tokens=40 prompt="What is the person in the centre doing?" ! pyml_metasink location=people.jsonl
+python mp-launch.py filesrc location=data/people.mp4 ! decodebin ! videoconvert ! videoscale ! video/x-raw,width=640,height=480 ! mp_yolo model-name=yolo11m device=cuda ! mp_alert rules='{"class":"person","min_score":0.8}' cooldown=5 draw-alert=false ! mp_vlm model-name=HuggingFaceTB/SmolVLM-500M-Instruct device=cuda only-on=alert max-tokens=40 prompt="What is the person in the centre doing?" ! mp_metasink location=people.jsonl
 ```
 
 The g2g host hands a hosted element the frame's upstream detections and
@@ -1235,14 +1235,14 @@ blobs, so `only-on` gates the same way on both backends.
 
 ### Embedding Extractor
 
-`pyml_embedding` attaches a CLIP or DINOv2 embedding to each frame.
+`mp_embedding` attaches a CLIP or DINOv2 embedding to each frame.
 
 #### CLIP embedding extraction
 
 ```
-python pyml-launch.py filesrc location=data/people.mp4 ! decodebin name=d \
+python mp-launch.py filesrc location=data/people.mp4 ! decodebin name=d \
   d. ! queue ! videoconvert ! videoscale ! "video/x-raw,width=640,height=480" \
-  ! pyml_embedding model-name=openai/clip-vit-base-patch32 device=cuda \
+  ! mp_embedding model-name=openai/clip-vit-base-patch32 device=cuda \
             normalize=true \
   ! fakesink
 ```
@@ -1250,28 +1250,28 @@ python pyml-launch.py filesrc location=data/people.mp4 ! decodebin name=d \
 #### DINOv2 embeddings saved to file
 
 ```
-python pyml-launch.py filesrc location=data/people.mp4 ! decodebin name=d \
+python mp-launch.py filesrc location=data/people.mp4 ! decodebin name=d \
   d. ! queue ! videoconvert ! videoscale ! "video/x-raw,width=640,height=480" \
-  ! pyml_embedding model-name=facebook/dinov2-base device=cuda \
+  ! mp_embedding model-name=facebook/dinov2-base device=cuda \
             frame-stride=5 \
   ! fakesink
 ```
 
 ### Video Memory
 
-`pyml_embeddingsink` stores the vectors `pyml_embedding` produces in an sqlite
+`mp_embeddingsink` stores the vectors `mp_embedding` produces in an sqlite
 index, one row per embedded frame: its `pts` in seconds, the `source-id` you give
 the stream, and the embedding. Search it by text through the MCP server's
 `search_video`. One index holds one model, and the embedding blob does not carry
 the model name, so set `model-name` on the sink to the extractor's model.
 
 ```
-python pyml-launch.py filesrc location=data/people.mp4 ! decodebin ! videoconvert ! videoscale ! video/x-raw,width=640,height=480 ! pyml_embedding model-name=openai/clip-vit-base-patch32 device=cuda frame-stride=30 ! pyml_embeddingsink location=people.sqlite source-id=people model-name=openai/clip-vit-base-patch32
+python mp-launch.py filesrc location=data/people.mp4 ! decodebin ! videoconvert ! videoscale ! video/x-raw,width=640,height=480 ! mp_embedding model-name=openai/clip-vit-base-patch32 device=cuda frame-stride=30 ! mp_embeddingsink location=people.sqlite source-id=people model-name=openai/clip-vit-base-patch32
 ```
 
 ### Multi-Object Tracker
 
-`pyml_tracker` tracks the detections of any upstream detector. A detection
+`mp_tracker` tracks the detections of any upstream detector. A detection
 matches a track by box overlap (`iou-threshold`) or by centre distance within
 `distance-gate` box sizes, so small boxes that move their own width a frame
 keep their id. Before matching, a detection covered by more than
@@ -1282,32 +1282,32 @@ object that NMS kept. `camera-motion` re-matches leftovers after a pan.
 
 Use it instead of `track=true` on the detector, not as well as it. `track=true`
 runs ultralytics' BOTSORT inside the detector, about 8 ms a frame on the CPU
-with its optical-flow motion compensation, while `pyml_tracker` costs about
+with its optical-flow motion compensation, while `mp_tracker` costs about
 2 ms, so a pipeline with both tracks twice and pays for the slow one.
 
 #### YOLO + standalone SORT tracker
 
 ```
-python pyml-launch.py filesrc location=data/soccer_tracking.mp4 ! decodebin name=d \
+python mp-launch.py filesrc location=data/soccer_tracking.mp4 ! decodebin name=d \
   d. ! queue ! videoconvert ! videoscale ! "video/x-raw,width=640,height=480" \
-  ! pyml_objectdetector model-name=fasterrcnn_resnet50_fpn device=cuda \
-  ! pyml_tracker tracker-type=sort max-age=30 min-hits=3 iou-threshold=0.3 \
-  ! pyml_overlay ! videoconvert ! autovideosink sync=false
+  ! mp_objectdetector model-name=fasterrcnn_resnet50_fpn device=cuda \
+  ! mp_tracker tracker-type=sort max-age=30 min-hits=3 iou-threshold=0.3 \
+  ! mp_overlay ! videoconvert ! autovideosink sync=false
 ```
 
 ### ML Alert
 
-`pyml_alert` fires on upstream detections that match `rules`.
+`mp_alert` fires on upstream detections that match `rules`.
 
 #### Webhook alert on person detection
 
 ```
-python pyml-launch.py filesrc location=data/people.mp4 ! decodebin name=d \
+python mp-launch.py filesrc location=data/people.mp4 ! decodebin name=d \
   d. ! queue ! videoconvert ! videoscale ! "video/x-raw,width=640,height=480" \
-  ! pyml_objectdetector model-name=fasterrcnn_resnet50_fpn device=cuda \
-  ! pyml_alert rules='{"class":"person","min_score":0.8}' \
+  ! mp_objectdetector model-name=fasterrcnn_resnet50_fpn device=cuda \
+  ! mp_alert rules='{"class":"person","min_score":0.8}' \
               webhook-url=http://localhost:8080/alert cooldown=10 \
-  ! pyml_overlay ! videoconvert ! autovideosink sync=false
+  ! mp_overlay ! videoconvert ! autovideosink sync=false
 ```
 
 To authenticate the POST, set `webhook-token-environment-variable` to the name of
@@ -1319,17 +1319,17 @@ has no counterpart, so the launcher refuses the property under g2g.
 #### MQTT alert with zone filtering
 
 ```
-python pyml-launch.py filesrc location=data/people.mp4 ! decodebin name=d \
+python mp-launch.py filesrc location=data/people.mp4 ! decodebin name=d \
   d. ! queue ! videoconvert ! videoscale ! "video/x-raw,width=640,height=480" \
-  ! pyml_yolo model-name=yolo11m device=cuda \
-  ! pyml_alert rules='{"class":"person","min_score":0.7,"zone":[0,0,320,240]}' \
+  ! mp_yolo model-name=yolo11m device=cuda \
+  ! mp_alert rules='{"class":"person","min_score":0.7,"zone":[0,0,320,240]}' \
               mqtt-broker=localhost:1883 mqtt-topic=alerts/zone1 cooldown=5 \
-  ! pyml_overlay ! videoconvert ! autovideosink sync=false
+  ! mp_overlay ! videoconvert ! autovideosink sync=false
 ```
 
 ### Alert Recorder
 
-`pyml_alertrecorder` writes a clip around each alert that an upstream `pyml_alert`
+`mp_alertrecorder` writes a clip around each alert that an upstream `mp_alert`
 attached to the buffer. It keeps `seconds-before` of video in memory and records
 until `seconds-after` have passed since the last alert. `%s` in `location` is the
 time the alert fired. The default encoder is `vp8enc deadline=1 ! webmmux`. Set
@@ -1337,19 +1337,19 @@ time the alert fired. The default encoder is `vp8enc deadline=1 ! webmmux`. Set
 `encoder="x264enc tune=zerolatency ! mp4mux" location=alert-%s.mp4`.
 
 ```
-python pyml-launch.py filesrc location=data/people.mp4 ! decodebin ! videoconvert ! videoscale ! video/x-raw,width=640,height=480 ! pyml_yolo model-name=yolo11m device=cuda ! pyml_alert rules='{"class":"person","min_score":0.7}' cooldown=8 draw-alert=false ! pyml_alertrecorder location=alert-%s.webm seconds-before=2 seconds-after=3 ! pyml_overlay ! videoconvert ! autovideosink sync=false
+python mp-launch.py filesrc location=data/people.mp4 ! decodebin ! videoconvert ! videoscale ! video/x-raw,width=640,height=480 ! mp_yolo model-name=yolo11m device=cuda ! mp_alert rules='{"class":"person","min_score":0.7}' cooldown=8 draw-alert=false ! mp_alertrecorder location=alert-%s.webm seconds-before=2 seconds-after=3 ! mp_overlay ! videoconvert ! autovideosink sync=false
 ```
 
 ### Metadata Sink
 
-`pyml_metasink` writes one JSON line per buffer with whatever the pipeline knows
+`mp_metasink` writes one JSON line per buffer with whatever the pipeline knows
 about it: `pts` in seconds, `detections` from the analytics metadata, any JSON
 blob an element attached under its name (`alert`, `depth`, `vlm`, ...) and, for a
 text stream, `text`. Lines go to `location`, or to stdout when it is unset. Use a
 `tee` to keep a display alongside it.
 
 ```
-python pyml-launch.py filesrc location=data/people.mp4 ! decodebin ! videoconvert ! videoscale ! video/x-raw,width=640,height=480 ! pyml_yolo model-name=yolo11m device=cuda ! pyml_alert rules='{"class":"person","min_score":0.7}' draw-alert=false ! pyml_metasink location=people.jsonl
+python mp-launch.py filesrc location=data/people.mp4 ! decodebin ! videoconvert ! videoscale ! video/x-raw,width=640,height=480 ! mp_yolo model-name=yolo11m device=cuda ! mp_alert rules='{"class":"person","min_score":0.7}' draw-alert=false ! mp_metasink location=people.jsonl
 ```
 
 ```
@@ -1358,56 +1358,56 @@ python pyml-launch.py filesrc location=data/people.mp4 ! decodebin ! videoconver
 
 ### Metadata Replay
 
-`pyml_metareplay` reads a JSON lines file a `pyml_metasink` wrote and reattaches
+`mp_metareplay` reads a JSON lines file a `mp_metasink` wrote and reattaches
 each record to the frame at the same timestamp: `detections` become analytics
 metadata again, every other key becomes the blob it came from. A record matches a
 frame whose timestamp is within half a frame duration of it. Downstream
-`pyml_tracker`, `pyml_alert`, `pyml_overlay` and `pyml_alertrecorder` then run
+`mp_tracker`, `mp_alert`, `mp_overlay` and `mp_alertrecorder` then run
 with no model loaded. Record once, then rerun the rules as often as you like.
 
 Record once:
 
 ```
-python pyml-launch.py filesrc location=data/people.mp4 ! decodebin ! videoconvert ! videoscale ! video/x-raw,width=640,height=480 ! pyml_yolo model-name=yolo11m device=cuda confidence=0.5 ! pyml_metasink location=people.jsonl
+python mp-launch.py filesrc location=data/people.mp4 ! decodebin ! videoconvert ! videoscale ! video/x-raw,width=640,height=480 ! mp_yolo model-name=yolo11m device=cuda confidence=0.5 ! mp_metasink location=people.jsonl
 ```
 
 Then replay. `data/people.jsonl` is that recording, shipped so this line runs with
 no GPU at all:
 
 ```
-python pyml-launch.py filesrc location=data/people.mp4 ! decodebin ! videoconvert ! videoscale ! video/x-raw,width=640,height=480 ! pyml_metareplay location=data/people.jsonl ! pyml_tracker tracker-type=sort ! pyml_overlay ! videoconvert ! autovideosink sync=false
+python mp-launch.py filesrc location=data/people.mp4 ! decodebin ! videoconvert ! videoscale ! video/x-raw,width=640,height=480 ! mp_metareplay location=data/people.jsonl ! mp_tracker tracker-type=sort ! mp_overlay ! videoconvert ! autovideosink sync=false
 ```
 
 ## MCP Server
 
 `pyml-mcp` is an MCP server over stdio that runs the gst backend in-process, so an
 agent can start a pipeline, read its results and change a property while it runs.
-End every pipeline with a `pyml_metasink`, that is where records come from.
+End every pipeline with a `mp_metasink`, that is where records come from.
 
 - `start_pipeline`, `pipeline_status`, `stop_pipeline`, `set_property`, `get_property`, `list_elements`, `inspect`.
 - One pipeline runs at a time, `start_pipeline` stops the previous one. `loop=true` replays a file source when it ends.
-- `set_property` and `get_property` find an element by its name, so give the ones an agent should tune a `name=`, such as `pyml_yolo name=detector`.
+- `set_property` and `get_property` find an element by its name, so give the ones an agent should tune a `name=`, such as `mp_yolo name=detector`.
 - When the pipeline has an element named `record`, such as `filesink name=record`, `stop_pipeline` sends end of stream first so the mp4 it writes is playable.
 - `latest_metadata` returns the newest records, at most the last 1000. `wait_for_records` blocks until the sink posts new ones, optionally only those carrying a key such as `detections`.
-- `load_metadata` reads a JSON lines file a `pyml_metasink` wrote, so a finished run needs no pipeline.
+- `load_metadata` reads a JSON lines file a `mp_metasink` wrote, so a finished run needs no pipeline.
 - `engine_options` lists the engines and devices that run a model name or file, as `pyml-engines --json` prints them.
 - `latest_bus_messages` returns the newest element messages, warnings and QoS reports any element posted, such as `level` loudness or a sink dropping late frames, at most the last 1000. Debug logs never reach the bus. Errors in `pipeline_status` and warnings carry GStreamer's debug detail, such as `not-negotiated`.
 - `buffer_flow` counts the buffers each source pad pushed, with the rate while they flowed and the seconds since the last one. Data stops at the first pad whose count stopped growing. `latency_ms` is the element's recent average time from a buffer entering to it leaving, matched by timestamp, so an element that changes timestamps, such as an encoder, has none, and a `queue` shows how long buffers wait in it. It covers the pipeline's own elements, not the ones inside a bin such as `autovideosink`.
-- `snapshot_frame` returns the newest rendered frame as a JPEG. `describe_frame` captions it with the model `PYML_MCP_VLM_MODEL` names, `HuggingFaceTB/SmolVLM-500M-Instruct` by default.
-- `search_video` reads an index `pyml_embeddingsink` wrote and returns the frames closest to a description, embedded with the index's own model. That model has to embed text too, so build the index with CLIP, not DINOv2. `clip_at` cuts a webm around a pts, which turns a hit into a clip.
+- `snapshot_frame` returns the newest rendered frame as a JPEG. `describe_frame` captions it with the model `MP_MCP_VLM_MODEL` names, `HuggingFaceTB/SmolVLM-500M-Instruct` by default.
+- `search_video` reads an index `mp_embeddingsink` wrote and returns the frames closest to a description, embedded with the index's own model. That model has to embed text too, so build the index with CLIP, not DINOv2. `clip_at` cuts a webm around a pts, which turns a hit into a clip.
 - Every pipeline section of this file is a prompt named after it, such as `object_detection`.
 
-Models run on `PYML_MCP_DEVICE`, `cuda` when torch sees one, else `cpu`, where a
+Models run on `MP_MCP_DEVICE`, `cuda` when torch sees one, else `cpu`, where a
 caption takes tens of seconds.
 
 ```
 uv sync --extra mcp
-claude mcp add gst-python-ml -- /path/to/gst-python-ml/.venv/bin/pyml-mcp
+claude mcp add modelpipe -- /path/to/modelpipe/.venv/bin/pyml-mcp
 ```
 
-With `PYML_BACKEND=g2g`, `pyml-mcp` serves glass2glass's own MCP server from
+With `MP_BACKEND=g2g`, `pyml-mcp` serves glass2glass's own MCP server from
 `g2g-launch-py --mcp`, on `PATH` or at `G2G_LAUNCH`. It takes pipelines in
-the `gst-launch` spelling this file uses and rewrites them as `pyml-launch` does.
+the `gst-launch` spelling this file uses and rewrites them as `mp-launch` does.
 An element passed to `insert_transform` is rewritten on its own, so name its
 `format=` or `cuda-frames=true` yourself. The tools and prompts are g2g's. It has
 `latest_metadata`, `wait_for_records`, `load_metadata`, `snapshot_frame`,
@@ -1415,5 +1415,5 @@ An element passed to `insert_transform` is rewritten on its own, so name its
 `describe_frame`, `search_video` or prompts from this file.
 
 ```
-claude mcp add gst-python-ml-g2g -e PYML_BACKEND=g2g -- /path/to/gst-python-ml/.venv/bin/pyml-mcp
+claude mcp add modelpipe-g2g -e MP_BACKEND=g2g -- /path/to/modelpipe/.venv/bin/pyml-mcp
 ```

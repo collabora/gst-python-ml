@@ -8,13 +8,13 @@ RUN dnf install -y gcc python3-pip python3-devel cairo cairo-devel cairo-gobject
     gstreamer1-plugins-bad-free-devel python3-gstreamer1
 
 # Set some environment variables
-ENV GST_PLUGIN_PATH=/root/gst-python-ml/plugins
+ENV GST_PLUGIN_PATH=/root/modelpipe/plugins
 
 # allow Python to properly handle Unicode characters during logging.
 ENV PYTHONIOENCODING=utf-8
 
 # Set the working directory (optional)
-WORKDIR /root/gst-python-ml
+WORKDIR /root/modelpipe
 
 # Set the entry point to bash for interactive use
 CMD ["/bin/bash"]

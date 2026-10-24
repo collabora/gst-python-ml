@@ -26,7 +26,7 @@ try:
 except ImportError as e:
     CAN_REGISTER_ELEMENT = False
     GlobalLogger().warning(
-        f"The 'pyml_whisperlive' element will not be available. Error: {e}"
+        f"The 'mp_whisperlive' element will not be available. Error: {e}"
     )
 
 if backend.BACKEND == "gst":
@@ -200,9 +200,9 @@ class WhisperLive(BaseTranscribe):
 
 if CAN_REGISTER_ELEMENT and backend.BACKEND == "gst":
     __gstelementfactory__ = backend.register_gst_element(
-        "pyml_whisperlive", WhisperLive
+        "mp_whisperlive", WhisperLive
     )
 elif not CAN_REGISTER_ELEMENT:
     GlobalLogger().warning(
-        "The 'pyml_whisperlive' element will not be registered because required modules were missing."
+        "The 'mp_whisperlive' element will not be registered because required modules were missing."
     )

@@ -57,10 +57,10 @@ from embedding_index import EmbeddingIndex  # noqa: E402
 from engine import model_engines  # noqa: E402
 from log.logger_factory import LoggerFactory  # noqa: E402
 
-APPLICATION_NAME = "gst-python-ml"
-MODEL_DEVICE = os.environ.get("PYML_MCP_DEVICE", "")
-VLM_MODEL = os.environ.get("PYML_MCP_VLM_MODEL", "HuggingFaceTB/SmolVLM-500M-Instruct")
-ELEMENT_PREFIX = "pyml_"
+APPLICATION_NAME = "modelpipe"
+MODEL_DEVICE = os.environ.get("MP_MCP_DEVICE", "")
+VLM_MODEL = os.environ.get("MP_MCP_VLM_MODEL", "HuggingFaceTB/SmolVLM-500M-Instruct")
+ELEMENT_PREFIX = "mp_"
 RECENT_RECORDS = 1000
 RECENT_BUS_MESSAGES = 1000
 RECENT_LATENCIES = 30
@@ -86,9 +86,9 @@ PIPELINES_PATH = (
 
 server = MCPServer(
     APPLICATION_NAME,
-    version=version("gst-python-ml"),
+    version=version("modelpipe"),
     instructions=(
-        "Pipelines are gst-launch descriptions. End one with pyml_metasink to read "
+        "Pipelines are gst-launch descriptions. End one with mp_metasink to read "
         "its detections, transcripts and alerts back through latest_metadata."
     ),
 )
@@ -345,7 +345,7 @@ def serialized(spec, value):
 
 @server.tool(
     description="Start a pipeline from a gst-launch description, stopping any running one first. "
-    "End it with pyml_metasink so its results reach latest_metadata."
+    "End it with mp_metasink so its results reach latest_metadata."
 )
 def start_pipeline(pipeline: str, loop: bool = False) -> dict:
     stop_pipeline()
@@ -411,7 +411,7 @@ def stop_pipeline() -> dict:
 
 
 @server.tool(
-    description="The newest records pyml_metasink posted, oldest first: each has a pts in "
+    description="The newest records mp_metasink posted, oldest first: each has a pts in "
     "seconds plus detections, text, or a blob such as alert or depth."
 )
 def latest_metadata(count: int = 10) -> list[dict]:
@@ -462,7 +462,7 @@ def element_latencies() -> list[dict]:
 
 
 @server.tool(
-    description="Load the JSON lines a pyml_metasink wrote to a file as the current records, "
+    description="Load the JSON lines a mp_metasink wrote to a file as the current records, "
     "so latest_metadata and wait_for_records read a finished run with no pipeline running."
 )
 def load_metadata(path: str) -> dict:
@@ -490,7 +490,7 @@ def records_posted_since(posted_before, key):
 
 
 @server.tool(
-    description="Wait for pyml_metasink to post new records, oldest first, and return them "
+    description="Wait for mp_metasink to post new records, oldest first, and return them "
     "with the pipeline status. Give a key such as detections or alert to wait only for "
     "records carrying it. Returns whatever arrived when the pipeline ends, fails, or "
     "the timeout in seconds passes first."
@@ -522,7 +522,7 @@ def newest_frame(element):
     else:
         target = next(metadata_sinks(running_pipeline()), None)
         if target is None:
-            raise ToolError("the pipeline has no pyml_metasink to snapshot")
+            raise ToolError("the pipeline has no mp_metasink to snapshot")
     name = target.get_name()
     if target.find_property("last-sample") is None:
         raise ToolError(f"{name} has no last-sample property")
@@ -542,8 +542,8 @@ def converted_frame(name, sample, caps):
 
 
 @server.tool(
-    description="The newest frame a pyml_metasink rendered, as a JPEG image. Names a sink of "
-    "the running pipeline, or the first pyml_metasink when left empty."
+    description="The newest frame a mp_metasink rendered, as a JPEG image. Names a sink of "
+    "the running pipeline, or the first mp_metasink when left empty."
 )
 def snapshot_frame(element: str = "") -> Image:
     name, sample = newest_frame(element)
@@ -589,9 +589,9 @@ def vlm_engine(model_name):
 
 
 @server.tool(
-    description="Caption the newest frame a pyml_metasink rendered with a vision-language "
+    description="Caption the newest frame a mp_metasink rendered with a vision-language "
     "model, answering the prompt about it. Names a sink of the running pipeline, or the "
-    "first pyml_metasink when left empty. On cpu a caption takes tens of seconds."
+    "first mp_metasink when left empty. On cpu a caption takes tens of seconds."
 )
 def describe_frame(
     prompt: str = "Describe this image.", element: str = "", max_tokens: int = 64
@@ -628,7 +628,7 @@ def text_embedding_engine(model_name):
 
 
 @server.tool(
-    description="Search a video index written by pyml_embeddingsink for the frames a description "
+    description="Search a video index written by mp_embeddingsink for the frames a description "
     "matches, closest first: each result has a pts in seconds, the source_id of its "
     "stream, and a cosine similarity score."
 )
@@ -731,7 +731,7 @@ def get_property(element: str, property: str) -> str:
     return serialized(spec, target.get_property(property))
 
 
-@server.tool(description="The gst-python-ml elements this GStreamer can load.")
+@server.tool(description="The ModelPipe elements this GStreamer can load.")
 def list_elements() -> list[dict]:
     factories = Gst.Registry.get().get_feature_list(Gst.ElementFactory)
     return [
@@ -792,9 +792,9 @@ def prompt_name(heading):
 def section_prompt(heading, descriptions, repository):
     def pipeline_section():
         opening = (
-            f"These are the {heading} pipelines from gst-python-ml's PIPELINES.md. "
+            f"These are the {heading} pipelines from ModelPipe's PIPELINES.md. "
             "start_pipeline takes each line below as written, swap a display sink such as "
-            "autovideosink for pyml_metasink to read the results back, and file paths are "
+            "autovideosink for mp_metasink to read the results back, and file paths are "
             f"relative to {repository}."
         )
         return "\n".join([opening, *descriptions])

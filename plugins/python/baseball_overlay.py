@@ -394,5 +394,5 @@ class BaseballOverlay(InPlaceVideoTransform):
 
 if backend.BACKEND == "gst":
     __gstelementfactory__ = backend.register_gst_element(
-        "pyml_baseball_overlay", BaseballOverlay
+        "mp_baseball_overlay", BaseballOverlay
     )

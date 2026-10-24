@@ -73,6 +73,6 @@ docker build --build-arg PRODUCT="$PRODUCT" -t "$TAG" "$CTX"
 cat <<EOF
 
 Done. Start it with this repo mounted:
-  docker run -it --rm -v "\$PWD/../../..":/workspace/gst-python-ml $TAG bash
+  docker run -it --rm -v "\$PWD/../../..":/workspace/modelpipe $TAG bash
 Inside, compile + run per this folder's README.md.
 EOF

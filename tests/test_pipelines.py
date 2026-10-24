@@ -32,14 +32,14 @@ FATAL_LOG_PATTERNS = (
     re.compile(r"^\S+ +\S+ +\S+ +ERROR +python .*", re.MULTILINE),
     # g2g's own failures: the launcher's parse / run errors and the rewrite's.
     re.compile(r"^(?:parse|pipeline) error:.*", re.MULTILINE),
-    re.compile(r"^pyml-launch: (?:no|unknown) .*", re.MULTILINE),
+    re.compile(r"^mp-launch: (?:no|unknown) .*", re.MULTILINE),
 )
 
-BACKEND = os.environ.get("PYML_BACKEND", "gst").lower()
+BACKEND = os.environ.get("MP_BACKEND", "gst").lower()
 
 # The launcher the PIPELINES.md examples name. Runs from a tmp dir, so it is spelled
 # absolute here.
-LAUNCHER = f"python {BASE_DIR / 'pyml-launch.py'}"
+LAUNCHER = f"python {BASE_DIR / 'mp-launch.py'}"
 
 # small models on the cpu, no display or microphone
 HEADLESS = os.environ.get("HEADLESS_PIPELINES") == "1"
@@ -48,20 +48,20 @@ CAPTURE_SOURCES = ("pulsesrc", "pipewiresrc", "autoaudiosrc", "alsasrc", "v4l2sr
 EXPORTED_MODEL_MARKERS = ("engine-name=", "compile=True")
 # too large for a runner, or needing a server or a model file outside the repo
 HEAVY_ELEMENTS = (
-    "pyml_llm",
-    "pyml_stablediffusion",
-    "pyml_whisper",
-    "pyml_mariantranslate",
-    "pyml_caption_qwen",
-    "pyml_vlm",
-    "pyml_sam",
-    "pyml_kafkasink",
+    "mp_llm",
+    "mp_stablediffusion",
+    "mp_whisper",
+    "mp_mariantranslate",
+    "mp_caption_qwen",
+    "mp_vlm",
+    "mp_sam",
+    "mp_kafkasink",
     "demo_soccer",
-    "pyml_demucs",
-    "pyml_sepformer",
-    "pyml_superres",
-    "pyml_face",
-    "pyml_ocr",
+    "mp_demucs",
+    "mp_sepformer",
+    "mp_superres",
+    "mp_face",
+    "mp_ocr",
 )
 HEADLESS_SKIP_MARKERS = CAPTURE_SOURCES + EXPORTED_MODEL_MARKERS + HEAVY_ELEMENTS
 DISPLAY_SINK_PATTERN = re.compile(r"\b(?:autovideosink|glimagesink)\b")
@@ -92,7 +92,7 @@ def headless_pipeline(pipeline):
 def capped_before_first_element(pipeline):
     if (
         pipeline.count("filesrc") != 1
-        or "pyml_streammux" in pipeline
+        or "mp_streammux" in pipeline
         or " tee " in pipeline
     ):
         return pipeline
@@ -442,7 +442,7 @@ def test_pipeline(pipeline, tmp_path):
 def test_pipelines_found():
     """Ensure at least one pipeline was found in PIPELINES.md."""
     if not PIPELINES:
-        pytest.fail("No pyml-launch pipelines found in PIPELINES.md")
+        pytest.fail("No mp-launch pipelines found in PIPELINES.md")
     print(f"Found {len(PIPELINES)} pipelines to test")
 
 

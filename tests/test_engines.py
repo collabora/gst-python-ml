@@ -13,7 +13,7 @@ from engine.engine_factory import EngineFactory  # noqa: E402
 from utils.box_matching import matched_box_fraction  # noqa: E402
 
 # a ci matrix leg fails on a missing import instead of skipping
-REQUIRED_ENGINE = os.environ.get("PYML_REQUIRE_ENGINE")
+REQUIRED_ENGINE = os.environ.get("MP_REQUIRE_ENGINE")
 
 VIDEO = BASE_DIR / "data" / "people.mp4"
 

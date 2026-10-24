@@ -34,7 +34,7 @@ try:
 except ImportError as e:
     CAN_REGISTER_ELEMENT = False
     GlobalLogger().warning(
-        f"The 'pyml_zeroshotdetector' element will not be available. Error {e}"
+        f"The 'mp_zeroshotdetector' element will not be available. Error {e}"
     )
 
 DEFAULT_MODEL_NAME = "google/owlv2-base-patch16-ensemble"
@@ -62,7 +62,7 @@ class ZeroShotDetector(BaseObjectDetector, ZeroShotDetectorTask):
 
     def __init__(self):
         super().__init__()
-        self.task_engine_name = self.mgr.engine_name = "pyml_zero_shot_detector_engine"
+        self.task_engine_name = self.mgr.engine_name = "mp_zero_shot_detector_engine"
         EngineFactory.register(self.mgr.engine_name, ZeroShotDetectorEngine)
         self._model_name = DEFAULT_MODEL_NAME
         self._labels_text = ""
@@ -102,9 +102,9 @@ class ZeroShotDetector(BaseObjectDetector, ZeroShotDetectorTask):
 # GStreamer factory registration runs only under the gst backend.
 if CAN_REGISTER_ELEMENT and backend.BACKEND == "gst":
     __gstelementfactory__ = backend.register_gst_element(
-        "pyml_zeroshotdetector", ZeroShotDetector
+        "mp_zeroshotdetector", ZeroShotDetector
     )
 elif not CAN_REGISTER_ELEMENT:
     GlobalLogger().warning(
-        "The 'pyml_zeroshotdetector' element will not be registered because required modules are missing."
+        "The 'mp_zeroshotdetector' element will not be registered because required modules are missing."
     )

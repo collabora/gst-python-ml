@@ -2,7 +2,7 @@
 # Football broadcast-overlay demo.
 #
 # Ppipeline:
-#   detector  ->  pyml_tracker (ByteTrack)  ->  pyml_football_overlay
+#   detector  ->  mp_tracker (ByteTrack)  ->  mp_football_overlay
 #
 # Usage:
 #   demo/football/run.sh [INPUT.mp4] [OUTPUT.mp4] [WxH]      # file -> annotated mp4
@@ -74,9 +74,9 @@ if [[ "$HOST" == "g2g" ]]; then
     ENCODE="nvenc ! mp4mux"
   fi
 else
-  DETECTOR_ELEMENT="pyml_yolo name=detector"
-  TRACKER_ELEMENT="pyml_tracker"
-  OVERLAY_ELEMENT="pyml_football_overlay name=overlay"
+  DETECTOR_ELEMENT="mp_yolo name=detector"
+  TRACKER_ELEMENT="mp_tracker"
+  OVERLAY_ELEMENT="mp_football_overlay name=overlay"
   CONVERT="videoconvert ! videoscale"
   DOWNLOAD=""
   if [[ "$CUDA" == "true" ]]; then
@@ -100,16 +100,16 @@ TRACK="$TRACKER_ELEMENT tracker-type=bytetrack new-track-confidence=$NEWTRACK"
 # detection is hidden; the tracker still runs so the HUD keeps its stats.
 OVERLAY="$OVERLAY_ELEMENT class-names=$CLASSES team-colors=true trails=$TRAILS ball-trail=$BALL_TRAIL show-ball=$SHOW_BALL show-ids=false show-labels=false draw-from-detections=true min-confidence=$DRAWCONF merge-iou=$MERGE position-smoothing=$SMOOTH highlight-focal=false detect-kicks=$KICKS"
 if [[ "$KICKS" == "true" ]]; then
-  # pyml_alertrecorder is a GStreamer element with no g2g counterpart
+  # mp_alertrecorder is a GStreamer element with no g2g counterpart
   [[ "$HOST" == "gst" ]] || { echo "KICKS=true runs on HOST=gst only" >&2; exit 1; }
   mkdir -p "$KICK_DIR"
-  OVERLAY="$OVERLAY ! pyml_alertrecorder seconds-before=$KICK_BEFORE seconds-after=$KICK_AFTER location=$KICK_DIR/kick-%s.webm"
+  OVERLAY="$OVERLAY ! mp_alertrecorder seconds-before=$KICK_BEFORE seconds-after=$KICK_AFTER location=$KICK_DIR/kick-%s.webm"
 fi
 
 if [[ "$BACKEND" == "fp16" ]]; then
   # nvidia is a namespace package (no __file__), so walk __path__ for the pip CUDA libs.
   export LD_LIBRARY_PATH="$(python -c "import os,glob,nvidia;print(':'.join(sorted({d for p in nvidia.__path__ for d in glob.glob(os.path.join(p,'*','lib'))})))"):${LD_LIBRARY_PATH:-}"
-  DETECT="pyml_objectdetector name=detector engine-name=onnx model-name=models/football/football_fp16.onnx device=cuda:0 input-format=nchw post-process=anchor_free interval=$INTERVAL"
+  DETECT="mp_objectdetector name=detector engine-name=onnx model-name=models/football/football_fp16.onnx device=cuda:0 input-format=nchw post-process=anchor_free interval=$INTERVAL"
   IN_FMT="RGB"
 else
   DETECT="$DETECTOR_ELEMENT model-name=models/football/football device=cuda:0 interval=$INTERVAL imgsz=$IMGSZ confidence=$CONF nms-iou=$IOU"

@@ -25,7 +25,7 @@ import migraphx
 
 from .ml_engine import MLEngine, fixed_height_width
 
-COMPILED_PROGRAM_CACHE = Path.home() / ".cache" / "gst-python-ml" / "migraphx"
+COMPILED_PROGRAM_CACHE = Path.home() / ".cache" / "modelpipe" / "migraphx"
 PARTIAL_SAVE_SUFFIX = ".partial"
 
 

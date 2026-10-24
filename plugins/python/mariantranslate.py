@@ -25,7 +25,7 @@ try:
 except ImportError as e:
     CAN_REGISTER_ELEMENT = False
     GlobalLogger().warning(
-        f"The 'pyml_mariantranslate' element will not be available. Element {e}"
+        f"The 'mp_mariantranslate' element will not be available. Element {e}"
     )
 
 
@@ -141,9 +141,9 @@ class MarianTranslate(BaseTranslate):
 
 if CAN_REGISTER_ELEMENT and backend.BACKEND == "gst":
     __gstelementfactory__ = backend.register_gst_element(
-        "pyml_mariantranslate", MarianTranslate
+        "mp_mariantranslate", MarianTranslate
     )
 elif not CAN_REGISTER_ELEMENT:
     GlobalLogger().warning(
-        "The 'pyml_mariantranslate' element will not be registered because required modules are missing."
+        "The 'mp_mariantranslate' element will not be registered because required modules are missing."
     )

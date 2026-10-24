@@ -47,7 +47,7 @@ class Classifier(BaseClassifier):
 
     def __init__(self):
         super().__init__()
-        self.task_engine_name = self.mgr.engine_name = "pyml_classifier_engine"
+        self.task_engine_name = self.mgr.engine_name = "mp_classifier_engine"
         EngineFactory.register(self.mgr.engine_name, ClassifierEngine)
 
     def export_model(self, model_name):
@@ -58,8 +58,8 @@ class Classifier(BaseClassifier):
 
 
 if CAN_REGISTER_ELEMENT and backend.BACKEND == "gst":
-    __gstelementfactory__ = backend.register_gst_element("pyml_classifier", Classifier)
+    __gstelementfactory__ = backend.register_gst_element("mp_classifier", Classifier)
 elif not CAN_REGISTER_ELEMENT:
     GlobalLogger().warning(
-        "The 'pyml_classifier' element will not be registered because a module is missing."
+        "The 'mp_classifier' element will not be registered because a module is missing."
     )

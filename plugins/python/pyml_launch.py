@@ -1,4 +1,4 @@
-# pyml-launch
+# mp-launch
 # Copyright (C) 2024-2026 Collabora Ltd.
 #
 # This library is free software; you can redistribute it and/or
@@ -16,17 +16,17 @@
 # Free Software Foundation, Inc., 51 Franklin Street, Fifth Floor,
 # Boston, MA 02110-1301, USA.
 
-"""Run one pipeline description on whichever backend `PYML_BACKEND` selects.
+"""Run one pipeline description on whichever backend `MP_BACKEND` selects.
 
 `gst` hands the pipeline to `gst-launch-1.0` unchanged. `g2g` rewrites it for
 `g2g-launch-py`, which spells six things differently:
 
-  * a `pyml_*` element is the generic `pyelement` host, or `pysink` for a sink,
+  * an `mp_*` element is the generic `pyelement` host, or `pysink` for a sink,
     plus the module and class to load;
-  * nine elements are g2g's own rather than hosted ones: `pyml_overlay` is
-    `analyticsoverlay`, `pyml_alert` is `analyticsalert`, `pyml_digest` is
-    `textdigest`, and `pyml_metasink` / `pyml_metareplay` / `pyml_alertrecorder`
-    / `pyml_embeddingsink` / `pyml_streammux` / `pyml_streamdemux` drop the
+  * nine elements are g2g's own rather than hosted ones: `mp_overlay` is
+    `analyticsoverlay`, `mp_alert` is `analyticsalert`, `mp_digest` is
+    `textdigest`, and `mp_metasink` / `mp_metareplay` / `mp_alertrecorder`
+    / `mp_embeddingsink` / `mp_streammux` / `mp_streamdemux` drop the
     prefix;
   * `pyelement` and `analyticsoverlay` both work on RGBA, so a raw-video caps
     filter that leaves the format open has to pin it;
@@ -58,55 +58,55 @@ from typing import NamedTuple
 _PLUGINS = Path(__file__).resolve().parent.parent
 CHECKOUT_PLUGINS = _PLUGINS if _PLUGINS.name == "plugins" else None
 
-USAGE = "usage: pyml-launch <element> [key=value ...] ! <element> ! ..."
+USAGE = "usage: mp-launch <element> [key=value ...] ! <element> ! ..."
 
 #: The g2g launcher, and the checkout it is built in, looked for beside this one.
 G2G_LAUNCH_NAME = "g2g-launch-py"
 G2G_CHECKOUT_NAME = "glass2glass"
 
-#: The g2g elements that host a gst-python-ml one: a transform, the N-in
+#: The g2g elements that host a ModelPipe one: a transform, the N-in
 #: batching host an aggregator needs, and a sink.
 PY_ELEMENT = "pyelement"
 PY_AGGREGATOR = "pyaggregator"
 PY_SINK = "pysink"
 
-#: The base class a gst-python-ml element hosted on `pysink` derives from.
+#: The base class a ModelPipe element hosted on `pysink` derives from.
 SINK_BASE_CLASS = "BaseSink"
 
-#: gst-python-ml elements that g2g implements natively instead of hosting.
+#: ModelPipe elements that g2g implements natively instead of hosting.
 NATIVE_EQUIVALENTS = {
-    "pyml_overlay": "analyticsoverlay",
-    "pyml_metasink": "metasink",
-    "pyml_metareplay": "metareplay",
-    "pyml_alert": "analyticsalert",
-    "pyml_alertrecorder": "alertrecorder",
-    "pyml_digest": "textdigest",
-    "pyml_embeddingsink": "embeddingsink",
-    "pyml_streammux": "streammux",
-    "pyml_streamdemux": "streamdemux",
+    "mp_overlay": "analyticsoverlay",
+    "mp_metasink": "metasink",
+    "mp_metareplay": "metareplay",
+    "mp_alert": "analyticsalert",
+    "mp_alertrecorder": "alertrecorder",
+    "mp_digest": "textdigest",
+    "mp_embeddingsink": "embeddingsink",
+    "mp_streammux": "streammux",
+    "mp_streamdemux": "streamdemux",
 }
 
 #: What each native element calls the properties it shares with the one it
 #: replaces. A property missing here has no counterpart at all: g2g runs no
-#: MQTT, so `pyml_alert`'s broker and topic are refused rather than dropped.
+#: MQTT, so `mp_alert`'s broker and topic are refused rather than dropped.
 NATIVE_PROPERTIES = {
-    "pyml_overlay": {"tracking": "show-track"},
-    "pyml_metasink": {"location": "location"},
-    "pyml_metareplay": {"location": "location"},
-    "pyml_alert": {
+    "mp_overlay": {"tracking": "show-track"},
+    "mp_metasink": {"location": "location"},
+    "mp_metareplay": {"location": "location"},
+    "mp_alert": {
         "rules": "rules",
         "cooldown": "cooldown",
         "draw-alert": "draw-alert",
         "webhook-url": "webhook-url",
     },
-    "pyml_alertrecorder": {
+    "mp_alertrecorder": {
         "location": "location",
         "encoder": "encoder",
         "seconds-before": "seconds-before",
         "seconds-after": "seconds-after",
     },
-    "pyml_digest": {"window-seconds": "window-seconds"},
-    "pyml_embeddingsink": {
+    "mp_digest": {"window-seconds": "window-seconds"},
+    "mp_embeddingsink": {
         "location": "location",
         "source-id": "source-id",
         "model-name": "model-name",
@@ -186,7 +186,7 @@ CUDA_MEMORY_FEATURE = "memory:CUDAMemory"
 
 
 class ElementShell(NamedTuple):
-    """What hosting one gst-python-ml element on g2g takes: the module and class
+    """What hosting one ModelPipe element on g2g takes: the module and class
     to load, and the `(property, caps)` pairs it negotiates with, if it says."""
 
     module: str
@@ -212,7 +212,7 @@ def plugin_dir():
         if candidate.is_dir():
             return candidate
     raise SystemExit(
-        "pyml-launch: no gst-python-ml element modules found; point "
+        "mp-launch: no ModelPipe element modules found; point "
         "GST_PLUGIN_PATH at the checkout's plugins directory"
     )
 
@@ -550,7 +550,7 @@ def rewrite_segment(
     if shell:
         # Every property of a hosted element goes to the Python class, so the
         # defaulted-property table must not touch one whose name happens to end
-        # like a g2g element's (`pyml_kafkasink` and its `sync`).
+        # like a g2g element's (`mp_kafkasink` and its `sync`).
         properties = [quoted(p) for p in properties]
         if shell.is_sink:
             host = PY_SINK
@@ -574,8 +574,8 @@ def rewrite_segment(
         hosted.extend(quoted(f"{property}={value}") for property, value in shell.caps)
         return [*hosted, *properties]
 
-    if head.startswith("pyml_"):
-        raise SystemExit(f"pyml-launch: no gst-python-ml element named {head!r}")
+    if head.startswith("mp_"):
+        raise SystemExit(f"mp-launch: no ModelPipe element named {head!r}")
 
     return [head, *[quoted(p) for p in drop_defaulted_properties(head, properties)]]
 
@@ -594,7 +594,7 @@ def renamed_properties(head, properties):
         key, _, value = property.partition("=")
         if key not in renames:
             raise SystemExit(
-                f"pyml-launch: g2g's {NATIVE_EQUIVALENTS[head]} has no counterpart "
+                f"mp-launch: g2g's {NATIVE_EQUIVALENTS[head]} has no counterpart "
                 f"for {head} {key}; of its properties only "
                 f"{', '.join(sorted(renames))} carries over"
             )
@@ -620,7 +620,7 @@ def drop_defaulted_properties(head, properties):
         # Asking for the other value needs a pipeline change this cannot make.
         if (value.lower() not in FALSE_VALUES) != defaulted.g2g_value:
             raise SystemExit(
-                f"pyml-launch: {head} {property} has no equivalent on g2g; "
+                f"mp-launch: {head} {property} has no equivalent on g2g; "
                 f"{defaulted.instead}"
             )
     return kept
@@ -699,7 +699,7 @@ def required_g2g_binary():
     binary = g2g_binary()
     if not binary:
         raise SystemExit(
-            "pyml-launch: no g2g-launch-py release build found; point G2G_LAUNCH "
+            "mp-launch: no g2g-launch-py release build found; point G2G_LAUNCH "
             "at one, or G2G_DIR at a glass2glass checkout, and build it with: "
             "PYO3_PYTHON=$(which python) cargo build --release -p g2g-python "
             "--features ml --bin g2g-launch-py"
@@ -716,18 +716,18 @@ def main(argv=None):
     if not argv:
         raise SystemExit(USAGE)
 
-    backend = os.environ.get("PYML_BACKEND", "gst").lower()
+    backend = os.environ.get("MP_BACKEND", "gst").lower()
     if backend == "gst":
         command, env = gst_command(argv)
     elif backend == "g2g":
         command, env = g2g_command(rewrite_for_g2g(argv, element_shells()))
     else:
         raise SystemExit(
-            f"pyml-launch: unknown PYML_BACKEND={backend!r}; use 'gst' or 'g2g'"
+            f"mp-launch: unknown MP_BACKEND={backend!r}; use 'gst' or 'g2g'"
         )
 
     # The line the backend actually runs, so it can be pasted back and extended.
-    print(f"pyml-launch: {shlex.join(command)}", file=sys.stderr)
+    print(f"mp-launch: {shlex.join(command)}", file=sys.stderr)
     return subprocess.call(command, env=env)
 
 

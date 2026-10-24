@@ -24,7 +24,7 @@ gi.require_version("Gst", "1.0")
 
 from log.logger_factory import LoggerFactory  # noqa: E402
 
-ANALYTICS_STORE_VARIABLE = "PYML_ANALYTICS"
+ANALYTICS_STORE_VARIABLE = "MP_ANALYTICS"
 RELATION_META_STORE = "meta"
 CHUNK_STORE = "chunk"
 

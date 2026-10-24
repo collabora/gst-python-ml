@@ -1,4 +1,4 @@
-# pyml_inference — generic passthrough for testing ML engines
+# mp_inference — generic passthrough for testing ML engines
 # Copyright (C) 2024-2026 Collabora Ltd.
 #
 # This library is free software; you can redistribute it and/or
@@ -26,7 +26,7 @@ try:
 except ImportError as e:
     CAN_REGISTER_ELEMENT = False
     GlobalLogger().warning(
-        f"The 'pyml_inference' element will not be available. Error {e}"
+        f"The 'mp_inference' element will not be available. Error {e}"
     )
 
 
@@ -38,10 +38,10 @@ class GenericInferenceTransform(VideoTransform):
     engine-name: pytorch (default), onnx, tensorflow, tflite, openvino
 
     Example:
-      python pyml-launch.py filesrc location=data/people.mp4 ! decodebin name=d \
+      python mp-launch.py filesrc location=data/people.mp4 ! decodebin name=d \
         d. ! queue ! videoconvert ! videoscale \
         ! "video/x-raw,format=RGB,width=640,height=480" \
-        ! pyml_inference engine-name=onnx model-name=yolo11m.onnx device=cpu \
+        ! mp_inference engine-name=onnx model-name=yolo11m.onnx device=cpu \
         ! fakesink
     """
 
@@ -55,7 +55,7 @@ class GenericInferenceTransform(VideoTransform):
     def do_start(self):
         result = super().do_start()
         self.logger.info(
-            f"pyml_inference started — engine={self.mgr.engine_name} "
+            f"mp_inference started — engine={self.mgr.engine_name} "
             f"model={self.model_name} device={self.mgr.device}"
         )
         return result
@@ -74,9 +74,9 @@ class GenericInferenceTransform(VideoTransform):
 
 if CAN_REGISTER_ELEMENT and backend.BACKEND == "gst":
     __gstelementfactory__ = backend.register_gst_element(
-        "pyml_inference", GenericInferenceTransform
+        "mp_inference", GenericInferenceTransform
     )
 elif not CAN_REGISTER_ELEMENT:
     GlobalLogger().warning(
-        "The 'pyml_inference' element will not be registered because required modules are missing."
+        "The 'mp_inference' element will not be registered because required modules are missing."
     )

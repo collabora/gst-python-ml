@@ -25,7 +25,7 @@ from embedding_index import EmbeddingIndex  # noqa: E402
 from embeddingsink import decode_embedding  # noqa: E402
 
 pytestmark = pytest.mark.skipif(
-    Gst.ElementFactory.find("pyml_embeddingsink") is None,
+    Gst.ElementFactory.find("mp_embeddingsink") is None,
     reason="the python plugin loader did not register the pyml elements",
 )
 
@@ -135,7 +135,7 @@ def test_the_sink_stores_one_row_per_embedded_frame(tmp_path):
         f"videotestsrc num-buffers={FRAMES} "
         f"! video/x-raw,width=64,height=48,framerate={FRAMERATE}/1,format=RGBA "
         "! appendembedding "
-        f"! pyml_embeddingsink location={location} "
+        f"! mp_embeddingsink location={location} "
         f"source-id={SOURCE_ID} model-name={MODEL_NAME}"
     )
     run_to_eos(pipeline)

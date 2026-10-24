@@ -1,13 +1,15 @@
-# GStreamer Python ML
+# ModelPipe
 
-[![CI](https://github.com/collabora/gst-python-ml/actions/workflows/ci.yml/badge.svg)](https://github.com/collabora/gst-python-ml/actions/workflows/ci.yml)
+[![CI](https://github.com/collabora/modelpipe/actions/workflows/ci.yml/badge.svg)](https://github.com/collabora/modelpipe/actions/workflows/ci.yml)
 
-Run any model with ease inside any GStreamer pipeline.
+ModelPipe runs a wide variety of ML models in GStreamer and
+[Glass2Glass](https://gitlab.collabora.com/glass2glass/glass2glass) multimedia
+pipelines.
 
-Pure Python ML elements for upstream GStreamer 1.24 or later: one element per task, or bring your own
-model and run it with the base classes and matching engine. 
-
-Write the pipeline in `gst-launch` format and run it with `pyml-launch`, with media backend set to either GStreamer or [glass2glass](https://gitlab.collabora.com/glass2glass/glass2glass).
+ModelPipe provides one Python element per task, plus base classes and inference
+engines for custom models. Write the pipeline in `gst-launch` format and run it
+with `mp-launch`, using GStreamer 1.24 or later or Glass2Glass as the media
+backend.
 
 ## Features
 
@@ -114,7 +116,7 @@ $ pyml-engines depth-anything/Depth-Anything-V2-Small-hf
 depth
   pytorch     runs                                                       cpu* cuda*
   onnx        runs                                                       cpu* cuda* tensorrt* rocm migraphx npu? coreml
-  openvino    runs                                                       cpu gpu npu                                     pip install gst-python-ml[openvino]
+  openvino    runs                                                       cpu gpu npu                                     pip install modelpipe[openvino]
 ```
 
 `--benchmark` times the model on each installed engine that runs it, on each device
@@ -141,14 +143,14 @@ adds the YOLO models the quick start uses.
 
 ```
 curl -LsSf https://astral.sh/uv/install.sh | sh
-git clone https://github.com/collabora/gst-python-ml.git && cd gst-python-ml
+git clone https://github.com/collabora/modelpipe.git && cd modelpipe
 uv venv --python /usr/bin/python3 --system-site-packages
 uv sync --extra yolo
 export GST_PLUGIN_PATH=$PWD/plugins:$GST_PLUGIN_PATH
 gst-inspect-1.0 python
 ```
 
-The last line lists the `pyml_*` elements. [INSTALL.md](INSTALL.md) covers
+The last line lists the `mp_*` elements. [INSTALL.md](INSTALL.md) covers
 Fedora, Windows, Docker, the feature extras, the other engines and custom
 plugins.
 
@@ -160,33 +162,33 @@ machine without a GPU.
 Track people with YOLO:
 
 ```
-python pyml-launch.py filesrc location=data/soccer_tracking.mp4 ! decodebin ! videoconvertscale ! video/x-raw,width=640,height=480 ! pyml_yolo model-name=yolo11m device=cuda track=True ! pyml_overlay ! videoconvert ! autovideosink
+python mp-launch.py filesrc location=data/soccer_tracking.mp4 ! decodebin ! videoconvertscale ! video/x-raw,width=640,height=480 ! mp_yolo model-name=yolo11m device=cuda track=True ! mp_overlay ! videoconvert ! autovideosink
 ```
 
 Estimate depth with Depth Anything V2:
 
 ```
-python pyml-launch.py filesrc location=data/people.mp4 ! decodebin ! videoconvert ! videoscale ! video/x-raw,width=640,height=480 ! pyml_depth model-name=depth-anything/Depth-Anything-V2-Small-hf device=cuda ! videoconvert ! autovideosink sync=false
+python mp-launch.py filesrc location=data/people.mp4 ! decodebin ! videoconvert ! videoscale ! video/x-raw,width=640,height=480 ! mp_depth model-name=depth-anything/Depth-Anything-V2-Small-hf device=cuda ! videoconvert ! autovideosink sync=false
 ```
 
 Transcribe Korean speech and translate it to English. Transcripts are logged at
 GStreamer info level:
 
 ```
-GST_DEBUG=python:4 python pyml-launch.py filesrc location=data/air_traffic_korean_with_english.wav ! decodebin ! audioconvert ! pyml_whispertranscribe device=cuda language=ko translate=yes ! fakesink
+GST_DEBUG=python:4 python mp-launch.py filesrc location=data/air_traffic_korean_with_english.wav ! decodebin ! audioconvert ! mp_whispertranscribe device=cuda language=ko translate=yes ! fakesink
 ```
 
 Record a clip around every person detection:
 
 ```
-python pyml-launch.py filesrc location=data/people.mp4 ! decodebin ! videoconvert ! videoscale ! video/x-raw,width=640,height=480 ! pyml_yolo model-name=yolo11m device=cuda ! pyml_alert rules='{"class":"person","min_score":0.7}' cooldown=8 draw-alert=false ! pyml_alertrecorder location=alert-%s.webm seconds-before=2 seconds-after=3 ! pyml_overlay ! videoconvert ! autovideosink sync=false
+python mp-launch.py filesrc location=data/people.mp4 ! decodebin ! videoconvert ! videoscale ! video/x-raw,width=640,height=480 ! mp_yolo model-name=yolo11m device=cuda ! mp_alert rules='{"class":"person","min_score":0.7}' cooldown=8 draw-alert=false ! mp_alertrecorder location=alert-%s.webm seconds-before=2 seconds-after=3 ! mp_overlay ! videoconvert ! autovideosink sync=false
 ```
 
 Replay a recorded detection stream through the tracker and overlay, with no
 model and no GPU:
 
 ```
-python pyml-launch.py filesrc location=data/people.mp4 ! decodebin ! videoconvert ! videoscale ! video/x-raw,width=640,height=480 ! pyml_metareplay location=data/people.jsonl ! pyml_tracker tracker-type=sort ! pyml_overlay ! videoconvert ! autovideosink sync=false
+python mp-launch.py filesrc location=data/people.mp4 ! decodebin ! videoconvert ! videoscale ! video/x-raw,width=640,height=480 ! mp_metareplay location=data/people.jsonl ! mp_tracker tracker-type=sort ! mp_overlay ! videoconvert ! autovideosink sync=false
 ```
 
 [PIPELINES.md](PIPELINES.md) describes every pipeline, one or two per element, how to
@@ -213,9 +215,9 @@ demo/baseball/run.sh display
 
 ## Blog post
 
-[![Unleashing gst-python-ml](https://www.collabora.com/assets/images/blog/Collabora-GStPython.jpg)](https://www.collabora.com/news-and-blog/blog/2025/05/12/unleashing-gst-python-ml-analytics-gstreamer-pipelines/)
+[![ModelPipe project announcement](https://www.collabora.com/assets/images/blog/Collabora-GStPython.jpg)](https://www.collabora.com/news-and-blog/blog/2025/05/12/unleashing-gst-python-ml-analytics-gstreamer-pipelines/)
 
-**[Unleashing gst-python-ml: Python-powered ML analytics for GStreamer pipelines](https://www.collabora.com/news-and-blog/blog/2025/05/12/unleashing-gst-python-ml-analytics-gstreamer-pipelines/)**
+**[Original project announcement: Python-powered ML analytics for GStreamer pipelines](https://www.collabora.com/news-and-blog/blog/2025/05/12/unleashing-gst-python-ml-analytics-gstreamer-pipelines/)**
 
 Combining GStreamer with machine learning frameworks into video analytics
 pipelines, from object detection to video captioning.

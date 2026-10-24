@@ -24,7 +24,7 @@ from utils.analytics_utils import AnalyticsUtils
 
 
 class KafkaSink(BaseSink):
-    GST_PLUGIN_NAME = "pyml_kafkasink"
+    GST_PLUGIN_NAME = "mp_kafkasink"
 
     __gstmetadata__ = (
         "Kafka Sink",
@@ -161,7 +161,7 @@ class KafkaSink(BaseSink):
 
         return metadata
 
-    # data/pyml_object_detector.json describes this message
+    # data/mp_object_detector.json describes this message
     def format_metadata(self, metadata):
         import datetime
 

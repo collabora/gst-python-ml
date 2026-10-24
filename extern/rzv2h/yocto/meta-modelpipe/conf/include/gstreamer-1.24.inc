@@ -6,7 +6,7 @@
 # a newer meta-oe). These PREFERRED_VERSION lines then select them.
 #
 # require this from local.conf:
-#   require ${TOPDIR}/../layers/meta-gst-python-ml/conf/include/gstreamer-1.24.inc
+#   require ${TOPDIR}/../layers/meta-modelpipe/conf/include/gstreamer-1.24.inc
 
 GST_124 ?= "1.24.%"
 

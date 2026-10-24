@@ -29,7 +29,7 @@ try:
 except ImportError as e:
     CAN_REGISTER_ELEMENT = False
     GlobalLogger().warning(
-        f"The 'pyml_caption_qwen' element will not be available. Error {e}"
+        f"The 'mp_caption_qwen' element will not be available. Error {e}"
     )
 
 
@@ -48,15 +48,15 @@ class CaptionQwen(BaseCaption):
     def __init__(self):
         super().__init__()
         # set engine_name directly on mgr, as engine_name property is read only
-        self.mgr.engine_name = "pyml_caption_qwen_engine"
+        self.mgr.engine_name = "mp_caption_qwen_engine"
         EngineFactory.register(self.engine_name, CaptionQwenEngine)
 
 
 if CAN_REGISTER_ELEMENT and backend.BACKEND == "gst":
     __gstelementfactory__ = backend.register_gst_element(
-        "pyml_caption_qwen", CaptionQwen, "pyml_caption_qwen"
+        "mp_caption_qwen", CaptionQwen, "mp_caption_qwen"
     )
 elif not CAN_REGISTER_ELEMENT:
     GlobalLogger().warning(
-        "The 'pyml_caption_qwen' element will not be registered because required modules are missing."
+        "The 'mp_caption_qwen' element will not be registered because required modules are missing."
     )

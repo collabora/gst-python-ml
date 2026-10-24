@@ -30,7 +30,7 @@ try:
 except ImportError as e:
     CAN_REGISTER_ELEMENT = False
     GlobalLogger().warning(
-        f"The 'pyml_sepformer' element will not be available. Error: {e}"
+        f"The 'mp_sepformer' element will not be available. Error: {e}"
     )
 
 if backend.BACKEND == "gst":
@@ -75,8 +75,8 @@ class Sepformer(BaseSeparate):
 
     def __init__(self):
         super().__init__()
-        self.model_name = "pyml_sepformer_model"
-        self.mgr.engine_name = "pyml_sepformer_engine"
+        self.model_name = "mp_sepformer_model"
+        self.mgr.engine_name = "mp_sepformer_engine"
         EngineFactory.register(self.mgr.engine_name, SepformerEngine)
 
     @GObject.Property(type=str)
@@ -120,6 +120,6 @@ class Sepformer(BaseSeparate):
 
 
 if CAN_REGISTER_ELEMENT and backend.BACKEND == "gst":
-    __gstelementfactory__ = backend.register_gst_element("pyml_sepformer", Sepformer)
+    __gstelementfactory__ = backend.register_gst_element("mp_sepformer", Sepformer)
 elif not CAN_REGISTER_ELEMENT:
-    GlobalLogger().warning("pyml_sepformer not registered")
+    GlobalLogger().warning("mp_sepformer not registered")

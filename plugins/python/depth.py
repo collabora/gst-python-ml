@@ -59,7 +59,7 @@ class DepthTransform(VideoTransform, DepthTask):
               depth = np.frombuffer(data[10:], dtype=np.uint8).reshape(H, W)
 
     Use frame-stride to skip frames and reduce compute:
-      pyml_depth model-name=depth-anything/Depth-Anything-V2-Small-hf frame-stride=2
+      mp_depth model-name=depth-anything/Depth-Anything-V2-Small-hf frame-stride=2
     """
 
     META_HEADER = DEPTH_META_HEADER
@@ -90,7 +90,7 @@ class DepthTransform(VideoTransform, DepthTask):
 
     def __init__(self):
         super().__init__()
-        self.task_engine_name = self.mgr.engine_name = "pyml_depth_engine"
+        self.task_engine_name = self.mgr.engine_name = "mp_depth_engine"
         EngineFactory.register(self.mgr.engine_name, DepthAnythingEngine)
         self.format_converter = FormatConverter()
 
@@ -101,8 +101,8 @@ class DepthTransform(VideoTransform, DepthTask):
 
 
 if CAN_REGISTER_ELEMENT and backend.BACKEND == "gst":
-    __gstelementfactory__ = backend.register_gst_element("pyml_depth", DepthTransform)
+    __gstelementfactory__ = backend.register_gst_element("mp_depth", DepthTransform)
 elif not CAN_REGISTER_ELEMENT:
     GlobalLogger().warning(
-        "The 'pyml_depth' element will not be registered because required modules are missing."
+        "The 'mp_depth' element will not be registered because required modules are missing."
     )

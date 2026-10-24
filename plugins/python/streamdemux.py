@@ -243,5 +243,5 @@ class StreamDemux(Gst.Element):
 
 if backend.BACKEND == "gst":
     __gstelementfactory__ = backend.register_gst_element(
-        "pyml_streamdemux", StreamDemux
+        "mp_streamdemux", StreamDemux
     )

@@ -40,10 +40,10 @@ try:
 except ImportError as e:
     CAN_REGISTER_ELEMENT = False
     GlobalLogger().warning(
-        f"The 'pyml_alertrecorder' element will not be available. Error: {e}"
+        f"The 'mp_alertrecorder' element will not be available. Error: {e}"
     )
 
-# the header pyml_alert attaches, lowercased by read_blobs
+# the header mp_alert attaches, lowercased by read_blobs
 ALERT_BLOB = "alert"
 DEFAULT_LOCATION = "alert-%s.webm"
 DEFAULT_ENCODER = "vp8enc deadline=1 ! webmmux"
@@ -95,7 +95,7 @@ class AlertRecorder(GstBase.BaseTransform):
     __gstmetadata__ = (
         "Alert Recorder",
         "Transform",
-        "Records a clip of the frames around each alert an upstream pyml_alert attached",
+        "Records a clip of the frames around each alert an upstream mp_alert attached",
         "Aaron Boxer <aaron.boxer@collabora.com>",
     )
 
@@ -196,9 +196,9 @@ class AlertRecorder(GstBase.BaseTransform):
 
 if CAN_REGISTER_ELEMENT and backend.BACKEND == "gst":
     __gstelementfactory__ = backend.register_gst_element(
-        "pyml_alertrecorder", AlertRecorder
+        "mp_alertrecorder", AlertRecorder
     )
 elif not CAN_REGISTER_ELEMENT:
     GlobalLogger().warning(
-        "The 'pyml_alertrecorder' element will not be registered because required modules are missing."
+        "The 'mp_alertrecorder' element will not be registered because required modules are missing."
     )

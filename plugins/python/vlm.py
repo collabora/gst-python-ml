@@ -50,7 +50,7 @@ class VlmTransform(VideoTransform, VlmTask):
               text = result["text"]
 
     Use frame-stride to control processing frequency:
-      pyml_vlm model-name=llava-hf/llava-1.5-7b-hf frame-stride=30 \\
+      mp_vlm model-name=llava-hf/llava-1.5-7b-hf frame-stride=30 \\
         prompt="What activity is happening in this scene?"
     """
 
@@ -99,7 +99,7 @@ class VlmTransform(VideoTransform, VlmTask):
 
     def __init__(self):
         super().__init__()
-        self.mgr.engine_name = "pyml_vlm_engine"
+        self.mgr.engine_name = "mp_vlm_engine"
         EngineFactory.register(self.mgr.engine_name, VlmEngine)
         self._frame_count = 0
 
@@ -110,7 +110,7 @@ class VlmTransform(VideoTransform, VlmTask):
 
     @engine_name.setter
     def engine_name(self, value):
-        raise ValueError("'engine_name' is read-only for pyml_vlm")
+        raise ValueError("'engine_name' is read-only for mp_vlm")
 
     def process_frames(self, frames, num_sources, fmt, target):
         """Caption the frame and append the payload, skipping strided-out frames."""
@@ -141,8 +141,8 @@ class VlmTransform(VideoTransform, VlmTask):
 
 
 if CAN_REGISTER_ELEMENT and backend.BACKEND == "gst":
-    __gstelementfactory__ = backend.register_gst_element("pyml_vlm", VlmTransform)
+    __gstelementfactory__ = backend.register_gst_element("mp_vlm", VlmTransform)
 elif not CAN_REGISTER_ELEMENT:
     GlobalLogger().warning(
-        "The 'pyml_vlm' element will not be registered because required modules are missing."
+        "The 'mp_vlm' element will not be registered because required modules are missing."
     )

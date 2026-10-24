@@ -1,16 +1,14 @@
-# Contributing to GStreamer Python ML
+# Contributing to ModelPipe
 
-Thank you for your interest in contributing! This guide covers how to get started.
+This guide covers how to get started.
 
 ## Development Setup
 
 ```bash
-git clone https://github.com/collabora/gst-python-ml.git
-cd gst-python-ml
-python3 -m venv --system-site-packages .venv
-source .venv/bin/activate
-pip install -e ".[all]"
-pip install ruff black pytest
+git clone https://github.com/collabora/modelpipe.git
+cd modelpipe
+uv venv --python /usr/bin/python3 --system-site-packages
+uv sync --extra all
 ```
 
 ## Code Style
@@ -18,8 +16,8 @@ pip install ruff black pytest
 We use **ruff** for linting and **black** for formatting:
 
 ```bash
-ruff check plugins/ tests/ utils/
-black plugins/ tests/ utils/
+uvx ruff check plugins/ tests/ utils/
+uvx black plugins/ tests/ utils/
 ```
 
 CI enforces these on every PR.
@@ -97,10 +95,10 @@ For pipeline testing:
 
 ```bash
 gst-inspect-1.0 python  # Verify all elements load
-python pyml-launch.py filesrc location=data/people.mp4 num-buffers=5 \
+python mp-launch.py filesrc location=data/people.mp4 num-buffers=5 \
   ! decodebin ! videoconvert ! videoscale \
   ! "video/x-raw,format=RGB,width=640,height=640" \
-  ! pyml_objectdetector engine-name=onnx model-name=yolo11n.onnx device=cpu \
+  ! mp_objectdetector engine-name=onnx model-name=yolo11n.onnx device=cpu \
     input-format=nchw post-process=anchor_free \
   ! fakesink
 ```

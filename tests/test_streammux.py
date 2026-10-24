@@ -18,7 +18,7 @@ from gi.repository import Gst  # noqa: E402
 Gst.init(None)
 
 pytestmark = pytest.mark.skipif(
-    Gst.ElementFactory.find("pyml_streammux") is None,
+    Gst.ElementFactory.find("mp_streammux") is None,
     reason="the python plugin loader did not register the pyml elements",
 )
 
@@ -37,7 +37,7 @@ def test_the_longer_source_keeps_its_frames_after_the_shorter_one_ends():
         for index in range(len(FRAMES_PER_SOURCE))
     )
     pipeline = Gst.parse_launch(
-        f"pyml_streammux name=mux ! pyml_streamdemux name=demux {sources} {sinks}"
+        f"mp_streammux name=mux ! mp_streamdemux name=demux {sources} {sinks}"
     )
     frames_received = [0] * len(FRAMES_PER_SOURCE)
     for index in range(len(FRAMES_PER_SOURCE)):
@@ -66,7 +66,7 @@ BATCH_COUNT = 5
 def test_each_batch_runs_later_than_the_one_before():
     caps = "video/x-raw,width=16,height=8,format=RGB,framerate=50/1"
     pipeline = Gst.parse_launch(
-        f"videotestsrc num-buffers={BATCH_COUNT} ! {caps} ! pyml_streammux name=mux "
+        f"videotestsrc num-buffers={BATCH_COUNT} ! {caps} ! mp_streammux name=mux "
         "! fakesink name=sink signal-handoffs=true"
     )
     running_times = []

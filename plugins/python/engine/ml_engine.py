@@ -25,7 +25,7 @@ from log.logger_factory import LoggerFactory
 
 TORCHVISION_WEIGHTS = "DEFAULT"
 TORCHVISION_RESNET_MODULE = "torchvision.models.resnet"
-MODEL_CACHE = Path.home() / ".cache" / "gst-python-ml"
+MODEL_CACHE = Path.home() / ".cache" / "modelpipe"
 CONVERSION_DIGEST_LENGTH = 12
 
 

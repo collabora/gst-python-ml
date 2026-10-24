@@ -85,7 +85,7 @@ class SamTransform(VideoTransform, SamTask):
 
     def __init__(self):
         super().__init__()
-        self.task_engine_name = self.mgr.engine_name = "pyml_sam_engine"
+        self.task_engine_name = self.mgr.engine_name = "mp_sam_engine"
         EngineFactory.register(self.mgr.engine_name, SamEngine)
         self.format_converter = FormatConverter()
 
@@ -94,8 +94,8 @@ class SamTransform(VideoTransform, SamTask):
 
 
 if CAN_REGISTER_ELEMENT and backend.BACKEND == "gst":
-    __gstelementfactory__ = backend.register_gst_element("pyml_sam", SamTransform)
+    __gstelementfactory__ = backend.register_gst_element("mp_sam", SamTransform)
 elif not CAN_REGISTER_ELEMENT:
     GlobalLogger().warning(
-        "The 'pyml_sam' element will not be registered because required modules are missing."
+        "The 'mp_sam' element will not be registered because required modules are missing."
     )

@@ -1,4 +1,4 @@
-SUMMARY = "Runtime stack for gst-python-ml on RZ/V2H (GStreamer 1.24 + Python)"
+SUMMARY = "Runtime stack for ModelPipe on RZ/V2H (GStreamer 1.24 + Python)"
 LICENSE = "MIT"
 
 inherit packagegroup
@@ -18,7 +18,7 @@ RDEPENDS:${PN} = " \
 "
 # Notes:
 # - gstreamer1.0-python provides the libgstpython.so plugin loader that runs
-#   the pyml_* .py elements. It is NOT in the stock AI SDK image.
+#   the mp_* .py elements. It is NOT in the stock AI SDK image.
 # - GstAnalytics (used by base_objectdetector / tracker / overlay) ships in
 #   gstreamer1.0-plugins-bad once GStreamer is >= 1.24 with the analytics
 #   PACKAGECONFIG enabled (see conf/include/gstreamer-1.24.inc).

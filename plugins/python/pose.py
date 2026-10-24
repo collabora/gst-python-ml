@@ -55,7 +55,7 @@ class YOLOPoseTransform(BaseObjectDetector):
     GStreamer element for human pose estimation using YOLO on video frames.
 
     Detects persons and estimates their 17 COCO body keypoints. Bounding boxes
-    are attached as GstAnalytics metadata for use with pyml_overlay. Keypoints
+    are attached as GstAnalytics metadata for use with mp_overlay. Keypoints
     are appended as a JSON blob in a GST-POSE: buffer memory chunk for use
     by downstream elements.
 
@@ -87,13 +87,13 @@ class YOLOPoseTransform(BaseObjectDetector):
         nick="TensorRT",
         blurb="Run CUDA frames through a half precision TensorRT engine when "
         "track is off. The engine is built from the weights on the first frame, "
-        "which takes a minute or two, and cached in ~/.cache/gst-python-ml/tensorrt",
+        "which takes a minute or two, and cached in ~/.cache/modelpipe/tensorrt",
         flags=GObject.ParamFlags.READWRITE,
     )
 
     def __init__(self):
         super().__init__()
-        self.task_engine_name = self.mgr.engine_name = "pyml_yolo_pose_engine"
+        self.task_engine_name = self.mgr.engine_name = "mp_yolo_pose_engine"
         EngineFactory.register(self.mgr.engine_name, YoloPoseEngine)
         self.frames_on_the_device = False
         self.frame_format = None
@@ -123,7 +123,7 @@ class YOLOPoseTransform(BaseObjectDetector):
             self.logger.info(f"Stream {stream_idx}: no persons detected")
             return
 
-        # Attach person bounding boxes via GstAnalytics (compatible with pyml_overlay)
+        # Attach person bounding boxes via GstAnalytics (compatible with mp_overlay)
         meta = analytics.add_relation_meta(buf)
         if not meta:
             self.logger.error("Failed to add analytics relation metadata")
@@ -273,9 +273,9 @@ class YOLOPoseTransform(BaseObjectDetector):
 
 if CAN_REGISTER_ELEMENT and backend.BACKEND == "gst":
     __gstelementfactory__ = backend.register_gst_element(
-        "pyml_yolo_pose", YOLOPoseTransform
+        "mp_yolo_pose", YOLOPoseTransform
     )
 elif not CAN_REGISTER_ELEMENT:
     GlobalLogger().warning(
-        "The 'pyml_yolo_pose' element will not be registered because required modules are missing."
+        "The 'mp_yolo_pose' element will not be registered because required modules are missing."
     )

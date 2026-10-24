@@ -57,9 +57,9 @@ PTS_DECIMALS = 6
 
 # the two elements default to different thresholds
 THRESHOLDS = "confidence=0.25 nms-iou=0.45"
-PYTORCH_DETECTOR = f"pyml_yolo model-name={{model}} device={{device}} {THRESHOLDS}"
+PYTORCH_DETECTOR = f"mp_yolo model-name={{model}} device={{device}} {THRESHOLDS}"
 CONVERTED_MODEL_DETECTOR = (
-    "pyml_objectdetector engine-name={engine} model-name={model} device={device} "
+    "mp_objectdetector engine-name={engine} model-name={model} device={device} "
     f"input-format=nchw post-process=anchor_free {THRESHOLDS}"
 )
 
@@ -92,7 +92,7 @@ def run_pipeline(detector, frames, records_path):
         f"filesrc location={VIDEO} ! decodebin ! videoconvert ! videoscale "
         f"! video/x-raw,width={FRAME_WIDTH},height={FRAME_HEIGHT} "
         f"! identity name=limiter eos-after={frames} "
-        f"! {detector} ! pyml_metasink location={records_path}"
+        f"! {detector} ! mp_metasink location={records_path}"
     )
     arrivals = []
 

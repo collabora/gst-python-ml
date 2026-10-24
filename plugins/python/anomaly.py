@@ -90,7 +90,7 @@ class AnomalyTransform(VideoTransform, AnomalyTask):
 
     def __init__(self):
         super().__init__()
-        self.task_engine_name = self.mgr.engine_name = "pyml_anomaly_engine"
+        self.task_engine_name = self.mgr.engine_name = "mp_anomaly_engine"
         EngineFactory.register(self.mgr.engine_name, AnomalyEngine)
         self.model_name = DEFAULT_BACKBONE
         self.format_converter = FormatConverter()
@@ -116,9 +116,9 @@ class AnomalyTransform(VideoTransform, AnomalyTask):
 
 if CAN_REGISTER_ELEMENT and backend.BACKEND == "gst":
     __gstelementfactory__ = backend.register_gst_element(
-        "pyml_anomaly", AnomalyTransform
+        "mp_anomaly", AnomalyTransform
     )
 elif not CAN_REGISTER_ELEMENT:
     GlobalLogger().warning(
-        "The 'pyml_anomaly' element will not be registered because required modules are missing."
+        "The 'mp_anomaly' element will not be registered because required modules are missing."
     )

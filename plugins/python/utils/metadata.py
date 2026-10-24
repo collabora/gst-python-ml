@@ -35,7 +35,7 @@ def first_memory_with_prefix(buffer: Gst.Buffer, prefix: bytes):
 
 
 class Metadata:
-    HEADER = b"GST-PYTHON-ML"
+    HEADER = b"MODELPIPE"
 
     def __init__(self, format_string: str):
         """

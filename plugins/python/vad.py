@@ -49,13 +49,13 @@ class VoiceActivityDetector(InPlaceAudioTransform):
           if data.startswith(b"GST-VAD:"):
               prob = struct.unpack("f", data[8:12])[0]
 
-    Typical use: chain before pyml_whispertranscribe to pre-filter silence
+    Typical use: chain before mp_whispertranscribe to pre-filter silence
     and reduce transcription latency.
 
     Example pipeline:
       pulsesrc ! audio/x-raw,format=S16LE,rate=16000,channels=1 \\
-        ! pyml_vad threshold=0.6 \\
-        ! pyml_whispertranscribe model-name=medium device=cuda \\
+        ! mp_vad threshold=0.6 \\
+        ! mp_whispertranscribe model-name=medium device=cuda \\
         ! fakesink
     """
 
@@ -132,9 +132,9 @@ class VoiceActivityDetector(InPlaceAudioTransform):
 
 if CAN_REGISTER_ELEMENT and backend.BACKEND == "gst":
     __gstelementfactory__ = backend.register_gst_element(
-        "pyml_vad", VoiceActivityDetector
+        "mp_vad", VoiceActivityDetector
     )
 elif not CAN_REGISTER_ELEMENT:
     GlobalLogger().warning(
-        "The 'pyml_vad' element will not be registered because required modules are missing."
+        "The 'mp_vad' element will not be registered because required modules are missing."
     )

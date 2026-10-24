@@ -3,8 +3,8 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>GStreamer Python ML &mdash; Pure Python ML Framework for GStreamer</title>
-    <meta name="description" content="A pure Python ML framework for upstream GStreamer. Object detection, segmentation, depth, OCR, face recognition, captioning, transcription, LLMs, and more &mdash; all as native GStreamer elements. By Collabora.">
+    <title>ModelPipe, Machine Learning for Media Pipelines</title>
+    <meta name="description" content="ModelPipe runs a wide variety of ML models in GStreamer and Glass2Glass multimedia pipelines.">
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800;900&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
@@ -879,7 +879,7 @@
                 <line x1="7" y1="14" x2="11" y2="14" stroke="#A855F7" stroke-width="2"/>
                 <line x1="17" y1="14" x2="21" y2="14" stroke="#A855F7" stroke-width="2"/>
             </svg>
-            GStreamer Python ML
+            ModelPipe
         </a>
         <ul class="nav-links">
             <li><a href="#engines">Engines</a></li>
@@ -889,7 +889,7 @@
             <li><a href="#pipelines">Pipelines</a></li>
             <li><a href="#install">Install</a></li>
             <li><a href="#custom-plugins">Extend</a></li>
-            <li><a href="https://github.com/collabora/gst-python-ml" class="nav-btn-ghost">GitHub</a></li>
+            <li><a href="https://github.com/collabora/modelpipe" class="nav-btn-ghost">GitHub</a></li>
             <li><a href="#install" class="nav-btn-green">Get Started</a></li>
         </ul>
         <button class="nav-hamburger" onclick="document.querySelector('.nav-links').classList.toggle('show')" aria-label="Toggle menu">&#9776;</button>
@@ -901,17 +901,17 @@
     <div class="hero-content">
         <div class="hero-badge">
             <div class="badge-dot"></div>
-            Open Source &middot; <span>v1.1.0</span>
+            Open Source &middot; <span>v1.3.0</span>
         </div>
-        <h1>Pure Python ML for<br><em>GStreamer</em></h1>
+        <h1>Machine Learning for<br><em>Media Pipelines</em></h1>
         <p class="hero-sub">
-            A complete ML framework for upstream GStreamer. Object detection, pose estimation, depth, captioning, transcription, LLMs, and more &mdash; all as native GStreamer elements.
+            ModelPipe runs a wide variety of ML models in GStreamer and Glass2Glass multimedia pipelines.
         </p>
         <div class="hero-actions">
-            <a href="https://github.com/collabora/gst-python-ml" class="btn btn-green">
+            <a href="https://github.com/collabora/modelpipe" class="btn btn-green">
                 Get Started
             </a>
-            <a href="https://github.com/collabora/gst-python-ml" class="btn btn-outline">
+            <a href="https://github.com/collabora/modelpipe" class="btn btn-outline">
                 View on GitHub &rarr;
             </a>
         </div>
@@ -919,15 +919,15 @@
         <div class="hero-demo">
             <div class="demo-header">
                 <div class="demo-dots"><span></span><span></span><span></span></div>
-                <div class="demo-title">pyml-launch &mdash; object detection pipeline</div>
+                <div class="demo-title">mp-launch &mdash; object detection pipeline</div>
                 <div style="width: 38px;"></div>
             </div>
             <div class="demo-body">
 <span class="c"># YOLO object detection with bounding box overlay</span>
-<span class="p">$</span> <span class="w">python pyml-launch.py</span> <span class="f">filesrc</span> <span class="v">location=video.mp4</span> <span class="w">!</span> <span class="f">decodebin</span> <span class="w">!</span> \
+<span class="p">$</span> <span class="w">python mp-launch.py</span> <span class="f">filesrc</span> <span class="v">location=video.mp4</span> <span class="w">!</span> <span class="f">decodebin</span> <span class="w">!</span> \
     <span class="f">videoconvertscale</span> <span class="w">!</span> <span class="v">video/x-raw,width=640,height=480</span> <span class="w">!</span> \
-    <span class="f">pyml_yolo</span> <span class="v">model-name=yolo11m</span> <span class="v">device=cuda:0</span> <span class="v">track=True</span> <span class="w">!</span> \
-    <span class="f">pyml_overlay</span> <span class="w">!</span> <span class="f">videoconvert</span> <span class="w">!</span> <span class="f">autovideosink</span>
+    <span class="f">mp_yolo</span> <span class="v">model-name=yolo11m</span> <span class="v">device=cuda:0</span> <span class="v">track=True</span> <span class="w">!</span> \
+    <span class="f">mp_overlay</span> <span class="w">!</span> <span class="f">videoconvert</span> <span class="w">!</span> <span class="f">autovideosink</span>
 
 <span class="o">Setting pipeline to PAUSED ...</span>
 <span class="o">Pipeline is PREROLLING ...</span>
@@ -1057,62 +1057,62 @@
     <div class="section-inner">
         <span class="section-label">Elements</span>
         <h2 class="section-title">Native GStreamer Elements</h2>
-        <p class="section-desc">Drop-in GStreamer elements for every ML task. Use them in any <code style="background: var(--bg-tertiary); padding: 2px 6px; border-radius: 4px; font-size: 0.9rem; font-family: 'JetBrains Mono', monospace; color: var(--green);">pyml-launch</code> pipeline or Python app.</p>
+        <p class="section-desc">Drop-in GStreamer elements for every ML task. Use them in any <code style="background: var(--bg-tertiary); padding: 2px 6px; border-radius: 4px; font-size: 0.9rem; font-family: 'JetBrains Mono', monospace; color: var(--green);">mp-launch</code> pipeline or Python app.</p>
 
         <div class="elements-grid fade-in">
             <!-- VISION -->
             <div class="element-card">
                 <span class="f-icon">&#128065;</span>
-                <code>pyml_objectdetector</code>
+                <code>mp_objectdetector</code>
                 <h3>Object Detection</h3>
                 <p>All TorchVision detection models plus ONNX, OpenVINO, TFLite, and TensorFlow engines. Faster R-CNN, SSD, and more.</p>
                 <span class="element-tag tag-vision">Vision</span>
             </div>
             <div class="element-card">
                 <span class="f-icon">&#127919;</span>
-                <code>pyml_yolo</code>
+                <code>mp_yolo</code>
                 <h3>YOLO Detection + Tracking</h3>
                 <p>YOLO11 object detection with built-in multi-object tracking. Real-time bounding boxes with track IDs.</p>
                 <span class="element-tag tag-vision">Vision</span>
             </div>
             <div class="element-card">
                 <span class="f-icon">&#127917;</span>
-                <code>pyml_maskrcnn</code>
+                <code>mp_maskrcnn</code>
                 <h3>Instance Segmentation</h3>
                 <p>Mask R-CNN pixel-level instance segmentation with per-object masks and bounding boxes.</p>
                 <span class="element-tag tag-vision">Vision</span>
             </div>
             <div class="element-card">
                 <span class="f-icon">&#129336;</span>
-                <code>pyml_yolo_pose</code>
+                <code>mp_yolo_pose</code>
                 <h3>Pose Estimation</h3>
                 <p>COCO 17-keypoint skeleton detection with YOLO pose models. Optional in-element skeleton visualization.</p>
                 <span class="element-tag tag-vision">Vision</span>
             </div>
             <div class="element-card">
                 <span class="f-icon">&#127755;</span>
-                <code>pyml_depth</code>
+                <code>mp_depth</code>
                 <h3>Monocular Depth</h3>
                 <p>DepthAnything V2 monocular depth estimation. Multiple colormaps (inferno, jet, viridis, plasma, magma) and frame-stride support.</p>
                 <span class="element-tag tag-vision">Vision</span>
             </div>
             <div class="element-card">
                 <span class="f-icon">&#128218;</span>
-                <code>pyml_clip</code>
+                <code>mp_clip</code>
                 <h3>Zero-Shot Classification</h3>
                 <p>CLIP and SigLIP zero-shot classification with user-defined labels. No fixed label set &mdash; set labels at pipeline launch.</p>
                 <span class="element-tag tag-vision">Vision</span>
             </div>
             <div class="element-card">
                 <span class="f-icon">&#128200;</span>
-                <code>pyml_classifier</code>
+                <code>mp_classifier</code>
                 <h3>Image Classification</h3>
                 <p>All TorchVision classifiers including ResNet, EfficientNet, and more. GPU or CPU inference.</p>
                 <span class="element-tag tag-vision">Vision</span>
             </div>
             <div class="element-card">
                 <span class="f-icon">&#128172;</span>
-                <code>pyml_caption_qwen</code>
+                <code>mp_caption_qwen</code>
                 <h3>Video Captioning (Qwen VL)</h3>
                 <p>Qwen2.5-VL vision-language model for video captioning and visual understanding. Supports caption history, LLM summarization, and AWQ quantization.</p>
                 <span class="element-tag tag-vision">Vision</span>
@@ -1121,35 +1121,35 @@
             <!-- AUDIO -->
             <div class="element-card">
                 <span class="f-icon">&#127897;</span>
-                <code>pyml_whispertranscribe</code>
+                <code>mp_whispertranscribe</code>
                 <h3>Speech Transcription</h3>
                 <p>OpenAI Whisper-based transcription with language detection, translation to English, and initial prompt support.</p>
                 <span class="element-tag tag-audio">Audio</span>
             </div>
             <div class="element-card">
                 <span class="f-icon">&#128225;</span>
-                <code>pyml_whisperlive</code>
+                <code>mp_whisperlive</code>
                 <h3>Live Transcription + LLM</h3>
                 <p>Combined live transcription with LLM integration. Transcribe, translate, and generate speech in one pipeline.</p>
                 <span class="element-tag tag-audio">Audio</span>
             </div>
             <div class="element-card">
                 <span class="f-icon">&#128266;</span>
-                <code>pyml_vad</code>
+                <code>mp_vad</code>
                 <h3>Voice Activity Detection</h3>
                 <p>Silero VAD with configurable threshold. Standalone metadata mode or gating mode to mute silent audio.</p>
                 <span class="element-tag tag-audio">Audio</span>
             </div>
             <div class="element-card">
                 <span class="f-icon">&#128264;</span>
-                <code>pyml_whisperspeechtts</code>
+                <code>mp_whisperspeechtts</code>
                 <h3>Text-to-Speech (WhisperSpeech)</h3>
                 <p>WhisperSpeech-based TTS for natural-sounding speech generation from text input.</p>
                 <span class="element-tag tag-audio">Audio</span>
             </div>
             <div class="element-card">
                 <span class="f-icon">&#127925;</span>
-                <code>pyml_demucs</code>
+                <code>mp_demucs</code>
                 <h3>Audio Separation</h3>
                 <p>Demucs source separation for isolating vocals from background audio. Clean input for downstream transcription.</p>
                 <span class="element-tag tag-audio">Audio</span>
@@ -1158,28 +1158,28 @@
             <!-- LANGUAGE -->
             <div class="element-card">
                 <span class="f-icon">&#127760;</span>
-                <code>pyml_mariantranslate</code>
+                <code>mp_mariantranslate</code>
                 <h3>Translation</h3>
                 <p>Marian machine translation. model-name is the Hugging Face model.</p>
                 <span class="element-tag tag-language">Language</span>
             </div>
             <div class="element-card">
                 <span class="f-icon">&#129504;</span>
-                <code>pyml_llm</code>
+                <code>mp_llm</code>
                 <h3>Large Language Models</h3>
                 <p>Run HuggingFace LLMs (Phi-2, Qwen3, etc.) as GStreamer elements. Text-in, text-out with system prompts.</p>
                 <span class="element-tag tag-language">Language</span>
             </div>
             <div class="element-card">
                 <span class="f-icon">&#127760;</span>
-                <code>pyml_llm_remote</code>
+                <code>mp_llm_remote</code>
                 <h3>Remote LLM (Ollama)</h3>
                 <p>Send text to a remote LLM via HTTP. Works with Ollama, OpenAI-compatible APIs. No local GPU required.</p>
                 <span class="element-tag tag-language">Language</span>
             </div>
             <div class="element-card">
                 <span class="f-icon">&#127912;</span>
-                <code>pyml_stablediffusion</code>
+                <code>mp_stablediffusion</code>
                 <h3>Text-to-Image</h3>
                 <p>Stable Diffusion image generation from text prompts. Outputs PNG frames as GStreamer buffers.</p>
                 <span class="element-tag tag-language">Language</span>
@@ -1188,49 +1188,49 @@
             <!-- UTILITY -->
             <div class="element-card">
                 <span class="f-icon">&#128230;</span>
-                <code>pyml_overlay</code>
+                <code>mp_overlay</code>
                 <h3>Bounding Box Overlay</h3>
                 <p>Render detection metadata as bounding boxes, labels, and tracking IDs directly on video frames.</p>
                 <span class="element-tag tag-utility">Utility</span>
             </div>
             <div class="element-card">
                 <span class="f-icon">&#128232;</span>
-                <code>pyml_kafkasink</code>
+                <code>mp_kafkasink</code>
                 <h3>Kafka Metadata Sink</h3>
                 <p>Serialize model inference metadata to Apache Kafka with JSON schema validation.</p>
                 <span class="element-tag tag-utility">Utility</span>
             </div>
             <div class="element-card">
                 <span class="f-icon">&#128256;</span>
-                <code>pyml_streammux</code>
+                <code>mp_streammux</code>
                 <h3>Stream Multiplexer</h3>
                 <p>Multiplex multiple video streams into a single batched stream for efficient multi-stream inference.</p>
                 <span class="element-tag tag-utility">Utility</span>
             </div>
             <div class="element-card">
                 <span class="f-icon">&#128257;</span>
-                <code>pyml_streamdemux</code>
+                <code>mp_streamdemux</code>
                 <h3>Stream Demultiplexer</h3>
                 <p>Split a batched stream back into individual streams for per-stream display or processing.</p>
                 <span class="element-tag tag-utility">Utility</span>
             </div>
             <div class="element-card">
                 <span class="f-icon">&#128301;</span>
-                <code>pyml_inference</code>
+                <code>mp_inference</code>
                 <h3>Generic Inference</h3>
                 <p>Run any model through any engine and inspect raw output. Useful for testing and debugging new models.</p>
                 <span class="element-tag tag-utility">Utility</span>
             </div>
             <div class="element-card">
                 <span class="f-icon">&#128247;</span>
-                <code>pyml_video_transform</code>
+                <code>mp_video_transform</code>
                 <h3>Video Transform</h3>
                 <p>Pre/post-processing transforms for video frames within ML pipelines.</p>
                 <span class="element-tag tag-utility">Utility</span>
             </div>
             <div class="element-card">
                 <span class="f-icon">&#127926;</span>
-                <code>pyml_sepformer</code>
+                <code>mp_sepformer</code>
                 <h3>Speech Separation</h3>
                 <p>SpeechBrain SepFormer model for separating overlapping speakers. Clean single-speaker audio from mixed recordings.</p>
                 <span class="element-tag tag-audio">Audio</span>
@@ -1239,49 +1239,49 @@
             <!-- NEW VISION -->
             <div class="element-card">
                 <span class="f-icon">&#9935;</span>
-                <code>pyml_sam</code>
+                <code>mp_sam</code>
                 <h3>Segment Anything</h3>
                 <p>Meta SAM2 zero-shot segmentation. Point, box, or auto prompts. Outputs per-object masks as GstAnalytics metadata.</p>
                 <span class="element-tag tag-vision">Vision</span>
             </div>
             <div class="element-card">
                 <span class="f-icon">&#128220;</span>
-                <code>pyml_ocr</code>
+                <code>mp_ocr</code>
                 <h3>Optical Character Recognition</h3>
                 <p>EasyOCR and TrOCR text detection and recognition. Outputs bounding boxes and recognized text in GstAnalytics metadata.</p>
                 <span class="element-tag tag-vision">Vision</span>
             </div>
             <div class="element-card">
                 <span class="f-icon">&#128100;</span>
-                <code>pyml_face</code>
+                <code>mp_face</code>
                 <h3>Face Detection &amp; Recognition</h3>
                 <p>RetinaFace detection with ArcFace embedding-based recognition. Configurable face gallery for identification.</p>
                 <span class="element-tag tag-vision">Vision</span>
             </div>
             <div class="element-card">
                 <span class="f-icon">&#127744;</span>
-                <code>pyml_optical_flow</code>
+                <code>mp_optical_flow</code>
                 <h3>Optical Flow</h3>
                 <p>RAFT dense optical flow estimation. Outputs per-pixel motion vectors as color-coded visualization or raw flow fields.</p>
                 <span class="element-tag tag-vision">Vision</span>
             </div>
             <div class="element-card">
                 <span class="f-icon">&#128269;</span>
-                <code>pyml_superres</code>
+                <code>mp_superres</code>
                 <h3>Super-Resolution</h3>
                 <p>Real-ESRGAN image upscaling (2&times;/4&times;). Tile-based processing for arbitrary input sizes with configurable overlap.</p>
                 <span class="element-tag tag-vision">Vision</span>
             </div>
             <div class="element-card">
                 <span class="f-icon">&#127916;</span>
-                <code>pyml_action</code>
+                <code>mp_action</code>
                 <h3>Action Recognition</h3>
                 <p>SlowFast and X3D temporal action recognition over sliding windows. Classifies activities across configurable frame clips.</p>
                 <span class="element-tag tag-vision">Vision</span>
             </div>
             <div class="element-card">
                 <span class="f-icon">&#128680;</span>
-                <code>pyml_anomaly</code>
+                <code>mp_anomaly</code>
                 <h3>Anomaly Detection</h3>
                 <p>PatchCore visual anomaly detection for manufacturing QA. Generates anomaly score heatmaps with configurable thresholds.</p>
                 <span class="element-tag tag-vision">Vision</span>
@@ -1290,21 +1290,21 @@
             <!-- NEW AUDIO/MULTIMODAL -->
             <div class="element-card">
                 <span class="f-icon">&#127911;</span>
-                <code>pyml_clap</code>
+                <code>mp_clap</code>
                 <h3>Audio Classification (CLAP)</h3>
                 <p>LAION CLAP zero-shot audio classification. User-defined text labels matched against audio &mdash; no fixed label set.</p>
                 <span class="element-tag tag-audio">Audio</span>
             </div>
             <div class="element-card">
                 <span class="f-icon">&#128064;</span>
-                <code>pyml_vlm</code>
+                <code>mp_vlm</code>
                 <h3>Vision-Language Model</h3>
                 <p>Generic VLM element supporting LLaVA, InternVL, and more. Visual question answering with configurable prompts.</p>
                 <span class="element-tag tag-vision">Vision</span>
             </div>
             <div class="element-card">
                 <span class="f-icon">&#128190;</span>
-                <code>pyml_embedding</code>
+                <code>mp_embedding</code>
                 <h3>Embedding Extractor</h3>
                 <p>Extract dense vector embeddings from video frames using CLIP, DINOv2, or any vision backbone. Outputs to buffer metadata or file.</p>
                 <span class="element-tag tag-vision">Vision</span>
@@ -1313,56 +1313,56 @@
             <!-- NEW UTILITY -->
             <div class="element-card">
                 <span class="f-icon">&#128270;</span>
-                <code>pyml_tracker</code>
+                <code>mp_tracker</code>
                 <h3>Multi-Object Tracker</h3>
                 <p>Standalone SORT/ByteTrack tracker. Reads upstream detection metadata and assigns persistent track IDs &mdash; works with any detector.</p>
                 <span class="element-tag tag-utility">Utility</span>
             </div>
             <div class="element-card">
                 <span class="f-icon">&#128680;</span>
-                <code>pyml_alert</code>
+                <code>mp_alert</code>
                 <h3>ML Alert</h3>
                 <p>Rule-based alerting triggered by upstream detections. Webhook, MQTT, and metadata output with per-rule cooldowns.</p>
                 <span class="element-tag tag-utility">Utility</span>
             </div>
             <div class="element-card">
                 <span class="f-icon">&#127909;</span>
-                <code>pyml_alertrecorder</code>
+                <code>mp_alertrecorder</code>
                 <h3>Alert Recorder</h3>
                 <p>Writes a video clip around each alert: a few seconds before, and until the alerts stop. Any encoder and muxer GStreamer has.</p>
                 <span class="element-tag tag-utility">Utility</span>
             </div>
             <div class="element-card">
                 <span class="f-icon">&#127919;</span>
-                <code>pyml_zeroshotdetector</code>
+                <code>mp_zeroshotdetector</code>
                 <h3>Zero-Shot Object Detection</h3>
                 <p>Type the classes: <code>labels="forklift, hard hat"</code>. OWLv2 or Grounding DINO boxes flow into alerts, tracking and overlay with no training.</p>
                 <span class="element-tag tag-vision">Vision</span>
             </div>
             <div class="element-card">
                 <span class="f-icon">&#128257;</span>
-                <code>pyml_metareplay</code>
+                <code>mp_metareplay</code>
                 <h3>Metadata Replay</h3>
                 <p>Reattaches a recorded JSON lines file to the frames, so tracker, alert and overlay run with no model and no GPU.</p>
                 <span class="element-tag tag-utility">Utility</span>
             </div>
             <div class="element-card">
                 <span class="f-icon">&#129504;</span>
-                <code>pyml_embeddingsink</code>
+                <code>mp_embeddingsink</code>
                 <h3>Video Memory</h3>
                 <p>Stores CLIP frame embeddings in a local index. The MCP server's <code>search_video</code> finds moments by text.</p>
                 <span class="element-tag tag-utility">Utility</span>
             </div>
             <div class="element-card">
                 <span class="f-icon">&#128221;</span>
-                <code>pyml_digest</code>
+                <code>mp_digest</code>
                 <h3>Incident Digest</h3>
                 <p>Collects a time window of captions or transcripts into one text buffer, so an LLM summarises a minute rather than a line.</p>
                 <span class="element-tag tag-utility">Utility</span>
             </div>
             <div class="element-card">
                 <span class="f-icon">&#128203;</span>
-                <code>pyml_metasink</code>
+                <code>mp_metasink</code>
                 <h3>Metadata Sink</h3>
                 <p>One JSON line per frame: detections, alerts, depth and other blobs, transcripts. To a file, stdout, or the bus for the MCP server.</p>
                 <span class="element-tag tag-utility">Utility</span>
@@ -1384,13 +1384,13 @@
             </div>
             <div class="feat-card">
                 <h3>Results</h3>
-                <p>End the pipeline with <code>pyml_metasink</code>. Every record it posts, detections, alerts, transcripts, reaches the agent through <code>latest_metadata</code>.</p>
+                <p>End the pipeline with <code>mp_metasink</code>. Every record it posts, detections, alerts, transcripts, reaches the agent through <code>latest_metadata</code>.</p>
             </div>
             <div class="feat-card">
                 <h3>Setup</h3>
 <pre>uv sync --extra mcp
-claude mcp add gst-python-ml -- \
-  /path/to/gst-python-ml/.venv/bin/pyml-mcp</pre>
+claude mcp add modelpipe -- \
+  /path/to/modelpipe/.venv/bin/pyml-mcp</pre>
             </div>
         </div>
     </div>
@@ -1401,12 +1401,12 @@ claude mcp add gst-python-ml -- \
     <div class="section-inner">
         <span class="section-label">Advanced Features</span>
         <h2 class="section-title">Built for Real Pipelines</h2>
-        <p class="section-desc">Production features that make GStreamer Python ML more than a demo &mdash; it&rsquo;s a framework.</p>
+        <p class="section-desc">Production features that make ModelPipe more than a demo &mdash; it&rsquo;s a framework.</p>
 
         <div class="features-grid fade-in">
             <div class="feat-card">
                 <h3>&#127919; Multi-Object Tracking</h3>
-                <p>Built-in tracking with <code>pyml_yolo</code>. Set <code>track=True</code> and get persistent track IDs across frames with no extra elements.</p>
+                <p>Built-in tracking with <code>mp_yolo</code>. Set <code>track=True</code> and get persistent track IDs across frames with no extra elements.</p>
             </div>
             <div class="feat-card">
                 <h3>&#128202; Multi-Engine Support</h3>
@@ -1414,7 +1414,7 @@ claude mcp add gst-python-ml -- \
             </div>
             <div class="feat-card">
                 <h3>&#128256; Multi-Stream Batching</h3>
-                <p>Use <code>pyml_streammux</code> and <code>pyml_streamdemux</code> to batch multiple video streams through a single model for GPU-efficient multi-camera inference.</p>
+                <p>Use <code>mp_streammux</code> and <code>mp_streamdemux</code> to batch multiple video streams through a single model for GPU-efficient multi-camera inference.</p>
             </div>
             <div class="feat-card">
                 <h3>&#128266; VAD Gating</h3>
@@ -1422,19 +1422,19 @@ claude mcp add gst-python-ml -- \
             </div>
             <div class="feat-card">
                 <h3>&#128172; Qwen VL + LLM Pipelines</h3>
-                <p>Chain <code>pyml_caption_qwen</code> (Qwen2.5-VL-3B-Instruct-AWQ) with <code>coalescehistory</code> and <code>pyml_llm</code> (Qwen3-0.6B) for real-time video narration with caption history summarization.</p>
+                <p>Chain <code>mp_caption_qwen</code> (Qwen2.5-VL-3B-Instruct-AWQ) with <code>coalescehistory</code> and <code>mp_llm</code> (Qwen3-0.6B) for real-time video narration with caption history summarization.</p>
             </div>
             <div class="feat-card">
                 <h3>&#127925; Audio Separation</h3>
-                <p>Demucs vocal isolation (<code>pyml_demucs</code>) cleans audio before transcription for dramatically better accuracy in noisy environments.</p>
+                <p>Demucs vocal isolation (<code>mp_demucs</code>) cleans audio before transcription for dramatically better accuracy in noisy environments.</p>
             </div>
             <div class="feat-card">
                 <h3>&#127760; Transcribe &rarr; Translate &rarr; Speak</h3>
-                <p>Chain <code>pyml_whispertranscribe</code> &rarr; <code>pyml_mariantranslate</code> &rarr; <code>pyml_whisperspeechtts</code> for end-to-end speech-to-speech translation in one pipeline.</p>
+                <p>Chain <code>mp_whispertranscribe</code> &rarr; <code>mp_mariantranslate</code> &rarr; <code>mp_whisperspeechtts</code> for end-to-end speech-to-speech translation in one pipeline.</p>
             </div>
             <div class="feat-card">
                 <h3>&#129302; Agent Access over MCP</h3>
-                <p><code>pyml-mcp</code> is an MCP server that runs a pipeline in-process. An LLM agent starts it, reads detections and transcripts from <code>pyml_metasink</code>, and changes element properties while it runs.</p>
+                <p><code>pyml-mcp</code> is an MCP server that runs a pipeline in-process. An LLM agent starts it, reads detections and transcripts from <code>mp_metasink</code>, and changes element properties while it runs.</p>
             </div>
             <div class="feat-card">
                 <h3>&#9878; Cascade Gating</h3>
@@ -1442,15 +1442,15 @@ claude mcp add gst-python-ml -- \
             </div>
             <div class="feat-card">
                 <h3>&#128269; Search Footage by Text</h3>
-                <p><code>pyml_embeddingsink</code> indexes CLIP embeddings, and an agent asks <code>search_video("a red van at the gate")</code> over MCP to get timestamps back.</p>
+                <p><code>mp_embeddingsink</code> indexes CLIP embeddings, and an agent asks <code>search_video("a red van at the gate")</code> over MCP to get timestamps back.</p>
             </div>
             <div class="feat-card">
                 <h3>&#127909; Alert Clips</h3>
-                <p><code>pyml_alert</code> tags the frame, <code>pyml_alertrecorder</code> writes the seconds around it to a file. No external recorder, no polling.</p>
+                <p><code>mp_alert</code> tags the frame, <code>mp_alertrecorder</code> writes the seconds around it to a file. No external recorder, no polling.</p>
             </div>
             <div class="feat-card">
                 <h3>&#128232; Kafka Integration</h3>
-                <p>Stream inference metadata to Kafka topics with <code>pyml_kafkasink</code>. JSON schema validation, configurable broker and topic, Docker-ready setup.</p>
+                <p>Stream inference metadata to Kafka topics with <code>mp_kafkasink</code>. JSON schema validation, configurable broker and topic, Docker-ready setup.</p>
             </div>
             <div class="feat-card">
                 <h3>&#9889; Frame Stride</h3>
@@ -1466,7 +1466,7 @@ claude mcp add gst-python-ml -- \
             </div>
             <div class="feat-card">
                 <h3>Python Without the GIL</h3>
-                <p>On the g2g backend, each Python element runs on its own OS thread. On free-threaded CPython 3.14t with the GIL off, those threads run Python at the same time. Experimental, tested with YOLO and <code>pyml_tracker</code> on CUDA. Setup in <a href="https://github.com/collabora/gst-python-ml/blob/master/FREE_THREADING.md">FREE_THREADING.md</a>.</p>
+                <p>On the g2g backend, each Python element runs on its own OS thread. On free-threaded CPython 3.14t with the GIL off, those threads run Python at the same time. Experimental, tested with YOLO and <code>mp_tracker</code> on CUDA. Setup in <a href="https://github.com/collabora/modelpipe/blob/master/FREE_THREADING.md">FREE_THREADING.md</a>.</p>
             </div>
             <div class="feat-card">
                 <h3>&#128300; ONNX Post-Processing</h3>
@@ -1481,7 +1481,7 @@ claude mcp add gst-python-ml -- \
     <div class="section-inner">
         <span class="section-label">Discover Capabilities</span>
         <h2 class="section-title">From Pixels to Understanding</h2>
-        <p class="section-desc">GStreamer Python ML spans vision, audio, and language &mdash; all composable in standard GStreamer pipelines.</p>
+        <p class="section-desc">ModelPipe spans vision, audio, and language. The elements compose in GStreamer and Glass2Glass pipelines.</p>
 
         <div class="cap-grid fade-in">
             <div class="cap-card">
@@ -1529,54 +1529,54 @@ claude mcp add gst-python-ml -- \
     <div class="section-inner">
         <span class="section-label">Example Pipelines</span>
         <h2 class="section-title">Copy, Paste, Run</h2>
-        <p class="section-desc">Real pipelines you can run right now. Every example works with <code style="background: var(--bg-tertiary); padding: 2px 6px; border-radius: 4px; font-size: 0.9rem; font-family: 'JetBrains Mono', monospace; color: var(--green);">pyml-launch</code>.</p>
+        <p class="section-desc">Real pipelines you can run right now. Every example works with <code style="background: var(--bg-tertiary); padding: 2px 6px; border-radius: 4px; font-size: 0.9rem; font-family: 'JetBrains Mono', monospace; color: var(--green);">mp-launch</code>.</p>
 
         <div class="pipeline-grid fade-in">
             <div class="pipeline-card">
                 <span class="pipe-tag">Alerts</span>
                 <h3>Detect, Alert, Record, Log</h3>
                 <p>YOLO detections raise an alert, the recorder writes a clip, the sink logs every frame as JSON.</p>
-<pre>python pyml-launch.py filesrc location=video.mp4 \
+<pre>python mp-launch.py filesrc location=video.mp4 \
   ! decodebin ! videoconvert ! videoscale \
   ! video/x-raw,width=640,height=480 \
-  ! pyml_yolo model-name=yolo11m device=cuda \
-  ! pyml_alert rules='{"class":"person","min_score":0.7}' \
-  ! pyml_alertrecorder location=alert-%s.webm \
-  ! pyml_metasink location=people.jsonl</pre>
+  ! mp_yolo model-name=yolo11m device=cuda \
+  ! mp_alert rules='{"class":"person","min_score":0.7}' \
+  ! mp_alertrecorder location=alert-%s.webm \
+  ! mp_metasink location=people.jsonl</pre>
             </div>
             <div class="pipeline-card">
                 <span class="pipe-tag">Vision</span>
                 <h3>YOLO + Tracking</h3>
                 <p>YOLO11 detection with multi-object tracking and overlay.</p>
-<pre>python pyml-launch.py filesrc location=video.mp4 \
+<pre>python mp-launch.py filesrc location=video.mp4 \
   ! decodebin ! videoconvertscale \
   ! video/x-raw,width=640,height=480 \
-  ! pyml_yolo model-name=yolo11m \
+  ! mp_yolo model-name=yolo11m \
     device=cuda:0 track=True \
-  ! pyml_overlay ! videoconvert \
+  ! mp_overlay ! videoconvert \
   ! autovideosink</pre>
             </div>
             <div class="pipeline-card">
                 <span class="pipe-tag">Vision</span>
                 <h3>Torch Compile</h3>
                 <p>Object detection with torch.compile for optimized steady-state throughput.</p>
-<pre>python pyml-launch.py filesrc location=video.mp4 \
+<pre>python mp-launch.py filesrc location=video.mp4 \
   ! decodebin ! videoconvert ! videoscale \
   ! video/x-raw,width=640,height=480 \
-  ! pyml_objectdetector \
+  ! mp_objectdetector \
     model-name=fasterrcnn_resnet50_fpn \
     device=cuda compile=True \
-  ! pyml_overlay ! videoconvert \
+  ! mp_overlay ! videoconvert \
   ! autovideosink</pre>
             </div>
             <div class="pipeline-card">
                 <span class="pipe-tag">Vision</span>
                 <h3>Pose Estimation</h3>
                 <p>YOLO pose with skeleton visualization on frame.</p>
-<pre>python pyml-launch.py filesrc location=video.mp4 \
+<pre>python mp-launch.py filesrc location=video.mp4 \
   ! decodebin ! videoconvert \
   ! videoscale ! video/x-raw,width=640,height=480 \
-  ! pyml_yolo_pose model-name=yolo11n-pose \
+  ! mp_yolo_pose model-name=yolo11n-pose \
     device=cuda \
   ! videoconvert ! autovideosink</pre>
             </div>
@@ -1584,10 +1584,10 @@ claude mcp add gst-python-ml -- \
                 <span class="pipe-tag">Vision</span>
                 <h3>Depth Estimation</h3>
                 <p>DepthAnything V2 monocular depth with colormap.</p>
-<pre>python pyml-launch.py filesrc location=video.mp4 \
+<pre>python mp-launch.py filesrc location=video.mp4 \
   ! decodebin ! videoconvert \
   ! videoscale ! video/x-raw,width=640,height=480 \
-  ! pyml_depth device=cuda \
+  ! mp_depth device=cuda \
     model-name=depth-anything/\
     Depth-Anything-V2-Small-hf \
   ! videoconvert ! autovideosink</pre>
@@ -1596,22 +1596,22 @@ claude mcp add gst-python-ml -- \
                 <span class="pipe-tag">Vision</span>
                 <h3>Zero-Shot CLIP</h3>
                 <p>Classify video frames with custom text labels.</p>
-<pre>python pyml-launch.py filesrc location=video.mp4 \
+<pre>python mp-launch.py filesrc location=video.mp4 \
   ! decodebin ! videoconvert \
   ! videoscale ! video/x-raw,width=640,height=480 \
-  ! pyml_clip device=cuda \
+  ! mp_clip device=cuda \
     labels="person, car, dog, cat" \
     top-k=3 \
-  ! pyml_overlay ! videoconvert \
+  ! mp_overlay ! videoconvert \
   ! autovideosink</pre>
             </div>
             <div class="pipeline-card">
                 <span class="pipe-tag">Audio</span>
                 <h3>Transcribe + Translate</h3>
                 <p>Korean audio to English text transcription.</p>
-<pre>python pyml-launch.py filesrc location=audio.wav \
+<pre>python mp-launch.py filesrc location=audio.wav \
   ! decodebin ! audioconvert \
-  ! pyml_whispertranscribe \
+  ! mp_whispertranscribe \
     device=cuda language=ko \
     translate=yes \
   ! fakesink</pre>
@@ -1620,21 +1620,21 @@ claude mcp add gst-python-ml -- \
                 <span class="pipe-tag">Audio</span>
                 <h3>VAD + Transcription</h3>
                 <p>Voice activity gating before Whisper for lower latency.</p>
-<pre>python pyml-launch.py filesrc location=audio.wav \
+<pre>python mp-launch.py filesrc location=audio.wav \
   ! decodebin ! audioconvert \
   ! audioresample \
   ! audio/x-raw,format=S16LE,\
     rate=16000,channels=1 \
-  ! pyml_vad threshold=0.6 gate=true \
-  ! pyml_whispertranscribe device=cuda \
+  ! mp_vad threshold=0.6 gate=true \
+  ! mp_whispertranscribe device=cuda \
   ! fakesink</pre>
             </div>
             <div class="pipeline-card">
                 <span class="pipe-tag">Language</span>
                 <h3>LLM Text Generation</h3>
                 <p>Run a HuggingFace LLM as a GStreamer element.</p>
-<pre>python pyml-launch.py filesrc location=prompt.txt \
-  ! pyml_llm device=cuda \
+<pre>python mp-launch.py filesrc location=prompt.txt \
+  ! mp_llm device=cuda \
     model-name="microsoft/phi-2" \
   ! fakesink</pre>
             </div>
@@ -1642,8 +1642,8 @@ claude mcp add gst-python-ml -- \
                 <span class="pipe-tag">Language</span>
                 <h3>Stable Diffusion</h3>
                 <p>Text prompt to PNG image generation.</p>
-<pre>python pyml-launch.py filesrc location=prompt.txt \
-  ! pyml_stablediffusion device=cuda \
+<pre>python mp-launch.py filesrc location=prompt.txt \
+  ! mp_stablediffusion device=cuda \
   ! pngenc \
   ! filesink location=output.png</pre>
             </div>
@@ -1651,17 +1651,17 @@ claude mcp add gst-python-ml -- \
                 <span class="pipe-tag">Multi-Stream</span>
                 <h3>Mux/Demux Pipeline</h3>
                 <p>Batch two video streams through one model.</p>
-<pre>python pyml-launch.py \
+<pre>python mp-launch.py \
   filesrc location=cam1.mp4 ! decodebin \
   ! videoconvertscale \
   ! video/x-raw,width=640,height=480 \
-  ! pyml_streammux name=mux \
+  ! mp_streammux name=mux \
   filesrc location=cam2.mp4 ! decodebin \
   ! videoconvertscale \
   ! video/x-raw,width=640,height=480 \
   ! mux. \
-  mux. ! pyml_yolo device=cuda \
-  ! pyml_streamdemux name=demux \
+  mux. ! mp_yolo device=cuda \
+  ! mp_streamdemux name=demux \
   demux. ! autovideosink \
   demux. ! autovideosink</pre>
             </div>
@@ -1694,8 +1694,8 @@ sudo apt install -y python3-pip python3-venv \
     gstreamer1.0-python3-plugin-loader libcairo2 libcairo2-dev git
 
 <span class="cmt"># Clone and set up</span>
-git clone https://github.com/collabora/gst-python-ml.git
-cd gst-python-ml
+git clone https://github.com/collabora/modelpipe.git
+cd modelpipe
 
 <span class="cmt"># Create venv (must use system Python to match GStreamer)</span>
 python3 -m venv --system-site-packages .venv
@@ -1704,7 +1704,7 @@ source .venv/bin/activate
 <span class="cmt"># Install PyTorch with CUDA support</span>
 pip install torch torchvision torchaudio --index-url https://download.pytorch.org/whl/cu128
 
-<span class="cmt"># Install gst-python-ml</span>
+<span class="cmt"># Install modelpipe</span>
 pip install -e .
 
 <span class="cmt"># Optional: flash-attention (must match python/torch/cuda versions)</span>
@@ -1712,9 +1712,9 @@ pip install -e .
 
 <span class="cmt"># Set plugin path and run</span>
 <span class="kw">export</span> GST_PLUGIN_PATH=<span class="str">$PWD/plugins:$GST_PLUGIN_PATH</span>
-python pyml-launch.py filesrc location=data/people.mp4 ! decodebin \
+python mp-launch.py filesrc location=data/people.mp4 ! decodebin \
   ! videoconvert ! videoscale ! video/x-raw,width=<span class="num">640</span>,height=<span class="num">480</span> \
-  ! pyml_yolo model-name=yolo11m device=cuda ! pyml_overlay \
+  ! mp_yolo model-name=yolo11m device=cuda ! mp_overlay \
   ! videoconvert ! autovideosink</pre>
                 </div>
                 <div class="tab-panel" id="tab-fedora">
@@ -1733,8 +1733,8 @@ sudo dnf install -y python3-pip python3-devel \
     gstreamer1-plugins-bad-free python3-gstreamer1
 
 <span class="cmt"># Clone and set up</span>
-git clone https://github.com/collabora/gst-python-ml.git
-cd gst-python-ml
+git clone https://github.com/collabora/modelpipe.git
+cd modelpipe
 
 <span class="cmt"># Create venv (must use system Python to match GStreamer)</span>
 python3 -m venv --system-site-packages .venv
@@ -1743,7 +1743,7 @@ source .venv/bin/activate
 <span class="cmt"># Install PyTorch with CUDA support</span>
 pip install torch torchvision torchaudio --index-url https://download.pytorch.org/whl/cu128
 
-<span class="cmt"># Install gst-python-ml</span>
+<span class="cmt"># Install modelpipe</span>
 pip install -e .
 
 <span class="cmt"># Optional: flash-attention (must match python/torch/cuda versions)</span>
@@ -1763,11 +1763,11 @@ docker build -f ./Dockerfile_ubuntu26 -t ubuntu26:latest .
 docker build -f ./Dockerfile_ubuntu24 -t ubuntu24:latest .
 
 <span class="cmt"># Run with GPU</span>
-docker run -v ~/src/gst-python-ml/:/root/gst-python-ml \
+docker run -v ~/src/modelpipe/:/root/modelpipe \
   -it --rm --gpus all --name fedora42 fedora42:latest /bin/bash
 
 <span class="cmt"># Run without GPU</span>
-docker run -v ~/src/gst-python-ml/:/root/gst-python-ml \
+docker run -v ~/src/modelpipe/:/root/modelpipe \
   -it --rm --name fedora42 fedora42:latest /bin/bash
 
 <span class="cmt"># Inside container: set up venv and install</span>
@@ -1784,7 +1784,7 @@ pip install -e .</pre>
 [Environment]::SetEnvironmentVariable(<span class="str">"PATH"</span>,
   <span class="str">"C:\gstreamer\1.0\msvc_x86_64\bin;"</span> + $env:PATH, <span class="str">"User"</span>)
 [Environment]::SetEnvironmentVariable(<span class="str">"GST_PLUGIN_PATH"</span>,
-  <span class="str">"D:\gst-python-ml\plugins"</span>, <span class="str">"User"</span>)
+  <span class="str">"D:\modelpipe\plugins"</span>, <span class="str">"User"</span>)
 
 <span class="cmt"># 3. Install Python 3.12+ and PyGObject</span>
 pip install gstreamer-python
@@ -1803,7 +1803,7 @@ pip install torch torchvision torchaudio \
     <div class="section-inner">
         <span class="section-label">Extensibility</span>
         <h2 class="section-title">Build Your Own Plugins</h2>
-        <p class="section-desc">Create custom GStreamer elements that inherit from gst-python-ml base classes. Full access to the engine abstraction, model loading, and pipeline integration.</p>
+        <p class="section-desc">Create custom elements that inherit from ModelPipe base classes and run on either backend. Use the same inference engines and model loading code.</p>
 
         <div class="code-block fade-in" style="margin-top: 40px;">
             <div class="code-header">
@@ -1827,7 +1827,7 @@ __gstelementfactory__ = (<span class="str">"my_detector"</span>, Gst.Rank.NONE, 
                 <span>Environment Setup</span>
             </div>
 <pre><span class="cmt"># Framework first (provides base classes on sys.path), custom second</span>
-<span class="kw">export</span> GST_PLUGIN_PATH=<span class="str">$HOME/src/gst-python-ml/plugins:$HOME/my_plugins:$GST_PLUGIN_PATH</span>
+<span class="kw">export</span> GST_PLUGIN_PATH=<span class="str">$HOME/src/modelpipe/plugins:$HOME/my_plugins:$GST_PLUGIN_PATH</span>
 <span class="kw">export</span> PYTHONPATH=<span class="str">$HOME/my_plugins/python:$PYTHONPATH</span>
 
 <span class="cmt"># Verify your element</span>
@@ -1854,7 +1854,7 @@ gst-inspect-1.0 my_detector</pre>
     <div class="section-inner">
         <span class="section-label">Platforms</span>
         <h2 class="section-title">Run Everywhere</h2>
-        <p class="section-desc">From your laptop to a GPU server &mdash; GStreamer Python ML works wherever GStreamer runs.</p>
+        <p class="section-desc">ModelPipe runs on Linux, Windows, and macOS with GStreamer, and on systems supported by Glass2Glass.</p>
 
         <div class="deploy-grid fade-in">
             <div class="deploy-card">
@@ -1881,19 +1881,19 @@ gst-inspect-1.0 my_detector</pre>
     <div class="section-inner">
         <span class="section-label">Resources</span>
         <h2 class="section-title">From the Blog</h2>
-        <p class="section-desc">Read about the technology behind GStreamer Python ML.</p>
+        <p class="section-desc">Read about the technology behind ModelPipe.</p>
 
         <div class="pipeline-grid fade-in">
             <a href="https://www.collabora.com/news-and-blog/blog/2025/05/12/unleashing-gst-python-ml-analytics-gstreamer-pipelines/" class="pipeline-card" style="text-decoration: none; cursor: pointer;">
                 <span class="pipe-tag">Blog Post</span>
-                <h3>Unleashing gst-python-ml: Analytics GStreamer Pipelines</h3>
-                <p style="color: var(--text-secondary);">A deep dive into how gst-python-ml enables ML-powered analytics in GStreamer pipelines &mdash; from object detection to video captioning.</p>
+                <h3>Original project announcement</h3>
+                <p style="color: var(--text-secondary);">A detailed look at ModelPipe analytics in GStreamer pipelines, from object detection to video captioning.</p>
                 <span style="display: inline-flex; align-items: center; gap: 4px; margin-top: 16px; font-size: 0.82rem; font-weight: 600; color: var(--green);">Read more &rarr;</span>
             </a>
             <div class="pipeline-card" style="grid-column: span 2;">
                 <span class="pipe-tag">Demo Video</span>
                 <h3>YOLO Tracking on Soccer Match</h3>
-                <p style="margin-bottom: 16px;">See gst-python-ml in action &mdash; real-time YOLO object tracking on a live soccer match.</p>
+                <p style="margin-bottom: 16px;">See ModelPipe run real-time YOLO object tracking on a live soccer match.</p>
                 <div style="position: relative; padding-bottom: 56.25%; height: 0; overflow: hidden; border-radius: 8px;">
                     <iframe src="https://www.youtube.com/embed/vn7p2hXUlcs" style="position: absolute; top: 0; left: 0; width: 100%; height: 100%; border: none; border-radius: 8px;" allowfullscreen></iframe>
                 </div>
@@ -1906,12 +1906,12 @@ gst-inspect-1.0 my_detector</pre>
 <section class="cta-section">
     <div class="cta-content">
         <h2>Ready to get started?</h2>
-        <p>GStreamer Python ML is free, open source (LGPLv3), and ready for production. Build ML-powered video and audio pipelines today.</p>
+        <p>ModelPipe is free, open source (LGPLv3), and ready for production. Build ML-powered video and audio pipelines today.</p>
         <div class="cta-actions">
-            <a href="https://github.com/collabora/gst-python-ml" class="btn btn-green">
+            <a href="https://github.com/collabora/modelpipe" class="btn btn-green">
                 Get Started
             </a>
-            <a href="https://github.com/collabora/gst-python-ml/issues" class="btn btn-outline">
+            <a href="https://github.com/collabora/modelpipe/issues" class="btn btn-outline">
                 Report an Issue
             </a>
         </div>
@@ -1933,21 +1933,21 @@ gst-inspect-1.0 my_detector</pre>
                     <line x1="7" y1="14" x2="11" y2="14" stroke="#A855F7" stroke-width="2"/>
                     <line x1="17" y1="14" x2="21" y2="14" stroke="#A855F7" stroke-width="2"/>
                 </svg>
-                GStreamer Python ML
+                ModelPipe
             </a>
-            <p>A pure Python ML framework for upstream GStreamer. Object detection, pose estimation, depth, captioning, transcription, LLMs, and more. By Collabora.</p>
+            <p>ModelPipe runs a wide variety of ML models in GStreamer and Glass2Glass multimedia pipelines. By Collabora.</p>
         </div>
         <div class="footer-col">
             <h4>Resources</h4>
-            <a href="https://github.com/collabora/gst-python-ml">GitHub</a>
-            <a href="https://github.com/collabora/gst-python-ml/blob/main/README.md">Documentation</a>
-            <a href="https://pypi.org/project/gst-python-ml/">PyPI Package</a>
+            <a href="https://github.com/collabora/modelpipe">GitHub</a>
+            <a href="https://github.com/collabora/modelpipe/blob/main/README.md">Documentation</a>
+            <a href="https://pypi.org/project/modelpipe/">PyPI Package</a>
             <a href="#install">Installation Guide</a>
         </div>
         <div class="footer-col">
             <h4>Community</h4>
-            <a href="https://github.com/collabora/gst-python-ml/issues">Issues</a>
-            <a href="https://github.com/collabora/gst-python-ml/pulls">Pull Requests</a>
+            <a href="https://github.com/collabora/modelpipe/issues">Issues</a>
+            <a href="https://github.com/collabora/modelpipe/pulls">Pull Requests</a>
             <a href="https://gstreamer.freedesktop.org/">GStreamer</a>
         </div>
         <div class="footer-col">
@@ -1960,7 +1960,7 @@ gst-inspect-1.0 my_detector</pre>
     <div class="footer-bottom">
         <p>&copy; 2025&ndash;2026 Collabora Ltd. Open source under the LGPLv3 License.</p>
         <div class="footer-social">
-            <a href="https://github.com/collabora/gst-python-ml">GitHub</a>
+            <a href="https://github.com/collabora/modelpipe">GitHub</a>
         </div>
     </div>
 </footer>

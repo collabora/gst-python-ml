@@ -73,7 +73,7 @@ matched at IoU 0.5 on the same pts. Frames per second leave out the model load
 and the first 10 frames, and include the decode. `engine=model@device` runs
 that pair on its own device, for example `onnx=yolo11m-384x640.onnx@tensorrt`.
 A pair that fails to load or run is skipped. To add an engine, pass another `engine=model` pair: every
-engine but `pytorch` runs through `pyml_objectdetector engine-name=<engine>`,
+engine but `pytorch` runs through `mp_objectdetector engine-name=<engine>`,
 so it needs a model file that engine can load, with the path taken relative to
 the repository root.
 

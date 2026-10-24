@@ -29,7 +29,7 @@ try:
 except ImportError as e:
     CAN_REGISTER_ELEMENT = False
     GlobalLogger().warning(
-        f"The 'pyml_whispertranscribe' element will not be available. Error: {e}"
+        f"The 'mp_whispertranscribe' element will not be available. Error: {e}"
     )
 
 
@@ -45,7 +45,7 @@ class WhisperTranscribe(BaseTranscribe):
         super().__init__()
         self._beam_size = 5
         self.model_name = "medium"
-        self.task_engine_name = self.mgr.engine_name = "pyml_whispertranscribe_engine"
+        self.task_engine_name = self.mgr.engine_name = "mp_whispertranscribe_engine"
         EngineFactory.register(self.mgr.engine_name, WhisperEngine)
 
     def export_model(self, model_name):
@@ -67,9 +67,9 @@ class WhisperTranscribe(BaseTranscribe):
 
 if CAN_REGISTER_ELEMENT and backend.BACKEND == "gst":
     __gstelementfactory__ = backend.register_gst_element(
-        "pyml_whispertranscribe", WhisperTranscribe
+        "mp_whispertranscribe", WhisperTranscribe
     )
 elif not CAN_REGISTER_ELEMENT:
     GlobalLogger().warning(
-        "The 'pyml_whispertranscribe' element will not be registered because base_transcribe module is missing."
+        "The 'mp_whispertranscribe' element will not be registered because base_transcribe module is missing."
     )

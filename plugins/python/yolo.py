@@ -103,13 +103,13 @@ class YOLOTransform(BaseObjectDetector, YoloTask):
         nick="TensorRT",
         blurb="Run CUDA frames through a half precision TensorRT engine when "
         "track is off. The engine is built from the weights on the first frame, "
-        "which takes a minute or two, and cached in ~/.cache/gst-python-ml/tensorrt",
+        "which takes a minute or two, and cached in ~/.cache/modelpipe/tensorrt",
         flags=GObject.ParamFlags.READWRITE,
     )
 
     def __init__(self):
         super().__init__()
-        self.task_engine_name = self.mgr.engine_name = "pyml_yolo_engine"
+        self.task_engine_name = self.mgr.engine_name = "mp_yolo_engine"
         EngineFactory.register(self.mgr.engine_name, YoloEngine)
 
     def export_model(self, model_name):
@@ -130,8 +130,8 @@ class YOLOTransform(BaseObjectDetector, YoloTask):
 # instantiates YOLOTransform directly, so no GObject registration applies.
 # GStreamer factory registration runs only under the gst backend.
 if CAN_REGISTER_ELEMENT and backend.BACKEND == "gst":
-    __gstelementfactory__ = backend.register_gst_element("pyml_yolo", YOLOTransform)
+    __gstelementfactory__ = backend.register_gst_element("mp_yolo", YOLOTransform)
 elif not CAN_REGISTER_ELEMENT:
     GlobalLogger().warning(
-        "The 'pyml_yolo' element will not be registered because required modules are missing."
+        "The 'mp_yolo' element will not be registered because required modules are missing."
     )

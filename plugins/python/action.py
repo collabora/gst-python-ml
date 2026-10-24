@@ -79,7 +79,7 @@ class ActionTransform(VideoTransform, ActionTask):
 
     def __init__(self):
         super().__init__()
-        self.task_engine_name = self.mgr.engine_name = "pyml_action_engine"
+        self.task_engine_name = self.mgr.engine_name = "mp_action_engine"
         EngineFactory.register(self.mgr.engine_name, ActionEngine)
         self.format_converter = FormatConverter()
         self._frame_buffer = deque(maxlen=16)
@@ -109,8 +109,8 @@ class ActionTransform(VideoTransform, ActionTask):
 
 
 if CAN_REGISTER_ELEMENT and backend.BACKEND == "gst":
-    __gstelementfactory__ = backend.register_gst_element("pyml_action", ActionTransform)
+    __gstelementfactory__ = backend.register_gst_element("mp_action", ActionTransform)
 elif not CAN_REGISTER_ELEMENT:
     GlobalLogger().warning(
-        "The 'pyml_action' element will not be registered because required modules are missing."
+        "The 'mp_action' element will not be registered because required modules are missing."
     )

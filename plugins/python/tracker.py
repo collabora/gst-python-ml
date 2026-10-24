@@ -547,7 +547,7 @@ class TrackerTransform(InPlaceVideoTransform):
         if detections and all(TRACKED_LABEL.search(label) for *_, label in detections):
             if not self._passing_tracked_through:
                 self.logger.warning(
-                    "detections arrive with track ids, pyml_tracker passes them through"
+                    "detections arrive with track ids, mp_tracker passes them through"
                 )
                 self._passing_tracked_through = True
             return
@@ -570,5 +570,5 @@ class TrackerTransform(InPlaceVideoTransform):
 
 if backend.BACKEND == "gst":
     __gstelementfactory__ = backend.register_gst_element(
-        "pyml_tracker", TrackerTransform
+        "mp_tracker", TrackerTransform
     )

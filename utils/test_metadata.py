@@ -10,7 +10,7 @@ Gst.init(None)
 
 
 class Metadata:
-    SIGNATURE = b"GST-PYTHON-ML"
+    SIGNATURE = b"MODELPIPE"
 
     def __init__(self, format_string: str):
         """

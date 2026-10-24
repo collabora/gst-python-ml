@@ -2,7 +2,7 @@
 # Baseball overlay demo.
 #
 # Pipeline:
-#   pyml_yolo (stock coco weights)  ->  pyml_tracker (ByteTrack)  ->  pyml_baseball_overlay
+#   mp_yolo (stock coco weights)  ->  mp_tracker (ByteTrack)  ->  mp_baseball_overlay
 #
 # Usage:
 #   demo/baseball/run.sh [INPUT.mp4] [OUTPUT.mp4] [WxH]      # file -> annotated mp4
@@ -52,9 +52,9 @@ if [[ "$HOST" == "g2g" ]]; then
     ENCODE="nvenc ! mp4mux"
   fi
 else
-  DETECTOR_ELEMENT="pyml_yolo name=detector"
-  TRACKER_ELEMENT="pyml_tracker"
-  OVERLAY_ELEMENT="pyml_baseball_overlay name=overlay"
+  DETECTOR_ELEMENT="mp_yolo name=detector"
+  TRACKER_ELEMENT="mp_tracker"
+  OVERLAY_ELEMENT="mp_baseball_overlay name=overlay"
   CONVERT="videoconvert ! videoscale"
   DOWNLOAD=""
   if [[ "$CUDA" == "true" ]]; then

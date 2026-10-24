@@ -1,7 +1,7 @@
 # Baseball demo
 
 Detection, tracking and a baseball overlay:
-`pyml_yolo` -> `pyml_tracker` -> `pyml_baseball_overlay`.
+`mp_yolo` -> `mp_tracker` -> `mp_baseball_overlay`.
 
 The detector is the stock `yolo11m` COCO model, which already knows `person`,
 `baseball bat`, `baseball glove` and `sports ball`. No training is needed. The
@@ -13,7 +13,7 @@ it stays put once the bat or glove is hidden for a few frames.
 
 ## Models and clip
 
-`run.sh` points `pyml_yolo` at `models/baseball/yolo11m`. Ultralytics downloads
+`run.sh` points `mp_yolo` at `models/baseball/yolo11m`. Ultralytics downloads
 the weights there on first use. `MODEL=yolo11n` and `MODEL=yolo11x` work the
 same way.
 
@@ -25,7 +25,7 @@ The default clip `data/baseball_batter.mp4` is Mixkit's free
 ## Run
 
 ```bash
-cd gst-python-ml
+cd modelpipe
 demo/baseball/run.sh                       # data/baseball_batter.mp4 -> demo/baseball/out.mp4
 demo/baseball/run.sh display               # same clip, on screen
 demo/baseball/run.sh display my_game.mp4 1920x1080
@@ -54,7 +54,7 @@ football demo does.
 
 ## Overlay properties
 
-`pyml_baseball_overlay` takes `show-labels`, `show-ids`, `show-equipment`,
+`mp_baseball_overlay` takes `show-labels`, `show-ids`, `show-equipment`,
 `ball-trail`, `trail-length` and `min-confidence`. The trail resets when the
 ball is unseen for 15 frames or jumps more than a tenth of the frame width per
 frame, which drops the detector's stray hits on other round objects.

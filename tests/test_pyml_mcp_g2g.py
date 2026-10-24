@@ -13,9 +13,9 @@ import pyml_launch  # noqa: E402
 import pyml_mcp_g2g  # noqa: E402
 
 GST_SPELLED_PIPELINE = (
-    "videotestsrc num-buffers=2 ! videoconvert ! pyml_tracker name=tracker ! fakesink"
+    "videotestsrc num-buffers=2 ! videoconvert ! mp_tracker name=tracker ! fakesink"
 )
-PYML_MCP_ENTRY_POINT = "import gst_python_ml; gst_python_ml.mcp()"
+MP_MCP_ENTRY_POINT = "import modelpipe; modelpipe.mcp()"
 SERVER_TIMEOUT_SECONDS = 120
 
 
@@ -57,7 +57,7 @@ def test_a_gst_spelled_pipeline_reaches_g2g_rewritten(shells):
 
 
 def test_an_inserted_element_reaches_g2g_rewritten(shells):
-    arguments = {"element": "pyml_tracker", "target": "videoconvert0"}
+    arguments = {"element": "mp_tracker", "target": "videoconvert0"}
     forwarded, _ = relayed([tool_call(1, "insert_transform", arguments)], shells)
     assert forwarded[0]["params"]["arguments"] == {
         "element": "pyelement module=tracker class=TrackerTransform",
@@ -68,14 +68,14 @@ def test_an_inserted_element_reaches_g2g_rewritten(shells):
 def test_a_call_with_no_launch_line_passes_unchanged(shells):
     requests = [
         {"jsonrpc": "2.0", "id": 1, "method": "tools/list"},
-        tool_call(2, "set_property", {"element": "tracker", "property": "pyml_x"}),
+        tool_call(2, "set_property", {"element": "tracker", "property": "mp_x"}),
     ]
     forwarded, _ = relayed(requests, shells)
     assert forwarded == requests
 
 
 def test_a_line_the_rewrite_refuses_is_answered_without_reaching_g2g(shells):
-    pipeline = "videotestsrc ! pyml_alert broker=localhost ! fakesink"
+    pipeline = "videotestsrc ! mp_alert broker=localhost ! fakesink"
     forwarded, answered = relayed(
         [tool_call(7, "validate", {"pipeline": pipeline})], shells
     )
@@ -92,16 +92,16 @@ def test_pyml_mcp_on_g2g_runs_a_gst_spelled_pipeline():
         {"jsonrpc": "2.0", "id": 1, "method": "initialize", "params": {}},
         tool_call(2, "launch", {"pipeline": GST_SPELLED_PIPELINE}),
         tool_call(
-            3, "validate", {"pipeline": "videotestsrc ! pyml_tracker x=1 ! fakesink"}
+            3, "validate", {"pipeline": "videotestsrc ! mp_tracker x=1 ! fakesink"}
         ),
     ]
     server = subprocess.run(
-        [sys.executable, "-c", PYML_MCP_ENTRY_POINT],
+        [sys.executable, "-c", MP_MCP_ENTRY_POINT],
         input="".join(json.dumps(request) + "\n" for request in requests),
         capture_output=True,
         text=True,
         timeout=SERVER_TIMEOUT_SECONDS,
-        env={**os.environ, "PYML_BACKEND": "g2g"},
+        env={**os.environ, "MP_BACKEND": "g2g"},
     )
     replies = {
         reply["id"]: reply

@@ -22,7 +22,7 @@ Gst.init(None)
 from backend import analytics  # noqa: E402
 
 pytestmark = pytest.mark.skipif(
-    Gst.ElementFactory.find("pyml_metareplay") is None,
+    Gst.ElementFactory.find("mp_metareplay") is None,
     reason="the python plugin loader did not register the pyml elements",
 )
 
@@ -84,7 +84,7 @@ def test_replayed_records_alert_at_the_recorded_timestamp(tmp_path):
         Gst.parse_launch(
             f"videotestsrc num-buffers={FRAMES} ! {CAPS} "
             "! metareplaytagger "
-            f"! pyml_metasink location={records}"
+            f"! mp_metasink location={records}"
         )
     )
     recorded = [line for line in read_lines(records) if line["detections"]]
@@ -94,9 +94,9 @@ def test_replayed_records_alert_at_the_recorded_timestamp(tmp_path):
     run_to_eos(
         Gst.parse_launch(
             f"videotestsrc num-buffers={FRAMES} ! {CAPS} "
-            f"! pyml_metareplay location={records} "
-            '! pyml_alert rules={"class":"thing"} draw-alert=false '
-            f"! pyml_metasink location={replayed}"
+            f"! mp_metareplay location={records} "
+            '! mp_alert rules={"class":"thing"} draw-alert=false '
+            f"! mp_metasink location={replayed}"
         )
     )
     lines = [line for line in read_lines(replayed) if line["detections"]]
@@ -117,8 +117,8 @@ def test_a_blob_record_comes_back_as_the_same_blob(tmp_path):
     run_to_eos(
         Gst.parse_launch(
             f"videotestsrc num-buffers={FRAMES} ! {CAPS} "
-            f"! pyml_metareplay location={records} "
-            f"! pyml_metasink location={replayed}"
+            f"! mp_metareplay location={records} "
+            f"! mp_metasink location={replayed}"
         )
     )
     lines = [line for line in read_lines(replayed) if "caption" in line]

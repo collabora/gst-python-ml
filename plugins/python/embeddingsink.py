@@ -38,10 +38,10 @@ try:
 except ImportError as e:
     CAN_REGISTER_ELEMENT = False
     GlobalLogger().warning(
-        f"The 'pyml_embeddingsink' element will not be available. Error: {e}"
+        f"The 'mp_embeddingsink' element will not be available. Error: {e}"
     )
 
-# the header pyml_embedding attaches, lowercased by read_blobs
+# the header mp_embedding attaches, lowercased by read_blobs
 EMBEDDING_BLOB = "embedding"
 HEADER_LENGTH_BYTES = 4
 HEADER_MODEL_KEY = "model_name"
@@ -56,7 +56,7 @@ def decode_embedding(payload):
 
 
 class EmbeddingSink(GstBase.BaseSink):
-    GST_PLUGIN_NAME = "pyml_embeddingsink"
+    GST_PLUGIN_NAME = "mp_embeddingsink"
 
     __gstmetadata__ = (
         "Embedding Sink",
@@ -104,7 +104,7 @@ class EmbeddingSink(GstBase.BaseSink):
 
     def do_start(self):
         if not self.location:
-            self.logger.error("pyml_embeddingsink needs a location to write the index")
+            self.logger.error("mp_embeddingsink needs a location to write the index")
             return False
         self._index = EmbeddingIndex.open(self.location)
         return True
@@ -122,7 +122,7 @@ class EmbeddingSink(GstBase.BaseSink):
         model_name = header.get(HEADER_MODEL_KEY) or self.model_name
         if not model_name:
             self.logger.error(
-                "the embedding blob names no model, set model-name on pyml_embeddingsink"
+                "the embedding blob names no model, set model-name on mp_embeddingsink"
             )
             return Gst.FlowReturn.ERROR
         self._index.add(self.source_id, buffer.pts / Gst.SECOND, vector, model_name)
@@ -135,5 +135,5 @@ if CAN_REGISTER_ELEMENT and backend.BACKEND == "gst":
     )
 elif not CAN_REGISTER_ELEMENT:
     GlobalLogger().warning(
-        "The 'pyml_embeddingsink' element will not be registered because required modules are missing."
+        "The 'mp_embeddingsink' element will not be registered because required modules are missing."
     )

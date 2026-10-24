@@ -21,10 +21,10 @@ pipeline_desc = """
   filesrc location=data/people.mp4 ! decodebin name=d
   d. ! queue ! videoconvert ! videoscale
   ! video/x-raw,format=RGB,width=640,height=640
-  ! pyml_objectdetector engine-name=migraphx model-name=yolo11m.onnx device=gpu
+  ! mp_objectdetector engine-name=migraphx model-name=yolo11m.onnx device=gpu
         input-format=nchw post-process=anchor_free
   ! videoconvert ! video/x-raw,format=RGBA
-  ! pyml_overlay ! videoconvert ! autovideosink
+  ! mp_overlay ! videoconvert ! autovideosink
 """
 
 pipeline = Gst.parse_launch(pipeline_desc)

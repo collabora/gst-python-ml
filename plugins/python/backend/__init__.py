@@ -14,7 +14,7 @@ that DO depend on the framework are isolated behind this package:
   * the element base classes `BaseTransform` / `BaseAggregator` / `VideoTransform`
   * the `analytics` metadata interface (add/get/remove detections)
 
-Select the active backend with the `PYML_BACKEND` environment variable
+Select the active backend with the `MP_BACKEND` environment variable
 (default ``"gst"``). To add another backend, create a sibling package exposing
 the same names (reusing `backend.core.MLEngineMixin` and implementing
 `backend.analytics.AnalyticsBackend`) and add a branch below.
@@ -58,7 +58,7 @@ elif BACKEND == "g2g":
     )
 else:
     raise ImportError(
-        f"Unknown PYML_BACKEND={BACKEND!r}; supported backends: 'gst', 'g2g'"
+        f"Unknown MP_BACKEND={BACKEND!r}; supported backends: 'gst', 'g2g'"
     )
 
 

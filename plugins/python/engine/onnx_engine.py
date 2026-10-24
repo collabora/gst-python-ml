@@ -47,7 +47,7 @@ PROVIDERS_WITHOUT_DEVICE_ID = (
 )
 PROVIDERS_ON_NVIDIA_LIBRARIES = (TENSORRT_PROVIDER, "CUDAExecutionProvider")
 # an uncached engine takes minutes to build on every start
-TENSORRT_ENGINE_CACHE = Path.home() / ".cache" / "gst-python-ml" / "tensorrt"
+TENSORRT_ENGINE_CACHE = Path.home() / ".cache" / "modelpipe" / "tensorrt"
 # device=tensorrt-fp16 builds a half precision engine
 TENSORRT_HALF_PRECISION_SUFFIX = "fp16"
 TENSORRT_LIBRARIES_PACKAGE = "tensorrt_libs"

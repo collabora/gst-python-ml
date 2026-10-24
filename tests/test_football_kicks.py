@@ -25,7 +25,7 @@ from backend import analytics  # noqa: E402
 from utils.blobs import read_blobs  # noqa: E402
 
 pytestmark = pytest.mark.skipif(
-    Gst.ElementFactory.find("pyml_football_overlay") is None,
+    Gst.ElementFactory.find("mp_football_overlay") is None,
     reason="the python plugin loader did not register the pyml elements",
 )
 
@@ -67,7 +67,7 @@ def test_a_kick_puts_an_alert_blob_on_its_frame_and_counts_once():
         f"appsrc name=source format=time "
         f"caps=video/x-raw,format=RGBA,width={WIDTH},height={HEIGHT},"
         f"framerate={FRAMERATE}/1 "
-        "! pyml_football_overlay name=overlay detect-kicks=true team-colors=false "
+        "! mp_football_overlay name=overlay detect-kicks=true team-colors=false "
         "! appsink name=sink sync=false"
     )
     source = pipeline.get_by_name("source")

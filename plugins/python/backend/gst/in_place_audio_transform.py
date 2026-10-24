@@ -29,7 +29,7 @@ from log.logger_factory import LoggerFactory  # noqa: E402
 
 
 class InPlaceAudioTransform(GstBase.BaseTransform):
-    # the element's one caps description, which pyml-launch also hands g2g
+    # the element's one caps description, which mp-launch also hands g2g
     INPUT_CAPS = "audio/x-raw"
 
     # runs before pygobject registers the subclass and reads its templates

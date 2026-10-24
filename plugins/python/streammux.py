@@ -187,4 +187,4 @@ class StreamMux(GstBase.Aggregator):
 
 
 if backend.BACKEND == "gst":
-    __gstelementfactory__ = backend.register_gst_element("pyml_streammux", StreamMux)
+    __gstelementfactory__ = backend.register_gst_element("mp_streammux", StreamMux)

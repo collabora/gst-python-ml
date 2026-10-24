@@ -1,3 +1,3 @@
 import os
 
-BACKEND = os.environ.get("PYML_BACKEND", "gst").lower()
+BACKEND = os.environ.get("MP_BACKEND", "gst").lower()

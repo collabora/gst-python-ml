@@ -16,7 +16,7 @@ from mcp.client.stdio import stdio_client
 
 REPO = Path(__file__).resolve().parents[2]
 RUN_SCRIPT = REPO / "demo/football/run.sh"
-PYML_MCP = REPO / ".venv/bin/pyml-mcp"
+MP_MCP = REPO / ".venv/bin/pyml-mcp"
 LOG_DIR = Path(tempfile.gettempdir())
 
 LLAMA_RUNTIME = Path.home() / ".local/share/liquid/runtime"
@@ -58,9 +58,9 @@ START_TOOL = {
 
 SYSTEM_PROMPT = """You operate a live GStreamer football broadcast pipeline through tools.
 The pipeline has three named elements you may change:
-- detector (pyml_yolo): property `confidence`, float 0 to 1, default 0.1. The minimum score a detection needs. Set high, players stop being detected and their markers vanish.
-- ball-detector (pyml_yolo): the same `confidence` property, for the ball alone.
-- overlay (pyml_football_overlay): property `show-ball`, bool, default true, draws the ball marker. Property `ball-trail`, bool, default false, draws a fading trail behind the ball. The ball track is that marker plus its trail. Property `trails`, bool, default false, draws a fading motion trail behind each player. Property `show-hud`, bool, default true, draws the focal-player HUD with headshot, contacts and distance.
+- detector (mp_yolo): property `confidence`, float 0 to 1, default 0.1. The minimum score a detection needs. Set high, players stop being detected and their markers vanish.
+- ball-detector (mp_yolo): the same `confidence` property, for the ball alone.
+- overlay (mp_football_overlay): property `show-ball`, bool, default true, draws the ball marker. Property `ball-trail`, bool, default false, draws a fading trail behind the ball. The ball track is that marker plus its trail. Property `trails`, bool, default false, draws a fading motion trail behind each player. Property `show-hud`, bool, default true, draws the focal-player HUD with headshot, contacts and distance.
 The overlay also has `detect-kicks`, bool, which turns kick detection on, and the read-only `kick-count` and `last-kick` (JSON of the latest kick with its frame, player id and speed), which you read with get_property when asked about kicks.
 Showing the ball track, or tracking the ball, sets `show-ball` and `ball-trail` to true and leaves `trails` as it is. Hiding or stopping the ball track sets `show-ball` and `ball-trail` to false and leaves `trails` as it is. Showing the player tracks sets `trails` to true and leaves the ball properties as they are. Hiding the player tracks sets `trails` to false and leaves the ball properties as they are.
 Spell booleans as true or false and numbers plainly.
@@ -125,7 +125,7 @@ def start_llama_server():
 def pyml_mcp_transport():
     log = open(LOG_DIR / "football-agent-pyml-mcp.log", "w")
     parameters = StdioServerParameters(
-        command=str(PYML_MCP), env=dict(os.environ), cwd=str(REPO)
+        command=str(MP_MCP), env=dict(os.environ), cwd=str(REPO)
     )
     return stdio_client(parameters, errlog=log)
 
@@ -365,7 +365,7 @@ def start_microphone(loop, queue):
         "audio/x-raw,format=S16LE,rate=16000,channels=1 ! "
         # silence ends a phrase the toggle cuts off
         "volume name=voice_toggle mute=true ! "
-        f"pyml_whispertranscribe name=stt device=cpu language=en "
+        f"mp_whispertranscribe name=stt device=cpu language=en "
         f"model-name={WHISPER_MODEL} beam-size=1 ! "
         "appsink name=words emit-signals=true sync=false"
     )

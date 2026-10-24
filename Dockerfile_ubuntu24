@@ -12,13 +12,13 @@ RUN apt-get install -y python3-pip  python3-venv \
     git gstreamer1.0-python3-plugin-loader
 
 # Set some environment variables
-ENV GST_PLUGIN_PATH=/root/gst-python-ml/plugins
+ENV GST_PLUGIN_PATH=/root/modelpipe/plugins
 
 # allow Python to properly handle Unicode characters during logging.
 ENV PYTHONIOENCODING=utf-8
 
 # Set the working directory (optional)
-WORKDIR /root/gst-python-ml
+WORKDIR /root/modelpipe
 
 # Set the entry point to bash for interactive use
 CMD ["/bin/bash"]

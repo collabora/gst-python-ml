@@ -47,9 +47,9 @@ To fetch just the Dockerfile by hand:
 ### 2. Compile YOLO11 with the real mera2 (inside the container)
 
 ```bash
-docker run -it --rm -v "$PWD":/workspace/gst-python-ml drpai-tvm-v2h bash
+docker run -it --rm -v "$PWD":/workspace/modelpipe drpai-tvm-v2h bash
 # inside:
-cd /workspace/gst-python-ml
+cd /workspace/modelpipe
 ./rzv2h/convert_yolo11_v2h.sh yolo11m 640      # real mera2.from_onnx + mera2.drp.build
 # -> yolo11m_drpai_v2h/{deploy.so,deploy.json,deploy.params}   (aarch64)
 ```
@@ -67,15 +67,15 @@ has `deploy.so/json/params` and `tvm` is importable (true inside this
 container). The engine code is unchanged.
 
 ```bash
-export GST_PLUGIN_PATH=/workspace/gst-python-ml/plugins:$GST_PLUGIN_PATH
-export PYTHONPATH=/workspace/gst-python-ml/rzv2h/emulation:$PYTHONPATH
+export GST_PLUGIN_PATH=/workspace/modelpipe/plugins:$GST_PLUGIN_PATH
+export PYTHONPATH=/workspace/modelpipe/rzv2h/emulation:$PYTHONPATH
 # (x86 deploy.so) run natively; (aarch64 deploy.so) run under qemu-aarch64
 gst-launch-1.0 filesrc location=08fd33_4.mp4 ! decodebin ! videoconvert ! videoscale \
   ! "video/x-raw,format=RGB,width=640,height=640" \
-  ! pyml_objectdetector engine-name=drpai model-name=yolo11m_drpai_v2h device=drpai \
+  ! mp_objectdetector engine-name=drpai model-name=yolo11m_drpai_v2h device=drpai \
         input-format=nchw post-process=anchor_free \
-  ! pyml_tracker ! videoconvert ! "video/x-raw,format=RGBA" \
-  ! pyml_football_overlay ! videoconvert ! autovideosink
+  ! mp_tracker ! videoconvert ! "video/x-raw,format=RGBA" \
+  ! mp_football_overlay ! videoconvert ! autovideosink
 ```
 
 The shim prints which backend it picked:

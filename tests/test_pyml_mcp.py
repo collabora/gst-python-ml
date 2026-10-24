@@ -20,7 +20,7 @@ gi.require_version("GstPbutils", "1.0")
 from gi.repository import Gst, GstPbutils  # noqa: E402
 
 pytestmark = pytest.mark.skipif(
-    not any(element["name"] == "pyml_metasink" for element in pyml_mcp.list_elements()),
+    not any(element["name"] == "mp_metasink" for element in pyml_mcp.list_elements()),
     reason="the python plugin loader did not register the pyml elements",
 )
 
@@ -46,11 +46,11 @@ FLOW_SETTLE_SECONDS = 1.0
 SLOW_ELEMENT_MICROSECONDS = 60000
 
 VIDEO_PIPELINE = (
-    "videotestsrc ! video/x-raw,width=64,height=48 ! pyml_metasink name=sink"
+    "videotestsrc ! video/x-raw,width=64,height=48 ! mp_metasink name=sink"
 )
 # 66 wide is 198 bytes a row, padded to a multiple of 4
 PADDED_VIDEO_PIPELINE = (
-    "videotestsrc ! video/x-raw,width=66,height=48 ! pyml_metasink name=sink"
+    "videotestsrc ! video/x-raw,width=66,height=48 ! mp_metasink name=sink"
 )
 CLIP_SOURCE_PIPELINE = (
     "videotestsrc num-buffers={frames} ! video/x-raw,framerate=30/1,width=64,height=48 "
@@ -85,7 +85,7 @@ def test_text_flows_from_the_sink_to_latest_metadata(tmp_path):
     text = tmp_path / "hello.txt"
     text.write_text("hello")
     pyml_mcp.start_pipeline(
-        f"filesrc location={text} ! text/x-raw,format=utf8 ! pyml_metasink"
+        f"filesrc location={text} ! text/x-raw,format=utf8 ! mp_metasink"
     )
     waited = pyml_mcp.wait_for_records(1, timeout=RECORD_WAIT_SECONDS)
     assert [record["text"] for record in waited["records"]] == ["hello"]
@@ -204,7 +204,7 @@ def test_snapshot_frame_refuses_a_sink_that_carries_no_video(tmp_path):
     text = tmp_path / "hello.txt"
     text.write_text("hello")
     pyml_mcp.start_pipeline(
-        f"filesrc location={text} ! text/x-raw,format=utf8 ! pyml_metasink"
+        f"filesrc location={text} ! text/x-raw,format=utf8 ! mp_metasink"
     )
     pyml_mcp.wait_for_records(1, timeout=RECORD_WAIT_SECONDS)
     with pytest.raises(ToolError):
@@ -231,7 +231,7 @@ def test_wait_for_records_gives_up_on_a_key_no_record_carries():
 def test_a_property_can_change_while_the_pipeline_runs():
     pyml_mcp.start_pipeline(
         "videotestsrc name=source pattern=snow ! videobalance name=balance "
-        "! pyml_metasink name=sink"
+        "! mp_metasink name=sink"
     )
     assert pyml_mcp.get_property("source", "pattern") == "snow"
     assert pyml_mcp.set_property("source", "pattern", "ball") == {"pattern": "ball"}
@@ -243,7 +243,7 @@ def test_a_property_can_change_while_the_pipeline_runs():
 
 
 def test_a_sink_without_a_location_is_kept_off_stdout():
-    pyml_mcp.start_pipeline("videotestsrc ! pyml_metasink name=sink")
+    pyml_mcp.start_pipeline("videotestsrc ! mp_metasink name=sink")
     assert pyml_mcp.get_property("sink", "location") == os.devnull
     pyml_mcp.stop_pipeline()
 
@@ -303,7 +303,7 @@ def test_describe_frame_refuses_a_sink_that_carries_no_video(tmp_path):
     text = tmp_path / "hello.txt"
     text.write_text("hello")
     pyml_mcp.start_pipeline(
-        f"filesrc location={text} ! text/x-raw,format=utf8 ! pyml_metasink"
+        f"filesrc location={text} ! text/x-raw,format=utf8 ! mp_metasink"
     )
     pyml_mcp.wait_for_records(1, timeout=RECORD_WAIT_SECONDS)
     with pytest.raises(ToolError, match="is not carrying video"):
@@ -356,11 +356,11 @@ def test_every_pipelines_section_is_offered_as_a_prompt():
     assert "object_detection" in names
     assert "metadata_sink" in names
     result = asyncio.run(pyml_mcp.server.get_prompt("metadata_sink", None))
-    assert "pyml_metasink" in result.messages[0].content.text
+    assert "mp_metasink" in result.messages[0].content.text
 
 
 def test_inspect_lists_the_sink_location():
-    described = pyml_mcp.inspect("pyml_metasink")
+    described = pyml_mcp.inspect("mp_metasink")
     defaults = {spec["name"]: spec["default"] for spec in described["properties"]}
     assert defaults["location"] == ""
     assert defaults["last-sample"] == ""

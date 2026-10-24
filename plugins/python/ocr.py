@@ -75,7 +75,7 @@ class OCRTransform(VideoTransform, OcrTask):
 
     def __init__(self):
         super().__init__()
-        self.mgr.engine_name = "pyml_ocr_engine"
+        self.mgr.engine_name = "mp_ocr_engine"
         EngineFactory.register(self.mgr.engine_name, OcrEngine)
         self.format_converter = FormatConverter()
 
@@ -86,12 +86,12 @@ class OCRTransform(VideoTransform, OcrTask):
 
     @engine_name.setter
     def engine_name(self, value):
-        raise ValueError("'engine_name' is read-only for pyml_ocr")
+        raise ValueError("'engine_name' is read-only for mp_ocr")
 
 
 if CAN_REGISTER_ELEMENT and backend.BACKEND == "gst":
-    __gstelementfactory__ = backend.register_gst_element("pyml_ocr", OCRTransform)
+    __gstelementfactory__ = backend.register_gst_element("mp_ocr", OCRTransform)
 elif not CAN_REGISTER_ELEMENT:
     GlobalLogger().warning(
-        "The 'pyml_ocr' element will not be registered because required modules are missing."
+        "The 'mp_ocr' element will not be registered because required modules are missing."
     )
