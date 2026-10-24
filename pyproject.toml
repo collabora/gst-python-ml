@@ -4,7 +4,7 @@ build-backend = "hatchling.build"
 
 [project]
 name = "modelpipe"
-version = "1.3.0"
+version = "2.0.0"
 description = "Machine-learning elements for GStreamer and glass2glass pipelines"
 readme = "README.md"
 requires-python = ">=3.10"

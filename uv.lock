@@ -2262,345 +2262,6 @@ wheels = [
 ]
 
 [[package]]
-name = "modelpipe"
-version = "1.3.0"
-source = { editable = "." }
-dependencies = [
-    { name = "accelerate" },
-    { name = "huggingface-hub" },
-    { name = "numpy", version = "2.2.6", source = { registry = "https://pypi.org/simple" }, marker = "(python_full_version < '3.14' and sys_platform != 'darwin') or (python_full_version < '3.11' and sys_platform == 'darwin')" },
-    { name = "numpy", version = "2.4.4", source = { registry = "https://pypi.org/simple" }, marker = "(python_full_version >= '3.14' and sys_platform != 'darwin') or (python_full_version >= '3.11' and sys_platform == 'darwin')" },
-    { name = "opencv-python-headless" },
-    { name = "pillow" },
-    { name = "protobuf" },
-    { name = "pycairo", marker = "sys_platform != 'win32'" },
-    { name = "pygobject", marker = "sys_platform != 'win32'" },
-    { name = "pyopengl" },
-    { name = "scipy", version = "1.15.3", source = { registry = "https://pypi.org/simple" }, marker = "python_full_version < '3.11'" },
-    { name = "scipy", version = "1.17.1", source = { registry = "https://pypi.org/simple" }, marker = "python_full_version >= '3.11'" },
-    { name = "sentencepiece" },
-    { name = "torch" },
-    { name = "torchvision" },
-    { name = "transformers" },
-]
-
-[package.optional-dependencies]
-all = [
-    { name = "ai-edge-litert" },
-    { name = "bitsandbytes" },
-    { name = "confluent-kafka" },
-    { name = "diffusers" },
-    { name = "faster-whisper" },
-    { name = "insightface" },
-    { name = "ipython", version = "8.39.0", source = { registry = "https://pypi.org/simple" }, marker = "python_full_version < '3.11'" },
-    { name = "ipython", version = "9.17.1", source = { registry = "https://pypi.org/simple" }, marker = "python_full_version >= '3.11'" },
-    { name = "lap" },
-    { name = "llama-cpp-python" },
-    { name = "onnx-graphsurgeon" },
-    { name = "onnx2tf" },
-    { name = "onnxruntime", version = "1.24.3", source = { registry = "https://pypi.org/simple" }, marker = "python_full_version < '3.11'" },
-    { name = "onnxruntime", version = "1.31.0", source = { registry = "https://pypi.org/simple" }, marker = "python_full_version >= '3.11'" },
-    { name = "onnxruntime-genai", version = "0.12.2", source = { registry = "https://pypi.org/simple" }, marker = "python_full_version < '3.11'" },
-    { name = "onnxruntime-genai", version = "0.17.1", source = { registry = "https://pypi.org/simple" }, marker = "python_full_version >= '3.11'" },
-    { name = "onnxscript" },
-    { name = "onnxslim" },
-    { name = "openvino" },
-    { name = "openvino-genai" },
-    { name = "optimum-intel" },
-    { name = "paho-mqtt" },
-    { name = "pysilero" },
-    { name = "pysilero-vad" },
-    { name = "pywhispercpp" },
-    { name = "qwen-vl-utils", extra = ["decord"] },
-    { name = "skia-python" },
-    { name = "sng4onnx" },
-    { name = "soundfile" },
-    { name = "spandrel" },
-    { name = "speechbrain" },
-    { name = "tensorflow" },
-    { name = "tf-keras" },
-    { name = "tinygrad", version = "0.11.0", source = { registry = "https://pypi.org/simple" }, marker = "python_full_version < '3.11'" },
-    { name = "tinygrad", version = "0.12.0", source = { registry = "https://pypi.org/simple" }, marker = "python_full_version >= '3.11'" },
-    { name = "torchaudio" },
-    { name = "ultralytics", version = "8.4.123", source = { registry = "https://pypi.org/simple" }, marker = "python_full_version < '3.11' and sys_platform == 'darwin'" },
-    { name = "ultralytics", version = "8.4.175", source = { registry = "https://pypi.org/simple" }, marker = "python_full_version >= '3.11' or sys_platform != 'darwin'" },
-    { name = "whisperspeech" },
-]
-audio = [
-    { name = "ipython", version = "8.39.0", source = { registry = "https://pypi.org/simple" }, marker = "python_full_version < '3.11'" },
-    { name = "ipython", version = "9.17.1", source = { registry = "https://pypi.org/simple" }, marker = "python_full_version >= '3.11'" },
-    { name = "soundfile" },
-    { name = "speechbrain" },
-    { name = "torchaudio" },
-    { name = "whisperspeech" },
-]
-awq = [
-    { name = "gptqmodel", version = "4.2.5", source = { registry = "https://pypi.org/simple" }, marker = "python_full_version >= '3.11' and python_full_version < '3.14' and sys_platform == 'darwin'" },
-    { name = "gptqmodel", version = "7.5.0", source = { registry = "https://pypi.org/simple" }, marker = "python_full_version < '3.11' or python_full_version >= '3.14' or sys_platform != 'darwin'" },
-]
-diffusion = [
-    { name = "diffusers" },
-]
-executorch = [
-    { name = "executorch", marker = "python_full_version < '3.14'" },
-]
-face = [
-    { name = "insightface" },
-]
-iree = [
-    { name = "iree-base-compiler" },
-    { name = "iree-base-runtime" },
-    { name = "onnx" },
-]
-jax-cpu = [
-    { name = "flax", version = "0.10.7", source = { registry = "https://pypi.org/simple" }, marker = "python_full_version < '3.11'" },
-    { name = "flax", version = "0.12.8", source = { registry = "https://pypi.org/simple" }, marker = "python_full_version == '3.11.*'" },
-    { name = "flax", version = "0.12.9", source = { registry = "https://pypi.org/simple" }, marker = "python_full_version >= '3.12'" },
-    { name = "grain", version = "0.2.13", source = { registry = "https://pypi.org/simple" }, marker = "python_full_version < '3.11'" },
-    { name = "grain", version = "0.2.18", source = { registry = "https://pypi.org/simple" }, marker = "python_full_version >= '3.11'" },
-    { name = "jax", version = "0.6.2", source = { registry = "https://pypi.org/simple" }, marker = "python_full_version < '3.11'" },
-    { name = "jax", version = "0.10.2", source = { registry = "https://pypi.org/simple" }, marker = "python_full_version == '3.11.*'" },
-    { name = "jax", version = "0.11.2", source = { registry = "https://pypi.org/simple" }, marker = "python_full_version >= '3.12'" },
-    { name = "keras-hub", marker = "python_full_version >= '3.11'" },
-]
-jax-gpu = [
-    { name = "flax", version = "0.10.7", source = { registry = "https://pypi.org/simple" }, marker = "python_full_version < '3.11'" },
-    { name = "flax", version = "0.12.8", source = { registry = "https://pypi.org/simple" }, marker = "python_full_version == '3.11.*'" },
-    { name = "flax", version = "0.12.9", source = { registry = "https://pypi.org/simple" }, marker = "python_full_version >= '3.12'" },
-    { name = "grain", version = "0.2.13", source = { registry = "https://pypi.org/simple" }, marker = "python_full_version < '3.11'" },
-    { name = "grain", version = "0.2.18", source = { registry = "https://pypi.org/simple" }, marker = "python_full_version >= '3.11'" },
-    { name = "jax", version = "0.6.2", source = { registry = "https://pypi.org/simple" }, extra = ["cuda12"], marker = "python_full_version < '3.11'" },
-    { name = "jax", version = "0.10.2", source = { registry = "https://pypi.org/simple" }, extra = ["cuda12"], marker = "python_full_version == '3.11.*'" },
-    { name = "jax", version = "0.11.2", source = { registry = "https://pypi.org/simple" }, extra = ["cuda12"], marker = "python_full_version >= '3.12'" },
-    { name = "keras-hub", marker = "python_full_version >= '3.11'" },
-]
-jax-tpu = [
-    { name = "flax", version = "0.10.7", source = { registry = "https://pypi.org/simple" }, marker = "python_full_version < '3.11'" },
-    { name = "flax", version = "0.12.8", source = { registry = "https://pypi.org/simple" }, marker = "python_full_version == '3.11.*'" },
-    { name = "flax", version = "0.12.9", source = { registry = "https://pypi.org/simple" }, marker = "python_full_version >= '3.12'" },
-    { name = "grain", version = "0.2.13", source = { registry = "https://pypi.org/simple" }, marker = "python_full_version < '3.11'" },
-    { name = "grain", version = "0.2.18", source = { registry = "https://pypi.org/simple" }, marker = "python_full_version >= '3.11'" },
-    { name = "jax", version = "0.6.2", source = { registry = "https://pypi.org/simple" }, extra = ["tpu"], marker = "python_full_version < '3.11'" },
-    { name = "jax", version = "0.10.2", source = { registry = "https://pypi.org/simple" }, extra = ["tpu"], marker = "python_full_version == '3.11.*'" },
-    { name = "jax", version = "0.11.2", source = { registry = "https://pypi.org/simple" }, extra = ["tpu"], marker = "python_full_version >= '3.12'" },
-    { name = "keras-hub", marker = "python_full_version >= '3.11'" },
-]
-kafka = [
-    { name = "confluent-kafka" },
-]
-litert = [
-    { name = "ai-edge-litert" },
-]
-llamacpp = [
-    { name = "llama-cpp-python" },
-    { name = "pywhispercpp" },
-]
-llm = [
-    { name = "bitsandbytes" },
-    { name = "qwen-vl-utils", extra = ["decord"] },
-]
-mcp = [
-    { name = "mcp" },
-]
-mlx = [
-    { name = "mlx" },
-    { name = "mlx-lm" },
-    { name = "mlx-whisper" },
-]
-mlx-cpu = [
-    { name = "mlx", extra = ["cpu"] },
-    { name = "mlx-whisper" },
-]
-mqtt = [
-    { name = "paho-mqtt" },
-]
-ncnn = [
-    { name = "ncnn" },
-    { name = "onnx" },
-    { name = "pnnx" },
-]
-onnx = [
-    { name = "onnxruntime", version = "1.24.3", source = { registry = "https://pypi.org/simple" }, marker = "python_full_version < '3.11'" },
-    { name = "onnxruntime", version = "1.31.0", source = { registry = "https://pypi.org/simple" }, marker = "python_full_version >= '3.11'" },
-    { name = "onnxruntime-genai", version = "0.12.2", source = { registry = "https://pypi.org/simple" }, marker = "python_full_version < '3.11'" },
-    { name = "onnxruntime-genai", version = "0.17.1", source = { registry = "https://pypi.org/simple" }, marker = "python_full_version >= '3.11'" },
-    { name = "onnxscript" },
-]
-onnx-gpu = [
-    { name = "onnxruntime-genai-cuda", version = "0.12.2", source = { registry = "https://pypi.org/simple" }, marker = "python_full_version < '3.11'" },
-    { name = "onnxruntime-genai-cuda", version = "0.17.1", source = { registry = "https://pypi.org/simple" }, marker = "python_full_version >= '3.11'" },
-    { name = "onnxruntime-gpu", version = "1.24.1", source = { registry = "https://pypi.org/simple" }, marker = "python_full_version < '3.11'" },
-    { name = "onnxruntime-gpu", version = "1.31.0", source = { registry = "https://pypi.org/simple" }, marker = "python_full_version >= '3.11'" },
-    { name = "onnxscript" },
-]
-openvino = [
-    { name = "openvino" },
-    { name = "openvino-genai" },
-    { name = "optimum-intel" },
-]
-rknn = [
-    { name = "rknn-toolkit-lite2", marker = "python_full_version == '3.12.*' and platform_machine == 'aarch64'" },
-]
-skia = [
-    { name = "skia-python" },
-]
-superres = [
-    { name = "spandrel" },
-]
-tensorflow = [
-    { name = "ai-edge-litert" },
-    { name = "onnx-graphsurgeon" },
-    { name = "onnx2tf" },
-    { name = "sng4onnx" },
-    { name = "tensorflow" },
-    { name = "tf-keras" },
-]
-tensorrt = [
-    { name = "lief" },
-    { name = "nvidia-modelopt" },
-    { name = "onnx-graphsurgeon" },
-    { name = "polygraphy" },
-    { name = "tensorrt" },
-    { name = "ultralytics", version = "8.4.175", source = { registry = "https://pypi.org/simple" }, marker = "sys_platform != 'darwin'" },
-]
-tinygrad = [
-    { name = "tinygrad", version = "0.11.0", source = { registry = "https://pypi.org/simple" }, marker = "python_full_version < '3.11'" },
-    { name = "tinygrad", version = "0.12.0", source = { registry = "https://pypi.org/simple" }, marker = "python_full_version >= '3.11'" },
-]
-tvm = [
-    { name = "apache-tvm" },
-]
-vad = [
-    { name = "faster-whisper" },
-    { name = "pysilero" },
-    { name = "pysilero-vad" },
-]
-yolo = [
-    { name = "lap" },
-    { name = "onnxslim" },
-    { name = "ultralytics", version = "8.4.123", source = { registry = "https://pypi.org/simple" }, marker = "python_full_version < '3.11' and sys_platform == 'darwin'" },
-    { name = "ultralytics", version = "8.4.175", source = { registry = "https://pypi.org/simple" }, marker = "python_full_version >= '3.11' or sys_platform != 'darwin'" },
-]
-
-[package.dev-dependencies]
-dev = [
-    { name = "pytest" },
-    { name = "tomli", marker = "python_full_version < '3.11'" },
-]
-test = [
-    { name = "pytest" },
-    { name = "tomli", marker = "python_full_version < '3.11'" },
-]
-
-[package.metadata]
-requires-dist = [
-    { name = "accelerate", specifier = ">=1.13.0" },
-    { name = "ai-edge-litert", marker = "extra == 'litert'" },
-    { name = "ai-edge-litert", marker = "extra == 'tensorflow'" },
-    { name = "apache-tvm", marker = "extra == 'tvm'" },
-    { name = "bitsandbytes", marker = "extra == 'llm'", specifier = ">=0.49.2" },
-    { name = "confluent-kafka", marker = "extra == 'kafka'" },
-    { name = "diffusers", marker = "extra == 'diffusion'" },
-    { name = "executorch", marker = "python_full_version < '3.14' and extra == 'executorch'" },
-    { name = "faster-whisper", marker = "extra == 'vad'" },
-    { name = "flax", marker = "extra == 'jax-cpu'" },
-    { name = "flax", marker = "extra == 'jax-gpu'" },
-    { name = "flax", marker = "extra == 'jax-tpu'" },
-    { name = "gptqmodel", marker = "extra == 'awq'" },
-    { name = "grain", marker = "extra == 'jax-cpu'" },
-    { name = "grain", marker = "extra == 'jax-gpu'" },
-    { name = "grain", marker = "extra == 'jax-tpu'" },
-    { name = "modelpipe", extras = ["onnx", "tinygrad", "llamacpp", "openvino", "tensorflow", "litert", "vad"], marker = "extra == 'all'" },
-    { name = "modelpipe", extras = ["yolo", "llm", "audio", "diffusion", "face", "superres", "skia", "kafka", "mqtt"], marker = "extra == 'all'" },
-    { name = "huggingface-hub" },
-    { name = "insightface", marker = "extra == 'face'" },
-    { name = "ipython", marker = "extra == 'audio'" },
-    { name = "iree-base-compiler", marker = "extra == 'iree'" },
-    { name = "iree-base-runtime", marker = "extra == 'iree'" },
-    { name = "jax", extras = ["cpu"], marker = "extra == 'jax-cpu'" },
-    { name = "jax", extras = ["cuda12"], marker = "extra == 'jax-gpu'" },
-    { name = "jax", extras = ["tpu"], marker = "extra == 'jax-tpu'" },
-    { name = "keras-hub", marker = "python_full_version >= '3.11' and extra == 'jax-cpu'", specifier = ">=0.32" },
-    { name = "keras-hub", marker = "python_full_version >= '3.11' and extra == 'jax-gpu'", specifier = ">=0.32" },
-    { name = "keras-hub", marker = "python_full_version >= '3.11' and extra == 'jax-tpu'", specifier = ">=0.32" },
-    { name = "lap", marker = "extra == 'yolo'" },
-    { name = "lief", marker = "extra == 'tensorrt'" },
-    { name = "llama-cpp-python", marker = "extra == 'llamacpp'" },
-    { name = "mcp", marker = "extra == 'mcp'", specifier = ">=2.2.0" },
-    { name = "mlx", marker = "extra == 'mlx'", specifier = ">=0.20.0" },
-    { name = "mlx", extras = ["cpu"], marker = "extra == 'mlx-cpu'", specifier = ">=0.20.0" },
-    { name = "mlx-lm", marker = "extra == 'mlx'" },
-    { name = "mlx-whisper", marker = "extra == 'mlx'" },
-    { name = "mlx-whisper", marker = "extra == 'mlx-cpu'" },
-    { name = "ncnn", marker = "extra == 'ncnn'" },
-    { name = "numpy" },
-    { name = "nvidia-modelopt", marker = "extra == 'tensorrt'" },
-    { name = "onnx", marker = "extra == 'iree'" },
-    { name = "onnx", marker = "extra == 'ncnn'" },
-    { name = "onnx-graphsurgeon", marker = "extra == 'tensorflow'", specifier = ">=0.3.26" },
-    { name = "onnx-graphsurgeon", marker = "extra == 'tensorrt'" },
-    { name = "onnx2tf", marker = "extra == 'tensorflow'", specifier = ">=1.26.3,<1.29.0" },
-    { name = "onnxruntime", marker = "extra == 'onnx'" },
-    { name = "onnxruntime-genai", marker = "extra == 'onnx'" },
-    { name = "onnxruntime-genai-cuda", marker = "extra == 'onnx-gpu'" },
-    { name = "onnxruntime-gpu", marker = "extra == 'onnx-gpu'" },
-    { name = "onnxscript", marker = "extra == 'onnx'" },
-    { name = "onnxscript", marker = "extra == 'onnx-gpu'" },
-    { name = "onnxslim", marker = "extra == 'yolo'", specifier = ">=0.1.71" },
-    { name = "opencv-python-headless", marker = "python_full_version < '3.14'", specifier = ">=4.9.0" },
-    { name = "opencv-python-headless", marker = "python_full_version >= '3.14'", specifier = ">=4.13.0" },
-    { name = "openvino", marker = "extra == 'openvino'", specifier = ">=2024.0" },
-    { name = "openvino-genai", marker = "extra == 'openvino'" },
-    { name = "optimum-intel", marker = "extra == 'openvino'" },
-    { name = "paho-mqtt", marker = "extra == 'mqtt'" },
-    { name = "pillow" },
-    { name = "pnnx", marker = "extra == 'ncnn'" },
-    { name = "polygraphy", marker = "extra == 'tensorrt'" },
-    { name = "protobuf" },
-    { name = "pycairo", marker = "sys_platform != 'win32'" },
-    { name = "pygobject", marker = "sys_platform != 'win32'" },
-    { name = "pyopengl" },
-    { name = "pysilero", marker = "extra == 'vad'" },
-    { name = "pysilero-vad", marker = "extra == 'vad'" },
-    { name = "pywhispercpp", marker = "extra == 'llamacpp'" },
-    { name = "qwen-vl-utils", extras = ["decord"], marker = "extra == 'llm'", specifier = ">=0.0.8" },
-    { name = "rknn-toolkit-lite2", marker = "python_full_version == '3.12.*' and platform_machine == 'aarch64' and extra == 'rknn'", specifier = ">=2.3.2" },
-    { name = "scipy" },
-    { name = "sentencepiece" },
-    { name = "skia-python", marker = "extra == 'skia'" },
-    { name = "sng4onnx", marker = "extra == 'tensorflow'", specifier = ">=1.0.1" },
-    { name = "soundfile", marker = "extra == 'audio'" },
-    { name = "spandrel", marker = "extra == 'superres'" },
-    { name = "speechbrain", marker = "extra == 'audio'" },
-    { name = "tensorflow", marker = "extra == 'tensorflow'", specifier = ">=2.16.0" },
-    { name = "tensorrt", marker = "extra == 'tensorrt'" },
-    { name = "tf-keras", marker = "extra == 'tensorflow'" },
-    { name = "tinygrad", marker = "extra == 'tinygrad'" },
-    { name = "torch", marker = "python_full_version < '3.14'", specifier = ">=2.7.0" },
-    { name = "torch", marker = "python_full_version >= '3.14'", specifier = ">=2.11.0" },
-    { name = "torchaudio", marker = "python_full_version >= '3.14' and extra == 'audio'", specifier = ">=2.11.0" },
-    { name = "torchaudio", marker = "python_full_version < '3.14' and extra == 'audio'", specifier = ">=2.7.0" },
-    { name = "torchvision", marker = "python_full_version < '3.14'", specifier = ">=0.22.0" },
-    { name = "torchvision", marker = "python_full_version >= '3.14'", specifier = ">=0.26.0" },
-    { name = "transformers", marker = "python_full_version < '3.14'", specifier = ">=4.44.0" },
-    { name = "transformers", marker = "python_full_version >= '3.14'", specifier = ">=5.5" },
-    { name = "ultralytics", marker = "sys_platform != 'darwin' and extra == 'tensorrt'", specifier = ">=8.4.175" },
-    { name = "ultralytics", marker = "extra == 'yolo'" },
-    { name = "whisperspeech", marker = "extra == 'audio'" },
-]
-provides-extras = ["yolo", "tensorrt", "llm", "awq", "audio", "diffusion", "face", "superres", "skia", "kafka", "mqtt", "onnx", "onnx-gpu", "tvm", "tinygrad", "mlx", "mlx-cpu", "executorch", "llamacpp", "jax-cpu", "jax-gpu", "jax-tpu", "openvino", "tensorflow", "litert", "ncnn", "rknn", "iree", "vad", "mcp", "all"]
-
-[package.metadata.requires-dev]
-dev = [
-    { name = "pytest", specifier = ">=9.0.3" },
-    { name = "tomli", marker = "python_full_version < '3.11'" },
-]
-test = [
-    { name = "pytest", specifier = ">=9.0.3" },
-    { name = "tomli", marker = "python_full_version < '3.11'" },
-]
-
-[[package]]
 name = "h11"
 version = "0.16.0"
 source = { registry = "https://pypi.org/simple" }
@@ -4478,6 +4139,345 @@ dependencies = [
 ]
 wheels = [
     { url = "https://files.pythonhosted.org/packages/22/b7/a35232812a2ccfffcb7614ba96a91338551a660a0e9815cee668bf5743f0/mlx_whisper-0.4.3-py3-none-any.whl", hash = "sha256:6b82b6597a994643a3e5496c7bc229a672e5ca308458455bfe276e76ae024489", size = 890544, upload-time = "2025-08-29T14:56:13.815Z" },
+]
+
+[[package]]
+name = "modelpipe"
+version = "2.0.0"
+source = { editable = "." }
+dependencies = [
+    { name = "accelerate" },
+    { name = "huggingface-hub" },
+    { name = "numpy", version = "2.2.6", source = { registry = "https://pypi.org/simple" }, marker = "(python_full_version < '3.14' and sys_platform != 'darwin') or (python_full_version < '3.11' and sys_platform == 'darwin')" },
+    { name = "numpy", version = "2.4.4", source = { registry = "https://pypi.org/simple" }, marker = "(python_full_version >= '3.14' and sys_platform != 'darwin') or (python_full_version >= '3.11' and sys_platform == 'darwin')" },
+    { name = "opencv-python-headless" },
+    { name = "pillow" },
+    { name = "protobuf" },
+    { name = "pycairo", marker = "sys_platform != 'win32'" },
+    { name = "pygobject", marker = "sys_platform != 'win32'" },
+    { name = "pyopengl" },
+    { name = "scipy", version = "1.15.3", source = { registry = "https://pypi.org/simple" }, marker = "python_full_version < '3.11'" },
+    { name = "scipy", version = "1.17.1", source = { registry = "https://pypi.org/simple" }, marker = "python_full_version >= '3.11'" },
+    { name = "sentencepiece" },
+    { name = "torch" },
+    { name = "torchvision" },
+    { name = "transformers" },
+]
+
+[package.optional-dependencies]
+all = [
+    { name = "ai-edge-litert" },
+    { name = "bitsandbytes" },
+    { name = "confluent-kafka" },
+    { name = "diffusers" },
+    { name = "faster-whisper" },
+    { name = "insightface" },
+    { name = "ipython", version = "8.39.0", source = { registry = "https://pypi.org/simple" }, marker = "python_full_version < '3.11'" },
+    { name = "ipython", version = "9.17.1", source = { registry = "https://pypi.org/simple" }, marker = "python_full_version >= '3.11'" },
+    { name = "lap" },
+    { name = "llama-cpp-python" },
+    { name = "onnx-graphsurgeon" },
+    { name = "onnx2tf" },
+    { name = "onnxruntime", version = "1.24.3", source = { registry = "https://pypi.org/simple" }, marker = "python_full_version < '3.11'" },
+    { name = "onnxruntime", version = "1.31.0", source = { registry = "https://pypi.org/simple" }, marker = "python_full_version >= '3.11'" },
+    { name = "onnxruntime-genai", version = "0.12.2", source = { registry = "https://pypi.org/simple" }, marker = "python_full_version < '3.11'" },
+    { name = "onnxruntime-genai", version = "0.17.1", source = { registry = "https://pypi.org/simple" }, marker = "python_full_version >= '3.11'" },
+    { name = "onnxscript" },
+    { name = "onnxslim" },
+    { name = "openvino" },
+    { name = "openvino-genai" },
+    { name = "optimum-intel" },
+    { name = "paho-mqtt" },
+    { name = "pysilero" },
+    { name = "pysilero-vad" },
+    { name = "pywhispercpp" },
+    { name = "qwen-vl-utils", extra = ["decord"] },
+    { name = "skia-python" },
+    { name = "sng4onnx" },
+    { name = "soundfile" },
+    { name = "spandrel" },
+    { name = "speechbrain" },
+    { name = "tensorflow" },
+    { name = "tf-keras" },
+    { name = "tinygrad", version = "0.11.0", source = { registry = "https://pypi.org/simple" }, marker = "python_full_version < '3.11'" },
+    { name = "tinygrad", version = "0.12.0", source = { registry = "https://pypi.org/simple" }, marker = "python_full_version >= '3.11'" },
+    { name = "torchaudio" },
+    { name = "ultralytics", version = "8.4.123", source = { registry = "https://pypi.org/simple" }, marker = "python_full_version < '3.11' and sys_platform == 'darwin'" },
+    { name = "ultralytics", version = "8.4.175", source = { registry = "https://pypi.org/simple" }, marker = "python_full_version >= '3.11' or sys_platform != 'darwin'" },
+    { name = "whisperspeech" },
+]
+audio = [
+    { name = "ipython", version = "8.39.0", source = { registry = "https://pypi.org/simple" }, marker = "python_full_version < '3.11'" },
+    { name = "ipython", version = "9.17.1", source = { registry = "https://pypi.org/simple" }, marker = "python_full_version >= '3.11'" },
+    { name = "soundfile" },
+    { name = "speechbrain" },
+    { name = "torchaudio" },
+    { name = "whisperspeech" },
+]
+awq = [
+    { name = "gptqmodel", version = "4.2.5", source = { registry = "https://pypi.org/simple" }, marker = "python_full_version >= '3.11' and python_full_version < '3.14' and sys_platform == 'darwin'" },
+    { name = "gptqmodel", version = "7.5.0", source = { registry = "https://pypi.org/simple" }, marker = "python_full_version < '3.11' or python_full_version >= '3.14' or sys_platform != 'darwin'" },
+]
+diffusion = [
+    { name = "diffusers" },
+]
+executorch = [
+    { name = "executorch", marker = "python_full_version < '3.14'" },
+]
+face = [
+    { name = "insightface" },
+]
+iree = [
+    { name = "iree-base-compiler" },
+    { name = "iree-base-runtime" },
+    { name = "onnx" },
+]
+jax-cpu = [
+    { name = "flax", version = "0.10.7", source = { registry = "https://pypi.org/simple" }, marker = "python_full_version < '3.11'" },
+    { name = "flax", version = "0.12.8", source = { registry = "https://pypi.org/simple" }, marker = "python_full_version == '3.11.*'" },
+    { name = "flax", version = "0.12.9", source = { registry = "https://pypi.org/simple" }, marker = "python_full_version >= '3.12'" },
+    { name = "grain", version = "0.2.13", source = { registry = "https://pypi.org/simple" }, marker = "python_full_version < '3.11'" },
+    { name = "grain", version = "0.2.18", source = { registry = "https://pypi.org/simple" }, marker = "python_full_version >= '3.11'" },
+    { name = "jax", version = "0.6.2", source = { registry = "https://pypi.org/simple" }, marker = "python_full_version < '3.11'" },
+    { name = "jax", version = "0.10.2", source = { registry = "https://pypi.org/simple" }, marker = "python_full_version == '3.11.*'" },
+    { name = "jax", version = "0.11.2", source = { registry = "https://pypi.org/simple" }, marker = "python_full_version >= '3.12'" },
+    { name = "keras-hub", marker = "python_full_version >= '3.11'" },
+]
+jax-gpu = [
+    { name = "flax", version = "0.10.7", source = { registry = "https://pypi.org/simple" }, marker = "python_full_version < '3.11'" },
+    { name = "flax", version = "0.12.8", source = { registry = "https://pypi.org/simple" }, marker = "python_full_version == '3.11.*'" },
+    { name = "flax", version = "0.12.9", source = { registry = "https://pypi.org/simple" }, marker = "python_full_version >= '3.12'" },
+    { name = "grain", version = "0.2.13", source = { registry = "https://pypi.org/simple" }, marker = "python_full_version < '3.11'" },
+    { name = "grain", version = "0.2.18", source = { registry = "https://pypi.org/simple" }, marker = "python_full_version >= '3.11'" },
+    { name = "jax", version = "0.6.2", source = { registry = "https://pypi.org/simple" }, extra = ["cuda12"], marker = "python_full_version < '3.11'" },
+    { name = "jax", version = "0.10.2", source = { registry = "https://pypi.org/simple" }, extra = ["cuda12"], marker = "python_full_version == '3.11.*'" },
+    { name = "jax", version = "0.11.2", source = { registry = "https://pypi.org/simple" }, extra = ["cuda12"], marker = "python_full_version >= '3.12'" },
+    { name = "keras-hub", marker = "python_full_version >= '3.11'" },
+]
+jax-tpu = [
+    { name = "flax", version = "0.10.7", source = { registry = "https://pypi.org/simple" }, marker = "python_full_version < '3.11'" },
+    { name = "flax", version = "0.12.8", source = { registry = "https://pypi.org/simple" }, marker = "python_full_version == '3.11.*'" },
+    { name = "flax", version = "0.12.9", source = { registry = "https://pypi.org/simple" }, marker = "python_full_version >= '3.12'" },
+    { name = "grain", version = "0.2.13", source = { registry = "https://pypi.org/simple" }, marker = "python_full_version < '3.11'" },
+    { name = "grain", version = "0.2.18", source = { registry = "https://pypi.org/simple" }, marker = "python_full_version >= '3.11'" },
+    { name = "jax", version = "0.6.2", source = { registry = "https://pypi.org/simple" }, extra = ["tpu"], marker = "python_full_version < '3.11'" },
+    { name = "jax", version = "0.10.2", source = { registry = "https://pypi.org/simple" }, extra = ["tpu"], marker = "python_full_version == '3.11.*'" },
+    { name = "jax", version = "0.11.2", source = { registry = "https://pypi.org/simple" }, extra = ["tpu"], marker = "python_full_version >= '3.12'" },
+    { name = "keras-hub", marker = "python_full_version >= '3.11'" },
+]
+kafka = [
+    { name = "confluent-kafka" },
+]
+litert = [
+    { name = "ai-edge-litert" },
+]
+llamacpp = [
+    { name = "llama-cpp-python" },
+    { name = "pywhispercpp" },
+]
+llm = [
+    { name = "bitsandbytes" },
+    { name = "qwen-vl-utils", extra = ["decord"] },
+]
+mcp = [
+    { name = "mcp" },
+]
+mlx = [
+    { name = "mlx" },
+    { name = "mlx-lm" },
+    { name = "mlx-whisper" },
+]
+mlx-cpu = [
+    { name = "mlx", extra = ["cpu"] },
+    { name = "mlx-whisper" },
+]
+mqtt = [
+    { name = "paho-mqtt" },
+]
+ncnn = [
+    { name = "ncnn" },
+    { name = "onnx" },
+    { name = "pnnx" },
+]
+onnx = [
+    { name = "onnxruntime", version = "1.24.3", source = { registry = "https://pypi.org/simple" }, marker = "python_full_version < '3.11'" },
+    { name = "onnxruntime", version = "1.31.0", source = { registry = "https://pypi.org/simple" }, marker = "python_full_version >= '3.11'" },
+    { name = "onnxruntime-genai", version = "0.12.2", source = { registry = "https://pypi.org/simple" }, marker = "python_full_version < '3.11'" },
+    { name = "onnxruntime-genai", version = "0.17.1", source = { registry = "https://pypi.org/simple" }, marker = "python_full_version >= '3.11'" },
+    { name = "onnxscript" },
+]
+onnx-gpu = [
+    { name = "onnxruntime-genai-cuda", version = "0.12.2", source = { registry = "https://pypi.org/simple" }, marker = "python_full_version < '3.11'" },
+    { name = "onnxruntime-genai-cuda", version = "0.17.1", source = { registry = "https://pypi.org/simple" }, marker = "python_full_version >= '3.11'" },
+    { name = "onnxruntime-gpu", version = "1.24.1", source = { registry = "https://pypi.org/simple" }, marker = "python_full_version < '3.11'" },
+    { name = "onnxruntime-gpu", version = "1.31.0", source = { registry = "https://pypi.org/simple" }, marker = "python_full_version >= '3.11'" },
+    { name = "onnxscript" },
+]
+openvino = [
+    { name = "openvino" },
+    { name = "openvino-genai" },
+    { name = "optimum-intel" },
+]
+rknn = [
+    { name = "rknn-toolkit-lite2", marker = "python_full_version == '3.12.*' and platform_machine == 'aarch64'" },
+]
+skia = [
+    { name = "skia-python" },
+]
+superres = [
+    { name = "spandrel" },
+]
+tensorflow = [
+    { name = "ai-edge-litert" },
+    { name = "onnx-graphsurgeon" },
+    { name = "onnx2tf" },
+    { name = "sng4onnx" },
+    { name = "tensorflow" },
+    { name = "tf-keras" },
+]
+tensorrt = [
+    { name = "lief" },
+    { name = "nvidia-modelopt" },
+    { name = "onnx-graphsurgeon" },
+    { name = "polygraphy" },
+    { name = "tensorrt" },
+    { name = "ultralytics", version = "8.4.175", source = { registry = "https://pypi.org/simple" }, marker = "sys_platform != 'darwin'" },
+]
+tinygrad = [
+    { name = "tinygrad", version = "0.11.0", source = { registry = "https://pypi.org/simple" }, marker = "python_full_version < '3.11'" },
+    { name = "tinygrad", version = "0.12.0", source = { registry = "https://pypi.org/simple" }, marker = "python_full_version >= '3.11'" },
+]
+tvm = [
+    { name = "apache-tvm" },
+]
+vad = [
+    { name = "faster-whisper" },
+    { name = "pysilero" },
+    { name = "pysilero-vad" },
+]
+yolo = [
+    { name = "lap" },
+    { name = "onnxslim" },
+    { name = "ultralytics", version = "8.4.123", source = { registry = "https://pypi.org/simple" }, marker = "python_full_version < '3.11' and sys_platform == 'darwin'" },
+    { name = "ultralytics", version = "8.4.175", source = { registry = "https://pypi.org/simple" }, marker = "python_full_version >= '3.11' or sys_platform != 'darwin'" },
+]
+
+[package.dev-dependencies]
+dev = [
+    { name = "pytest" },
+    { name = "tomli", marker = "python_full_version < '3.11'" },
+]
+test = [
+    { name = "pytest" },
+    { name = "tomli", marker = "python_full_version < '3.11'" },
+]
+
+[package.metadata]
+requires-dist = [
+    { name = "accelerate", specifier = ">=1.13.0" },
+    { name = "ai-edge-litert", marker = "extra == 'litert'" },
+    { name = "ai-edge-litert", marker = "extra == 'tensorflow'" },
+    { name = "apache-tvm", marker = "extra == 'tvm'" },
+    { name = "bitsandbytes", marker = "extra == 'llm'", specifier = ">=0.49.2" },
+    { name = "confluent-kafka", marker = "extra == 'kafka'" },
+    { name = "diffusers", marker = "extra == 'diffusion'" },
+    { name = "executorch", marker = "python_full_version < '3.14' and extra == 'executorch'" },
+    { name = "faster-whisper", marker = "extra == 'vad'" },
+    { name = "flax", marker = "extra == 'jax-cpu'" },
+    { name = "flax", marker = "extra == 'jax-gpu'" },
+    { name = "flax", marker = "extra == 'jax-tpu'" },
+    { name = "gptqmodel", marker = "extra == 'awq'" },
+    { name = "grain", marker = "extra == 'jax-cpu'" },
+    { name = "grain", marker = "extra == 'jax-gpu'" },
+    { name = "grain", marker = "extra == 'jax-tpu'" },
+    { name = "huggingface-hub" },
+    { name = "insightface", marker = "extra == 'face'" },
+    { name = "ipython", marker = "extra == 'audio'" },
+    { name = "iree-base-compiler", marker = "extra == 'iree'" },
+    { name = "iree-base-runtime", marker = "extra == 'iree'" },
+    { name = "jax", extras = ["cpu"], marker = "extra == 'jax-cpu'" },
+    { name = "jax", extras = ["cuda12"], marker = "extra == 'jax-gpu'" },
+    { name = "jax", extras = ["tpu"], marker = "extra == 'jax-tpu'" },
+    { name = "keras-hub", marker = "python_full_version >= '3.11' and extra == 'jax-cpu'", specifier = ">=0.32" },
+    { name = "keras-hub", marker = "python_full_version >= '3.11' and extra == 'jax-gpu'", specifier = ">=0.32" },
+    { name = "keras-hub", marker = "python_full_version >= '3.11' and extra == 'jax-tpu'", specifier = ">=0.32" },
+    { name = "lap", marker = "extra == 'yolo'" },
+    { name = "lief", marker = "extra == 'tensorrt'" },
+    { name = "llama-cpp-python", marker = "extra == 'llamacpp'" },
+    { name = "mcp", marker = "extra == 'mcp'", specifier = ">=2.2.0" },
+    { name = "mlx", marker = "extra == 'mlx'", specifier = ">=0.20.0" },
+    { name = "mlx", extras = ["cpu"], marker = "extra == 'mlx-cpu'", specifier = ">=0.20.0" },
+    { name = "mlx-lm", marker = "extra == 'mlx'" },
+    { name = "mlx-whisper", marker = "extra == 'mlx'" },
+    { name = "mlx-whisper", marker = "extra == 'mlx-cpu'" },
+    { name = "modelpipe", extras = ["onnx", "tinygrad", "llamacpp", "openvino", "tensorflow", "litert", "vad"], marker = "extra == 'all'" },
+    { name = "modelpipe", extras = ["yolo", "llm", "audio", "diffusion", "face", "superres", "skia", "kafka", "mqtt"], marker = "extra == 'all'" },
+    { name = "ncnn", marker = "extra == 'ncnn'" },
+    { name = "numpy" },
+    { name = "nvidia-modelopt", marker = "extra == 'tensorrt'" },
+    { name = "onnx", marker = "extra == 'iree'" },
+    { name = "onnx", marker = "extra == 'ncnn'" },
+    { name = "onnx-graphsurgeon", marker = "extra == 'tensorflow'", specifier = ">=0.3.26" },
+    { name = "onnx-graphsurgeon", marker = "extra == 'tensorrt'" },
+    { name = "onnx2tf", marker = "extra == 'tensorflow'", specifier = ">=1.26.3,<1.29.0" },
+    { name = "onnxruntime", marker = "extra == 'onnx'" },
+    { name = "onnxruntime-genai", marker = "extra == 'onnx'" },
+    { name = "onnxruntime-genai-cuda", marker = "extra == 'onnx-gpu'" },
+    { name = "onnxruntime-gpu", marker = "extra == 'onnx-gpu'" },
+    { name = "onnxscript", marker = "extra == 'onnx'" },
+    { name = "onnxscript", marker = "extra == 'onnx-gpu'" },
+    { name = "onnxslim", marker = "extra == 'yolo'", specifier = ">=0.1.71" },
+    { name = "opencv-python-headless", marker = "python_full_version < '3.14'", specifier = ">=4.9.0" },
+    { name = "opencv-python-headless", marker = "python_full_version >= '3.14'", specifier = ">=4.13.0" },
+    { name = "openvino", marker = "extra == 'openvino'", specifier = ">=2024.0" },
+    { name = "openvino-genai", marker = "extra == 'openvino'" },
+    { name = "optimum-intel", marker = "extra == 'openvino'" },
+    { name = "paho-mqtt", marker = "extra == 'mqtt'" },
+    { name = "pillow" },
+    { name = "pnnx", marker = "extra == 'ncnn'" },
+    { name = "polygraphy", marker = "extra == 'tensorrt'" },
+    { name = "protobuf" },
+    { name = "pycairo", marker = "sys_platform != 'win32'" },
+    { name = "pygobject", marker = "sys_platform != 'win32'" },
+    { name = "pyopengl" },
+    { name = "pysilero", marker = "extra == 'vad'" },
+    { name = "pysilero-vad", marker = "extra == 'vad'" },
+    { name = "pywhispercpp", marker = "extra == 'llamacpp'" },
+    { name = "qwen-vl-utils", extras = ["decord"], marker = "extra == 'llm'", specifier = ">=0.0.8" },
+    { name = "rknn-toolkit-lite2", marker = "python_full_version == '3.12.*' and platform_machine == 'aarch64' and extra == 'rknn'", specifier = ">=2.3.2" },
+    { name = "scipy" },
+    { name = "sentencepiece" },
+    { name = "skia-python", marker = "extra == 'skia'" },
+    { name = "sng4onnx", marker = "extra == 'tensorflow'", specifier = ">=1.0.1" },
+    { name = "soundfile", marker = "extra == 'audio'" },
+    { name = "spandrel", marker = "extra == 'superres'" },
+    { name = "speechbrain", marker = "extra == 'audio'" },
+    { name = "tensorflow", marker = "extra == 'tensorflow'", specifier = ">=2.16.0" },
+    { name = "tensorrt", marker = "extra == 'tensorrt'" },
+    { name = "tf-keras", marker = "extra == 'tensorflow'" },
+    { name = "tinygrad", marker = "extra == 'tinygrad'" },
+    { name = "torch", marker = "python_full_version < '3.14'", specifier = ">=2.7.0" },
+    { name = "torch", marker = "python_full_version >= '3.14'", specifier = ">=2.11.0" },
+    { name = "torchaudio", marker = "python_full_version >= '3.14' and extra == 'audio'", specifier = ">=2.11.0" },
+    { name = "torchaudio", marker = "python_full_version < '3.14' and extra == 'audio'", specifier = ">=2.7.0" },
+    { name = "torchvision", marker = "python_full_version < '3.14'", specifier = ">=0.22.0" },
+    { name = "torchvision", marker = "python_full_version >= '3.14'", specifier = ">=0.26.0" },
+    { name = "transformers", marker = "python_full_version < '3.14'", specifier = ">=4.44.0" },
+    { name = "transformers", marker = "python_full_version >= '3.14'", specifier = ">=5.5" },
+    { name = "ultralytics", marker = "sys_platform != 'darwin' and extra == 'tensorrt'", specifier = ">=8.4.175" },
+    { name = "ultralytics", marker = "extra == 'yolo'" },
+    { name = "whisperspeech", marker = "extra == 'audio'" },
+]
+provides-extras = ["yolo", "tensorrt", "llm", "awq", "audio", "diffusion", "face", "superres", "skia", "kafka", "mqtt", "onnx", "onnx-gpu", "tvm", "tinygrad", "mlx", "mlx-cpu", "executorch", "llamacpp", "jax-cpu", "jax-gpu", "jax-tpu", "openvino", "tensorflow", "litert", "ncnn", "rknn", "iree", "vad", "mcp", "all"]
+
+[package.metadata.requires-dev]
+dev = [
+    { name = "pytest", specifier = ">=9.0.3" },
+    { name = "tomli", marker = "python_full_version < '3.11'" },
+]
+test = [
+    { name = "pytest", specifier = ">=9.0.3" },
+    { name = "tomli", marker = "python_full_version < '3.11'" },
 ]
 
 [[package]]
