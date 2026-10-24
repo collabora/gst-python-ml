@@ -45,9 +45,7 @@ CLIP_DURATION_TOLERANCE = 0.2
 FLOW_SETTLE_SECONDS = 1.0
 SLOW_ELEMENT_MICROSECONDS = 60000
 
-VIDEO_PIPELINE = (
-    "videotestsrc ! video/x-raw,width=64,height=48 ! mp_metasink name=sink"
-)
+VIDEO_PIPELINE = "videotestsrc ! video/x-raw,width=64,height=48 ! mp_metasink name=sink"
 # 66 wide is 198 bytes a row, padded to a multiple of 4
 PADDED_VIDEO_PIPELINE = (
     "videotestsrc ! video/x-raw,width=66,height=48 ! mp_metasink name=sink"

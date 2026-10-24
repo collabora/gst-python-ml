@@ -38,9 +38,7 @@ try:
 
 except ImportError as e:
     CAN_REGISTER_ELEMENT = False
-    GlobalLogger().warning(
-        f"The 'mp_digest' element will not be available. Error: {e}"
-    )
+    GlobalLogger().warning(f"The 'mp_digest' element will not be available. Error: {e}")
 
 DEFAULT_WINDOW_SECONDS = 60.0
 DIGEST_LINE = "At {seconds:.1f}s: {text}"

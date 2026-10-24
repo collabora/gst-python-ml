@@ -29,9 +29,7 @@ try:
 
 except ImportError as e:
     CAN_REGISTER_ELEMENT = False
-    GlobalLogger().warning(
-        f"The 'mp_demucs' element will not be available. Error: {e}"
-    )
+    GlobalLogger().warning(f"The 'mp_demucs' element will not be available. Error: {e}")
 
 
 class Demucs(BaseSeparate):

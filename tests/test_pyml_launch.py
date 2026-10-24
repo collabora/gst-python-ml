@@ -94,9 +94,10 @@ def test_overlay_properties_carry_over_under_the_native_name(shells):
 
 
 def test_metasink_becomes_the_native_element(shells):
-    assert pyml_launch.rewrite_segment(
-        "mp_metasink location=people.jsonl", shells
-    ) == ["metasink", "location=people.jsonl"]
+    assert pyml_launch.rewrite_segment("mp_metasink location=people.jsonl", shells) == [
+        "metasink",
+        "location=people.jsonl",
+    ]
 
 
 def test_metareplay_becomes_the_native_element(shells):

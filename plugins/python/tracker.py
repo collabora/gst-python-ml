@@ -569,6 +569,4 @@ class TrackerTransform(InPlaceVideoTransform):
 
 
 if backend.BACKEND == "gst":
-    __gstelementfactory__ = backend.register_gst_element(
-        "mp_tracker", TrackerTransform
-    )
+    __gstelementfactory__ = backend.register_gst_element("mp_tracker", TrackerTransform)

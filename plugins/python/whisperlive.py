@@ -199,9 +199,7 @@ class WhisperLive(BaseTranscribe):
 
 
 if CAN_REGISTER_ELEMENT and backend.BACKEND == "gst":
-    __gstelementfactory__ = backend.register_gst_element(
-        "mp_whisperlive", WhisperLive
-    )
+    __gstelementfactory__ = backend.register_gst_element("mp_whisperlive", WhisperLive)
 elif not CAN_REGISTER_ELEMENT:
     GlobalLogger().warning(
         "The 'mp_whisperlive' element will not be registered because required modules were missing."

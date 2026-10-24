@@ -115,9 +115,7 @@ class AnomalyTransform(VideoTransform, AnomalyTask):
 
 
 if CAN_REGISTER_ELEMENT and backend.BACKEND == "gst":
-    __gstelementfactory__ = backend.register_gst_element(
-        "mp_anomaly", AnomalyTransform
-    )
+    __gstelementfactory__ = backend.register_gst_element("mp_anomaly", AnomalyTransform)
 elif not CAN_REGISTER_ELEMENT:
     GlobalLogger().warning(
         "The 'mp_anomaly' element will not be registered because required modules are missing."
